@@ -1,0 +1,53 @@
+//
+//  View+CloudFiles.swift
+//  smm-printer-mac
+//
+//  Created by tpe on 09.09.2024.
+//
+
+import SwiftUI
+
+private struct CloudFilesAlerts: ViewModifier {
+    
+    let showFilesDownloadAlert: Binding<Bool>
+    let showFilesDownloadingAlert: Binding<Bool>
+    
+    let downloadFiles: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .actionAlert(
+                title: ^String.Alerts.alertsInfoTitle,
+                message: ^String.Root.rootTheFileIsPlacedInCloudTitle,
+                actionTitle: ^String.Root.rootDownloadTitle,
+                action: {
+                    downloadFiles()
+                },
+                show: showFilesDownloadAlert
+            )
+            .infoAlert(
+                title: ^String.Alerts.alertsInfoTitle,
+                message: ^String.Root.rootDownloadingHasStartedTitle,
+                show: showFilesDownloadingAlert
+            )
+    }
+    
+}
+
+extension View {
+    
+    func cloudFilesAlerts(
+        showFilesDownloadAlert: Binding<Bool>,
+        showFilesDownloadingAlert: Binding<Bool>,
+        downloadFiles: @escaping () -> Void
+    ) -> some View {
+        modifier(
+            CloudFilesAlerts(
+                showFilesDownloadAlert: showFilesDownloadAlert,
+                showFilesDownloadingAlert: showFilesDownloadingAlert,
+                downloadFiles: downloadFiles
+            )
+        )
+    }
+
+}

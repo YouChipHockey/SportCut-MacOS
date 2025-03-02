@@ -1,0 +1,41 @@
+/* 
+  Localizable.strings
+  smm-printer-mac
+
+  Created by Сергей Бекезин on 04.06.2024.
+  
+*/
+
+// Root
+"RootYouChipTitle" = "YouChip";
+"RootTheFileIsPlacedInCloudTitle" = "One or more files are placed in the iCloud and must be downloaded before we can open them. Start downloading now?";
+"RootDownloadTitle" = "Download";
+"RootDownloadingHasStartedTitle" = "Downloading has started. Please try to open the file(s) later";
+
+// Button Titles
+"ContinueButtonTitle" = "Continue";
+"CloseButtonTitle" = "Close";
+"CancelButtonTitle" = "Cancel";
+"SaveButtonTitle" = "Save";
+"PreviousButtonTitle" = "Previous";
+"NextButtonTitle" = "Next";
+"AutoButtonTitle" = "Auto";
+"DeleteButtonTitle" = "Delete";
+
+//Alerts
+"AlertsOkTitle" = "OK";
+"AlertsErrorTitle" = "Error";
+"AlertsInfoTitle" = "Info";
+"AlertsYesTitle" = "Yes";
+"AlertsNoTitle" = "No";
+"AlertsAreYouSure" = "Are you sure?";
+"AlertsLikeAlertTitle" = "Do you like Printer app?";
+"AlertsOcrErrorTitle" = "This image file can not be transribing. Try to choose other or change language.";
+"AlertsOpenFileErrorTitle" = "This document no longer exists";
+"AlertsFileErrorTitle" = "Some problems with this file";
+"AlertsUnknowErrorTitle" = "Something went wrong";
+"AlertsEmptyFileErrorTitle" = "The file does not exist";
+"AlertsBadFileErrorTitle" = "Bad file";
+
+//Mac
+"MacQuitAppTitle" = "Quit Printer";

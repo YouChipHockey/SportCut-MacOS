@@ -1,0 +1,598 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */; };
+		DD32C2632D74A00C0052B5C6 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DD32C25C2D74A00C0052B5C6 /* Preview Assets.xcassets */; };
+		DD32C2642D74A00C0052B5C6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DD32C25E2D74A00C0052B5C6 /* Assets.xcassets */; };
+		DD32C2652D74A00C0052B5C6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C25F2D74A00C0052B5C6 /* ContentView.swift */; };
+		DD32C2662D74A00C0052B5C6 /* Youchip_StatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2612D74A00C0052B5C6 /* Youchip_StatApp.swift */; };
+		DD32C26C2D74A0420052B5C6 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DD32C26B2D74A0420052B5C6 /* Localizable.strings */; };
+		DD32C27B2D74A0480052B5C6 /* SFProRounded-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2722D74A0480052B5C6 /* SFProRounded-Regular.otf */; };
+		DD32C27C2D74A0480052B5C6 /* SFCompactText-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C26D2D74A0480052B5C6 /* SFCompactText-Medium.ttf */; };
+		DD32C27D2D74A0480052B5C6 /* SFProDisplay-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C26F2D74A0480052B5C6 /* SFProDisplay-Bold.ttf */; };
+		DD32C27E2D74A0480052B5C6 /* SFProRounded-Semibold.otf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2732D74A0480052B5C6 /* SFProRounded-Semibold.otf */; };
+		DD32C27F2D74A0480052B5C6 /* SFMono-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C26E2D74A0480052B5C6 /* SFMono-Regular.otf */; };
+		DD32C2802D74A0480052B5C6 /* SFCompactText-Semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2792D74A0480052B5C6 /* SFCompactText-Semibold.ttf */; };
+		DD32C2812D74A0480052B5C6 /* SFProDisplay-Semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2712D74A0480052B5C6 /* SFProDisplay-Semibold.ttf */; };
+		DD32C2822D74A0480052B5C6 /* SFProText-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2742D74A0480052B5C6 /* SFProText-Bold.ttf */; };
+		DD32C2832D74A0480052B5C6 /* SFProText-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2752D74A0480052B5C6 /* SFProText-Medium.ttf */; };
+		DD32C2842D74A0480052B5C6 /* SFProText-Semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2772D74A0480052B5C6 /* SFProText-Semibold.ttf */; };
+		DD32C2852D74A0480052B5C6 /* SFCompactText-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2782D74A0480052B5C6 /* SFCompactText-Regular.ttf */; };
+		DD32C2862D74A0480052B5C6 /* SFProDisplay-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2702D74A0480052B5C6 /* SFProDisplay-Regular.ttf */; };
+		DD32C2872D74A0480052B5C6 /* SFProText-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2762D74A0480052B5C6 /* SFProText-Regular.ttf */; };
+		DD32C2892D74A05C0052B5C6 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = DD32C2882D74A05C0052B5C6 /* Info.plist */; };
+		DD32C28B2D74A1190052B5C6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C28A2D74A1180052B5C6 /* AppDelegate.swift */; };
+		DD32C28F2D74A19A0052B5C6 /* AppSetupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C28E2D74A1990052B5C6 /* AppSetupManager.swift */; };
+		DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2902D74A1C80052B5C6 /* Colors.swift */; };
+		DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2962D74A1C80052B5C6 /* NSError+Convenience.swift */; };
+		DD32C2A22D74A1C80052B5C6 /* NSView+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2982D74A1C80052B5C6 /* NSView+Convenience.swift */; };
+		DD32C2A32D74A1C80052B5C6 /* Date+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2912D74A1C80052B5C6 /* Date+Convenience.swift */; };
+		DD32C2A42D74A1C80052B5C6 /* UInt64+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29B2D74A1C80052B5C6 /* UInt64+Convenience.swift */; };
+		DD32C2A62D74A1C80052B5C6 /* Fonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2932D74A1C80052B5C6 /* Fonts.swift */; };
+		DD32C2A72D74A1C80052B5C6 /* SKProduct+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2992D74A1C80052B5C6 /* SKProduct+Convenience.swift */; };
+		DD32C2A82D74A1C80052B5C6 /* FileManager+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2922D74A1C80052B5C6 /* FileManager+Convenience.swift */; };
+		DD32C2A92D74A1C80052B5C6 /* View+Alerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */; };
+		DD32C2AA2D74A1C80052B5C6 /* Images.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2942D74A1C80052B5C6 /* Images.swift */; };
+		DD32C2AB2D74A1C80052B5C6 /* String+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29A2D74A1C80052B5C6 /* String+Convenience.swift */; };
+		DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */; };
+		DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */; };
+		DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		23DAB237503920889C6C4438 /* Pods-Youchip-Stat.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.debug.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.debug.xcconfig"; sourceTree = "<group>"; };
+		2EA66B918FEF070C401BD61D /* Pods-Youchip-Stat.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.release.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.release.xcconfig"; sourceTree = "<group>"; };
+		D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Youchip_Stat.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		DD32C25C2D74A00C0052B5C6 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		DD32C25E2D74A00C0052B5C6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		DD32C25F2D74A00C0052B5C6 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		DD32C2602D74A00C0052B5C6 /* Youchip_Stat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Youchip_Stat.entitlements; sourceTree = "<group>"; };
+		DD32C2612D74A00C0052B5C6 /* Youchip_StatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Youchip_StatApp.swift; sourceTree = "<group>"; };
+		DD32C26A2D74A0420052B5C6 /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		DD32C26D2D74A0480052B5C6 /* SFCompactText-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFCompactText-Medium.ttf"; sourceTree = "<group>"; };
+		DD32C26E2D74A0480052B5C6 /* SFMono-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFMono-Regular.otf"; sourceTree = "<group>"; };
+		DD32C26F2D74A0480052B5C6 /* SFProDisplay-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProDisplay-Bold.ttf"; sourceTree = "<group>"; };
+		DD32C2702D74A0480052B5C6 /* SFProDisplay-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProDisplay-Regular.ttf"; sourceTree = "<group>"; };
+		DD32C2712D74A0480052B5C6 /* SFProDisplay-Semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProDisplay-Semibold.ttf"; sourceTree = "<group>"; };
+		DD32C2722D74A0480052B5C6 /* SFProRounded-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProRounded-Regular.otf"; sourceTree = "<group>"; };
+		DD32C2732D74A0480052B5C6 /* SFProRounded-Semibold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProRounded-Semibold.otf"; sourceTree = "<group>"; };
+		DD32C2742D74A0480052B5C6 /* SFProText-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProText-Bold.ttf"; sourceTree = "<group>"; };
+		DD32C2752D74A0480052B5C6 /* SFProText-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProText-Medium.ttf"; sourceTree = "<group>"; };
+		DD32C2762D74A0480052B5C6 /* SFProText-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProText-Regular.ttf"; sourceTree = "<group>"; };
+		DD32C2772D74A0480052B5C6 /* SFProText-Semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProText-Semibold.ttf"; sourceTree = "<group>"; };
+		DD32C2782D74A0480052B5C6 /* SFCompactText-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFCompactText-Regular.ttf"; sourceTree = "<group>"; };
+		DD32C2792D74A0480052B5C6 /* SFCompactText-Semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFCompactText-Semibold.ttf"; sourceTree = "<group>"; };
+		DD32C2882D74A05C0052B5C6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = "Youchip-Stat/Resourses/Info.plist"; sourceTree = SOURCE_ROOT; };
+		DD32C28A2D74A1180052B5C6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		DD32C28E2D74A1990052B5C6 /* AppSetupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSetupManager.swift; sourceTree = "<group>"; };
+		DD32C2902D74A1C80052B5C6 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
+		DD32C2912D74A1C80052B5C6 /* Date+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Convenience.swift"; sourceTree = "<group>"; };
+		DD32C2922D74A1C80052B5C6 /* FileManager+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FileManager+Convenience.swift"; sourceTree = "<group>"; };
+		DD32C2932D74A1C80052B5C6 /* Fonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fonts.swift; sourceTree = "<group>"; };
+		DD32C2942D74A1C80052B5C6 /* Images.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Images.swift; sourceTree = "<group>"; };
+		DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedStrings.swift; sourceTree = "<group>"; };
+		DD32C2962D74A1C80052B5C6 /* NSError+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSError+Convenience.swift"; sourceTree = "<group>"; };
+		DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSImage+Convenience.swift"; sourceTree = "<group>"; };
+		DD32C2982D74A1C80052B5C6 /* NSView+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSView+Convenience.swift"; sourceTree = "<group>"; };
+		DD32C2992D74A1C80052B5C6 /* SKProduct+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SKProduct+Convenience.swift"; sourceTree = "<group>"; };
+		DD32C29A2D74A1C80052B5C6 /* String+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Convenience.swift"; sourceTree = "<group>"; };
+		DD32C29B2D74A1C80052B5C6 /* UInt64+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt64+Convenience.swift"; sourceTree = "<group>"; };
+		DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Alerts.swift"; sourceTree = "<group>"; };
+		DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+CloudFiles.swift"; sourceTree = "<group>"; };
+		DDB401912D749E0F004A12C2 /* Youchip-Stat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Youchip-Stat.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DDB4018E2D749E0F004A12C2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		12AB2F0D65F3DB2A6B5D40D5 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		19D7382366CFC9B0A4001CE8 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				23DAB237503920889C6C4438 /* Pods-Youchip-Stat.debug.xcconfig */,
+				2EA66B918FEF070C401BD61D /* Pods-Youchip-Stat.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		DD32C25D2D74A00C0052B5C6 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				DD32C25C2D74A00C0052B5C6 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		DD32C2622D74A00C0052B5C6 /* Youchip-Stat */ = {
+			isa = PBXGroup;
+			children = (
+				DD32C25F2D74A00C0052B5C6 /* ContentView.swift */,
+				DD32C2612D74A00C0052B5C6 /* Youchip_StatApp.swift */,
+				DD32C28A2D74A1180052B5C6 /* AppDelegate.swift */,
+				DD32C2672D74A0110052B5C6 /* Common */,
+				DD32C2682D74A0180052B5C6 /* Modules */,
+				DD32C25D2D74A00C0052B5C6 /* Preview Content */,
+				DD32C2692D74A0270052B5C6 /* Resourses */,
+			);
+			path = "Youchip-Stat";
+			sourceTree = "<group>";
+		};
+		DD32C2672D74A0110052B5C6 /* Common */ = {
+			isa = PBXGroup;
+			children = (
+				DD32C29F2D74A1C80052B5C6 /* Extensions */,
+				DD32C28E2D74A1990052B5C6 /* AppSetupManager.swift */,
+			);
+			path = Common;
+			sourceTree = "<group>";
+		};
+		DD32C2682D74A0180052B5C6 /* Modules */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Modules;
+			sourceTree = "<group>";
+		};
+		DD32C2692D74A0270052B5C6 /* Resourses */ = {
+			isa = PBXGroup;
+			children = (
+				DD32C27A2D74A0480052B5C6 /* Fonts */,
+				DD32C2602D74A00C0052B5C6 /* Youchip_Stat.entitlements */,
+				DD32C2882D74A05C0052B5C6 /* Info.plist */,
+				DD32C25E2D74A00C0052B5C6 /* Assets.xcassets */,
+				DD32C26B2D74A0420052B5C6 /* Localizable.strings */,
+			);
+			path = Resourses;
+			sourceTree = "<group>";
+		};
+		DD32C27A2D74A0480052B5C6 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				DD32C26D2D74A0480052B5C6 /* SFCompactText-Medium.ttf */,
+				DD32C26E2D74A0480052B5C6 /* SFMono-Regular.otf */,
+				DD32C26F2D74A0480052B5C6 /* SFProDisplay-Bold.ttf */,
+				DD32C2702D74A0480052B5C6 /* SFProDisplay-Regular.ttf */,
+				DD32C2712D74A0480052B5C6 /* SFProDisplay-Semibold.ttf */,
+				DD32C2722D74A0480052B5C6 /* SFProRounded-Regular.otf */,
+				DD32C2732D74A0480052B5C6 /* SFProRounded-Semibold.otf */,
+				DD32C2742D74A0480052B5C6 /* SFProText-Bold.ttf */,
+				DD32C2752D74A0480052B5C6 /* SFProText-Medium.ttf */,
+				DD32C2762D74A0480052B5C6 /* SFProText-Regular.ttf */,
+				DD32C2772D74A0480052B5C6 /* SFProText-Semibold.ttf */,
+				DD32C2782D74A0480052B5C6 /* SFCompactText-Regular.ttf */,
+				DD32C2792D74A0480052B5C6 /* SFCompactText-Semibold.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		DD32C29F2D74A1C80052B5C6 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				DD32C2902D74A1C80052B5C6 /* Colors.swift */,
+				DD32C2912D74A1C80052B5C6 /* Date+Convenience.swift */,
+				DD32C2922D74A1C80052B5C6 /* FileManager+Convenience.swift */,
+				DD32C2932D74A1C80052B5C6 /* Fonts.swift */,
+				DD32C2942D74A1C80052B5C6 /* Images.swift */,
+				DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */,
+				DD32C2962D74A1C80052B5C6 /* NSError+Convenience.swift */,
+				DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */,
+				DD32C2982D74A1C80052B5C6 /* NSView+Convenience.swift */,
+				DD32C2992D74A1C80052B5C6 /* SKProduct+Convenience.swift */,
+				DD32C29A2D74A1C80052B5C6 /* String+Convenience.swift */,
+				DD32C29B2D74A1C80052B5C6 /* UInt64+Convenience.swift */,
+				DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */,
+				DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		DDB401882D749E0F004A12C2 = {
+			isa = PBXGroup;
+			children = (
+				DD32C2622D74A00C0052B5C6 /* Youchip-Stat */,
+				DDB401922D749E0F004A12C2 /* Products */,
+				19D7382366CFC9B0A4001CE8 /* Pods */,
+				12AB2F0D65F3DB2A6B5D40D5 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		DDB401922D749E0F004A12C2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				DDB401912D749E0F004A12C2 /* Youchip-Stat.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		DDB401902D749E0F004A12C2 /* Youchip-Stat */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DDB401A02D749E11004A12C2 /* Build configuration list for PBXNativeTarget "Youchip-Stat" */;
+			buildPhases = (
+				27A1F35877FBEFE8D2BFD756 /* [CP] Check Pods Manifest.lock */,
+				DDB4018D2D749E0F004A12C2 /* Sources */,
+				DDB4018E2D749E0F004A12C2 /* Frameworks */,
+				DDB4018F2D749E0F004A12C2 /* Resources */,
+				58EF2125F838AA35E7959A89 /* [CP] Embed Pods Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Youchip-Stat";
+			productName = "Youchip-Stat";
+			productReference = DDB401912D749E0F004A12C2 /* Youchip-Stat.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DDB401892D749E0F004A12C2 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1610;
+				LastUpgradeCheck = 1610;
+				TargetAttributes = {
+					DDB401902D749E0F004A12C2 = {
+						CreatedOnToolsVersion = 16.1;
+					};
+				};
+			};
+			buildConfigurationList = DDB4018C2D749E0F004A12C2 /* Build configuration list for PBXProject "Youchip-Stat" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = DDB401882D749E0F004A12C2;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = DDB401922D749E0F004A12C2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				DDB401902D749E0F004A12C2 /* Youchip-Stat */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		DDB4018F2D749E0F004A12C2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DD32C27B2D74A0480052B5C6 /* SFProRounded-Regular.otf in Resources */,
+				DD32C27C2D74A0480052B5C6 /* SFCompactText-Medium.ttf in Resources */,
+				DD32C27D2D74A0480052B5C6 /* SFProDisplay-Bold.ttf in Resources */,
+				DD32C27E2D74A0480052B5C6 /* SFProRounded-Semibold.otf in Resources */,
+				DD32C27F2D74A0480052B5C6 /* SFMono-Regular.otf in Resources */,
+				DD32C2802D74A0480052B5C6 /* SFCompactText-Semibold.ttf in Resources */,
+				DD32C2812D74A0480052B5C6 /* SFProDisplay-Semibold.ttf in Resources */,
+				DD32C2822D74A0480052B5C6 /* SFProText-Bold.ttf in Resources */,
+				DD32C2832D74A0480052B5C6 /* SFProText-Medium.ttf in Resources */,
+				DD32C2842D74A0480052B5C6 /* SFProText-Semibold.ttf in Resources */,
+				DD32C2892D74A05C0052B5C6 /* Info.plist in Resources */,
+				DD32C2852D74A0480052B5C6 /* SFCompactText-Regular.ttf in Resources */,
+				DD32C2862D74A0480052B5C6 /* SFProDisplay-Regular.ttf in Resources */,
+				DD32C2872D74A0480052B5C6 /* SFProText-Regular.ttf in Resources */,
+				DD32C2632D74A00C0052B5C6 /* Preview Assets.xcassets in Resources */,
+				DD32C26C2D74A0420052B5C6 /* Localizable.strings in Resources */,
+				DD32C2642D74A00C0052B5C6 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		27A1F35877FBEFE8D2BFD756 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Youchip-Stat-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		58EF2125F838AA35E7959A89 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DDB4018D2D749E0F004A12C2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DD32C28B2D74A1190052B5C6 /* AppDelegate.swift in Sources */,
+				DD32C28F2D74A19A0052B5C6 /* AppSetupManager.swift in Sources */,
+				DD32C2652D74A00C0052B5C6 /* ContentView.swift in Sources */,
+				DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */,
+				DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */,
+				DD32C2A22D74A1C80052B5C6 /* NSView+Convenience.swift in Sources */,
+				DD32C2A32D74A1C80052B5C6 /* Date+Convenience.swift in Sources */,
+				DD32C2A42D74A1C80052B5C6 /* UInt64+Convenience.swift in Sources */,
+				DD32C2A62D74A1C80052B5C6 /* Fonts.swift in Sources */,
+				DD32C2A72D74A1C80052B5C6 /* SKProduct+Convenience.swift in Sources */,
+				DD32C2A82D74A1C80052B5C6 /* FileManager+Convenience.swift in Sources */,
+				DD32C2A92D74A1C80052B5C6 /* View+Alerts.swift in Sources */,
+				DD32C2AA2D74A1C80052B5C6 /* Images.swift in Sources */,
+				DD32C2AB2D74A1C80052B5C6 /* String+Convenience.swift in Sources */,
+				DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */,
+				DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */,
+				DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */,
+				DD32C2662D74A00C0052B5C6 /* Youchip_StatApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		DD32C26B2D74A0420052B5C6 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				DD32C26A2D74A0420052B5C6 /* Localizable.strings */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		DDB4019E2D749E11004A12C2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		DDB4019F2D749E11004A12C2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		DDB401A12D749E11004A12C2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 23DAB237503920889C6C4438 /* Pods-Youchip-Stat.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Youchip-Stat/Resourses/Youchip_Stat.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Youchip-Stat/Preview Content\"";
+				DEVELOPMENT_TEAM = 39LGYY2D5D;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Youchip-Stat/Resourses/Info.plist";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.YouChip.Youchip-Stat";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DDB401A22D749E11004A12C2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2EA66B918FEF070C401BD61D /* Pods-Youchip-Stat.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Youchip-Stat/Resourses/Youchip_Stat.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Youchip-Stat/Preview Content\"";
+				DEVELOPMENT_TEAM = 39LGYY2D5D;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Youchip-Stat/Resourses/Info.plist";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.YouChip.Youchip-Stat";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		DDB4018C2D749E0F004A12C2 /* Build configuration list for PBXProject "Youchip-Stat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DDB4019E2D749E11004A12C2 /* Debug */,
+				DDB4019F2D749E11004A12C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DDB401A02D749E11004A12C2 /* Build configuration list for PBXNativeTarget "Youchip-Stat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DDB401A12D749E11004A12C2 /* Debug */,
+				DDB401A22D749E11004A12C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = DDB401892D749E0F004A12C2 /* Project object */;
+}
