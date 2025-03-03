@@ -18,7 +18,8 @@ struct Youchip_StatApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            VideosView()
+                .environmentObject(VideosViewModel())
         }
         .handlesExternalEvents(matching: [])
     }

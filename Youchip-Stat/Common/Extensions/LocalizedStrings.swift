@@ -42,9 +42,14 @@ extension String {
     
     enum Root: String {
         case rootYouChipTitle
+        case rootVideosTitle
         case rootTheFileIsPlacedInCloudTitle
         case rootDownloadTitle
         case rootDownloadingHasStartedTitle
+    }
+    
+    enum Videos: String {
+        case addVideoTitle
     }
     
     enum Mac: String {
