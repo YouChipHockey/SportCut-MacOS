@@ -101,10 +101,12 @@ tags – array, массив из id тэгов к которым привяза
 ```
 
 id – String, выдается автоматически, формат uuid
+
 name – String, название лейбла
+
 tags – array, массив из тэгов:
 	tagId – String, id тэга, формат uuid
  	timeStart – String, начало тэга, формат HH:MM:SS
-  	timeFinish – String, конец тэга, формат HH:MM:SS
-   	comment – String, комментарий, может быть пустым
-	labels – array, массив из id лейблов
+ 	timeFinish – String, конец тэга, формат HH:MM:SS
+  	comment – String, комментарий, может быть пустым
+   	labels – array, массив из id лейблов
