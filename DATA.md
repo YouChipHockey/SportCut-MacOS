@@ -104,7 +104,7 @@ id – String, выдается автоматически, формат uuid
 
 name – String, название лейбла
 
--- tags – array, массив из тэгов:
+tags – array, массив из тэгов:
 
 -- tagId – String, id тэга, формат uuid
 
