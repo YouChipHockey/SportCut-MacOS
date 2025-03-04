@@ -2,24 +2,24 @@
 У нас есть 3 сущности tag, label и timeline. Тут описано их структура в виде JSON
 </p>
 
-<h1>Тэги</h1>
+<h1>Тэг</h1>
 
-<p>
-Тэг которым и размечтается видео 
-</p>
-`{
-		"id": "gjgj5jfkj3",
-		"name": "Поперечный",
-		"description":"описание",
-		"color": "FF5733",
-		"defaultTimeBefore": 3,
-		"defaultTimeAfter": 4,
-		"groupName": "Пасы",
-		"collection": "от YouChip"
-	}`
+Тэгами размечтается видео. Обычно тэг обозначает какое-то событие или действие. Например, бросок, пас, ускорение и т.п.
 
-<p>
-id – uuid, выдается автоматически
+<code>
+{
+	"id": "gjgj5jfkj3",
+	"name": "Поперечный",
+	"description":"описание",
+	"color": "FF5733",
+	"defaultTimeBefore": 3,
+	"defaultTimeAfter": 4,
+	"groupName": "Пасы",
+	"collection": "от YouChip"
+}
+</code>
+
+id – String, выдается автоматически, формат uuid
 
 name – String, название тэга
 
@@ -33,5 +33,78 @@ defaultTimeAfter – кол-во секунд после момента нажа
 
 groupName – группа к которой относится тэг
 
-collection – 
-</p>
+collection – коллекция тэгов, для разметки конкретного видео открывается одна коллекция
+
+<h1>Лейбл</h1>
+
+Лейбл, привязанный к тэгу, обычно уточняет или характеризует тэг. Например, для тэга «бросок» будут лейблы заблокированный, в створ и т.п. Также, лейблы могут характеризовать игроков.
+
+<code>
+{
+	"id": "tj3hjkhu4",
+	"name":"Панарин 65",
+	"description": "Нападающий",
+	"tags": [
+		"gjgj5jfkj3",
+		"45kjhn56lgk",
+		"glj6hkjh5l"	
+	]
+},
+</code>  
+
+id – String, выдается автоматически, формат uuid
+
+name – String, название лейбла
+
+description – String, описание, может быть пустым
+
+tags – array, массив из id тэгов к которым привязан лейбл. Лейбл может быть привязан к совершенно любому тэгу.
+
+<h1>Таймлайн</h1>
+
+Таймлайн содержит в себе информацию по разметке видео тэгами. У одного видео может быть несоклько таймлайнов.
+
+<code>
+{
+	"id": "jjh5hgj4b",
+	"name": "Броски и пасы",
+	"tags":[
+		{
+			"tagName": "glj6hkjh5l",
+			"timeStart": "01:23:54",
+			"timeFinish": "01:24:10",
+			"comment": "ниче такой гол",
+			"labels": [
+				"tj3hjkhu4",
+				"985u89g84"
+			]
+		},
+		{
+			"tagId": "glj6hkjh5l",
+			"timeStart": "01:32:00",
+			"timeFinish": "01:33:00",
+			"comment": "",
+			"labels": [
+				"tj3hjkhu4"
+			]
+		},
+		{
+			"tagId": "45kjhn56lgk",
+			"timeStart": "00:40:30",
+			"timeFinish": "00:40:45",
+			"comment": "заебатый пас",
+			"labels": [
+			]
+		}
+	]
+}
+</code>
+
+id – String, выдается автоматически, формат uuid
+name – String, название лейбла
+tags – array, массив из тэгов:
+	tagId – String, id тэга, формат uuid
+ 	timeStart – String, начало тэга, формат HH:MM:SS
+  	timeFinish – String, конец тэга, формат HH:MM:SS
+   	comment – String, комментарий, может быть пустым
+	labels – array, массив из id лейблов
