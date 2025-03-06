@@ -14,7 +14,7 @@ struct FilesFile {
         get {
             do {
                 var isStale = false
-                let restoredUrl = try URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
+                let restoredUrl = try URL(resolvingBookmarkData: videoData.bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
                 guard restoredUrl.startAccessingSecurityScopedResource() else { return nil }
                 return restoredUrl
             } catch {
@@ -24,7 +24,7 @@ struct FilesFile {
         set {
             if let newUrl = newValue {
                 do {
-                    bookmark = try newUrl.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+                    videoData.bookmark = try newUrl.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
                 } catch {
                     print("Failed to create bookmark data: \(error)")
                 }
@@ -47,17 +47,17 @@ struct FilesFile {
     
     var customName: String?
     
-    var bookmark: Data
+    var videoData: VideosData
     
     var preview: NSImage?
     
-    init(bookmark: Data) {
-        self.bookmark = bookmark
+    init(videoData: VideosData) {
+        self.videoData = videoData
     }
     
     mutating func updateBookmark() {
         guard let bookmarkData = try? self.url!.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) else { return }
-        bookmark = bookmarkData
+        videoData.bookmark = bookmarkData
     }
     
 }

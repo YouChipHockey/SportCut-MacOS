@@ -43,7 +43,7 @@ struct VideoThumbnailView: View {
             Button(role: .destructive) {
                 viewModel.action.send(.deleteFile(file: file))
             } label: {
-                Label(^String.ButtonTitles.deleteButtonTitle, systemImage: AppImage.sfTrash.rawValue)
+                SwiftUI.Label(^String.ButtonTitles.deleteButtonTitle, systemImage: AppImage.sfTrash.rawValue)
             }
         }
     }

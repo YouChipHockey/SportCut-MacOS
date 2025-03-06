@@ -25,8 +25,6 @@
 		DD2A70762D74D77C00287BA8 /* AppCloudFilesHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70752D74D77C00287BA8 /* AppCloudFilesHelper.swift */; };
 		DD2A70782D74D79B00287BA8 /* FileOpenHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70772D74D79B00287BA8 /* FileOpenHelper.swift */; };
 		DD2A707A2D74E0AF00287BA8 /* VideoThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70792D74E08300287BA8 /* VideoThumbnailView.swift */; };
-		DD2A707F2D74E42100287BA8 /* VideoPlayerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A707E2D74E42000287BA8 /* VideoPlayerManager.swift */; };
-		DD2A70812D74E42C00287BA8 /* VideoPlayerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70802D74E42C00287BA8 /* VideoPlayerWindow.swift */; };
 		DD2A70832D74E43700287BA8 /* VideoControlWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70822D74E43700287BA8 /* VideoControlWindow.swift */; };
 		DD32C2632D74A00C0052B5C6 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DD32C25C2D74A00C0052B5C6 /* Preview Assets.xcassets */; };
 		DD32C2642D74A00C0052B5C6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DD32C25E2D74A00C0052B5C6 /* Assets.xcassets */; };
@@ -62,6 +60,11 @@
 		DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */; };
 		DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */; };
 		DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */; };
+		DDD60A912D7A35140097600D /* tags.json in Resources */ = {isa = PBXBuildFile; fileRef = DDD60A8F2D7A35140097600D /* tags.json */; };
+		DDD60A922D7A35140097600D /* labelsGroups.json in Resources */ = {isa = PBXBuildFile; fileRef = DDD60A8D2D7A35140097600D /* labelsGroups.json */; };
+		DDD60A932D7A35140097600D /* tagsGroups.json in Resources */ = {isa = PBXBuildFile; fileRef = DDD60A902D7A35140097600D /* tagsGroups.json */; };
+		DDD60A942D7A35140097600D /* labels.json in Resources */ = {isa = PBXBuildFile; fileRef = DDD60A8E2D7A35140097600D /* labels.json */; };
+		DDDB36362D78E16500A1111C /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDB36352D78E16100A1111C /* Color.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,8 +88,6 @@
 		DD2A70752D74D77C00287BA8 /* AppCloudFilesHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudFilesHelper.swift; sourceTree = "<group>"; };
 		DD2A70772D74D79B00287BA8 /* FileOpenHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileOpenHelper.swift; sourceTree = "<group>"; };
 		DD2A70792D74E08300287BA8 /* VideoThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoThumbnailView.swift; sourceTree = "<group>"; };
-		DD2A707E2D74E42000287BA8 /* VideoPlayerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerManager.swift; sourceTree = "<group>"; };
-		DD2A70802D74E42C00287BA8 /* VideoPlayerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerWindow.swift; sourceTree = "<group>"; };
 		DD2A70822D74E43700287BA8 /* VideoControlWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoControlWindow.swift; sourceTree = "<group>"; };
 		DD32C25C2D74A00C0052B5C6 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		DD32C25E2D74A00C0052B5C6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -124,6 +125,11 @@
 		DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Alerts.swift"; sourceTree = "<group>"; };
 		DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+CloudFiles.swift"; sourceTree = "<group>"; };
 		DDB401912D749E0F004A12C2 /* Youchip-Stat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Youchip-Stat.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDD60A8D2D7A35140097600D /* labelsGroups.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labelsGroups.json; sourceTree = "<group>"; };
+		DDD60A8E2D7A35140097600D /* labels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labels.json; sourceTree = "<group>"; };
+		DDD60A8F2D7A35140097600D /* tags.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tags.json; sourceTree = "<group>"; };
+		DDD60A902D7A35140097600D /* tagsGroups.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tagsGroups.json; sourceTree = "<group>"; };
+		DDDB36352D78E16100A1111C /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -226,8 +232,6 @@
 			isa = PBXGroup;
 			children = (
 				DD2A70822D74E43700287BA8 /* VideoControlWindow.swift */,
-				DD2A70802D74E42C00287BA8 /* VideoPlayerWindow.swift */,
-				DD2A707E2D74E42000287BA8 /* VideoPlayerManager.swift */,
 			);
 			path = VideoPlayer;
 			sourceTree = "<group>";
@@ -283,6 +287,10 @@
 				DD32C2882D74A05C0052B5C6 /* Info.plist */,
 				DD32C25E2D74A00C0052B5C6 /* Assets.xcassets */,
 				DD32C26B2D74A0420052B5C6 /* Localizable.strings */,
+				DDD60A8D2D7A35140097600D /* labelsGroups.json */,
+				DDD60A8E2D7A35140097600D /* labels.json */,
+				DDD60A8F2D7A35140097600D /* tags.json */,
+				DDD60A902D7A35140097600D /* tagsGroups.json */,
 			);
 			path = Resourses;
 			sourceTree = "<group>";
@@ -310,6 +318,7 @@
 		DD32C29F2D74A1C80052B5C6 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
+				DDDB36352D78E16100A1111C /* Color.swift */,
 				DD32C2902D74A1C80052B5C6 /* Colors.swift */,
 				DD32C2912D74A1C80052B5C6 /* Date+Convenience.swift */,
 				DD32C2922D74A1C80052B5C6 /* FileManager+Convenience.swift */,
@@ -420,6 +429,10 @@
 				DD32C2842D74A0480052B5C6 /* SFProText-Semibold.ttf in Resources */,
 				DD32C2892D74A05C0052B5C6 /* Info.plist in Resources */,
 				DD32C2852D74A0480052B5C6 /* SFCompactText-Regular.ttf in Resources */,
+				DDD60A912D7A35140097600D /* tags.json in Resources */,
+				DDD60A922D7A35140097600D /* labelsGroups.json in Resources */,
+				DDD60A932D7A35140097600D /* tagsGroups.json in Resources */,
+				DDD60A942D7A35140097600D /* labels.json in Resources */,
 				DD32C2862D74A0480052B5C6 /* SFProDisplay-Regular.ttf in Resources */,
 				DD32C2872D74A0480052B5C6 /* SFProText-Regular.ttf in Resources */,
 				DD32C2632D74A00C0052B5C6 /* Preview Assets.xcassets in Resources */,
@@ -495,6 +508,7 @@
 				DD2A705E2D74C66700287BA8 /* VideosActions.swift in Sources */,
 				DD2A706B2D74D31600287BA8 /* VideosPreviewManager.swift in Sources */,
 				DD2A70582D74C35F00287BA8 /* URL+Convenience.swift in Sources */,
+				DDDB36362D78E16500A1111C /* Color.swift in Sources */,
 				DD32C2A62D74A1C80052B5C6 /* Fonts.swift in Sources */,
 				DD32C2A72D74A1C80052B5C6 /* SKProduct+Convenience.swift in Sources */,
 				DD2A70622D74D27900287BA8 /* FilesDocumentPickerHelper.swift in Sources */,
@@ -504,9 +518,7 @@
 				DD32C2A92D74A1C80052B5C6 /* View+Alerts.swift in Sources */,
 				DD32C2AA2D74A1C80052B5C6 /* Images.swift in Sources */,
 				DD2A705C2D74C3B100287BA8 /* VideoFilesManager.swift in Sources */,
-				DD2A70812D74E42C00287BA8 /* VideoPlayerWindow.swift in Sources */,
 				DD32C2AB2D74A1C80052B5C6 /* String+Convenience.swift in Sources */,
-				DD2A707F2D74E42100287BA8 /* VideoPlayerManager.swift in Sources */,
 				DD2A70542D74C31B00287BA8 /* VideosState.swift in Sources */,
 				DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */,
 				DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */,

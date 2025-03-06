@@ -1,0 +1,211 @@
+{
+  "tags": [
+      {
+          "id": "d48dc77f-8d66-4c3f-a4e9-b0b3c787c26d",
+          "name": "Бросок",
+          "description":"",
+          "color": "7d3c98",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "e37c417c-589f-4cd6-a759-570fba4f5cef",
+          "name": "Бросок в створ",
+          "description":"",
+          "color": "17a589",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "da149249-07db-4037-9fbd-f96504f57864",
+          "name": "Гол",
+          "description":"",
+          "color": "d4ac0d",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "lablesGroup": [
+              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "9a77cb46-9c88-4f13-9d51-aa7f3d3a3c92",
+          "name": "Заблокированный",
+          "description":"",
+          "color": "e67e22",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "59475c37-8cda-4b23-b1ab-0eadd838188f",
+          "name": "Передача",
+          "description":"",
+          "color": "bdc3c7",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "13586425-da68-4898-9638-08cbfdb77e98",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "0f35aa88-730c-48c2-ad9a-29e00785952b",
+          "name": "Бросок зщ",
+          "description":"",
+          "color": "7d3c98",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "9c5b2a4c-3b13-4713-8a17-e4d248b3ebc0",
+          "name": "Бросок в створ зщ",
+          "description":"",
+          "color": "17a589",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "d31eed1e-f37f-4389-8dd3-d51c92cb2b23",
+          "name": "Гол зщ",
+          "description":"",
+          "color": "d4ac0d",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "bcfdb728-3622-4c0c-b680-7f2139d1a634",
+          "name": "Заблокированный зщ",
+          "description":"",
+          "color": "e67e22",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "914d7e1c-c135-4ff5-a775-b377c871a6f0",
+          "name": "С контролем",
+          "description":"",
+          "color": "dcea0",
+          "defaultTimeBefore": 10,
+          "defaultTimeAfter": 10,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "d3b0a5ba-1d6c-405e-abbe-ec9c89c01114",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "4948ad9b-d348-4bb8-b0f5-eef76dc098e3",
+          "name": "Без контроля",
+          "description":"",
+          "color": "f7dc6f",
+          "defaultTimeBefore": 10,
+          "defaultTimeAfter": 10,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "c4982e53-795c-4c46-acf3-fb73e09a327c",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "f782ca3d-7d2f-43aa-93c1-8c0c982c7bb7",
+          "name": "В защите",
+          "description":"",
+          "color": "2e4053",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "2905e370-0b83-43b0-9cb7-18d5ff311d4a",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "f64411d1-8829-4616-ab99-e1a7d77f0016",
+          "name": "В атаке",
+          "description":"",
+          "color": "dc7633",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "2905e370-0b83-43b0-9cb7-18d5ff311d4a",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "dc0da2ba-0282-4ab1-a3c6-934f2c8cc776",
+          "name": "В средней",
+          "description":"",
+          "color": "27ae60",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "2905e370-0b83-43b0-9cb7-18d5ff311d4a",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "713ca542-1cb8-46cd-95ef-84b3ba76b21c",
+          "name": "С контролем",
+          "description":"",
+          "color": "28b463",
+          "defaultTimeBefore": 10,
+          "defaultTimeAfter": 10,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "153fb597-3d76-4d72-ba8d-3e1c816505e2",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "5c4a9555-19e5-4fbc-a224-6e00bd586d8f",
+          "name": "Без контроля",
+          "description":"e67e22",
+          "color": "",
+          "defaultTimeBefore": 10,
+          "defaultTimeAfter": 10,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "4948ad9b-d348-4bb8-b0f5-eef76dc098e3",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      }
+  ]
+}

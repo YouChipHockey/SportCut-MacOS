@@ -7,6 +7,13 @@
 
 import Foundation
 
+struct VideosData: Codable {
+    
+    var bookmark: Data
+    var timelines: [TimelineLine]
+    
+}
+
 class VideoFilesManager {
     
     static let shared = VideoFilesManager()
@@ -14,7 +21,7 @@ class VideoFilesManager {
     let fileManager = FileManager.default
     
     @Published private(set) var files: [FilesFile] = []
-    @Published private(set) var bookmarks: [Data] = []
+    @Published private(set) var videosData: [VideosData] = []
     
     var updateFiles: (([FilesFile]) -> Void)?
     
@@ -28,12 +35,12 @@ class VideoFilesManager {
     @discardableResult
     func importFile(url: URL) -> FilesFile? {
         if let bookmark = url.makeBookmark() {
-            var file = FilesFile(bookmark: bookmark)
-            if !bookmarks.contains(bookmark) {
+            var file = FilesFile(videoData: VideosData(bookmark: bookmark, timelines: []))
+            if videosData.first(where: { $0.bookmark == bookmark}) == nil {
                 file.updateDateOpened()
                 file.updateDateModified()
                 files.append(file)
-                bookmarks.append(file.bookmark)
+                videosData.append(VideosData(bookmark: file.videoData.bookmark, timelines: []))
                 saveBookmarks()
                 updateFiles?(files)
             }
@@ -44,7 +51,7 @@ class VideoFilesManager {
     }
     
     func removeFile(file: FilesFile) {
-        guard let fileIndex = files.firstIndex(of: file), let bookmarkIndex = bookmarks.firstIndex(of: file.bookmark) else {
+        guard let fileIndex = files.firstIndex(of: file), let bookmarkIndex = videosData.firstIndex(where: {$0.bookmark ==  file.videoData.bookmark}) else {
             do {
                 guard let url = file.url else { return }
                 try fileManager.removeItem(at: url)
@@ -53,10 +60,21 @@ class VideoFilesManager {
             }
             return
         }
-        bookmarks.remove(at: bookmarkIndex)
+        videosData.remove(at: bookmarkIndex)
         files.remove(at: fileIndex)
         saveBookmarks()
         updateFiles?(files)
+    }
+    
+    func updateTimelines(for bookmark: Data, with timelines: [TimelineLine]) {
+        if let index = videosData.firstIndex(where: { $0.bookmark == bookmark }) {
+            videosData[index].timelines = timelines
+            saveBookmarks()
+        }
+        if let index = files.firstIndex(where: { $0.videoData.bookmark == bookmark }) {
+            files[index].videoData.timelines = timelines
+            updateFiles?(files)
+        }
     }
     
     // MARK: - Helpers
@@ -68,14 +86,19 @@ class VideoFilesManager {
     
     private func resolveBookmarks() -> [FilesFile] {
         var resolvedURLs: [FilesFile] = []
-        for bookmark in bookmarks {
-            resolvedURLs.append(FilesFile(bookmark: bookmark))
+        for videoData in videosData {
+            resolvedURLs.append(FilesFile(videoData: videoData))
         }
         return resolvedURLs
     }
     
     private func saveBookmarks() {
-        UserDefaults.standard.set(bookmarks, forKey: "bookmarks")
+        do {
+            let encoded = try JSONEncoder().encode(videosData)
+            UserDefaults.standard.set(encoded, forKey: "videosData")
+        } catch {
+            print("Ошибка кодирования: \(error)")
+        }
     }
     
     private func filterFiles() {
@@ -95,8 +118,13 @@ class VideoFilesManager {
     }
     
     private func loadBookmarks() {
-        if let bookmarksData = UserDefaults.standard.array(forKey: "bookmarks") as? [Data] {
-            bookmarks = bookmarksData
+        if let data = UserDefaults.standard.data(forKey: "videosData") {
+            do {
+                let videosData = try JSONDecoder().decode([VideosData].self, from: data)
+                self.videosData = videosData
+            } catch {
+                print("Ошибка декодирования: \(error)")
+            }
         }
     }
     

@@ -68,7 +68,7 @@ class VideosViewModel: ObservableObject {
         filesPreviewManager.saveThumbnail(for: url) { [weak self] in
             file.updateDateOpened()
             DispatchQueue.main.async { [weak self] in
-                self?.openVideo(file: url)
+                WindowsManager.shared.openVideo(filesFile: file)
             }
         }
     }
@@ -81,8 +81,7 @@ class VideosViewModel: ObservableObject {
             break
 //            openImages(image: image)
         case .openVideo(let file):
-            guard let url = file.url else { return }
-            openVideo(file: url)
+            WindowsManager.shared.openVideo(filesFile: file)
         case .deleteFile(let file):
             filesManager.removeFile(file: file)
         case .openFileFromHelper:
@@ -103,15 +102,4 @@ class VideosViewModel: ObservableObject {
         }
     }
     
-    private func openVideo(file: URL) {
-        let playerManager = VideoPlayerManager.shared
-        playerManager.loadVideo(from: file)
-
-        DispatchQueue.main.async {
-            let playerWindow = VideoPlayerWindowController()
-            let controlWindow = VideoControlWindowController()
-            playerWindow.showWindow(nil)
-            controlWindow.showWindow(nil)
-        }
-    }
 }

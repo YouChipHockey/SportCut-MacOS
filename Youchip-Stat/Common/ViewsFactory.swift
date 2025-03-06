@@ -24,7 +24,7 @@ class ViewsFactory {
                 #selector(NSSplitViewController.toggleSidebar(_:)), with: nil
             )
         } label: {
-            Label("Toggle sidebar", systemImage: "sidebar.left")
+            SwiftUI.Label("Toggle sidebar", systemImage: "sidebar.left")
         }
     }
     
@@ -48,7 +48,7 @@ class ViewsFactory {
         Button {
             completion()
         } label: {
-            Label(^String.ButtonTitles.previousButtonTitle, systemImage: AppImage.sfChevronLeft.rawValue)
+            SwiftUI.Label(^String.ButtonTitles.previousButtonTitle, systemImage: AppImage.sfChevronLeft.rawValue)
         }
     }
     
