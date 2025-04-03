@@ -1,6 +1,9 @@
 import SwiftUI
 import AVKit
 import Cocoa
+import AVFoundation  // для работы с AVAssetExportSession
+
+// MARK: - Модели данных
 
 struct Tag: Codable, Identifiable {
     let id: String
@@ -63,6 +66,8 @@ func loadJSON<T: Decodable>(filename: String) -> T? {
     }
 }
 
+// MARK: - Менеджер библиотеки тегов
+
 class TagLibraryManager: ObservableObject {
     static let shared = TagLibraryManager()
     @Published var tags: [Tag] = []
@@ -102,6 +107,8 @@ func timeStringToSeconds(_ time: String) -> Double {
     return 0
 }
 
+// MARK: - Расширение для цвета из HEX
+
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
@@ -130,6 +137,7 @@ extension Color {
 
 struct TimelineStamp: Identifiable, Codable {
     let id: UUID
+    var idTag: String
     var timeStart: String
     var timeFinish: String
     var colorHex: String
@@ -147,8 +155,9 @@ struct TimelineStamp: Identifiable, Codable {
     var duration: Double {
         finishSeconds - startSeconds
     }
-    init(id: UUID = UUID(), timeStart: String, timeFinish: String, colorHex: String, label: String, labels: [String]) {
+    init(id: UUID = UUID(), idTag: String, timeStart: String, timeFinish: String, colorHex: String, label: String, labels: [String]) {
         self.id = id
+        self.idTag = idTag
         self.timeStart = timeStart
         self.timeFinish = timeFinish
         self.colorHex = colorHex
@@ -162,6 +171,8 @@ struct TimelineLine: Identifiable, Codable {
     var name: String
     var stamps: [TimelineStamp] = []
 }
+
+// MARK: - Менеджер таймлайнов
 
 class TimelineDataManager: ObservableObject {
     static let shared = TimelineDataManager()
@@ -188,10 +199,10 @@ class TimelineDataManager: ObservableObject {
         selectedLineID = newLine.id
         updateTimelines()
     }
-    func addStampToSelectedLine(name: String, timeStart: String, timeFinish: String, color: String, labels: [String]) {
+    func addStampToSelectedLine(idTag: String, name: String, timeStart: String, timeFinish: String, color: String, labels: [String]) {
         guard let lineID = selectedLineID,
               let idx = lines.firstIndex(where: { $0.id == lineID }) else { return }
-        let stamp = TimelineStamp(timeStart: timeStart, timeFinish: timeFinish, colorHex: color, label: name, labels: labels)
+        let stamp = TimelineStamp(idTag: idTag, timeStart: timeStart, timeFinish: timeFinish, colorHex: color, label: name, labels: labels)
         lines[idx].stamps.append(stamp)
         updateTimelines()
     }
@@ -214,7 +225,7 @@ class WindowsManager {
     var videoWindow: VideoPlayerWindowController?
     var controlWindow: FullControlWindowController?
     var tagLibraryWindow: TagLibraryWindowController?
-    private var isClosing = false
+    private var isClosing = true
     
     func closeAll() {
         videoWindow?.window?.delegate = nil
@@ -225,10 +236,15 @@ class WindowsManager {
         tagLibraryWindow?.close()
         
         VideoPlayerManager.shared.deleteVideo()
+        isClosing = true
     }
     
     func openVideo(filesFile: FilesFile) {
-        guard let file = filesFile.url else { return }
+        guard let file = filesFile.url, isClosing else { return }
+        
+        UserDefaults.standard.set("", forKey: "editingStampLineID")
+        UserDefaults.standard.set("", forKey: "editingStampID")
+        isClosing = false
         
         TimelineDataManager.shared.currentBookmark = filesFile.videoData.bookmark
         TimelineDataManager.shared.lines = filesFile.videoData.timelines
@@ -239,25 +255,19 @@ class WindowsManager {
         controlWindow = FullControlWindowController()
         tagLibraryWindow = TagLibraryWindowController()
         
-        // 3. Позиционируем окна на экране
         if let screen = NSScreen.main {
             let screenFrame = screen.frame
-            
-            // Высота нижней трети
             let bottomHeight = screenFrame.height / 3
-            // Высота верхних двух третей
-            let topHeight = screenFrame.height - bottomHeight
+            let topHeight = screenFrame.height - bottomHeight - 40
             
-            // Окно таймлайна (нижняя треть, на всю ширину)
             let timelineRect = NSRect(
                 x: screenFrame.minX,
-                y: screenFrame.minY,           // снизу
+                y: screenFrame.minY,
                 width: screenFrame.width,
                 height: bottomHeight
             )
             controlWindow?.window?.setFrame(timelineRect, display: true)
             
-            // Окно библиотеки (левая часть верхних 2/3)
             let libraryRect = NSRect(
                 x: screenFrame.minX,
                 y: screenFrame.minY + bottomHeight,
@@ -266,7 +276,6 @@ class WindowsManager {
             )
             tagLibraryWindow?.window?.setFrame(libraryRect, display: true)
             
-            // Окно видео (правая часть верхних 2/3)
             let videoRect = NSRect(
                 x: screenFrame.minX + screenFrame.width / 3,
                 y: screenFrame.minY + bottomHeight,
@@ -276,7 +285,6 @@ class WindowsManager {
             videoWindow?.window?.setFrame(videoRect, display: true)
         }
         
-        // 4. Показываем окна
         videoWindow?.showWindow(nil)
         controlWindow?.showWindow(nil)
         tagLibraryWindow?.showWindow(nil)
@@ -336,6 +344,8 @@ class VideoPlayerManager: ObservableObject {
     }
 }
 
+// MARK: - Представление видео
+
 struct VideoPlayerWindow: View {
     @ObservedObject var videoManager = VideoPlayerManager.shared
     var body: some View {
@@ -349,6 +359,27 @@ struct VideoPlayerWindow: View {
             }
         }
         .frame(minWidth: 400, minHeight: 300)
+    }
+}
+
+class FullControlWindowController: NSWindowController, NSWindowDelegate {
+    init() {
+        let view = FullControlView()
+        let hostingController = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Таймлайны"
+        super.init(window: window)
+        window.styleMask.insert(.closable)
+        window.delegate = self
+        window.makeKeyAndOrderFront(nil)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func windowWillClose(_ notification: Notification) {
+        WindowsManager.shared.closeAll()
     }
 }
 
@@ -385,15 +416,498 @@ struct FullTimelineLine: Codable {
     let stamps: [FullTimelineStamp]
 }
 
+
 struct FullControlView: View {
     @ObservedObject var videoManager = VideoPlayerManager.shared
     @ObservedObject var timelineData = TimelineDataManager.shared
     @State private var sliderValue: Double = 0.0
     @State private var isDraggingSlider = false
     @State private var showAddLineSheet = false
+    @State private var isExporting: Bool = false
     @State private var showLabelEditSheet = false
     @State private var editingStampLineID: UUID?
     @State private var editingStampID: UUID?
+    
+    enum ExportMode { case film, playlist }
+    enum CutsExportType {
+        case currentTimeline
+        case allTimelines
+        case tag(selectedTag: Tag)
+    }
+    struct ExportSegment {
+        let timeRange: CMTimeRange
+        let lineName: String?
+        let tagName: String
+        let groupName: String?
+    }
+    @State private var selectedExportType: CutsExportType?
+    @State private var showExportModeSheet: Bool = false
+    @State private var showTagSelectionSheet: Bool = false
+
+    func getSegmentsForExport(type: CutsExportType) -> [ExportSegment] {
+        var result: [ExportSegment] = []
+        let tagLibrary = TagLibraryManager.shared
+        
+        switch type {
+        case .currentTimeline:
+            if let lineID = timelineData.selectedLineID,
+               let line = timelineData.lines.first(where: { $0.id == lineID }) {
+                for stamp in line.stamps {
+                    let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
+                    let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                    let possibleGroup = tagLibrary.tagGroups.first(where: { $0.tags.contains(stamp.idTag) })
+                    
+                    result.append(
+                        ExportSegment(
+                            timeRange: CMTimeRange(start: start, duration: duration),
+                            lineName: line.name,
+                            tagName: stamp.label,
+                            groupName: possibleGroup?.name
+                        )
+                    )
+                }
+            }
+        case .allTimelines:
+            for line in timelineData.lines {
+                for stamp in line.stamps {
+                    let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
+                    let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                    let possibleGroup = tagLibrary.tagGroups.first(where: { $0.tags.contains(stamp.idTag) })
+                    
+                    result.append(
+                        ExportSegment(
+                            timeRange: CMTimeRange(start: start, duration: duration),
+                            lineName: line.name,
+                            tagName: stamp.label,
+                            groupName: possibleGroup?.name
+                        )
+                    )
+                }
+            }
+        case .tag(let selectedTag):
+            let possibleGroup = tagLibrary.tagGroups.first(where: { $0.tags.contains(selectedTag.id) })
+            
+            for line in timelineData.lines {
+                for stamp in line.stamps {
+                    if stamp.label == selectedTag.name {
+                        let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
+                        let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                        result.append(
+                            ExportSegment(
+                                timeRange: CMTimeRange(start: start, duration: duration),
+                                lineName: line.name,
+                                tagName: stamp.label,
+                                groupName: possibleGroup?.name
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        
+        result.sort { $0.timeRange.start.seconds < $1.timeRange.start.seconds }
+        return result
+    }
+    
+    func exportFilm(segments: [ExportSegment], asset: AVAsset, type: CutsExportType, completion: @escaping (Result<URL, Error>) -> Void) {
+        let composition = AVMutableComposition()
+        
+        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+            completion(.failure(NSError(domain: "Export", code: 0, userInfo: [NSLocalizedDescriptionKey: "Video track not found"])))
+            return
+        }
+        let audioTrack = asset.tracks(withMediaType: .audio).first
+        
+        guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            completion(.failure(NSError(domain: "Export", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])))
+            return
+        }
+        var compAudioTrack: AVMutableCompositionTrack? = nil
+        if audioTrack != nil {
+            compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        }
+        
+        var currentTime = CMTime.zero
+        for segment in segments {
+            do {
+                try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: currentTime)
+                if let compAudio = compAudioTrack, let aTrack = audioTrack {
+                    try compAudio.insertTimeRange(segment.timeRange, of: aTrack, at: currentTime)
+                }
+                currentTime = currentTime + segment.timeRange.duration
+            } catch {
+                completion(.failure(error))
+                return
+            }
+        }
+        
+        let fileName: String
+        switch type {
+        case .currentTimeline:
+            if let lineName = segments.first?.lineName {
+                fileName = "\(lineName)_фильм.mp4"
+            } else {
+                fileName = "timeline_фильм.mp4"
+            }
+        case .tag(let selectedTag):
+            let groupName = segments.first?.groupName ?? "group"
+            fileName = "\(groupName)_\(selectedTag.name)_фильм.mp4"
+        case .allTimelines:
+            fileName = "все моменты.mp4"
+        }
+        
+        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        try? FileManager.default.removeItem(at: outputURL)
+        
+        let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
+        exportSession?.outputURL = outputURL
+        exportSession?.outputFileType = .mp4
+        exportSession?.exportAsynchronously {
+            if exportSession?.status == .completed {
+                completion(.success(outputURL))
+            } else {
+                completion(.failure(exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])))
+            }
+        }
+    }
+    
+    func exportPlaylist(segments: [ExportSegment],
+                        asset: AVAsset,
+                        type: CutsExportType,
+                        completion: @escaping (Result<URL, Error>) -> Void)
+    {
+        var exportedURLs: [URL] = []
+        let group = DispatchGroup()
+        var exportError: Error? = nil
+        
+        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+            completion(.failure(NSError(domain: "Export", code: 0, userInfo: [NSLocalizedDescriptionKey: "Video track not found"])))
+            return
+        }
+        let audioTrack = asset.tracks(withMediaType: .audio).first
+        
+        for (index, segment) in segments.enumerated() {
+            group.enter()
+            
+            let composition = AVMutableComposition()
+            guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video,
+                                                                   preferredTrackID: kCMPersistentTrackID_Invalid)
+            else {
+                exportError = NSError(domain: "Export", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])
+                group.leave()
+                continue
+            }
+            var compAudioTrack: AVMutableCompositionTrack? = nil
+            if let aTrack = audioTrack {
+                compAudioTrack = composition.addMutableTrack(withMediaType: .audio,
+                                                             preferredTrackID: kCMPersistentTrackID_Invalid)
+                do {
+                    try compAudioTrack?.insertTimeRange(segment.timeRange, of: aTrack, at: .zero)
+                } catch {
+                    exportError = error
+                    group.leave()
+                    continue
+                }
+            }
+            
+            do {
+                try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: .zero)
+            } catch {
+                exportError = error
+                group.leave()
+                continue
+            }
+            let fileName: String
+            
+            switch type {
+            case .currentTimeline:
+                let lineName = segment.lineName ?? "таймлайн"
+                fileName = "\(lineName)_\(segment.tagName)_\(index + 1).mp4"
+                
+            case .allTimelines:
+                let lineName = segment.lineName ?? "таймлайн"
+                fileName = "\(lineName)_\(segment.tagName)_\(index + 1).mp4"
+                
+            case .tag(let selectedTag):
+                let groupName = segment.groupName ?? "group"
+                fileName = "\(groupName)_\(selectedTag.name)_\(index + 1).mp4"
+            }
+            
+            let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            try? FileManager.default.removeItem(at: clipOutputURL)
+            
+            let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
+            exportSession?.outputURL = clipOutputURL
+            exportSession?.outputFileType = .mp4
+            
+            exportSession?.exportAsynchronously {
+                if exportSession?.status == .completed {
+                    exportedURLs.append(clipOutputURL)
+                } else {
+                    exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
+                }
+                group.leave()
+            }
+        }
+        
+        group.notify(queue: .main) {
+            if let error = exportError {
+                completion(.failure(error))
+            } else {
+                compressFiles(urls: exportedURLs, completion: completion)
+            }
+        }
+    }
+    
+    func compressFiles(urls: [URL], completion: @escaping (Result<URL, Error>) -> Void) {
+        let zipURL = FileManager.default.temporaryDirectory.appendingPathComponent("export_playlist.zip")
+        try? FileManager.default.removeItem(at: zipURL)
+        
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        
+        var arguments = ["-j", zipURL.path]
+        for fileURL in urls {
+            arguments.append(fileURL.path)
+        }
+        process.arguments = arguments
+        
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        
+        do {
+            try process.run()
+            process.waitUntilExit()
+            if process.terminationStatus == 0 {
+                completion(.success(zipURL))
+            } else {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let errorMessage = String(data: data, encoding: .utf8) ?? "Неизвестная ошибка"
+                let error = NSError(domain: "ZIPError", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errorMessage])
+                completion(.failure(error))
+            }
+        } catch {
+            completion(.failure(error))
+        }
+    }
+    
+    func performExport(mode: ExportMode) {
+        guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
+            print("Asset not found")
+            return
+        }
+        guard let selectedType = selectedExportType else { return }
+
+        let segments = getSegmentsForExport(type: selectedType)
+        if segments.isEmpty {
+            print("Нет сегментов для экспорта")
+            return
+        }
+
+        isExporting = true
+
+        if mode == .film {
+            exportFilm(segments: segments, asset: asset, type: selectedType) { result in
+                DispatchQueue.main.async {
+                    self.isExporting = false
+                    
+                    switch result {
+                    case .success(let outputURL):
+                        let panel = NSSavePanel()
+                        panel.allowedFileTypes = ["mp4"]
+                        panel.nameFieldStringValue = outputURL.lastPathComponent
+                        if panel.runModal() == .OK, let url = panel.url {
+                            do {
+                                try FileManager.default.copyItem(at: outputURL, to: url)
+                                print("Фильм экспортирован и сохранён по \(url)")
+                            } catch {
+                                print("Ошибка сохранения фильма: \(error)")
+                            }
+                        }
+                    case .failure(let error):
+                        print("Ошибка экспорта фильма: \(error)")
+                    }
+                }
+            }
+        } else {
+            exportPlaylist(segments: segments, asset: asset, type: selectedType) { result in
+                DispatchQueue.main.async {
+                    self.isExporting = false
+
+                    switch result {
+                    case .success(let zipURL):
+                        let panel = NSSavePanel()
+                        panel.allowedFileTypes = ["zip"]
+                        panel.nameFieldStringValue = "export_playlist.zip"
+                        if panel.runModal() == .OK, let url = panel.url {
+                            do {
+                                try FileManager.default.copyItem(at: zipURL, to: url)
+                                print("Плейлист экспортирован и сохранён по \(url)")
+                            } catch {
+                                print("Ошибка сохранения плейлиста: \(error)")
+                            }
+                        }
+                    case .failure(let error):
+                        print("Ошибка экспорта плейлиста: \(error)")
+                    }
+                }
+            }
+        }
+    }
+    
+    var body: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Button(action: { videoManager.seek(by: -10) }) {
+                        Image(systemName: "gobackward.10")
+                        Text("10s")
+                    }
+                    Button(action: { videoManager.togglePlayPause() }) {
+                        Image(systemName: "playpause")
+                    }
+                    Button(action: { videoManager.seek(by: 10) }) {
+                        Text("10s")
+                        Image(systemName: "goforward.10")
+                    }
+                    Menu {
+                        ForEach([0.5, 1.0, 2.0, 5.0], id: \.self) { speed in
+                            Button("\(String(format: "%.1f", speed))x") {
+                                videoManager.changePlaybackSpeed(to: speed)
+                            }
+                        }
+                    } label: {
+                        Text("Speed x\(String(format: "%.1f", videoManager.playbackSpeed))")
+                    }
+                    Spacer()
+                }
+                Slider(value: $sliderValue, in: 0...(videoManager.videoDuration > 0 ? videoManager.videoDuration : 1), onEditingChanged: { editing in
+                    if !editing { videoManager.seek(to: sliderValue) }
+                    isDraggingSlider = editing
+                })
+                .onReceive(videoManager.$currentTime) { current in
+                    if !isDraggingSlider { sliderValue = current }
+                }
+                HStack {
+                    Text("Таймлайны:")
+                    Button {
+                        showAddLineSheet = true
+                    } label: {
+                        Image(systemName: "plus.circle")
+                            .font(.title2)
+                    }
+                    Button("Скачать упрощенный JSON") {
+                        let encoder = JSONEncoder()
+                        encoder.outputFormatting = .prettyPrinted
+                        do {
+                            let data = try encoder.encode(timelineData.lines)
+                            let panel = NSSavePanel()
+                            panel.allowedFileTypes = ["json"]
+                            panel.nameFieldStringValue = "timelines_simple.json"
+                            if panel.runModal() == .OK, let url = panel.url {
+                                try data.write(to: url)
+                            }
+                        } catch {
+                            print("Ошибка сохранения JSON: \(error)")
+                        }
+                    }
+                    Button("Скачать полный JSON") {
+                        let encoder = JSONEncoder()
+                        encoder.outputFormatting = .prettyPrinted
+                        let fullLines = transformToFullTimelineLines()
+                        do {
+                            let data = try encoder.encode(fullLines)
+                            let panel = NSSavePanel()
+                            panel.allowedFileTypes = ["json"]
+                            panel.nameFieldStringValue = "timelines_full.json"
+                            if panel.runModal() == .OK, let url = panel.url {
+                                try data.write(to: url)
+                            }
+                        } catch {
+                            print("Ошибка сохранения полного JSON: \(error)")
+                        }
+                    }
+                    Menu("Нарезки") {
+                        Button("Экспорт текущего таймлайна") {
+                            selectedExportType = .currentTimeline
+                            showExportModeSheet = true
+                        }
+                        Button("Экспорт всего") {
+                            selectedExportType = .allTimelines
+                            showExportModeSheet = true
+                        }
+                        Button("Экспорт тегов") {
+                            showTagSelectionSheet = true
+                        }
+                    }
+                    Spacer()
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        ForEach(timelineData.lines) { line in
+                            TimelineLineView(line: line, isSelected: (line.id == timelineData.selectedLineID), onSelect: { timelineData.selectLine(line.id) }, onEditLabelsRequest: { stampID in
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    showLabelEditSheet = true
+                                }
+                                UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
+                                UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
+                            })
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .padding()
+            .frame(minWidth: 800, minHeight: 300)
+            .overlay(
+                Group {
+                    if isExporting {
+                        ViewsFactory.customHUD()
+                            .transition(.opacity)
+                    }
+                }
+            )
+        .sheet(isPresented: $showAddLineSheet) {
+            AddLineSheet { newLineName in
+                timelineData.addLine(name: newLineName)
+            }
+        }
+        .sheet(isPresented: $showLabelEditSheet) {
+            if let lineIDString = UserDefaults.standard.string(forKey: "editingStampLineID"),
+               let stampIDString = UserDefaults.standard.string(forKey: "editingStampID"),
+               let lineID = UUID(uuidString: lineIDString),
+               let stampID = UUID(uuidString: stampIDString) {
+
+                if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
+                   let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) {
+                    let currentLabels = timelineData.lines[lineIndex].stamps[stampIndex].labels
+                    let stampName = timelineData.lines[lineIndex].stamps[stampIndex].label
+                    if let tag = TagLibraryManager.shared.tags.first(where: { $0.id == timelineData.lines[lineIndex].stamps[stampIndex].idTag }) {
+                        LabelSelectionSheet(stampName: stampName, initialLabels: currentLabels, tag: tag, tagLibrary: TagLibraryManager.shared) { newLabels in
+                            timelineData.updateStampLabels(lineID: lineID, stampID: stampID, newLabels: newLabels)
+                        }
+                    }
+                } else {
+                    Text("Ошибка: не найден таймстемп")
+                }
+            } else {
+                Text("Ошибка: не найден таймстемп")
+            }
+        }
+        .sheet(isPresented: $showExportModeSheet) {
+            ExportModeSelectionSheet { mode in
+                performExport(mode: mode)
+                showExportModeSheet = false
+            }
+        }
+        .sheet(isPresented: $showTagSelectionSheet) {
+            TagSelectionSheetView(uniqueTags: uniqueTagsFromTimelines()) { selectedTag in
+                selectedExportType = .tag(selectedTag: selectedTag)
+                showTagSelectionSheet = false
+                showExportModeSheet = true
+            }
+        }
+    }
     
     func transformToFullTimelineLines() -> [FullTimelineLine] {
         let tagLibrary = TagLibraryManager.shared
@@ -409,132 +923,20 @@ struct FullControlView: View {
         }
     }
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Button(action: { videoManager.seek(by: -10) }) {
-                    Image(systemName: "gobackward.10")
-                    Text("10s")
-                }
-                Button(action: { videoManager.togglePlayPause() }) {
-                    Image(systemName: "playpause")
-                }
-                Button(action: { videoManager.seek(by: 10) }) {
-                    Text("10s")
-                    Image(systemName: "goforward.10")
-                }
-                Menu {
-                    ForEach([0.5, 1.0, 2.0, 5.0], id: \.self) { speed in
-                        Button("\(String(format: "%.1f", speed))x") {
-                            videoManager.changePlaybackSpeed(to: speed)
-                        }
-                    }
-                } label: {
-                    Text("Speed x\(String(format: "%.1f", videoManager.playbackSpeed))")
-                }
-                Spacer()
-            }
-            Slider(value: $sliderValue, in: 0...(videoManager.videoDuration > 0 ? videoManager.videoDuration : 1), onEditingChanged: { editing in
-                if !editing { videoManager.seek(to: sliderValue) }
-                isDraggingSlider = editing
-            })
-            .onReceive(videoManager.$currentTime) { current in
-                if !isDraggingSlider { sliderValue = current }
-            }
-            HStack {
-                Text("Таймлайны:")
-                Button {
-                    showAddLineSheet = true
-                } label: {
-                    Image(systemName: "plus.circle")
-                        .font(.title2)
-                }
-                Button("Скачать упрощенный JSON") {
-                    let encoder = JSONEncoder()
-                    encoder.outputFormatting = .prettyPrinted
-                    do {
-                        let data = try encoder.encode(timelineData.lines)
-                        let panel = NSSavePanel()
-                        panel.allowedFileTypes = ["json"]
-                        panel.nameFieldStringValue = "timelines_simple.json"
-                        if panel.runModal() == .OK, let url = panel.url {
-                            try data.write(to: url)
-                        }
-                    } catch {
-                        print("Ошибка сохранения JSON: \(error)")
-                    }
-                }
-                Button("Скачать полный JSON") {
-                    let encoder = JSONEncoder()
-                    encoder.outputFormatting = .prettyPrinted
-                    let fullLines = transformToFullTimelineLines()
-                    do {
-                        let data = try encoder.encode(fullLines)
-                        let panel = NSSavePanel()
-                        panel.allowedFileTypes = ["json"]
-                        panel.nameFieldStringValue = "timelines_full.json"
-                        if panel.runModal() == .OK, let url = panel.url {
-                            try data.write(to: url)
-                        }
-                    } catch {
-                        print("Ошибка сохранения полного JSON: \(error)")
-                    }
-                }
-                Spacer()
-            }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    ForEach(timelineData.lines) { line in
-                        TimelineLineView(line: line, isSelected: (line.id == timelineData.selectedLineID), onSelect: { timelineData.selectLine(line.id) }, onEditLabelsRequest: { stampID in
-                            editingStampLineID = line.id
-                            editingStampID = stampID
-                            showLabelEditSheet = true
-                        })
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .padding()
-        .frame(minWidth: 800, minHeight: 300)
-        .sheet(isPresented: $showAddLineSheet) {
-            AddLineSheet { newLineName in
-                timelineData.addLine(name: newLineName)
+    func uniqueTagsFromTimelines() -> [Tag] {
+        let tagIDs = timelineData.lines.flatMap { line in
+            line.stamps.flatMap { stamp in
+                [stamp.idTag]
             }
         }
-        .sheet(isPresented: $showLabelEditSheet) {
-            if let lineID = editingStampLineID,
-               let stampID = editingStampID,
-               let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
-               let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) {
-                let currentLabels = timelineData.lines[lineIndex].stamps[stampIndex].labels
-                let stampName = timelineData.lines[lineIndex].stamps[stampIndex].label
-                LabelSelectionSheet(stampName: stampName, initialLabels: currentLabels, tag: nil, tagLibrary: TagLibraryManager.shared) { newLabels in
-                    timelineData.updateStampLabels(lineID: lineID, stampID: stampID, newLabels: newLabels)
-                }
-            } else {
-                Text("Ошибка: не найден таймстемп")
-            }
+        
+        let uniqueTagIDs = Array(Set(tagIDs))
+        
+        let tags = TagLibraryManager.shared.tags.filter { tag in
+            return uniqueTagIDs.contains { $0 == tag.id }
         }
-    }
-}
-
-class FullControlWindowController: NSWindowController, NSWindowDelegate {
-    init() {
-        let view = FullControlView()
-        let hostingController = NSHostingController(rootView: view)
-        let w = NSWindow(contentViewController: hostingController)
-        w.title = "Таймлайны"
-        super.init(window: w)
-        w.styleMask.insert(.closable)
-        w.delegate = self
-        w.makeKeyAndOrderFront(nil)
-    }
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    func windowWillClose(_ notification: Notification) {
-        WindowsManager.shared.closeAll()
+        
+        return tags
     }
 }
 
@@ -544,6 +946,8 @@ struct TimelineLineView: View {
     let isSelected: Bool
     let onSelect: () -> Void
     let onEditLabelsRequest: (UUID) -> Void
+    @ObservedObject var tagLibrary = TagLibraryManager.shared
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(line.name)
@@ -575,10 +979,14 @@ struct TimelineLineView: View {
                         .position(x: stampX + stampWidth / 2, y: 15)
                         .onTapGesture { videoManager.seek(to: stamp.startSeconds) }
                         .contextMenu {
-                            Text("Stamp: \(stamp.label)")
+                            Text("Тег: \(stamp.label)")
                             if !stamp.labels.isEmpty {
-                                ForEach(stamp.labels, id: \.self) { lbl in
-                                    Text(lbl)
+                                ForEach(stamp.labels, id: \.self) { labelID in
+                                    if let label = tagLibrary.labels.first(where: { $0.id == labelID }) {
+                                        if let group = tagLibrary.labelGroups.first(where: { $0.lables.contains(label.id) }) {
+                                            Text("\(label.name) (\(group.name))")
+                                        }
+                                    }
                                 }
                                 Divider()
                             }
@@ -600,45 +1008,97 @@ struct TagLibraryView: View {
     @ObservedObject var timelineData = TimelineDataManager.shared
     @State private var showLabelSheet = false
     @State private var selectedTag: Tag? = nil
+    
+    func makeHyphenatedString(_ text: String, width: CGFloat, fontSize: CGFloat = 14, locale: Locale = Locale(identifier: "ru")) -> NSAttributedString {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byWordWrapping
+        paragraphStyle.hyphenationFactor = 1.0
+        let attributes: [NSAttributedString.Key: Any] = [
+            .paragraphStyle: paragraphStyle,
+            .font: NSFont.systemFont(ofSize: fontSize)
+        ]
+
+        return NSAttributedString(string: text, attributes: attributes)
+    }
+
     var body: some View {
         VStack(alignment: .leading) {
             Text("Группы тегов")
                 .font(.headline)
                 .padding()
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(tagLibrary.tagGroups) { group in
-                        DisclosureGroup(group.name) {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 10) {
+                        DisclosureGroup(isExpanded: .constant(true), content: {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                                 ForEach(group.tags, id: \.self) { tagID in
                                     if let tag = tagLibrary.tags.first(where: { $0.id == tagID }) {
-                                        Button(tag.name) {
+                                        let isTagUsedOnSelectedLine: Bool = {
+                                            guard let selectedLineID = timelineData.selectedLineID,
+                                                  let selectedLine = timelineData.lines.first(where: { $0.id == selectedLineID })
+                                            else {
+                                                return false
+                                            }
+                                            return selectedLine.stamps.contains(where: { $0.idTag == tag.id })
+                                        }()
+                                        Button(action: {
                                             videoManager.player?.pause()
                                             selectedTag = tag
-                                            showLabelSheet = true
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                showLabelSheet = true
+                                            }
+                                        }) {
+                                            Text(tag.name)
+                                                .lineLimit(nil)
+                                                .multilineTextAlignment(.center)
+                                                .frame(width: 135)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .padding(5)
+                                                .foregroundColor(Color(hex: tag.color).isDark ? .white : .black)
                                         }
+                                        .background(Color(hex: tag.color))
+                                        .cornerRadius(4)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .stroke(Color.red, lineWidth: isTagUsedOnSelectedLine ? 2 : 0)
+                                        )
                                     }
                                 }
                             }
                             .padding(.horizontal)
-                        }
+                        }, label: {
+                            Text(group.name)
+                                .font(.headline)
+                        })
                         .padding(.horizontal)
                     }
                 }
             }
         }
         .sheet(isPresented: $showLabelSheet) {
-            if let tag = selectedTag {
+            if timelineData.selectedLineID != nil, let tag = selectedTag {
                 LabelSelectionSheet(stampName: tag.name, initialLabels: [], tag: tag, tagLibrary: tagLibrary) { selectedLabels in
                     let currentTime = videoManager.currentTime
                     let startTime = max(0, currentTime - tag.defaultTimeBefore)
                     let finishTime = startTime + tag.defaultTimeBefore + tag.defaultTimeAfter
                     let timeStartString = secondsToTimeString(startTime)
                     let timeFinishString = secondsToTimeString(finishTime)
-                    timelineData.addStampToSelectedLine(name: tag.name, timeStart: timeStartString, timeFinish: timeFinishString, color: tag.color, labels: selectedLabels)
+                    timelineData.addStampToSelectedLine(idTag: tag.id,
+                                                        name: tag.name,
+                                                        timeStart: timeStartString,
+                                                        timeFinish: timeFinishString,
+                                                        color: tag.color,
+                                                        labels: selectedLabels)
                 }
             } else {
-                Text("Не выбран тег").padding()
+                Text("""
+                     Тег не может быть добавлен до выбора таймлайна.
+                     Выберите его, нажав на название таймлайна.
+                     Если таймлайна нет, то сначала создайте его, нажав на 􀁌
+                     """)
+                .padding()
+                .multilineTextAlignment(.center)
             }
         }
     }
@@ -664,9 +1124,10 @@ class TagLibraryWindowController: NSWindowController, NSWindowDelegate {
 }
 
 struct AddLineSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
     @State private var lineName: String = ""
     let onAdd: (String) -> Void
+    
     var body: some View {
         VStack(spacing: 20) {
             Text("Добавить таймлайн")
@@ -675,10 +1136,12 @@ struct AddLineSheet: View {
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding()
             HStack {
-                Button("Отмена") { dismiss() }
+                Button("Отмена") {
+                    presentationMode.wrappedValue.dismiss()
+                }
                 Button("Добавить") {
                     onAdd(lineName)
-                    dismiss()
+                    presentationMode.wrappedValue.dismiss()
                 }
                 .disabled(lineName.isEmpty)
             }
@@ -694,15 +1157,10 @@ struct LabelSelectionSheet: View {
     let tag: Tag?
     let tagLibrary: TagLibraryManager
     let onDone: ([String]) -> Void
-    @State var selectedLabels: Set<String> = []
-    @Environment(\.dismiss) private var dismiss
-    var filteredLabelGroups: [LabelGroupData] {
-        if let tag = tag {
-            return tagLibrary.labelGroups.filter { tag.lablesGroup.contains($0.id) }
-        } else {
-            return tagLibrary.labelGroups
-        }
-    }
+
+    @State private var selectedLabels: Set<String> = []
+    @Environment(\.presentationMode) private var presentationMode
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Таймстемп: \(stampName)")
@@ -710,14 +1168,18 @@ struct LabelSelectionSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(filteredLabelGroups) { group in
-                        DisclosureGroup(group.name) {
+                        DisclosureGroup(isExpanded: .constant(true), content: {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {
                                 ForEach(group.lables, id: \.self) { labelID in
                                     if let label = tagLibrary.labels.first(where: { $0.id == labelID }) {
                                         Toggle(isOn: Binding(
                                             get: { selectedLabels.contains(label.id) },
                                             set: { newValue in
-                                                if newValue { selectedLabels.insert(label.id) } else { selectedLabels.remove(label.id) }
+                                                if newValue {
+                                                    selectedLabels.insert(label.id)
+                                                } else {
+                                                    selectedLabels.remove(label.id)
+                                                }
                                             }
                                         )) {
                                             Text(label.name)
@@ -725,22 +1187,90 @@ struct LabelSelectionSheet: View {
                                     }
                                 }
                             }
-                        }
+                        }, label: {
+                            Text(group.name)
+                        })
                     }
                 }
             }
             HStack {
                 Spacer()
-                Button("Отмена") { dismiss() }
+                Button("Отмена") {
+                    presentationMode.wrappedValue.dismiss()
+                }
                 Button("Добавить") {
                     onDone(Array(selectedLabels))
-                    dismiss()
+                    presentationMode.wrappedValue.dismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .conditionalButtonStyle()
             }
         }
         .padding()
         .frame(minWidth: 300, minHeight: 400)
-        .onAppear { selectedLabels = Set(initialLabels) }
+        .onAppear {
+            selectedLabels = Set(initialLabels)
+        }
+    }
+
+    var filteredLabelGroups: [LabelGroupData] {
+        if let tag = tag {
+            return tagLibrary.labelGroups.filter { tag.lablesGroup.contains($0.id) }
+        } else {
+            return tagLibrary.labelGroups
+        }
+    }
+}
+
+struct ExportModeSelectionSheet: View {
+    let onSelect: (FullControlView.ExportMode) -> Void
+    @Environment(\.presentationMode) var presentationMode
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Экспортировать как:")
+                .font(.headline)
+            HStack(spacing: 20) {
+                Button("Фильм") {
+                    onSelect(.film)
+                    presentationMode.wrappedValue.dismiss()
+                }
+                Button("Плейлист") {
+                    onSelect(.playlist)
+                    presentationMode.wrappedValue.dismiss()
+                }
+            }
+            Button("Отмена") {
+                presentationMode.wrappedValue.dismiss()
+            }
+        }
+        .padding()
+        .frame(width: 300)
+    }
+}
+
+struct TagSelectionSheetView: View {
+    let uniqueTags: [Tag]
+    let onSelect: (Tag) -> Void
+    @ObservedObject var tagLibrary = TagLibraryManager.shared
+    
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("Выберите тег для экспорта")
+                .font(.headline)
+            
+            List(tagLibrary.tagGroups) { group in
+                Section(header: Text(group.name).font(.subheadline).bold()) {
+                    ForEach(group.tags, id: \.self) { tagID in
+                        if let tag = tagLibrary.tags.first(where: { $0.id == tagID }), uniqueTags.contains(where: { $0.id == tag.id }) {
+                            Button(tag.name) {
+                                onSelect(tag)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(minWidth: 300, minHeight: 400)
+        }
+        .padding()
     }
 }

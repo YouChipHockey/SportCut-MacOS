@@ -71,6 +71,11 @@
           "description": ""
       },
       {
+          "id": "6cc39328-cebd-45fe-b53e-332e76c0f203",
+          "name": "На пятак",
+          "description": ""
+      },
+      {
           "id": "8b3d6cb9-cce0-4884-a9c2-22a9c20ac550",
           "name": "Через пас",
           "description": ""
@@ -111,13 +116,18 @@
           "description": ""
       },
       {
+          "id": "48c98a8e-49ad-434e-9da6-c492d1a2b4c8",
+          "name": "В защите",
+          "description": ""
+      },
+      {
           "id": "48c98a8e-49ad-434e-9da6-c492d1a2b4c7",
-          "name": "Выиграно",
+          "name": "В средней",
           "description": ""
       },
       {
           "id": "def9cfb6-f056-41c5-9db5-4f68dfded1ca",
-          "name": "Проиграно",
+          "name": "В атаке",
           "description": ""
       },
       {
@@ -201,18 +211,23 @@
           "description": ""
       },
       {
+          "id": "0b9c79d7-fcf0-4157-9503-2c2697565da3",
+          "name": "Выиграно",
+          "description": ""
+      },
+      {
+          "id": "f8ed5fc0-fff5-42ea-b967-95a5b836ee56",
+          "name": "Проиграно",
+          "description": ""
+      },
+      {
           "id": "e81e9b48-df78-48f7-831c-5ec8f9b3rt34",
-          "name": "69 Овечкин",
+          "name": "Защ",
           "description": ""
       },
       {
           "id": "0d05f06e-414b-43df-zzd6-724e6b25e199",
-          "name": "66 Панарин",
-          "description": ""
-      },
-      {
-          "id": "57750b31-3ab7-47f5-8706-fgg1be2857a3",
-          "name": "55 Макатров",
+          "name": "Нап",
           "description": ""
       }
   ]

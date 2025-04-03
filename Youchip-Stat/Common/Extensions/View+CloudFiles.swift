@@ -51,3 +51,14 @@ extension View {
     }
 
 }
+
+extension View {
+    @ViewBuilder
+    func conditionalButtonStyle() -> some View {
+        if #available(macOS 12.0, *) {
+            self.buttonStyle(.borderedProminent)
+        } else {
+            self
+        }
+    }
+}

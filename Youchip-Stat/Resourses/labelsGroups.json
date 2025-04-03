@@ -5,8 +5,7 @@
           "name":"Игроки",
           "lables": [
               "e81e9b48-df78-48f7-831c-5ec8f9b3rt34",
-              "0d05f06e-414b-43df-zzd6-724e6b25e199",
-              "57750b31-3ab7-47f5-8706-fgg1be2857a3"
+              "0d05f06e-414b-43df-zzd6-724e6b25e199"
           ]
       },
       {
@@ -21,7 +20,24 @@
               "dbb6f522-c19a-47b8-9356-9916b4ffe944",
               "301a4593-87b3-417c-9527-fbf1b9e88e0f",
               "dbe62629-6c0b-45a9-ab2a-642f8262ae43",
-              "325ab5dd-cf0e-437d-9ca0-3e42fb392484",
+              "325ab5dd-cf0e-437d-9ca0-3e42fb392484"
+          ]
+      },
+      {
+          "id": "0400fd80-1909-4772-b6cf-9441d36a9401",
+          "name":"Для защиты",
+          "lables": [
+              "48c98a8e-49ad-434e-9da6-c492d1a2b4c8",
+              "48c98a8e-49ad-434e-9da6-c492d1a2b4c7",
+              "def9cfb6-f056-41c5-9db5-4f68dfded1ca"
+          ]
+      },
+      {
+          "id": "ef5c8e23-d476-4ab7-af3d-c0340004ec16",
+          "name":"Для единоборств",
+          "lables": [
+              "0b9c79d7-fcf0-4157-9503-2c2697565da3",
+              "f8ed5fc0-fff5-42ea-b967-95a5b836ee56"
           ]
       },
       {
@@ -32,7 +48,8 @@
               "1a5f0eb4-be87-47e8-8eb8-e6e8da372215",
               "aa622577-55ee-42bf-afff-85bbf411d5e1",
               "521c956b-b92d-4bf1-a9fd-dce954622b81",
-              "e3c60937-edad-4c05-bb28-e4dab09fc355"
+              "e3c60937-edad-4c05-bb28-e4dab09fc355",
+              "6cc39328-cebd-45fe-b53e-332e76c0f203"
           ]
       },
       {
@@ -60,6 +77,7 @@
           "name":"Для вбрасываний",
           "lables": [
               "48c98a8e-49ad-434e-9da6-c492d1a2b4c7",
+              "48c98a8e-49ad-434e-9da6-c492d1a2b4c8",
               "def9cfb6-f056-41c5-9db5-4f68dfded1ca",
               "94031c94-9915-4f0c-b4cd-d6bd869bbb21",
               "179e7be2-06b3-416b-a0f6-610e23759c6e"

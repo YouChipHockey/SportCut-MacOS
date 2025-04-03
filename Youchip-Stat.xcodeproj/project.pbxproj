@@ -8,6 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */; };
+		DD29C48A2D96CA2C003E4F83 /* tags.json in Resources */ = {isa = PBXBuildFile; fileRef = DD29C4882D96CA2C003E4F83 /* tags.json */; };
+		DD29C48B2D96CA2C003E4F83 /* labelsGroups.json in Resources */ = {isa = PBXBuildFile; fileRef = DD29C4872D96CA2C003E4F83 /* labelsGroups.json */; };
+		DD29C48C2D96CA2C003E4F83 /* tagsGroups.json in Resources */ = {isa = PBXBuildFile; fileRef = DD29C4892D96CA2C003E4F83 /* tagsGroups.json */; };
+		DD29C48D2D96CA2C003E4F83 /* labels.json in Resources */ = {isa = PBXBuildFile; fileRef = DD29C4862D96CA2C003E4F83 /* labels.json */; };
 		DD2A70542D74C31B00287BA8 /* VideosState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70532D74C31600287BA8 /* VideosState.swift */; };
 		DD2A70562D74C33E00287BA8 /* FilesFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70552D74C33D00287BA8 /* FilesFile.swift */; };
 		DD2A70582D74C35F00287BA8 /* URL+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70572D74C35E00287BA8 /* URL+Convenience.swift */; };
@@ -48,7 +52,6 @@
 		DD32C28F2D74A19A0052B5C6 /* AppSetupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C28E2D74A1990052B5C6 /* AppSetupManager.swift */; };
 		DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2902D74A1C80052B5C6 /* Colors.swift */; };
 		DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2962D74A1C80052B5C6 /* NSError+Convenience.swift */; };
-		DD32C2A22D74A1C80052B5C6 /* NSView+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2982D74A1C80052B5C6 /* NSView+Convenience.swift */; };
 		DD32C2A32D74A1C80052B5C6 /* Date+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2912D74A1C80052B5C6 /* Date+Convenience.swift */; };
 		DD32C2A42D74A1C80052B5C6 /* UInt64+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29B2D74A1C80052B5C6 /* UInt64+Convenience.swift */; };
 		DD32C2A62D74A1C80052B5C6 /* Fonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2932D74A1C80052B5C6 /* Fonts.swift */; };
@@ -60,10 +63,7 @@
 		DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */; };
 		DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */; };
 		DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */; };
-		DDD60A912D7A35140097600D /* tags.json in Resources */ = {isa = PBXBuildFile; fileRef = DDD60A8F2D7A35140097600D /* tags.json */; };
-		DDD60A922D7A35140097600D /* labelsGroups.json in Resources */ = {isa = PBXBuildFile; fileRef = DDD60A8D2D7A35140097600D /* labelsGroups.json */; };
-		DDD60A932D7A35140097600D /* tagsGroups.json in Resources */ = {isa = PBXBuildFile; fileRef = DDD60A902D7A35140097600D /* tagsGroups.json */; };
-		DDD60A942D7A35140097600D /* labels.json in Resources */ = {isa = PBXBuildFile; fileRef = DDD60A8E2D7A35140097600D /* labels.json */; };
+		DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDD60A952D7A5D7E0097600D /* AVKit.framework */; };
 		DDDB36362D78E16500A1111C /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDB36352D78E16100A1111C /* Color.swift */; };
 /* End PBXBuildFile section */
 
@@ -71,6 +71,10 @@
 		23DAB237503920889C6C4438 /* Pods-Youchip-Stat.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.debug.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.debug.xcconfig"; sourceTree = "<group>"; };
 		2EA66B918FEF070C401BD61D /* Pods-Youchip-Stat.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.release.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.release.xcconfig"; sourceTree = "<group>"; };
 		D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Youchip_Stat.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		DD29C4862D96CA2C003E4F83 /* labels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labels.json; sourceTree = "<group>"; };
+		DD29C4872D96CA2C003E4F83 /* labelsGroups.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labelsGroups.json; sourceTree = "<group>"; };
+		DD29C4882D96CA2C003E4F83 /* tags.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tags.json; sourceTree = "<group>"; };
+		DD29C4892D96CA2C003E4F83 /* tagsGroups.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tagsGroups.json; sourceTree = "<group>"; };
 		DD2A70532D74C31600287BA8 /* VideosState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideosState.swift; sourceTree = "<group>"; };
 		DD2A70552D74C33D00287BA8 /* FilesFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesFile.swift; sourceTree = "<group>"; };
 		DD2A70572D74C35E00287BA8 /* URL+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URL+Convenience.swift"; sourceTree = "<group>"; };
@@ -118,17 +122,13 @@
 		DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedStrings.swift; sourceTree = "<group>"; };
 		DD32C2962D74A1C80052B5C6 /* NSError+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSError+Convenience.swift"; sourceTree = "<group>"; };
 		DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSImage+Convenience.swift"; sourceTree = "<group>"; };
-		DD32C2982D74A1C80052B5C6 /* NSView+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSView+Convenience.swift"; sourceTree = "<group>"; };
 		DD32C2992D74A1C80052B5C6 /* SKProduct+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SKProduct+Convenience.swift"; sourceTree = "<group>"; };
 		DD32C29A2D74A1C80052B5C6 /* String+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Convenience.swift"; sourceTree = "<group>"; };
 		DD32C29B2D74A1C80052B5C6 /* UInt64+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt64+Convenience.swift"; sourceTree = "<group>"; };
 		DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Alerts.swift"; sourceTree = "<group>"; };
 		DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+CloudFiles.swift"; sourceTree = "<group>"; };
 		DDB401912D749E0F004A12C2 /* Youchip-Stat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Youchip-Stat.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		DDD60A8D2D7A35140097600D /* labelsGroups.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labelsGroups.json; sourceTree = "<group>"; };
-		DDD60A8E2D7A35140097600D /* labels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labels.json; sourceTree = "<group>"; };
-		DDD60A8F2D7A35140097600D /* tags.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tags.json; sourceTree = "<group>"; };
-		DDD60A902D7A35140097600D /* tagsGroups.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tagsGroups.json; sourceTree = "<group>"; };
+		DDD60A952D7A5D7E0097600D /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 		DDDB36352D78E16100A1111C /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -137,6 +137,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */,
 				4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -147,6 +148,7 @@
 		12AB2F0D65F3DB2A6B5D40D5 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				DDD60A952D7A5D7E0097600D /* AVKit.framework */,
 				D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */,
 			);
 			name = Frameworks;
@@ -286,11 +288,11 @@
 				DD32C2602D74A00C0052B5C6 /* Youchip_Stat.entitlements */,
 				DD32C2882D74A05C0052B5C6 /* Info.plist */,
 				DD32C25E2D74A00C0052B5C6 /* Assets.xcassets */,
+				DD29C4862D96CA2C003E4F83 /* labels.json */,
+				DD29C4872D96CA2C003E4F83 /* labelsGroups.json */,
+				DD29C4882D96CA2C003E4F83 /* tags.json */,
+				DD29C4892D96CA2C003E4F83 /* tagsGroups.json */,
 				DD32C26B2D74A0420052B5C6 /* Localizable.strings */,
-				DDD60A8D2D7A35140097600D /* labelsGroups.json */,
-				DDD60A8E2D7A35140097600D /* labels.json */,
-				DDD60A8F2D7A35140097600D /* tags.json */,
-				DDD60A902D7A35140097600D /* tagsGroups.json */,
 			);
 			path = Resourses;
 			sourceTree = "<group>";
@@ -327,7 +329,6 @@
 				DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */,
 				DD32C2962D74A1C80052B5C6 /* NSError+Convenience.swift */,
 				DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */,
-				DD32C2982D74A1C80052B5C6 /* NSView+Convenience.swift */,
 				DD32C2992D74A1C80052B5C6 /* SKProduct+Convenience.swift */,
 				DD32C29A2D74A1C80052B5C6 /* String+Convenience.swift */,
 				DD32C29B2D74A1C80052B5C6 /* UInt64+Convenience.swift */,
@@ -427,12 +428,12 @@
 				DD32C2822D74A0480052B5C6 /* SFProText-Bold.ttf in Resources */,
 				DD32C2832D74A0480052B5C6 /* SFProText-Medium.ttf in Resources */,
 				DD32C2842D74A0480052B5C6 /* SFProText-Semibold.ttf in Resources */,
+				DD29C48A2D96CA2C003E4F83 /* tags.json in Resources */,
+				DD29C48B2D96CA2C003E4F83 /* labelsGroups.json in Resources */,
+				DD29C48C2D96CA2C003E4F83 /* tagsGroups.json in Resources */,
+				DD29C48D2D96CA2C003E4F83 /* labels.json in Resources */,
 				DD32C2892D74A05C0052B5C6 /* Info.plist in Resources */,
 				DD32C2852D74A0480052B5C6 /* SFCompactText-Regular.ttf in Resources */,
-				DDD60A912D7A35140097600D /* tags.json in Resources */,
-				DDD60A922D7A35140097600D /* labelsGroups.json in Resources */,
-				DDD60A932D7A35140097600D /* tagsGroups.json in Resources */,
-				DDD60A942D7A35140097600D /* labels.json in Resources */,
 				DD32C2862D74A0480052B5C6 /* SFProDisplay-Regular.ttf in Resources */,
 				DD32C2872D74A0480052B5C6 /* SFProText-Regular.ttf in Resources */,
 				DD32C2632D74A00C0052B5C6 /* Preview Assets.xcassets in Resources */,
@@ -499,7 +500,6 @@
 				DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */,
 				DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */,
 				DD2A70832D74E43700287BA8 /* VideoControlWindow.swift in Sources */,
-				DD32C2A22D74A1C80052B5C6 /* NSView+Convenience.swift in Sources */,
 				DD32C2A32D74A1C80052B5C6 /* Date+Convenience.swift in Sources */,
 				DD32C2A42D74A1C80052B5C6 /* UInt64+Convenience.swift in Sources */,
 				DD2A70642D74D28E00287BA8 /* CustomTypes.swift in Sources */,
@@ -596,7 +596,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MACOSX_DEPLOYMENT_TARGET = 11.5;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -653,7 +653,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MACOSX_DEPLOYMENT_TARGET = 11.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -668,6 +668,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Youchip-Stat/Resourses/Youchip_Stat.entitlements";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -683,9 +684,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.YouChip.Youchip-Stat";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.YouChip.Youchip-Stati";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -699,6 +700,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Youchip-Stat/Resourses/Youchip_Stat.entitlements";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -714,9 +716,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.YouChip.Youchip-Stat";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.YouChip.Youchip-Stati";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

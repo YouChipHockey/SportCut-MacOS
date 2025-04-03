@@ -11,10 +11,16 @@ class ViewsFactory {
     
     @ViewBuilder
     static func lineDivider(isVertical: Bool = true, width: CGFloat = 1, color: Color = Color.appSystemGray5.opacity(0.1)) -> some View {
-        Divider()
-            .background(color)
-            .foregroundStyle(color)
-            .frame(width: isVertical ? width : nil, height: isVertical ? nil : width)
+        if #available(macOS 12.0, *) {
+            Divider()
+                .background(color)
+                .foregroundStyle(color)
+                .frame(width: isVertical ? width : nil, height: isVertical ? nil : width)
+        } else {
+            Divider()
+                .background(color)
+                .frame(width: isVertical ? width : nil, height: isVertical ? nil : width)
+        }
     }
     
     @ViewBuilder

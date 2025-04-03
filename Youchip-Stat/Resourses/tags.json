@@ -66,53 +66,65 @@
       },
       {
           "id": "0f35aa88-730c-48c2-ad9a-29e00785952b",
-          "name": "Бросок зщ",
+          "name": "Перехват",
           "description":"",
           "color": "7d3c98",
           "defaultTimeBefore": 5,
           "defaultTimeAfter": 3,
           "collection": "от YouChip",
           "lablesGroup": [
-              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "0400fd80-1909-4772-b6cf-9441d36a9401",
               "e81e9b48-df78-48f7-831c-5ec8f9b37352"
           ]
       },
       {
           "id": "9c5b2a4c-3b13-4713-8a17-e4d248b3ebc0",
-          "name": "Бросок в створ зщ",
+          "name": "Отбор",
           "description":"",
           "color": "17a589",
           "defaultTimeBefore": 5,
           "defaultTimeAfter": 3,
           "collection": "от YouChip",
           "lablesGroup": [
-              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "0400fd80-1909-4772-b6cf-9441d36a9401",
               "e81e9b48-df78-48f7-831c-5ec8f9b37352"
           ]
       },
       {
           "id": "d31eed1e-f37f-4389-8dd3-d51c92cb2b23",
-          "name": "Гол зщ",
+          "name": "Потеря",
           "description":"",
           "color": "d4ac0d",
           "defaultTimeBefore": 5,
           "defaultTimeAfter": 3,
           "collection": "от YouChip",
           "lablesGroup": [
-              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "0400fd80-1909-4772-b6cf-9441d36a9401",
               "e81e9b48-df78-48f7-831c-5ec8f9b37352"
           ]
       },
       {
           "id": "bcfdb728-3622-4c0c-b680-7f2139d1a634",
-          "name": "Заблокированный зщ",
+          "name": "Блокированный соп",
           "description":"",
           "color": "e67e22",
           "defaultTimeBefore": 5,
           "defaultTimeAfter": 3,
           "collection": "от YouChip",
           "lablesGroup": [
-              "1bfd9cc4-acaf-473f-9511-3fcc15a61172",
+              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
+          ]
+      },
+      {
+          "id": "361ab26e-40b9-455e-89ee-1944f0ff122f",
+          "name": "Единоборство",
+          "description":"",
+          "color": "e67e22",
+          "defaultTimeBefore": 5,
+          "defaultTimeAfter": 3,
+          "collection": "от YouChip",
+          "lablesGroup": [
+              "ef5c8e23-d476-4ab7-af3d-c0340004ec16",
               "e81e9b48-df78-48f7-831c-5ec8f9b37352"
           ]
       },
@@ -120,7 +132,7 @@
           "id": "914d7e1c-c135-4ff5-a775-b377c871a6f0",
           "name": "С контролем",
           "description":"",
-          "color": "dcea0",
+          "color": "00FF00",
           "defaultTimeBefore": 10,
           "defaultTimeAfter": 10,
           "collection": "от YouChip",
@@ -144,7 +156,7 @@
       },
       {
           "id": "f782ca3d-7d2f-43aa-93c1-8c0c982c7bb7",
-          "name": "В защите",
+          "name": "Выиграно",
           "description":"",
           "color": "2e4053",
           "defaultTimeBefore": 5,
@@ -157,22 +169,9 @@
       },
       {
           "id": "f64411d1-8829-4616-ab99-e1a7d77f0016",
-          "name": "В атаке",
+          "name": "Проиграно",
           "description":"",
           "color": "dc7633",
-          "defaultTimeBefore": 5,
-          "defaultTimeAfter": 3,
-          "collection": "от YouChip",
-          "lablesGroup": [
-              "2905e370-0b83-43b0-9cb7-18d5ff311d4a",
-              "e81e9b48-df78-48f7-831c-5ec8f9b37352"
-          ]
-      },
-      {
-          "id": "dc0da2ba-0282-4ab1-a3c6-934f2c8cc776",
-          "name": "В средней",
-          "description":"",
-          "color": "27ae60",
           "defaultTimeBefore": 5,
           "defaultTimeAfter": 3,
           "collection": "от YouChip",

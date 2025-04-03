@@ -40,10 +40,18 @@ struct VideoThumbnailView: View {
             viewModel.action.send(.openVideo(file: file))
         }
         .contextMenu {
-            Button(role: .destructive) {
-                viewModel.action.send(.deleteFile(file: file))
-            } label: {
-                SwiftUI.Label(^String.ButtonTitles.deleteButtonTitle, systemImage: AppImage.sfTrash.rawValue)
+            if #available(macOS 12.0, *) {
+                Button(role: .destructive) {
+                    viewModel.action.send(.deleteFile(file: file))
+                } label: {
+                    SwiftUI.Label(^String.ButtonTitles.deleteButtonTitle, systemImage: AppImage.sfTrash.rawValue)
+                }
+            } else {
+                Button {
+                    viewModel.action.send(.deleteFile(file: file))
+                } label: {
+                    SwiftUI.Label(^String.ButtonTitles.deleteButtonTitle, systemImage: AppImage.sfTrash.rawValue)
+                }
             }
         }
     }
