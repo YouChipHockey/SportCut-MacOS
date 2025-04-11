@@ -219,78 +219,6 @@ class TimelineDataManager: ObservableObject {
     }
 }
 
-class WindowsManager {
-    static let shared = WindowsManager()
-    
-    var videoWindow: VideoPlayerWindowController?
-    var controlWindow: FullControlWindowController?
-    var tagLibraryWindow: TagLibraryWindowController?
-    private var isClosing = true
-    
-    func closeAll() {
-        videoWindow?.window?.delegate = nil
-        controlWindow?.window?.delegate = nil
-        tagLibraryWindow?.window?.delegate = nil
-        videoWindow?.close()
-        controlWindow?.close()
-        tagLibraryWindow?.close()
-        
-        VideoPlayerManager.shared.deleteVideo()
-        isClosing = true
-    }
-    
-    func openVideo(filesFile: FilesFile) {
-        guard let file = filesFile.url, isClosing else { return }
-        
-        UserDefaults.standard.set("", forKey: "editingStampLineID")
-        UserDefaults.standard.set("", forKey: "editingStampID")
-        isClosing = false
-        
-        TimelineDataManager.shared.currentBookmark = filesFile.videoData.bookmark
-        TimelineDataManager.shared.lines = filesFile.videoData.timelines
-        TimelineDataManager.shared.selectedLineID = filesFile.videoData.timelines.first?.id
-        VideoPlayerManager.shared.loadVideo(from: file)
-        
-        videoWindow = VideoPlayerWindowController()
-        controlWindow = FullControlWindowController()
-        tagLibraryWindow = TagLibraryWindowController()
-        
-        if let screen = NSScreen.main {
-            let screenFrame = screen.frame
-            let bottomHeight = screenFrame.height / 3
-            let topHeight = screenFrame.height - bottomHeight - 40
-            
-            let timelineRect = NSRect(
-                x: screenFrame.minX,
-                y: screenFrame.minY,
-                width: screenFrame.width,
-                height: bottomHeight
-            )
-            controlWindow?.window?.setFrame(timelineRect, display: true)
-            
-            let libraryRect = NSRect(
-                x: screenFrame.minX,
-                y: screenFrame.minY + bottomHeight,
-                width: screenFrame.width / 3,
-                height: topHeight
-            )
-            tagLibraryWindow?.window?.setFrame(libraryRect, display: true)
-            
-            let videoRect = NSRect(
-                x: screenFrame.minX + screenFrame.width / 3,
-                y: screenFrame.minY + bottomHeight,
-                width: (screenFrame.width * 2) / 3,
-                height: topHeight
-            )
-            videoWindow?.window?.setFrame(videoRect, display: true)
-        }
-        
-        videoWindow?.showWindow(nil)
-        controlWindow?.showWindow(nil)
-        tagLibraryWindow?.showWindow(nil)
-    }
-}
-
 class VideoPlayerManager: ObservableObject {
     static let shared = VideoPlayerManager()
     @Published var player: AVPlayer?
@@ -427,6 +355,8 @@ struct FullControlView: View {
     @State private var showLabelEditSheet = false
     @State private var editingStampLineID: UUID?
     @State private var editingStampID: UUID?
+    @State private var timelineScale: CGFloat = 1.0
+    @GestureState private var magnifyScale: CGFloat = 1.0
     
     enum ExportMode { case film, playlist }
     enum CutsExportType {
@@ -443,6 +373,7 @@ struct FullControlView: View {
     @State private var selectedExportType: CutsExportType?
     @State private var showExportModeSheet: Bool = false
     @State private var showTagSelectionSheet: Bool = false
+    @State private var parentWindowHeight: CGFloat = 600
 
     func getSegmentsForExport(type: CutsExportType) -> [ExportSegment] {
         var result: [ExportSegment] = []
@@ -692,6 +623,10 @@ struct FullControlView: View {
         }
     }
     
+    func generateReport() {
+        
+    }
+    
     func performExport(mode: ExportMode) {
         guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
             print("Asset not found")
@@ -757,7 +692,10 @@ struct FullControlView: View {
     }
     
     var body: some View {
+        GeometryReader { geo in
             VStack(alignment: .leading, spacing: 10) {
+                
+                // --- Кнопки управления видео (Play/Pause/Seek) ---
                 HStack {
                     Button(action: { videoManager.seek(by: -10) }) {
                         Image(systemName: "gobackward.10")
@@ -772,7 +710,7 @@ struct FullControlView: View {
                     }
                     Menu {
                         ForEach([0.5, 1.0, 2.0, 5.0], id: \.self) { speed in
-                            Button("\(String(format: "%.1f", speed))x") {
+                            Button(String(format: "%.1fx", speed)) {
                                 videoManager.changePlaybackSpeed(to: speed)
                             }
                         }
@@ -781,6 +719,8 @@ struct FullControlView: View {
                     }
                     Spacer()
                 }
+                
+                // --- Слайдер по времени видео ---
                 Slider(value: $sliderValue, in: 0...(videoManager.videoDuration > 0 ? videoManager.videoDuration : 1), onEditingChanged: { editing in
                     if !editing { videoManager.seek(to: sliderValue) }
                     isDraggingSlider = editing
@@ -788,6 +728,8 @@ struct FullControlView: View {
                 .onReceive(videoManager.$currentTime) { current in
                     if !isDraggingSlider { sliderValue = current }
                 }
+                
+                // --- Кнопки \"Таймлайны / JSON / Нарезки\" ---
                 HStack {
                     Text("Таймлайны:")
                     Button {
@@ -840,20 +782,71 @@ struct FullControlView: View {
                             showTagSelectionSheet = true
                         }
                     }
-                    Spacer()
-                }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        ForEach(timelineData.lines) { line in
-                            TimelineLineView(line: line, isSelected: (line.id == timelineData.selectedLineID), onSelect: { timelineData.selectLine(line.id) }, onEditLabelsRequest: { stampID in
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    showLabelEditSheet = true
-                                }
-                                UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
-                                UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
-                            })
+                    if #available(macOS 12.0, *) {
+                        Button("Отчет") {
+                            WindowsManager.shared.showAnalytics()
                         }
                     }
+                    Spacer()
+                }
+                
+                // --- Кнопки зума таймлайнов (\"–\" и \"+\") и отображение фактического значения ---
+                HStack {
+                    Button {
+                        // Уменьшаем масштаб, минимум 1.0
+                        timelineScale = max(1.0, timelineScale - 0.5)
+                    } label: {
+                        Image(systemName: "minus.magnifyingglass")
+                    }
+                    .help("Отдалить таймлайн")
+                    
+                    Button {
+                        // Увеличиваем
+                        timelineScale += 0.5
+                    } label: {
+                        Image(systemName: "plus.magnifyingglass")
+                    }
+                    .help("Приблизить таймлайн")
+                    
+                    Text(String(format: "%.1fx", timelineScale))
+                        .padding(.leading, 8)
+                }
+                
+                // --- Горизонтальный скролл для таймлайнов, с поддержкой pinch ---
+                ScrollView(.vertical) {
+//                    ScrollView(.horizontal) {
+                        VStack(alignment: .leading, spacing: 65) {
+                            ForEach(timelineData.lines) { line in
+                                TimelineLineView(
+                                    line: line,
+                                    scale: timelineScale * magnifyScale, // совмещаем кнопки + жест
+                                    isSelected: (line.id == timelineData.selectedLineID),
+                                    onSelect: { timelineData.selectLine(line.id) },
+                                    onEditLabelsRequest: { stampID in
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                            showLabelEditSheet = true
+                                        }
+                                        UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
+                                        UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
+                                    }
+                                )
+                            }
+                        .gesture(
+                            MagnificationGesture()
+                                .updating($magnifyScale) { current, gestureState, _ in
+                                    // временно применяем scale к жесту
+                                    gestureState = current
+                                }
+                                .onEnded { final in
+                                    // фиксируем итоговый масштаб
+                                    let newScale = timelineScale * final
+                                    timelineScale = max(1.0, newScale)
+                                }
+                        )
+                            Spacer()
+                                .frame(height: 50)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -867,24 +860,42 @@ struct FullControlView: View {
                     }
                 }
             )
+            .onAppear {
+                parentWindowHeight = geo.size.height
+            }
+            .onChange(of: geo.size) { newSize in
+                parentWindowHeight = newSize.height
+            }
+        }
         .sheet(isPresented: $showAddLineSheet) {
             AddLineSheet { newLineName in
                 timelineData.addLine(name: newLineName)
             }
         }
         .sheet(isPresented: $showLabelEditSheet) {
+            
             if let lineIDString = UserDefaults.standard.string(forKey: "editingStampLineID"),
                let stampIDString = UserDefaults.standard.string(forKey: "editingStampID"),
                let lineID = UUID(uuidString: lineIDString),
                let stampID = UUID(uuidString: stampIDString) {
-
+                
                 if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
                    let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) {
+                    
                     let currentLabels = timelineData.lines[lineIndex].stamps[stampIndex].labels
                     let stampName = timelineData.lines[lineIndex].stamps[stampIndex].label
+                    
                     if let tag = TagLibraryManager.shared.tags.first(where: { $0.id == timelineData.lines[lineIndex].stamps[stampIndex].idTag }) {
-                        LabelSelectionSheet(stampName: stampName, initialLabels: currentLabels, tag: tag, tagLibrary: TagLibraryManager.shared) { newLabels in
-                            timelineData.updateStampLabels(lineID: lineID, stampID: stampID, newLabels: newLabels)
+                        LabelSelectionSheet(
+                            stampName: stampName,
+                            initialLabels: currentLabels,
+                            tag: tag,
+                            tagLibrary: TagLibraryManager.shared,
+                            isDop: true
+                        ) { newLabels in
+                            timelineData.updateStampLabels(lineID: lineID,
+                                                           stampID: stampID,
+                                                           newLabels: newLabels)
                         }
                     }
                 } else {
@@ -901,11 +912,14 @@ struct FullControlView: View {
             }
         }
         .sheet(isPresented: $showTagSelectionSheet) {
+            let maxSheetHeight = parentWindowHeight * 0.8
+            
             TagSelectionSheetView(uniqueTags: uniqueTagsFromTimelines()) { selectedTag in
                 selectedExportType = .tag(selectedTag: selectedTag)
                 showTagSelectionSheet = false
                 showExportModeSheet = true
             }
+            .frame(height: maxSheetHeight)
         }
     }
     
@@ -942,62 +956,93 @@ struct FullControlView: View {
 
 struct TimelineLineView: View {
     @ObservedObject var videoManager = VideoPlayerManager.shared
+    
     let line: TimelineLine
+    
+    // Новое поле: масштаб
+    let scale: CGFloat
+    
     let isSelected: Bool
     let onSelect: () -> Void
     let onEditLabelsRequest: (UUID) -> Void
+    
     @ObservedObject var tagLibrary = TagLibraryManager.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(line.name)
-                .font(.headline)
-                .padding(4)
-                .background(isSelected ? Color.blue.opacity(0.2) : Color.clear)
-                .cornerRadius(4)
-                .onTapGesture { onSelect() }
-                .contextMenu {
-                    Button("Удалить таймлайн") {
-                        TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
-                        TimelineDataManager.shared.updateTimelines()
+        GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 2) {
+                Text(line.name)
+                    .font(.headline)
+                    .padding(4)
+                    .background(isSelected ? Color.blue.opacity(0.2) : Color.clear)
+                    .cornerRadius(4)
+                    .onTapGesture { onSelect() }
+                    .contextMenu {
+                        Button("Удалить таймлайн") {
+                            TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
+                            TimelineDataManager.shared.updateTimelines()
+                        }
                     }
-                }
-            GeometryReader { geo in
-                Rectangle()
-                    .fill(Color.gray.opacity(0.1))
-                    .frame(height: 30)
-                let sortedStamps = line.stamps.sorted { $0.duration > $1.duration }
-                ForEach(sortedStamps) { stamp in
-                    let total = max(1, videoManager.videoDuration)
-                    let startRatio = stamp.startSeconds / total
-                    let durationRatio = stamp.duration / total
-                    let stampWidth = durationRatio * geo.size.width
-                    let stampX = startRatio * geo.size.width
-                    Rectangle()
-                        .fill(stamp.color)
-                        .frame(width: stampWidth, height: 30)
-                        .position(x: stampX + stampWidth / 2, y: 15)
-                        .onTapGesture { videoManager.seek(to: stamp.startSeconds) }
-                        .contextMenu {
-                            Text("Тег: \(stamp.label)")
-                            if !stamp.labels.isEmpty {
-                                ForEach(stamp.labels, id: \.self) { labelID in
-                                    if let label = tagLibrary.labels.first(where: { $0.id == labelID }) {
-                                        if let group = tagLibrary.labelGroups.first(where: { $0.lables.contains(label.id) }) {
-                                            Text("\(label.name) (\(group.name))")
+                
+                ScrollView(.horizontal) {
+                    let baseWidth = geometry.size.width
+                    let totalDuration = max(1, videoManager.videoDuration)
+                    let computedWidth = baseWidth * max(scale, 1.0)  // ширина не меньше базовой
+                    
+                    HStack(spacing: 0) {
+                        ZStack(alignment: .topLeading) {
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.1))
+                                .frame(width: computedWidth, height: 30)
+                            
+                            ForEach(line.stamps.sorted { $0.duration > $1.duration }) { stamp in
+                                let startRatio = stamp.startSeconds / totalDuration
+                                let durationRatio = stamp.duration / totalDuration
+                                
+                                let stampWidth = durationRatio * computedWidth
+                                let stampX = startRatio * computedWidth
+                                
+                                ZStack(alignment: .leading) {
+                                    Rectangle()
+                                        .fill(stamp.color)
+                                        .frame(height: 30)
+                                    
+                                    StampLabelsOverlayView(stamp: stamp, maxWidth: stampWidth)
+                                        .frame(height: 30)
+                                }
+                                .frame(width: stampWidth, height: 30)
+                                .position(x: stampX + stampWidth / 2, y: 15)
+                                .onTapGesture {
+                                    videoManager.seek(to: stamp.startSeconds)
+                                }
+                                .contextMenu {
+                                    Text("Тег: \(stamp.label)")
+                                    if !stamp.labels.isEmpty {
+                                        ForEach(stamp.labels, id: \.self) { labelID in
+                                            if let label = tagLibrary.labels.first(where: { $0.id == labelID }) {
+                                                if let group = tagLibrary.labelGroups.first(where: { $0.lables.contains(label.id) }) {
+                                                    Text("\(label.name) (\(group.name))")
+                                                } else {
+                                                    Text(label.name)
+                                                }
+                                            }
                                         }
+                                        Divider()
+                                    }
+                                    Button("Удалить тег") {
+                                        TimelineDataManager.shared.removeStamp(lineID: line.id, stampID: stamp.id)
+                                    }
+                                    Button("Редактировать лейблы") {
+                                        onEditLabelsRequest(stamp.id)
                                     }
                                 }
-                                Divider()
                             }
-                            Button("Удалить тег") {
-                                TimelineDataManager.shared.removeStamp(lineID: line.id, stampID: stamp.id)
-                            }
-                            Button("Редактировать лейблы") { onEditLabelsRequest(stamp.id) }
                         }
+                        .frame(width: computedWidth, height: 30)
+                    }
                 }
+                .frame(height: 30)
             }
-            .frame(height: 30)
         }
     }
 }
@@ -1006,9 +1051,11 @@ struct TagLibraryView: View {
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @ObservedObject var videoManager = VideoPlayerManager.shared
     @ObservedObject var timelineData = TimelineDataManager.shared
+    
     @State private var showLabelSheet = false
     @State private var selectedTag: Tag? = nil
-    
+    @State private var hoveredTagID: String? = nil
+
     func makeHyphenatedString(_ text: String, width: CGFloat, fontSize: CGFloat = 14, locale: Locale = Locale(identifier: "ru")) -> NSAttributedString {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineBreakMode = .byWordWrapping
@@ -1030,25 +1077,18 @@ struct TagLibraryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(tagLibrary.tagGroups) { group in
-                        DisclosureGroup(isExpanded: .constant(true), content: {
+                        DisclosureGroup(isExpanded: .constant(true)) {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                                 ForEach(group.tags, id: \.self) { tagID in
                                     if let tag = tagLibrary.tags.first(where: { $0.id == tagID }) {
-                                        let isTagUsedOnSelectedLine: Bool = {
-                                            guard let selectedLineID = timelineData.selectedLineID,
-                                                  let selectedLine = timelineData.lines.first(where: { $0.id == selectedLineID })
-                                            else {
-                                                return false
-                                            }
-                                            return selectedLine.stamps.contains(where: { $0.idTag == tag.id })
-                                        }()
-                                        Button(action: {
+                                        Button {
+                                            // При нажатии: ставим selectedTag и показываем Sheet
                                             videoManager.player?.pause()
                                             selectedTag = tag
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                                 showLabelSheet = true
                                             }
-                                        }) {
+                                        } label: {
                                             Text(tag.name)
                                                 .lineLimit(nil)
                                                 .multilineTextAlignment(.center)
@@ -1059,37 +1099,56 @@ struct TagLibraryView: View {
                                         }
                                         .background(Color(hex: tag.color))
                                         .cornerRadius(4)
+                                        // Подсветка на ховер
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 4)
-                                                .stroke(Color.red, lineWidth: isTagUsedOnSelectedLine ? 2 : 0)
+                                                .stroke(hoveredTagID == tag.id ? Color.blue : Color.clear,
+                                                        lineWidth: 2)
                                         )
+                                        .onHover { hovering in
+                                            // При наведении: ставим hoveredTagID = tag.id, иначе сбрасываем
+                                            if hovering {
+                                                hoveredTagID = tag.id
+                                            } else if hoveredTagID == tag.id {
+                                                hoveredTagID = nil
+                                            }
+                                        }
                                     }
                                 }
                             }
                             .padding(.horizontal)
-                        }, label: {
+                        } label: {
                             Text(group.name)
                                 .font(.headline)
-                        })
+                        }
                         .padding(.horizontal)
                     }
                 }
             }
         }
+        // Когда showLabelSheet == true, открываем окно выбора лейблов
         .sheet(isPresented: $showLabelSheet) {
             if timelineData.selectedLineID != nil, let tag = selectedTag {
-                LabelSelectionSheet(stampName: tag.name, initialLabels: [], tag: tag, tagLibrary: tagLibrary) { selectedLabels in
+                LabelSelectionSheet(
+                    stampName: tag.name,
+                    initialLabels: [],
+                    tag: tag,
+                    tagLibrary: tagLibrary
+                ) { selectedLabels in
                     let currentTime = videoManager.currentTime
                     let startTime = max(0, currentTime - tag.defaultTimeBefore)
                     let finishTime = startTime + tag.defaultTimeBefore + tag.defaultTimeAfter
                     let timeStartString = secondsToTimeString(startTime)
                     let timeFinishString = secondsToTimeString(finishTime)
-                    timelineData.addStampToSelectedLine(idTag: tag.id,
-                                                        name: tag.name,
-                                                        timeStart: timeStartString,
-                                                        timeFinish: timeFinishString,
-                                                        color: tag.color,
-                                                        labels: selectedLabels)
+
+                    timelineData.addStampToSelectedLine(
+                        idTag: tag.id,
+                        name: tag.name,
+                        timeStart: timeStartString,
+                        timeFinish: timeFinishString,
+                        color: tag.color,
+                        labels: selectedLabels
+                    )
                 }
             } else {
                 Text("""
@@ -1156,6 +1215,7 @@ struct LabelSelectionSheet: View {
     let initialLabels: [String]
     let tag: Tag?
     let tagLibrary: TagLibraryManager
+    var isDop: Bool = false
     let onDone: ([String]) -> Void
 
     @State private var selectedLabels: Set<String> = []
@@ -1165,31 +1225,49 @@ struct LabelSelectionSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Таймстемп: \(stampName)")
                 .font(.headline)
+            
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(filteredLabelGroups) { group in
-                        DisclosureGroup(isExpanded: .constant(true), content: {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {
+                        DisclosureGroup(isExpanded: .constant(true)) {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 140), spacing: 16, alignment: .top)],
+                                spacing: 16
+                            ) {
                                 ForEach(group.lables, id: \.self) { labelID in
                                     if let label = tagLibrary.labels.first(where: { $0.id == labelID }) {
-                                        Toggle(isOn: Binding(
-                                            get: { selectedLabels.contains(label.id) },
-                                            set: { newValue in
-                                                if newValue {
-                                                    selectedLabels.insert(label.id)
-                                                } else {
-                                                    selectedLabels.remove(label.id)
-                                                }
+                                        Button {
+                                            if selectedLabels.contains(label.id) {
+                                                selectedLabels.remove(label.id)
+                                            } else {
+                                                selectedLabels.insert(label.id)
                                             }
-                                        )) {
-                                            Text(label.name)
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(
+                                                    systemName: selectedLabels.contains(label.id)
+                                                    ? "checkmark.square"
+                                                    : "square"
+                                                )
+                                                Text(label.name)
+                                                    .lineLimit(1)
+                                            }
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(selectedLabels.contains(label.id)
+                                                        ? Color.blue.opacity(0.2)
+                                                        : Color.gray.opacity(0.1))
+                                            .cornerRadius(8)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
                                         }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
-                        }, label: {
+                        } label: {
                             Text(group.name)
-                        })
+                                .font(.subheadline)
+                        }
                     }
                 }
             }
@@ -1202,11 +1280,10 @@ struct LabelSelectionSheet: View {
                     onDone(Array(selectedLabels))
                     presentationMode.wrappedValue.dismiss()
                 }
-                .conditionalButtonStyle()
             }
         }
         .padding()
-        .frame(minWidth: 300, minHeight: 400)
+        .frame(minWidth: 400, minHeight: isDop ? 0 : 400)
         .onAppear {
             selectedLabels = Set(initialLabels)
         }
@@ -1269,8 +1346,135 @@ struct TagSelectionSheetView: View {
                     }
                 }
             }
-            .frame(minWidth: 300, minHeight: 400)
+            .frame(width: 300)
         }
         .padding()
+    }
+}
+
+// New view for displaying stamp label chips with dynamic font sizing.
+struct StampLabelsOverlayView: View {
+    let stamp: TimelineStamp
+    let maxWidth: CGFloat
+    @ObservedObject var tagLibrary = TagLibraryManager.shared
+
+    @State private var displayedLabels: [Label] = []
+    @State private var fontSize: CGFloat = 12 // start at 12, can reduce
+
+    var body: some View {
+        GeometryReader { proxy in
+            let finalWidth = proxy.size.width
+            HStack(spacing: 4) {
+                ForEach(displayedLabels, id: \.id) { label in
+                    LabelChip(label: label, baseColor: stamp.color, fontSize: fontSize)
+                }
+            }
+            .frame(height: proxy.size.height, alignment: .center)
+            .onAppear {
+                updateDisplayedLabels(finalWidth: finalWidth)
+            }
+            .onChange(of: finalWidth) { newValue in
+                updateDisplayedLabels(finalWidth: newValue)
+            }
+            .onChange(of: stamp.labels) { _ in
+                updateDisplayedLabels(finalWidth: finalWidth)
+            }
+        }
+    }
+
+    private func updateDisplayedLabels(finalWidth: CGFloat) {
+        let stampLabels = stamp.labels.compactMap { labelID in
+            tagLibrary.labels.first(where: { $0.id == labelID })
+        }
+        var testFont: CGFloat = 12
+        let labelChips = stampLabels.map { LabelChip(label: $0, baseColor: stamp.color, fontSize: testFont) }
+
+        let totalWidthOfAll = labelChips.reduce(0) { partialResult, chip in
+            let textWidth = chip.label.name.size(withSystemFontSize: testFont).width + 20 // icon + padding
+            return partialResult + textWidth + 4 // spacing
+        }
+        if totalWidthOfAll <= finalWidth {
+            displayedLabels = stampLabels
+            fontSize = testFont
+            return
+        }
+        let firstLabelWidth = stampLabels.first.map {
+            $0.name.size(withSystemFontSize: testFont).width + 20
+        } ?? 0
+        if firstLabelWidth > finalWidth {
+            testFont = 10
+            let newFirstWidth = stampLabels.first.map {
+                $0.name.size(withSystemFontSize: testFont).width + 20
+            } ?? 0
+            if newFirstWidth > finalWidth {
+                displayedLabels = []
+                return
+            } else {
+                displayedLabels = [stampLabels.first!]
+                fontSize = testFont
+                return
+            }
+        } else {
+            var listToShow: [Label] = []
+            var currentWidth: CGFloat = 0
+            for lb in stampLabels {
+                let neededWidth = lb.name.size(withSystemFontSize: testFont).width + 20 + 4
+                if currentWidth + neededWidth <= finalWidth {
+                    listToShow.append(lb)
+                    currentWidth += neededWidth
+                } else {
+                    break
+                }
+            }
+            displayedLabels = listToShow
+            fontSize = testFont
+        }
+    }
+}
+
+extension String {
+    func size(withSystemFontSize fontSize: CGFloat) -> CGSize {
+        let font = NSFont.systemFont(ofSize: fontSize)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        let attString = NSAttributedString(string: self, attributes: attributes)
+        let rect = attString.boundingRect(
+            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
+            options: .usesLineFragmentOrigin
+        )
+        return rect.size
+    }
+}
+
+struct LabelChip: View {
+    let label: Label
+    let baseColor: Color
+    let fontSize: CGFloat
+
+    var body: some View {
+        let textColor = baseColor.isDark ? Color.white : Color.black
+        let backgroundColor = baseColor.darken(by: 0.2)
+        HStack(spacing: 3) {
+            Image(systemName: "tag.fill")
+            Text(label.name)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(backgroundColor)
+        .cornerRadius(8)
+        .foregroundColor(textColor)
+        .font(.system(size: fontSize))
+    }
+}
+
+extension Color {
+    func darken(by amount: CGFloat) -> Color {
+        let uiColor = NSColor(self)
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        uiColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        brightness = max(brightness - amount, 0)
+        return Color(hue: Double(hue), saturation: Double(saturation), brightness: Double(brightness), opacity: Double(alpha))
     }
 }

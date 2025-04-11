@@ -132,6 +132,19 @@
 		DDDB36352D78E16100A1111C /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		DDF695982DA86B6500696636 /* Managers */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		DDF6959C2DA86B6A00696636 /* Views */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		DDB4018E2D749E0F004A12C2 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -233,6 +246,8 @@
 		DD2A707D2D74E41400287BA8 /* VideoPlayer */ = {
 			isa = PBXGroup;
 			children = (
+				DDF6959C2DA86B6A00696636 /* Views */,
+				DDF695982DA86B6500696636 /* Managers */,
 				DD2A70822D74E43700287BA8 /* VideoControlWindow.swift */,
 			);
 			path = VideoPlayer;
@@ -373,6 +388,10 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DDF695982DA86B6500696636 /* Managers */,
+				DDF6959C2DA86B6A00696636 /* Views */,
 			);
 			name = "Youchip-Stat";
 			productName = "Youchip-Stat";
