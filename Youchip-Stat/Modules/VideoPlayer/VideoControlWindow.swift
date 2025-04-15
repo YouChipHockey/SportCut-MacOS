@@ -1,7 +1,8 @@
 import SwiftUI
 import AVKit
 import Cocoa
-import AVFoundation  // для работы с AVAssetExportSession
+import AVFoundation
+import UniformTypeIdentifiers
 
 // MARK: - Модели данных
 
@@ -178,6 +179,7 @@ class TimelineDataManager: ObservableObject {
     static let shared = TimelineDataManager()
     @Published var lines: [TimelineLine] = []
     @Published var selectedLineID: UUID? = nil
+    @Published var selectedStampID: UUID? = nil  // Track the selected stamp
     var currentBookmark: Data?
     init() {
         lines = []
@@ -187,6 +189,9 @@ class TimelineDataManager: ObservableObject {
     }
     func selectLine(_ lineID: UUID) {
         selectedLineID = lineID
+    }
+    func selectStamp(stampID: UUID?) {
+        selectedStampID = stampID
     }
     func removeStamp(lineID: UUID, stampID: UUID) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
@@ -210,6 +215,52 @@ class TimelineDataManager: ObservableObject {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
         guard let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }
         lines[lineIndex].stamps[stampIndex].labels = newLabels
+        updateTimelines()
+    }
+    
+    // Check if a stamp overlaps with other stamps in its timeline
+    func stampHasOverlaps(lineID: UUID, stampID: UUID) -> Bool {
+        guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }),
+              let stamp = lines[lineIndex].stamps.first(where: { $0.id == stampID }) else {
+            return false
+        }
+        
+        return lines[lineIndex].stamps.contains { otherStamp in
+            guard otherStamp.id != stampID else { return false }
+            
+            // Check for time overlap
+            let stampStart = stamp.startSeconds
+            let stampEnd = stamp.finishSeconds
+            let otherStart = otherStamp.startSeconds
+            let otherEnd = otherStamp.finishSeconds
+            
+            // Overlap occurs when one stamp starts before the other ends
+            return (stampStart < otherEnd && otherStart < stampEnd)
+        }
+    }
+    
+    // Update stamp time boundaries
+    func updateStampTime(lineID: UUID, stampID: UUID, newStart: Double? = nil, newEnd: Double? = nil) {
+        guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }),
+              let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else {
+            return
+        }
+        
+        var stamp = lines[lineIndex].stamps[stampIndex]
+        
+        if let newStartTime = newStart {
+            // Ensure we don't make the stamp shorter than 0.5 seconds
+            let limitedStart = min(newStartTime, stamp.finishSeconds - 0.5)
+            stamp.timeStart = secondsToTimeString(limitedStart)
+        }
+        
+        if let newEndTime = newEnd {
+            // Ensure we don't make the stamp shorter than 0.5 seconds
+            let limitedEnd = max(newEndTime, stamp.startSeconds + 0.5)
+            stamp.timeFinish = secondsToTimeString(limitedEnd)
+        }
+        
+        lines[lineIndex].stamps[stampIndex] = stamp
         updateTimelines()
     }
     
@@ -357,6 +408,32 @@ struct FullControlView: View {
     @State private var editingStampID: UUID?
     @State private var timelineScale: CGFloat = 1.0
     @GestureState private var magnifyScale: CGFloat = 1.0
+    @State private var keyEventMonitor: Any?
+    
+    private func setupKeyboardShortcuts() {
+        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            switch event.keyCode {
+            case 53: // ESC key
+                // Clear the selection
+                timelineData.selectStamp(stampID: nil)
+                return nil
+            case 51: // DELETE key
+                // Delete the selected stamp
+                if let stampID = timelineData.selectedStampID {
+                    // Find which line contains this stamp
+                    for line in timelineData.lines {
+                        if line.stamps.contains(where: { $0.id == stampID }) {
+                            timelineData.removeStamp(lineID: line.id, stampID: stampID)
+                            break
+                        }
+                    }
+                }
+                return nil
+            default:
+                return event
+            }
+        }
+    }
     
     enum ExportMode { case film, playlist }
     enum CutsExportType {
@@ -862,6 +939,12 @@ struct FullControlView: View {
             )
             .onAppear {
                 parentWindowHeight = geo.size.height
+                setupKeyboardShortcuts()
+            }
+            .onDisappear {
+                if let monitor = keyEventMonitor {
+                    NSEvent.removeMonitor(monitor)
+                }
             }
             .onChange(of: geo.size) { newSize in
                 parentWindowHeight = newSize.height
@@ -956,6 +1039,7 @@ struct FullControlView: View {
 
 struct TimelineLineView: View {
     @ObservedObject var videoManager = VideoPlayerManager.shared
+    @ObservedObject var timelineData = TimelineDataManager.shared
     
     let line: TimelineLine
     
@@ -967,6 +1051,20 @@ struct TimelineLineView: View {
     let onEditLabelsRequest: (UUID) -> Void
     
     @ObservedObject var tagLibrary = TagLibraryManager.shared
+    
+    // Drag-n-drop state
+    @State private var isDraggingOver = false
+    
+    // Resizing state
+    @State private var isResizing = false
+    @State private var resizingSide: ResizingSide = .none
+    @State private var initialDragLocation: CGPoint = .zero
+    @State private var initialStartTime: Double = 0
+    @State private var initialEndTime: Double = 0
+    
+    enum ResizingSide {
+        case left, right, none
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -992,28 +1090,179 @@ struct TimelineLineView: View {
                     HStack(spacing: 0) {
                         ZStack(alignment: .topLeading) {
                             Rectangle()
-                                .fill(Color.gray.opacity(0.1))
+                                .fill(isDraggingOver ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
                                 .frame(width: computedWidth, height: 30)
+                                .onDrop(
+                                    of: [.init(UTType.plainText.identifier)],
+                                    isTargeted: $isDraggingOver
+                                ) { providers, _ in
+                                    if let provider = providers.first {
+                                        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) { (data, error) in
+                                            if let stampData = data as? Data,
+                                               let stampInfo = try? JSONDecoder().decode(StampDragInfo.self, from: stampData) {
+                                                DispatchQueue.main.async {
+                                                    transferStamp(stampInfo, to: line.id)
+                                                }
+                                            }
+                                        }
+                                        return true
+                                    }
+                                    return false
+                                }
+                                .onTapGesture {
+                                    // Clear selection when clicking timeline background
+                                    timelineData.selectStamp(stampID: nil)
+                                }
                             
-                            ForEach(line.stamps.sorted { $0.duration > $1.duration }) { stamp in
+                            // Modified sorting to put selected tag on top
+                            ForEach(line.stamps.sorted { stamp1, stamp2 in
+                                // If stamp1 is selected, it should come last (to be drawn on top)
+                                if stamp1.id == timelineData.selectedStampID {
+                                    return false
+                                }
+                                // If stamp2 is selected, it should come last (to be drawn on top)
+                                if stamp2.id == timelineData.selectedStampID {
+                                    return true
+                                }
+                                // Otherwise, sort by duration as before
+                                return stamp1.duration > stamp2.duration
+                            }) { stamp in
                                 let startRatio = stamp.startSeconds / totalDuration
                                 let durationRatio = stamp.duration / totalDuration
                                 
                                 let stampWidth = durationRatio * computedWidth
                                 let stampX = startRatio * computedWidth
                                 
+                                let isSelected = timelineData.selectedStampID == stamp.id
+                                let hasOverlaps = isSelected && timelineData.stampHasOverlaps(lineID: line.id, stampID: stamp.id)
+                                let borderColor = hasOverlaps ? Color.red : Color.blue
+                                
                                 ZStack(alignment: .leading) {
                                     Rectangle()
                                         .fill(stamp.color)
                                         .frame(height: 30)
+                                        .overlay(
+                                            // Border for selected stamp
+                                            isSelected ? 
+                                                RoundedRectangle(cornerRadius: 2)
+                                                    .stroke(borderColor, lineWidth: 2) : 
+                                                nil
+                                        )
                                     
                                     StampLabelsOverlayView(stamp: stamp, maxWidth: stampWidth)
                                         .frame(height: 30)
+                                    
+                                    if isSelected {
+                                        
+                                        // Right resize handle
+                                        Rectangle()
+                                            .fill(borderColor)
+                                            .frame(width: 8, height: 30)
+                                            .contentShape(Rectangle().size(width: 10, height: 30))
+                                            .position(x: stampWidth - 2, y: 15)
+                                            .onHover { hovering in
+                                                if hovering && !isResizing {
+                                                    NSCursor.resizeLeftRight.push()
+                                                } else if !hovering && !isResizing {
+                                                    NSCursor.pop()
+                                                }
+                                            }
+                                            .gesture(
+                                                DragGesture()
+                                                    .onChanged { value in
+                                                        if !isResizing {
+                                                            // Start resizing
+                                                            isResizing = true
+                                                            resizingSide = .right
+                                                            initialDragLocation = CGPoint(x: value.location.x, y: value.location.y)
+                                                            initialStartTime = stamp.startSeconds
+                                                            initialEndTime = stamp.finishSeconds
+                                                            NSCursor.resizeLeftRight.push()
+                                                        } else if resizingSide == .right {
+                                                            // Continue resizing
+                                                            let dragDelta = value.location.x - initialDragLocation.x
+                                                            let timeDelta = (dragDelta / computedWidth) * totalDuration
+                                                            let newEndTime = initialEndTime + timeDelta
+                                                            
+                                                            if newEndTime > initialStartTime + 1 {
+                                                                timelineData.updateStampTime(
+                                                                    lineID: line.id, 
+                                                                    stampID: stamp.id, 
+                                                                    newEnd: newEndTime
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    .onEnded { _ in
+                                                        isResizing = false
+                                                        resizingSide = .none
+                                                        NSCursor.pop()
+                                                    }
+                                            )
+                                        
+                                        Rectangle()
+                                            .fill(borderColor)
+                                            .frame(width: 8, height: 30)
+                                            .contentShape(Rectangle().size(width: 10, height: 30))
+                                            .position(x: 2, y: 15)
+                                            .onHover { hovering in
+                                                if hovering && !isResizing {
+                                                    NSCursor.resizeLeftRight.push()
+                                                } else if !hovering && !isResizing {
+                                                    NSCursor.pop()
+                                                }
+                                            }
+                                            .gesture(
+                                                DragGesture(minimumDistance: 1, coordinateSpace: .local)
+                                                    .onChanged { value in
+                                                        if !isResizing {
+                                                            // Start resizing
+                                                            isResizing = true
+                                                            resizingSide = .left
+                                                            initialDragLocation = value.startLocation
+                                                            initialStartTime = stamp.startSeconds
+                                                            initialEndTime = stamp.finishSeconds
+                                                            NSCursor.resizeLeftRight.push()
+                                                        } else if resizingSide == .left {
+                                                            // Continue resizing left side only
+                                                            let dragDelta = value.location.x - value.startLocation.x
+                                                            let timeDelta = (dragDelta / computedWidth) * totalDuration
+                                                            let newStartTime = initialStartTime + timeDelta
+                                                            
+                                                            // Only update if we don't make it too short
+                                                            if newStartTime < initialEndTime - 1 {
+                                                                timelineData.updateStampTime(
+                                                                    lineID: line.id,
+                                                                    stampID: stamp.id,
+                                                                    newStart: newStartTime
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    .onEnded { _ in
+                                                        isResizing = false
+                                                        resizingSide = .none
+                                                        NSCursor.pop()
+                                                    }
+                                            )
+                                    }
                                 }
                                 .frame(width: stampWidth, height: 30)
                                 .position(x: stampX + stampWidth / 2, y: 15)
                                 .onTapGesture {
+                                    // Seek to the timestamp and select it
                                     videoManager.seek(to: stamp.startSeconds)
+                                    timelineData.selectStamp(stampID: stamp.id)
+                                }
+                                .onDrag {
+                                    let stampInfo = StampDragInfo(
+                                        lineID: line.id,
+                                        stampID: stamp.id
+                                    )
+                                    if let data = try? JSONEncoder().encode(stampInfo) {
+                                        return NSItemProvider(item: data as NSData, typeIdentifier: UTType.plainText.identifier)
+                                    }
+                                    return NSItemProvider()
                                 }
                                 .contextMenu {
                                     Text("Тег: \(stamp.label)")
@@ -1031,6 +1280,9 @@ struct TimelineLineView: View {
                                     }
                                     Button("Удалить тег") {
                                         TimelineDataManager.shared.removeStamp(lineID: line.id, stampID: stamp.id)
+                                        if timelineData.selectedStampID == stamp.id {
+                                            timelineData.selectStamp(stampID: nil)
+                                        }
                                     }
                                     Button("Редактировать лейблы") {
                                         onEditLabelsRequest(stamp.id)
@@ -1045,6 +1297,39 @@ struct TimelineLineView: View {
             }
         }
     }
+    
+    private func transferStamp(_ stampInfo: StampDragInfo, to destLineID: UUID) {
+        guard let sourceLineIndex = timelineData.lines.firstIndex(where: { $0.id == stampInfo.lineID }),
+              let destLineIndex = timelineData.lines.firstIndex(where: { $0.id == destLineID }),
+              let stampIndex = timelineData.lines[sourceLineIndex].stamps.firstIndex(where: { $0.id == stampInfo.stampID }) else {
+            return
+        }
+        
+        if stampInfo.lineID == destLineID {
+            return
+        }
+        
+        let stamp = timelineData.lines[sourceLineIndex].stamps[stampIndex]
+        
+        let newStamp = TimelineStamp(
+            id: UUID(), // Новый ID для нового тега
+            idTag: stamp.idTag,
+            timeStart: stamp.timeStart,
+            timeFinish: stamp.timeFinish,
+            colorHex: stamp.colorHex,
+            label: stamp.label,
+            labels: stamp.labels
+        )
+        
+        timelineData.lines[destLineIndex].stamps.append(newStamp)
+        timelineData.lines[sourceLineIndex].stamps.remove(at: stampIndex)
+        timelineData.updateTimelines()
+    }
+}
+
+struct StampDragInfo: Codable {
+    let lineID: UUID
+    let stampID: UUID
 }
 
 struct TagLibraryView: View {

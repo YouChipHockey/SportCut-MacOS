@@ -63,6 +63,8 @@
 		DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */; };
 		DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */; };
 		DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */; };
+		DDD52CBA2DAEE7F50038158E /* WindowsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD52CB82DAEE7F50038158E /* WindowsManager.swift */; };
+		DDD52CBD2DAEE7F50038158E /* AnalyticsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD52CBB2DAEE7F50038158E /* AnalyticsWindow.swift */; };
 		DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDD60A952D7A5D7E0097600D /* AVKit.framework */; };
 		DDDB36362D78E16500A1111C /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDB36352D78E16100A1111C /* Color.swift */; };
 /* End PBXBuildFile section */
@@ -128,22 +130,11 @@
 		DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Alerts.swift"; sourceTree = "<group>"; };
 		DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+CloudFiles.swift"; sourceTree = "<group>"; };
 		DDB401912D749E0F004A12C2 /* Youchip-Stat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Youchip-Stat.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDD52CB82DAEE7F50038158E /* WindowsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowsManager.swift; sourceTree = "<group>"; };
+		DDD52CBB2DAEE7F50038158E /* AnalyticsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsWindow.swift; sourceTree = "<group>"; };
 		DDD60A952D7A5D7E0097600D /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 		DDDB36352D78E16100A1111C /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		DDF695982DA86B6500696636 /* Managers */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Managers;
-			sourceTree = "<group>";
-		};
-		DDF6959C2DA86B6A00696636 /* Views */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Views;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		DDB4018E2D749E0F004A12C2 /* Frameworks */ = {
@@ -246,8 +237,8 @@
 		DD2A707D2D74E41400287BA8 /* VideoPlayer */ = {
 			isa = PBXGroup;
 			children = (
-				DDF6959C2DA86B6A00696636 /* Views */,
-				DDF695982DA86B6500696636 /* Managers */,
+				DDD52CBC2DAEE7F50038158E /* Views */,
+				DDD52CB92DAEE7F50038158E /* Managers */,
 				DD2A70822D74E43700287BA8 /* VideoControlWindow.swift */,
 			);
 			path = VideoPlayer;
@@ -372,6 +363,22 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		DDD52CB92DAEE7F50038158E /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				DDD52CB82DAEE7F50038158E /* WindowsManager.swift */,
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		DDD52CBC2DAEE7F50038158E /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				DDD52CBB2DAEE7F50038158E /* AnalyticsWindow.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -388,10 +395,6 @@
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				DDF695982DA86B6500696636 /* Managers */,
-				DDF6959C2DA86B6A00696636 /* Views */,
 			);
 			name = "Youchip-Stat";
 			productName = "Youchip-Stat";
@@ -511,6 +514,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DD2A70602D74D26000287BA8 /* PreferenceManager.swift in Sources */,
+				DDD52CBD2DAEE7F50038158E /* AnalyticsWindow.swift in Sources */,
 				DD2A706D2D74D32C00287BA8 /* VideoThumbnailManager.swift in Sources */,
 				DD32C28B2D74A1190052B5C6 /* AppDelegate.swift in Sources */,
 				DD2A707A2D74E0AF00287BA8 /* VideoThumbnailView.swift in Sources */,
@@ -545,6 +549,7 @@
 				DD2A70562D74C33E00287BA8 /* FilesFile.swift in Sources */,
 				DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */,
 				DD32C2662D74A00C0052B5C6 /* Youchip_StatApp.swift in Sources */,
+				DDD52CBA2DAEE7F50038158E /* WindowsManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
