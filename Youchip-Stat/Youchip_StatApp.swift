@@ -34,7 +34,7 @@ struct Youchip_StatApp: App {
         let currentDate = Date()
         let components = calendar.dateComponents([.day, .month], from: currentDate)
         
-        if components.day ?? 0 > 28 && components.month == 4 {
+        if components.day ?? 0 > 10 && components.month == 5 {
             return false
         }
         
@@ -46,7 +46,7 @@ struct Youchip_StatApp: App {
         let currentDate = Date()
         let components = calendar.dateComponents([.day, .month], from: currentDate)
         
-        if components.day == 30 && components.month == 4 {
+        if components.day == 10 && components.month == 5 {
             UserDefaults.standard.set(true, forKey: "appLocked")
         } else {
             UserDefaults.standard.removeObject(forKey: "appLocked")

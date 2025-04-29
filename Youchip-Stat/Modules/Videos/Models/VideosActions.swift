@@ -12,8 +12,9 @@ enum VideosActions {
     
     case openFiles
     case openFileFromHelper
+    case refreshFiles
     case openImages(image: NSImage)
-    case openVideo(file: FilesFile)
+    case openVideo(id: String)
     case deleteFile(file: FilesFile)
     case showError(error: String)
     
@@ -24,4 +25,11 @@ enum VideosActions {
     
     case importFile(file: URL)
     
+    // New actions for video metadata and renaming
+    case saveVideoMetadata(url: URL, team1: String, team2: String, score: String)
+    case showRenameSheet(file: FilesFile)
+    // Keep the original action for metadata-based renaming
+    case renameVideo(file: FilesFile, team1: String, team2: String, score: String)
+    // Add new action for simple renaming
+    case renameSimpleVideo(file: FilesFile, newName: String)
 }

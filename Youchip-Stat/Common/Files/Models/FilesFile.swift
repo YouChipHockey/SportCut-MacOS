@@ -10,6 +10,10 @@ import AppKit
 
 struct FilesFile {
     
+    var id: String {
+        return "\(videoData.bookmark.base64EncodedString())-\(Date().timeIntervalSince1970)"
+    }
+    
     var url: URL? {
         get {
             do {
@@ -39,13 +43,12 @@ struct FilesFile {
     var isFile: Bool { !(url?.isFolder ?? true) }
     var isFolder: Bool { url?.isFolder ?? false }
     
-    var name: String { url?.fileName  ?? "" }
+    // Update the name property to use customName when available
+    var name: String { videoData.customName ?? url?.lastPathComponent ?? "" }
     var pathExtension: String { url?.pathExtension  ?? "" }
     var lastPathComponent: String { url?.lastPathComponent  ?? "" }
     var sizeString: String { url?.sizeString ?? "" }
     var size: UInt64 { url?.sizeByets ?? 0 }
-    
-    var customName: String?
     
     var videoData: VideosData
     

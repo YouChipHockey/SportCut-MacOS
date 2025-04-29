@@ -10,7 +10,9 @@ import Foundation
 struct VideosData: Codable {
     
     var bookmark: Data
+    var id: String
     var timelines: [TimelineLine]
+    var customName: String?
     
 }
 
@@ -32,15 +34,22 @@ class VideoFilesManager {
         filterFiles()
     }
     
+    func generate32CharacterCode() -> String {
+        let uuid = UUID().uuidString
+        let cleanUUID = uuid.replacingOccurrences(of: "-", with: "")
+        return cleanUUID
+    }
+    
     @discardableResult
     func importFile(url: URL) -> FilesFile? {
         if let bookmark = url.makeBookmark() {
-            var file = FilesFile(videoData: VideosData(bookmark: bookmark, timelines: []))
+            let id = generate32CharacterCode()
+            var file = FilesFile(videoData: VideosData(bookmark: bookmark, id: id, timelines: []))
             if videosData.first(where: { $0.bookmark == bookmark}) == nil {
                 file.updateDateOpened()
                 file.updateDateModified()
                 files.append(file)
-                videosData.append(VideosData(bookmark: file.videoData.bookmark, timelines: []))
+                videosData.append(VideosData(bookmark: file.videoData.bookmark, id: id, timelines: []))
                 saveBookmarks()
                 updateFiles?(files)
             }
@@ -48,6 +57,36 @@ class VideoFilesManager {
         } else {
             return nil
         }
+    }
+    
+    func refreshFiles() -> [FilesFile] {
+        readFiles()
+        filterFiles()
+        return files
+    }
+    
+    @discardableResult
+    func importFile(url: URL, newName: String) -> FilesFile? {
+        if let file = importFile(url: url) {
+            // Update the custom name in videoData
+            if let index = videosData.firstIndex(where: { $0.bookmark == file.videoData.bookmark }) {
+                videosData[index].customName = newName
+                saveBookmarks()
+            }
+            
+            // Update the custom name in file
+            var updatedFile = file
+            updatedFile.videoData.customName = newName
+            
+            // Update the file in the files array
+            if let fileIndex = files.firstIndex(where: { $0.videoData.bookmark == file.videoData.bookmark }) {
+                files[fileIndex] = updatedFile
+                updateFiles?(files)
+            }
+            
+            return updatedFile
+        }
+        return nil
     }
     
     func removeFile(file: FilesFile) {
@@ -74,6 +113,20 @@ class VideoFilesManager {
         if let index = files.firstIndex(where: { $0.videoData.bookmark == bookmark }) {
             files[index].videoData.timelines = timelines
             updateFiles?(files)
+        }
+    }
+    
+    func renameFile(file: FilesFile, newName: String) {
+        // Find the file in the array and update its custom name
+        if let index = files.firstIndex(where: { $0.videoData.bookmark == file.videoData.bookmark }) {
+            files[index].videoData.customName = newName
+            
+            // Also update the custom name in videosData
+            if let dataIndex = videosData.firstIndex(where: { $0.bookmark == file.videoData.bookmark }) {
+                videosData[dataIndex].customName = newName
+                saveBookmarks()
+                updateFiles?(files)
+            }
         }
     }
     
