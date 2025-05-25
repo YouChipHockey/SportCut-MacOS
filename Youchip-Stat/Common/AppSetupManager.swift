@@ -7,10 +7,14 @@
 
 import Foundation
 import AppKit
+import Firebase
+import FirebaseCore
+import FirebaseInstallations
 
 class AppSetupManager {
     
     class func setup() {
+        FirebaseApp.configure()
         setupMenu()
         setupBaseAppearence()
     }
@@ -23,11 +27,11 @@ class AppSetupManager {
         let application = NSApplication.shared
         application.menu = NSMenu()
         
-        let mainMenu = NSMenuItem(title: ^String.Root.rootYouChipTitle, action: nil, keyEquivalent: "")
+        let mainMenu = NSMenuItem(title: ^String.Titles.rootYouChipTitle, action: nil, keyEquivalent: "")
         application.menu?.addItem(mainMenu)
         application.menu?.setSubmenu(NSMenu(), for: mainMenu)
         
-        let quitItem = NSMenuItem(title: ^String.Mac.macQuitAppTitle, action: nil, keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: ^String.Titles.macQuitAppTitle, action: nil, keyEquivalent: "q")
         quitItem.target = application
         quitItem.action = #selector(application.terminate)
         mainMenu.submenu?.addItem(quitItem)

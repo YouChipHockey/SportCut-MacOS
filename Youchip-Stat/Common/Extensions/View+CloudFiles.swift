@@ -17,17 +17,17 @@ private struct CloudFilesAlerts: ViewModifier {
     func body(content: Content) -> some View {
         content
             .actionAlert(
-                title: ^String.Alerts.alertsInfoTitle,
-                message: ^String.Root.rootTheFileIsPlacedInCloudTitle,
-                actionTitle: ^String.Root.rootDownloadTitle,
+                title: ^String.Titles.alertsInfoTitle,
+                message: ^String.Titles.rootTheFileIsPlacedInCloudTitle,
+                actionTitle: ^String.Titles.rootDownloadTitle,
                 action: {
                     downloadFiles()
                 },
                 show: showFilesDownloadAlert
             )
             .infoAlert(
-                title: ^String.Alerts.alertsInfoTitle,
-                message: ^String.Root.rootDownloadingHasStartedTitle,
+                title: ^String.Titles.alertsInfoTitle,
+                message: ^String.Titles.rootDownloadingHasStartedTitle,
                 show: showFilesDownloadingAlert
             )
     }

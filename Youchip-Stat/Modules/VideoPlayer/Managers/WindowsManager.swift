@@ -3,12 +3,6 @@ import AppKit
 import AVKit
 import Foundation
 
-extension NSNotification.Name {
-    static let collectionDataChanged = NSNotification.Name("collectionDataChanged")
-    static let collectionEditorOpened = NSNotification.Name("collectionEditorOpened") // Add new notification
-    static let collectionEditorClosed = NSNotification.Name("collectionEditorClosed") // Add new notification
-}
-
 class WindowsManager {
     static let shared = WindowsManager()
     
@@ -36,59 +30,50 @@ class WindowsManager {
         isClosing = true
     }
     
-    @available(macOS 12.0, *)
     func showAnalytics() {
         analyticsWindow = AnalyticsWindowController()
     }
     
+    func setMarkupMode(_ mode: MarkupMode) {
+        MarkupMode.current = mode
+        if mode == .tagBased {
+            print("Tag-based markup mode activated. Each tag will have its own timeline.")
+        } else {
+            print("Standard markup mode activated. Full timeline editing enabled.")
+        }
+    }
+    
     func openCustomCollectionsWindow(withExistingCollection existingCollection: CollectionBookmark? = nil) {
-        // Create the appropriate view based on whether we're editing or creating a new collection
         let view: AnyView
         
         if let existingCollection = existingCollection {
-            // For editing an existing collection
             view = AnyView(CreateCustomCollectionsView(existingCollection: existingCollection))
         } else {
-            // For creating a new collection
             view = AnyView(CreateCustomCollectionsView())
         }
         
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
-        // Set the appropriate title based on the mode
         window.title = existingCollection != nil ?
             "Редактирование коллекции: \(existingCollection?.name ?? "")" :
             "Создание новой коллекции"
         
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-        
-        // Получаем размер главного экрана
         if let screen = NSScreen.main {
-            // Получаем размер экрана с учетом панели задач и т.д.
             let screenFrame = screen.visibleFrame
-            
-            // Устанавливаем размер окна равным размеру экрана
             window.setFrame(screenFrame, display: true)
         } else {
-            // Если не удалось получить размер экрана, используем резервные значения
             window.center()
             window.setContentSize(NSSize(width: 850, height: 600))
         }
-        
-        // Add notification observer to refresh collections after window closes
         NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
-            // Refresh the global pools in TagLibraryManager
             TagLibraryManager.shared.refreshGlobalPools()
         }
         
-        // Create and store a strong reference to the delegate
         self.collectionWindowDelegate = CollectionWindowDelegate()
         window.delegate = self.collectionWindowDelegate
-        
-        // Notify that the collection editor is open
         NotificationCenter.default.post(name: .collectionEditorOpened, object: nil)
-        
         window.makeKeyAndOrderFront(nil)
     }
     
@@ -101,13 +86,20 @@ class WindowsManager {
         isClosing = false
         
         TimelineDataManager.shared.currentBookmark = filesFile.videoData.bookmark
-        TimelineDataManager.shared.lines = filesFile.videoData.timelines
-        TimelineDataManager.shared.selectedLineID = filesFile.videoData.timelines.first?.id
-        VideoPlayerManager.shared.loadVideo(from: file)
         
-        videoWindow = VideoPlayerWindowController()
-        controlWindow = FullControlWindowController()
-        tagLibraryWindow = TagLibraryWindowController()
+        if MarkupMode.current == .standard {
+            TimelineDataManager.shared.lines = filesFile.videoData.timelines
+            TimelineDataManager.shared.selectedLineID = filesFile.videoData.timelines.first?.id
+        } else {
+            TimelineDataManager.shared.lines = filesFile.videoData.timelines
+            TimelineDataManager.shared.selectedLineID = nil
+        }
+            
+            VideoPlayerManager.shared.loadVideo(from: file)
+            
+            videoWindow = VideoPlayerWindowController()
+            controlWindow = FullControlWindowController()
+            tagLibraryWindow = TagLibraryWindowController()
         
         if let screen = NSScreen.main {
             let screenFrame = screen.frame
@@ -142,12 +134,5 @@ class WindowsManager {
         videoWindow?.showWindow(nil)
         controlWindow?.showWindow(nil)
         tagLibraryWindow?.showWindow(nil)
-    }
-}
-
-class CollectionWindowDelegate: NSObject, NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
-        print("Collection editor window closing")
-        NotificationCenter.default.post(name: .collectionEditorClosed, object: nil)
     }
 }

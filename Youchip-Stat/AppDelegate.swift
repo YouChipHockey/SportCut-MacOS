@@ -7,6 +7,7 @@
 
 import Cocoa
 import UserNotifications
+import Sparkle
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, ObservableObject {
     
@@ -22,15 +23,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         closeAllSheetsAndModals()
         return .terminateNow
     }
-    
-//    func application(_ application: NSApplication, open urls: [URL]) {
-//        guard let url = urls.first else { return }
-//        FileOpenHelper.shared.openFileOnAppear(url)
-//    }
-    
-//    func applicationDidBecomeActive(_ notification: Notification) {
-//        AppNavigator.shared.fixRootViewAppear()
-//    }
     
     private func closeAllSheetsAndModals() {
         for window in NSApplication.shared.windows {

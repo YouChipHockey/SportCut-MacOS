@@ -8,38 +8,38 @@
 
 // Root
 "RootYouChipTitle" = "YouChip";
-"RootVideosTitle" = "Videos";
-"RootTheFileIsPlacedInCloudTitle" = "One or more files are placed in the iCloud and must be downloaded before we can open them. Start downloading now?";
-"RootDownloadTitle" = "Download";
-"RootDownloadingHasStartedTitle" = "Downloading has started. Please try to open the file(s) later";
+"RootVideosTitle" = "Видео";
+"RootTheFileIsPlacedInCloudTitle" = "Один или несколько файлов размещены в iCloud и должны быть загружены, прежде чем мы сможем их открыть. Начните загрузку прямо сейчас?";
+"RootDownloadTitle" = "Скачать";
+"RootDownloadingHasStartedTitle" = "Загрузка началась. Пожалуйста, попробуйте открыть файлы позже";
 
 // Vides
-"AddVideoTitle" = "Add video";
+"AddVideoTitle" = "Добавить видео";
 
 // Button Titles
-"ContinueButtonTitle" = "Continue";
-"CloseButtonTitle" = "Close";
-"CancelButtonTitle" = "Cancel";
-"SaveButtonTitle" = "Save";
-"PreviousButtonTitle" = "Previous";
-"NextButtonTitle" = "Next";
-"AutoButtonTitle" = "Auto";
-"DeleteButtonTitle" = "Delete";
+"ContinueButtonTitle" = "Продолжить";
+"CloseButtonTitle" = "Закрыть";
+"CancelButtonTitle" = "Отмена";
+"SaveButtonTitle" = "Сохранить";
+"PreviousButtonTitle" = "Предыдущий";
+"NextButtonTitle" = "Следующий";
+"AutoButtonTitle" = "Авто";
+"DeleteButtonTitle" = "Удалить";
 
 //Alerts
 "AlertsOkTitle" = "OK";
-"AlertsErrorTitle" = "Error";
-"AlertsInfoTitle" = "Info";
-"AlertsYesTitle" = "Yes";
-"AlertsNoTitle" = "No";
-"AlertsAreYouSure" = "Are you sure?";
-"AlertsLikeAlertTitle" = "Do you like Printer app?";
-"AlertsOcrErrorTitle" = "This image file can not be transribing. Try to choose other or change language.";
-"AlertsOpenFileErrorTitle" = "This document no longer exists";
-"AlertsFileErrorTitle" = "Some problems with this file";
-"AlertsUnknowErrorTitle" = "Something went wrong";
-"AlertsEmptyFileErrorTitle" = "The file does not exist";
-"AlertsBadFileErrorTitle" = "Bad file";
+"AlertsErrorTitle" = "Ошибка";
+"AlertsInfoTitle" = "Информация";
+"AlertsYesTitle" = "Да";
+"AlertsNoTitle" = "Нет";
+"AlertsAreYouSure" = "Вы уверены?";
+"AlertsLikeAlertTitle" = "Вам нравится YouChip SportCut?";
+"AlertsOcrErrorTitle" = "Этот файл изображения не поддается расшифровке. Попробуйте выбрать другой язык или сменить его.";
+"AlertsOpenFileErrorTitle" = "Этот документ больше не существует";
+"AlertsFileErrorTitle" = "Некоторые проблемы с этим файлом";
+"AlertsUnknowErrorTitle" = "Что-то пошло не так";
+"AlertsEmptyFileErrorTitle" = "Этот файл не существует";
+"AlertsBadFileErrorTitle" = "Плохой файл";
 
-//Mac
-"MacQuitAppTitle" = "Quit Printer";
+"MacQuitAppTitle" = "Выйти YouChip SportCut";
+"DeleteCollection" = "Удалить коллекцию";

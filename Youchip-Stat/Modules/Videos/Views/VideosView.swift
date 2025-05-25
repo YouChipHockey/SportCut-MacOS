@@ -11,14 +11,19 @@ struct VideosView: View {
     
     @EnvironmentObject private var viewModel: VideosViewModel
     
-    // State variables for metadata sheet
     @State private var team1Name: String = ""
     @State private var team2Name: String = ""
     @State private var score: String = ""
+    @State private var selectedDate: Date = Date()
     
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 20)], spacing: 20) {
+            LazyVGrid(
+                columns: [
+                    GridItem(.adaptive(minimum: 150), spacing: 20, alignment: .top)
+                ],
+                spacing: 20
+            ) {
                 ForEach(viewModel.state.files, id: \.videoData.bookmark) { file in
                     VideoThumbnailView(file: file, id: file.videoData.id, viewModel: viewModel)
                 }
@@ -27,25 +32,28 @@ struct VideosView: View {
         }
         .frame(minWidth: 650, minHeight: 600)
         .background(Color.appSystemGray)
-        .navigationTitle(^String.Root.rootVideosTitle)
+        .navigationTitle(^String.Titles.rootVideosTitle)
         .overlay(loadingOverlay)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                // Add refresh button
-                Button(action: {
-                    viewModel.action.send(.refreshFiles)
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                        .foregroundColor(.white)
+                Text(viewModel.state.limitInfoText)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                ViewsFactory.whiteBarButton(title: "Гайды") {
+                    viewModel.action.send(.openGuide)
+                }
+                ViewsFactory.whiteBarButton(title: ^String.Titles.addVideoTitle) {
+                    viewModel.action.send(.openFiles)
                 }
                 
-                ViewsFactory.whiteBarButton(title: ^String.Videos.addVideoTitle) {
-                    viewModel.action.send(.openFiles)
+                ViewsFactory.whiteBarButton(title: viewModel.authManager.isAuthValid ? "Продлить лицензию" : "Купить лицензию") {
+                    viewModel.action.send(.showAuthSheet)
                 }
             }
         }
         .infoAlert(
-            title: ^String.Alerts.alertsErrorTitle,
+            title: ^String.Titles.alertsErrorTitle,
             message: viewModel.state.errorTitle,
             show: $viewModel.state.showError
         )
@@ -56,7 +64,6 @@ struct VideosView: View {
                 viewModel.action.send(.downloadFiles)
             }
         )
-        // Add metadata sheet
         .sheet(isPresented: $viewModel.state.showMetadataSheet, onDismiss: {
             team1Name = ""
             team2Name = ""
@@ -64,11 +71,21 @@ struct VideosView: View {
         }) {
             videoMetadataSheet
         }
-        // Add rename sheet
         .sheet(isPresented: $viewModel.state.showRenameSheet) {
             videoRenameSheet
         }
+        .sheet(isPresented: $viewModel.state.showAuthSheet, onDismiss: {
+            viewModel.action.send(.updateLimitInfo)
+        }) {
+            AuthKeyView()
+                .environmentObject(viewModel.authManager)
+        }
+        .onReceive(viewModel.authManager.$isAuthValid) { isValid in
+            viewModel.action.send(.updateLimitInfo)
+        }
     }
+    
+    // MARK: - Вспомогательные представления
     
     private var loadingOverlay: some View {
         Group {
@@ -79,7 +96,6 @@ struct VideosView: View {
         }
     }
     
-    // Video metadata input sheet
     private var videoMetadataSheet: some View {
         VStack(spacing: 20) {
             Text("Информация о матче")
@@ -98,6 +114,12 @@ struct VideosView: View {
                 TextField("Счёт (например: 2-1)", text: $score)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
+                
+                DatePicker("Дата и время матча",
+                           selection: $selectedDate,
+                           displayedComponents: [.date, .hourAndMinute]
+                )
+                .padding(.horizontal)
             }
             
             HStack {
@@ -111,7 +133,8 @@ struct VideosView: View {
                             url: url,
                             team1: team1Name,
                             team2: team2Name,
-                            score: score
+                            score: score,
+                            dateTime: selectedDate
                         ))
                     }
                 }
@@ -119,16 +142,15 @@ struct VideosView: View {
             }
             .padding()
         }
-        .frame(width: 400, height: 300)
+        .frame(width: 400, height: 350)
         .onAppear {
-            // Initialize with any existing metadata
             team1Name = viewModel.state.videoMetadata.team1
             team2Name = viewModel.state.videoMetadata.team2
             score = viewModel.state.videoMetadata.score
+            selectedDate = viewModel.state.videoMetadata.dateTime
         }
     }
     
-    // Video rename sheet - simplified to just one text field
     private var videoRenameSheet: some View {
         VStack(spacing: 20) {
             Text("Переименовать видео")

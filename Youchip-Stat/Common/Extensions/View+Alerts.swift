@@ -7,8 +7,7 @@
 
 import SwiftUI
 
-@available(macOS 12.0, *)
-private struct InfoAlert: ViewModifier {
+struct InfoAlert: ViewModifier {
     
     let title: String
     let message: String
@@ -23,7 +22,7 @@ private struct InfoAlert: ViewModifier {
                 Button(action: {
                     action?()
                 }) {
-                    Text(^String.Alerts.alertsOkTitle)
+                    Text(^String.Titles.alertsOkTitle)
                 }
             },
             message: {
@@ -33,8 +32,7 @@ private struct InfoAlert: ViewModifier {
     }
 }
 
-@available(macOS 12.0, *)
-private struct ActionAlert: ViewModifier {
+struct ActionAlert: ViewModifier {
     
     let title: String
     let message: String
@@ -112,61 +110,39 @@ extension View {
         action: (() -> Void)? = nil,
         show: Binding<Bool>
     ) -> some View {
-        if #available(macOS 12.0, *) {
-            self.modifier(InfoAlert(title: title, message: message, action: action, show: show))
-        } else {
-            self.alert(isPresented: show) {
-                Alert(
-                    title: Text(title),
-                    message: Text(message),
-                    dismissButton: .default(Text(^String.Alerts.alertsOkTitle), action: action)
-                )
-            }
-        }
+        self.modifier(InfoAlert(title: title, message: message, action: action, show: show))
     }
     
     @ViewBuilder
     func actionAlert(
         title: String,
         message: String,
-        cancelTitle: String = ^String.ButtonTitles.cancelButtonTitle,
+        cancelTitle: String = ^String.Titles.cancelButtonTitle,
         actionTitle: String,
         cancel: (() -> Void)? = nil,
         action: @escaping () -> Void,
         destructive: Bool = false,
         show: Binding<Bool>
     ) -> some View {
-        if #available(macOS 12.0, *) {
-            self.modifier(
-                ActionAlert(
-                    title: title,
-                    message: message,
-                    cancelTitle: cancelTitle,
-                    actionTitle: actionTitle,
-                    cancel: cancel,
-                    action: action,
-                    destructive: destructive,
-                    show: show
-                )
+        self.modifier(
+            ActionAlert(
+                title: title,
+                message: message,
+                cancelTitle: cancelTitle,
+                actionTitle: actionTitle,
+                cancel: cancel,
+                action: action,
+                destructive: destructive,
+                show: show
             )
-        } else {
-            self.alert(isPresented: show) {
-                Alert(
-                    title: Text(title),
-                    message: Text(message),
-                    primaryButton: .default(Text(actionTitle), action: action),
-                    secondaryButton: .cancel(Text(cancelTitle), action: cancel)
-                )
-            }
-        }
+        )
     }
     
-    @available(macOS 12.0, *)
     @ViewBuilder
     func textFieldAlert(
         title: String,
         message: String,
-        cancelTitle: String = ^String.ButtonTitles.cancelButtonTitle,
+        cancelTitle: String = ^String.Titles.cancelButtonTitle,
         actionTitle: String,
         cancel: (() -> Void)? = nil,
         action: @escaping (String) -> Void,

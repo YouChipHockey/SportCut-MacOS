@@ -11,16 +11,10 @@ class ViewsFactory {
     
     @ViewBuilder
     static func lineDivider(isVertical: Bool = true, width: CGFloat = 1, color: Color = Color.appSystemGray5.opacity(0.1)) -> some View {
-        if #available(macOS 12.0, *) {
-            Divider()
-                .background(color)
-                .foregroundStyle(color)
-                .frame(width: isVertical ? width : nil, height: isVertical ? nil : width)
-        } else {
-            Divider()
-                .background(color)
-                .frame(width: isVertical ? width : nil, height: isVertical ? nil : width)
-        }
+        Divider()
+            .background(color)
+            .foregroundStyle(color)
+            .frame(width: isVertical ? width : nil, height: isVertical ? nil : width)
     }
     
     @ViewBuilder
@@ -54,7 +48,7 @@ class ViewsFactory {
         Button {
             completion()
         } label: {
-            SwiftUI.Label(^String.ButtonTitles.previousButtonTitle, systemImage: AppImage.sfChevronLeft.rawValue)
+            SwiftUI.Label(^String.Titles.previousButtonTitle, systemImage: AppImage.sfChevronLeft.rawValue)
         }
     }
     

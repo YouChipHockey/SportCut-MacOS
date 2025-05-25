@@ -13,18 +13,9 @@ extension String {
         return prefix(1).capitalized + dropFirst()
     }
     
-    enum ButtonTitles: String {
-        case continueButtonTitle
-        case closeButtonTitle
+    enum Titles: String {
         case cancelButtonTitle
-        case saveButtonTitle
         case previousButtonTitle
-        case nextButtonTitle
-        case autoButtonTitle
-        case deleteButtonTitle
-    }
-    
-    enum Alerts: String {
         case alertsOkTitle
         case alertsErrorTitle
         case alertsInfoTitle
@@ -38,22 +29,13 @@ extension String {
         case alertsUnknowErrorTitle
         case alertsEmptyFileErrorTitle
         case alertsBadFileErrorTitle
-    }
-    
-    enum Root: String {
+        case addVideoTitle
+        case macQuitAppTitle
         case rootYouChipTitle
         case rootVideosTitle
         case rootTheFileIsPlacedInCloudTitle
         case rootDownloadTitle
         case rootDownloadingHasStartedTitle
-    }
-    
-    enum Videos: String {
-        case addVideoTitle
-    }
-    
-    enum Mac: String {
-        case macQuitAppTitle
     }
     
 }

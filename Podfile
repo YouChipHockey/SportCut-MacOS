@@ -7,6 +7,11 @@ $firebase_version = '10.29.0'
 target 'Youchip-Stat' do
   platform :osx, osx_deployment_target
   pod 'TinyConstraints', '4.0.2'
+  pod 'Firebase/Analytics', $firebase_version
+  pod 'Firebase/Crashlytics', $firebase_version
+  pod 'Firebase/AppCheck', $firebase_version
+  pod 'Firebase/RemoteConfig', $firebase_version
+  pod 'Firebase/Core', $firebase_version
 end
 
 post_install do |installer|

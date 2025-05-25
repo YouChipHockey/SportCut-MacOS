@@ -2,12 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>SUEnableInstallerLauncherService</key>
+    <true/>
+    <key>SUEnableDownloaderService</key>
+    <true/>
+    <key>SUFeedURL</key>
+    <string>https://razmetka.youchip.pro/api/updates/macos/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>your_previous_generated_public_Key</string>
 	<key>ATSApplicationFontsPath</key>
 	<string>Fonts</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>YouChip</string>
+	<string>SportCut</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
