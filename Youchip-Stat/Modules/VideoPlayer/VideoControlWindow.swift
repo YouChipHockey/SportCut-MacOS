@@ -64,6 +64,13 @@ class TagLibraryManager: ObservableObject {
             self.defaultTimeEvents = loadedTimeEvents.events
         }
         
+        NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleTagUpdated),
+                name: .tagUpdated,
+                object: nil
+            )
+        
         allTags = tags
         allTagGroups = tagGroups
         allLabelGroups = labelGroups
@@ -124,6 +131,27 @@ class TagLibraryManager: ObservableObject {
         } else {
             selectedTimeEvents.insert(id)
         }
+    }
+    
+    @objc private func handleTagUpdated(_ notification: Notification) {
+        guard let originalID = notification.userInfo?["originalID"] as? String,
+              let newID = notification.userInfo?["newID"] as? String else {
+            return
+        }
+        
+        for i in 0..<allTagGroups.count {
+            if let tagIndex = allTagGroups[i].tags.firstIndex(where: { $0 == originalID }) {
+                var updatedTags = allTagGroups[i].tags
+                updatedTags[tagIndex] = newID
+                allTagGroups[i] = TagGroup(
+                    id: allTagGroups[i].id,
+                    name: allTagGroups[i].name,
+                    tags: updatedTags
+                )
+            }
+        }
+        
+        refreshGlobalPools()
     }
     
     func refreshGlobalPools() {
@@ -230,6 +258,7 @@ extension NSColor {
 struct TimelineStamp: Identifiable, Codable {
     let id: UUID
     var idTag: String
+    let primaryID: String?
     var timeStart: String
     var timeFinish: String
     var colorHex: String
@@ -248,8 +277,9 @@ struct TimelineStamp: Identifiable, Codable {
     var duration: Double {
         finishSeconds - startSeconds
     }
-    init(id: UUID = UUID(), idTag: String, timeStart: String, timeFinish: String, colorHex: String, label: String, labels: [String], timeEvents: [String] = []) {
+    init(id: UUID = UUID(), idTag: String, primaryID: String?, timeStart: String, timeFinish: String, colorHex: String, label: String, labels: [String], timeEvents: [String] = []) {
         self.id = id
+        self.primaryID = primaryID
         self.idTag = idTag
         self.timeStart = timeStart
         self.timeFinish = timeFinish
@@ -267,12 +297,21 @@ class TimelineDataManager: ObservableObject {
     @Published var selectedLineID: UUID? = nil
     @Published var selectedStampID: UUID? = nil
     var currentBookmark: Data?
+    
     init() {
         lines = []
         if let first = lines.first {
             selectedLineID = first.id
         }
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTagUpdated),
+            name: .tagUpdated,
+            object: nil
+        )
     }
+    
     func selectLine(_ lineID: UUID) {
         if MarkupMode.current == .standard {
             selectedLineID = lineID
@@ -305,7 +344,29 @@ class TimelineDataManager: ObservableObject {
         return newLine.id
     }
     
-    func addStampToSelectedLine(idTag: String, name: String, timeStart: String, timeFinish: String, color: String, labels: [String]) {
+    func updateTagReferences(originalID: String, newID: String) {
+        var updated = false
+        
+        for lineIndex in 0..<lines.count {
+            for stampIndex in 0..<lines[lineIndex].stamps.count {
+                if lines[lineIndex].stamps[stampIndex].idTag == originalID {
+                    lines[lineIndex].stamps[stampIndex].idTag = newID
+                    updated = true
+                }
+            }
+            
+            if lines[lineIndex].tagIdForMode == originalID {
+                lines[lineIndex].tagIdForMode = newID
+                updated = true
+            }
+        }
+        
+        if updated {
+            updateTimelines()
+        }
+    }
+    
+    func addStampToSelectedLine(idTag: String, primaryId: String?, name: String, timeStart: String, timeFinish: String, color: String, labels: [String]) {
         if MarkupMode.current == .standard {
             guard let lineID = selectedLineID,
                   let idx = lines.firstIndex(where: { $0.id == lineID }) else { return }
@@ -314,6 +375,7 @@ class TimelineDataManager: ObservableObject {
             
             let stamp = TimelineStamp(
                 idTag: idTag,
+                primaryID: primaryId,
                 timeStart: timeStart,
                 timeFinish: timeFinish,
                 colorHex: color,
@@ -332,6 +394,7 @@ class TimelineDataManager: ObservableObject {
                 
                 let stamp = TimelineStamp(
                     idTag: idTag,
+                    primaryID: primaryId,
                     timeStart: timeStart,
                     timeFinish: timeFinish,
                     colorHex: color,
@@ -394,6 +457,40 @@ class TimelineDataManager: ObservableObject {
     func updateTimelines() {
         guard let currentBookmark = currentBookmark else { return }
         VideoFilesManager.shared.updateTimelines(for: currentBookmark, with: lines)
+    }
+    
+    @objc private func handleTagUpdated(_ notification: Notification) {
+        guard let originalID = notification.userInfo?["originalID"] as? String,
+              let newID = notification.userInfo?["newID"] as? String else {
+            return
+        }
+        
+        var updated = false
+        
+        guard let updatedTag = TagLibraryManager.shared.findTagById(newID) else { return }
+        
+        for lineIndex in 0..<lines.count {
+            for stampIndex in 0..<lines[lineIndex].stamps.count {
+                if lines[lineIndex].stamps[stampIndex].idTag == originalID {
+                    lines[lineIndex].stamps[stampIndex].idTag = newID
+                    lines[lineIndex].stamps[stampIndex].label = updatedTag.name
+                    updated = true
+                }
+            }
+            
+            if lines[lineIndex].tagIdForMode == originalID {
+                lines[lineIndex].tagIdForMode = newID
+                if lines[lineIndex].name == lines[lineIndex].tagIdForMode {
+                    lines[lineIndex].name = updatedTag.name
+                }
+                
+                updated = true
+            }
+        }
+        
+        if updated {
+            updateTimelines()
+        }
     }
 }
 
@@ -468,18 +565,111 @@ class VideoPlayerManager: ObservableObject {
 }
 
 struct VideoPlayerWindow: View {
+    let id: String
+    
     @ObservedObject var videoManager = VideoPlayerManager.shared
+    
+    @State private var showScreenshotNameSheet = false
+    @State private var tempScreenshotImage: NSImage?
+    @State private var currentScreenshotName: String = ""
+    @State private var screenshotImage: URL? = nil
+    
+    init(id: String) {
+        self.id = id
+    }
+
     var body: some View {
         VStack {
             if let player = videoManager.player {
                 VideoPlayer(player: player)
                     .onAppear { player.play() }
+                    .overlay(
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Button(action: takeScreenshot) {
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 18))
+                                        .padding(10)
+                                        .background(Color.black.opacity(0.6))
+                                        .foregroundColor(.white)
+                                        .clipShape(Circle())
+                                        .shadow(radius: 3)
+                                }
+                                .buttonStyle(BorderlessButtonStyle())
+                                .padding()
+                                .padding(.bottom, 40)
+                                .help("Создать скриншот и открыть редактор")
+                            }
+                        }
+                    )
             } else {
                 Text("Видео не загружено")
                     .foregroundColor(.gray)
             }
         }
+        .sheet(isPresented: $showScreenshotNameSheet) {
+            ScreenshotNameSheet { name in
+                currentScreenshotName = name
+                saveScreenshot(with: name)
+            }
+        }
         .frame(minWidth: 400, minHeight: 300)
+    }
+    
+    private func takeScreenshot() {
+        guard let player = videoManager.player,
+              let asset = player.currentItem?.asset else {
+            return
+        }
+        player.pause()
+        let currentTime = player.currentTime()
+        let imageGenerator = AVAssetImageGenerator(asset: asset)
+        imageGenerator.appliesPreferredTrackTransform = true
+        imageGenerator.requestedTimeToleranceBefore = .zero
+        imageGenerator.requestedTimeToleranceAfter = .zero
+        
+        do {
+            let cgImage = try imageGenerator.copyCGImage(at: currentTime, actualTime: nil)
+            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+            tempScreenshotImage = nsImage
+            showScreenshotNameSheet = true
+        } catch {
+            print("Ошибка создания скриншота: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveScreenshot(with name: String) {
+        guard let nsImage = tempScreenshotImage,
+              let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == id }) else {
+            return
+        }
+        
+        let screenshotsFolder = filesFile.screenshotsFolder
+        let fileName = name.hasSuffix(".png") ? name : "\(name).png"
+        let fileURL = screenshotsFolder.appendingPathComponent(fileName)
+        
+        if let imageData = nsImage.pngData() {
+            try? imageData.write(to: fileURL)
+            screenshotImage = fileURL
+            openEditorInNewWindow(with: fileURL, screenshotsFolder: screenshotsFolder)
+        }
+    }
+    
+    private func openEditorInNewWindow(with imageUrl: URL, screenshotsFolder: URL) {
+        let editorViewModel = EditorViewModel(file: imageUrl, screenshotsFolder: screenshotsFolder)
+        
+        let editorView = EditorView()
+            .environmentObject(editorViewModel)
+            
+        let hostingController = NSHostingController(rootView: editorView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Редактирование скриншота"
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.setContentSize(NSSize(width: 800, height: 600))
+        window.center()
+        window.makeKeyAndOrderFront(nil)
     }
 }
 
@@ -505,8 +695,8 @@ class FullControlWindowController: NSWindowController, NSWindowDelegate {
 }
 
 class VideoPlayerWindowController: NSWindowController, NSWindowDelegate {
-    init() {
-        let view = VideoPlayerWindow()
+    init(id: String) {
+        let view = VideoPlayerWindow(id: id)
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Видео"
@@ -1077,30 +1267,19 @@ struct FullControlView: View {
                                             .gesture(
                                                 DragGesture(minimumDistance: 1, coordinateSpace: .local)
                                                                 .onChanged { value in
-                                                                    // Pause video immediately when drag starts
                                                                     if videoManager.player?.timeControlStatus == .playing {
                                                                         videoManager.player?.pause()
                                                                     }
-                                                                    
-                                                                    // Update displayed position without seeking yet
                                                                     let newPosition = max(0, min(value.location.x, gridWidth))
                                                                     let newTime = (newPosition / gridWidth) * duration
-                                                                    
-                                                                    // Only update visual position during drag
                                                                     videoManager.currentTime = newTime
                                                                 }
                                                                 .onEnded { value in
-                                                                    // Calculate final position and perform actual seek only once at the end
                                                                     let newPosition = max(0, min(value.location.x, gridWidth))
                                                                     let newTime = (newPosition / gridWidth) * duration
                                                                     videoManager.currentTime = newTime
-                                                                    
-                                                                    // Do a single seek when drag ends
                                                                     videoManager.seek(to: newTime)
-                                                                    
-                                                                    // Resume playback if speed was > 0
                                                                     if videoManager.playbackSpeed > 0 {
-                                                                        // Small delay to ensure seek completes first
                                                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                                                             videoManager.player?.play()
                                                                         }
@@ -1230,7 +1409,8 @@ struct FullControlView: View {
                         encoder.outputFormatting = .prettyPrinted
                         let fullLines = transformToFullTimelineLines()
                         do {
-                            let data = try encoder.encode(fullLines)
+                            let wrapper = ["data": fullLines]
+                            let data = try encoder.encode(wrapper)
                             let panel = NSSavePanel()
                             panel.allowedFileTypes = ["json"]
                             panel.nameFieldStringValue = "timelines_full.json"
@@ -1259,6 +1439,9 @@ struct FullControlView: View {
                     }
                     Button("Отчет") {
                         WindowsManager.shared.showAnalytics()
+                    }
+                    Button("Мои скриншоты") {
+                        WindowsManager.shared.showScreenshots()
                     }
                     Spacer()
                 }
@@ -1410,17 +1593,67 @@ struct FullControlView: View {
     
     func transformToFullTimelineLines() -> [FullTimelineLine] {
         let tagLibrary = TagLibraryManager.shared
+        
         return TimelineDataManager.shared.lines.map { line in
             let fullStamps = line.stamps.map { stamp -> FullTimelineStamp in
-                let fullTag = tagLibrary.findTagById(stamp.idTag) ?? Tag(id: "", name: stamp.label, description: "", color: "FFFFFF", defaultTimeBefore: 0, defaultTimeAfter: 0, collection: "", lablesGroup: [], hotkey: "", labelHotkeys: [:])
-                let fullLabels = stamp.labels.compactMap { labelID in
-                    tagLibrary.findLabelById(labelID)
+                let tag = tagLibrary.findTagById(stamp.idTag)
+                var tagGroup: TagGroupInfo? = nil
+                if let tagID = tag?.id {
+                    for group in tagLibrary.allTagGroups {
+                        if group.tags.contains(tagID) {
+                            tagGroup = TagGroupInfo(id: group.id, name: group.name)
+                            break
+                        }
+                    }
                 }
+                
+                let fullTag = FullTagWithGroup(
+                    id: tag?.id ?? "",
+                    primaryID: tag?.primaryID,
+                    name: tag?.name ?? stamp.label,
+                    description: tag?.description ?? "",
+                    color: tag?.color ?? "FFFFFF",
+                    defaultTimeBefore: tag?.defaultTimeBefore ?? 0,
+                    defaultTimeAfter: tag?.defaultTimeAfter ?? 0,
+                    collection: tag?.collection ?? "",
+                    hotkey: tag?.hotkey,
+                    labelHotkeys: tag?.labelHotkeys,
+                    group: tagGroup
+                )
+                
+                let fullLabels = stamp.labels.compactMap { labelID -> FullLabelWithGroup? in
+                    guard let label = tagLibrary.findLabelById(labelID) else { return nil }
+                    
+                    var labelGroup: LabelGroupInfo? = nil
+                    for group in tagLibrary.allLabelGroups {
+                        if group.lables.contains(labelID) {
+                            labelGroup = LabelGroupInfo(id: group.id, name: group.name)
+                            break
+                        }
+                    }
+                    
+                    return FullLabelWithGroup(
+                        id: label.id,
+                        name: label.name,
+                        description: label.description,
+                        group: labelGroup
+                    )
+                }
+                
                 let fullTimeEvents = stamp.timeEvents.compactMap { eventID in
                     tagLibrary.allTimeEvents.first(where: { $0.id == eventID })
                 }
-                return FullTimelineStamp(id: stamp.id, timeStart: stamp.timeStart, timeFinish: stamp.timeFinish, tag: fullTag, labels: fullLabels, timeEvents: fullTimeEvents)
+                
+                return FullTimelineStamp(
+                    id: stamp.id,
+                    timeStart: stamp.timeStart,
+                    timeFinish: stamp.timeFinish,
+                    tag: fullTag,
+                    labels: fullLabels,
+                    timeEvents: fullTimeEvents
+                )
             }
+            
             return FullTimelineLine(id: line.id, name: line.name, stamps: fullStamps)
         }
     }
@@ -1635,6 +1868,7 @@ struct TimelineLineView: View {
         let newStamp = TimelineStamp(
             id: UUID(),
             idTag: stamp.idTag,
+            primaryID: stamp.primaryID,
             timeStart: stamp.timeStart,
             timeFinish: stamp.timeFinish,
             colorHex: stamp.colorHex,
@@ -1897,6 +2131,7 @@ class HotKeyManager: ObservableObject {
 extension Notification.Name {
     static let showLabelSheet = Notification.Name("showLabelSheet")
     static let labelHotkeyPressed = Notification.Name("labelHotkeyPressed")
+    static let tagUpdated = Notification.Name("tagUpdated")
 }
 
 class TagLibraryWindowController: NSWindowController, NSWindowDelegate {
@@ -2381,6 +2616,7 @@ struct TagLibraryView: View {
         
         timelineData.addStampToSelectedLine(
             idTag: tag.id,
+            primaryId: tag.primaryID,
             name: tag.name,
             timeStart: timeStartString,
             timeFinish: timeFinishString,
@@ -2844,10 +3080,10 @@ struct TagSelectionSheetView: View {
             Text("Выберите тег для экспорта")
                 .font(.headline)
             
-            List(tagLibrary.allTagGroups) { group in
-                Section(header: Text(group.name).font(.subheadline).bold()) {
-                    ForEach(group.tags, id: \.self) { tagID in
-                        if let tag = tagLibrary.tags.first(where: { $0.id == tagID }), uniqueTags.contains(where: { $0.id == tag.id }) {
+            List {
+                ForEach(tagGroupsWithTags(), id: \.name) { groupInfo in
+                    Section(header: Text(groupInfo.name).font(.subheadline).bold()) {
+                        ForEach(groupInfo.tags) { tag in
                             Button(tag.name) {
                                 onSelect(tag)
                             }
@@ -2863,6 +3099,40 @@ struct TagSelectionSheetView: View {
             .padding(.top, 10)
         }
         .padding()
+    }
+    
+    private func tagGroupsWithTags() -> [TagGroupWithTags] {
+        let allGroups = tagLibrary.allTagGroups
+        var groupsWithTags: [String: (name: String, tags: [Tag])] = [:]
+        groupsWithTags["uncategorized"] = ("Без группы", [])
+        for tag in uniqueTags {
+            var foundGroup = false
+            
+            for group in allGroups {
+                if group.tags.contains(tag.id) {
+                    if groupsWithTags[group.id] == nil {
+                        groupsWithTags[group.id] = (group.name, [])
+                    }
+                    groupsWithTags[group.id]?.tags.append(tag)
+                    foundGroup = true
+                    break
+                }
+            }
+            
+            if !foundGroup {
+                groupsWithTags["uncategorized"]?.tags.append(tag)
+            }
+        }
+        
+        return groupsWithTags.values
+            .filter { !$0.tags.isEmpty }
+            .map { TagGroupWithTags(name: $0.name, tags: $0.tags) }
+            .sorted { $0.name < $1.name }
+    }
+    
+    struct TagGroupWithTags {
+        let name: String
+        let tags: [Tag]
     }
 }
 
@@ -3308,5 +3578,15 @@ extension DispatchWorkItem {
         let newItem = DispatchWorkItem(block: action)
         previousItem = newItem
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: newItem)
+    }
+}
+
+extension NSImage {
+    func pngData() -> Data? {
+        guard let tiffRepresentation = tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffRepresentation) else {
+            return nil
+        }
+        return bitmapImage.representation(using: .png, properties: [:])
     }
 }

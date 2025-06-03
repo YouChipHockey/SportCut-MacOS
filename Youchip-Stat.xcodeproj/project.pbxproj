@@ -88,6 +88,15 @@
 		DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDD60A952D7A5D7E0097600D /* AVKit.framework */; };
 		DDDB36362D78E16500A1111C /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDB36352D78E16100A1111C /* Color.swift */; };
 		DDE2F3282DB6CDB40040B011 /* timeEvents.json in Resources */ = {isa = PBXBuildFile; fileRef = DDE2F3272DB6CDB40040B011 /* timeEvents.json */; };
+		DDFB1A482DE510E700175D97 /* EditorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A412DE510E700175D97 /* EditorState.swift */; };
+		DDFB1A492DE510E700175D97 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A452DE510E700175D97 /* EditorView.swift */; };
+		DDFB1A4A2DE510E700175D97 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A3F2DE510E700175D97 /* EditorViewModel.swift */; };
+		DDFB1A4B2DE510E700175D97 /* EditorWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A442DE510E700175D97 /* EditorWebView.swift */; };
+		DDFB1A4C2DE510E700175D97 /* EditorActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A422DE510E700175D97 /* EditorActions.swift */; };
+		DDFB1A502DE512D900175D97 /* SharingPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A4F2DE512D800175D97 /* SharingPicker.swift */; };
+		DDFB1A522DE5130C00175D97 /* AppNavigationButtonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A512DE5130B00175D97 /* AppNavigationButtonsView.swift */; };
+		DDFB1A542DE5131F00175D97 /* SheetToolbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A532DE5131F00175D97 /* SheetToolbarView.swift */; };
+		DDFB1A562DE521D300175D97 /* ScreenshotsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A552DE521D300175D97 /* ScreenshotsWindowController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -176,7 +185,25 @@
 		DDD60A952D7A5D7E0097600D /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 		DDDB36352D78E16100A1111C /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
 		DDE2F3272DB6CDB40040B011 /* timeEvents.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = timeEvents.json; sourceTree = "<group>"; };
+		DDFB1A3F2DE510E700175D97 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
+		DDFB1A412DE510E700175D97 /* EditorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorState.swift; sourceTree = "<group>"; };
+		DDFB1A422DE510E700175D97 /* EditorActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorActions.swift; sourceTree = "<group>"; };
+		DDFB1A442DE510E700175D97 /* EditorWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorWebView.swift; sourceTree = "<group>"; };
+		DDFB1A452DE510E700175D97 /* EditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorView.swift; sourceTree = "<group>"; };
+		DDFB1A4F2DE512D800175D97 /* SharingPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharingPicker.swift; sourceTree = "<group>"; };
+		DDFB1A512DE5130B00175D97 /* AppNavigationButtonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationButtonsView.swift; sourceTree = "<group>"; };
+		DDFB1A532DE5131F00175D97 /* SheetToolbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetToolbarView.swift; sourceTree = "<group>"; };
+		DDFB1A552DE521D300175D97 /* ScreenshotsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotsWindowController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		DDFB1A352DE510CF00175D97 /* dist */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = dist;
+			path = web/dist;
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		DDB4018E2D749E0F004A12C2 /* Frameworks */ = {
@@ -304,6 +331,7 @@
 		DD32C2622D74A00C0052B5C6 /* Youchip-Stat */ = {
 			isa = PBXGroup;
 			children = (
+				DDFB1A352DE510CF00175D97 /* dist */,
 				DD32C2612D74A00C0052B5C6 /* Youchip_StatApp.swift */,
 				DD32C28A2D74A1180052B5C6 /* AppDelegate.swift */,
 				DD32C2672D74A0110052B5C6 /* Common */,
@@ -323,6 +351,9 @@
 				DD2A70632D74D28E00287BA8 /* CustomTypes.swift */,
 				DD2A70732D74D63200287BA8 /* ViewsFactory.swift */,
 				DD2A705F2D74D26000287BA8 /* PreferenceManager.swift */,
+				DDFB1A512DE5130B00175D97 /* AppNavigationButtonsView.swift */,
+				DDFB1A532DE5131F00175D97 /* SheetToolbarView.swift */,
+				DDFB1A4F2DE512D800175D97 /* SharingPicker.swift */,
 			);
 			path = Common;
 			sourceTree = "<group>";
@@ -330,6 +361,7 @@
 		DD32C2682D74A0180052B5C6 /* Modules */ = {
 			isa = PBXGroup;
 			children = (
+				DDFB1A472DE510E700175D97 /* ImagesEditor */,
 				DDC938EA2DD2452000B7AB12 /* License */,
 				DD2A707D2D74E41400287BA8 /* VideoPlayer */,
 				DD2A704C2D74C2CC00287BA8 /* Videos */,
@@ -427,6 +459,7 @@
 		DDCA6B4C2DCA64CE0025EF9E /* Windows */ = {
 			isa = PBXGroup;
 			children = (
+				DDFB1A552DE521D300175D97 /* ScreenshotsWindowController.swift */,
 			);
 			path = Windows;
 			sourceTree = "<group>";
@@ -491,6 +524,42 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		DDFB1A402DE510E700175D97 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				DDFB1A3F2DE510E700175D97 /* EditorViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		DDFB1A432DE510E700175D97 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				DDFB1A412DE510E700175D97 /* EditorState.swift */,
+				DDFB1A422DE510E700175D97 /* EditorActions.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		DDFB1A462DE510E700175D97 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				DDFB1A442DE510E700175D97 /* EditorWebView.swift */,
+				DDFB1A452DE510E700175D97 /* EditorView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		DDFB1A472DE510E700175D97 /* ImagesEditor */ = {
+			isa = PBXGroup;
+			children = (
+				DDFB1A402DE510E700175D97 /* ViewModels */,
+				DDFB1A432DE510E700175D97 /* Models */,
+				DDFB1A462DE510E700175D97 /* Views */,
+			);
+			path = ImagesEditor;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -508,6 +577,9 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DDFB1A352DE510CF00175D97 /* dist */,
 			);
 			name = "Youchip-Stat";
 			productName = "Youchip-Stat";
@@ -654,6 +726,11 @@
 				DDCA6B512DCA65220025EF9E /* MarkupMode.swift in Sources */,
 				DD2A707A2D74E0AF00287BA8 /* VideoThumbnailView.swift in Sources */,
 				DD2A70782D74D79B00287BA8 /* FileOpenHelper.swift in Sources */,
+				DDFB1A482DE510E700175D97 /* EditorState.swift in Sources */,
+				DDFB1A492DE510E700175D97 /* EditorView.swift in Sources */,
+				DDFB1A4A2DE510E700175D97 /* EditorViewModel.swift in Sources */,
+				DDFB1A4B2DE510E700175D97 /* EditorWebView.swift in Sources */,
+				DDFB1A4C2DE510E700175D97 /* EditorActions.swift in Sources */,
 				DD32C28F2D74A19A0052B5C6 /* AppSetupManager.swift in Sources */,
 				DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */,
 				DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */,
@@ -667,14 +744,17 @@
 				DD2A705A2D74C37D00287BA8 /* FilesFileFormat.swift in Sources */,
 				DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */,
 				DDCA6B542DCA657B0025EF9E /* CollectionWindowDelegate.swift in Sources */,
+				DDFB1A542DE5131F00175D97 /* SheetToolbarView.swift in Sources */,
 				DD2A705E2D74C66700287BA8 /* VideosActions.swift in Sources */,
 				DD2A706B2D74D31600287BA8 /* VideosPreviewManager.swift in Sources */,
+				DDFB1A502DE512D900175D97 /* SharingPicker.swift in Sources */,
 				DD2A70582D74C35F00287BA8 /* URL+Convenience.swift in Sources */,
 				DDCA6B4F2DCA64EE0025EF9E /* NSNotification + Convenience.swift in Sources */,
 				DDCA6B622DCA67C60025EF9E /* ExportAnalyticsView.swift in Sources */,
 				DDDB36362D78E16500A1111C /* Color.swift in Sources */,
 				DD32C2A62D74A1C80052B5C6 /* Fonts.swift in Sources */,
 				DD32C2A72D74A1C80052B5C6 /* SKProduct+Convenience.swift in Sources */,
+				DDFB1A562DE521D300175D97 /* ScreenshotsWindowController.swift in Sources */,
 				DDCA6B662DCA68F80025EF9E /* TagFormData.swift in Sources */,
 				DD2A70622D74D27900287BA8 /* FilesDocumentPickerHelper.swift in Sources */,
 				DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */,
@@ -683,6 +763,7 @@
 				DDCA6B682DCA69140025EF9E /* KeyCaptureView.swift in Sources */,
 				DD2A70742D74D63300287BA8 /* ViewsFactory.swift in Sources */,
 				DD32C2A82D74A1C80052B5C6 /* FileManager+Convenience.swift in Sources */,
+				DDFB1A522DE5130C00175D97 /* AppNavigationButtonsView.swift in Sources */,
 				DD494BF02DC0146B003F8BE6 /* VideoPlayerModels.swift in Sources */,
 				DD2A70762D74D77C00287BA8 /* AppCloudFilesHelper.swift in Sources */,
 				DDCA6B6A2DCA69340025EF9E /* NSApplication + Convenience.swift in Sources */,

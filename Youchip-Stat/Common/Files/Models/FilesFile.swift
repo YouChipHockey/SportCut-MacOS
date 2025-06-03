@@ -11,7 +11,7 @@ import AppKit
 struct FilesFile {
     
     var id: String {
-        return "\(videoData.bookmark.base64EncodedString())-\(Date().timeIntervalSince1970)"
+        return videoData.id
     }
     
     var url: URL? {
@@ -43,12 +43,23 @@ struct FilesFile {
     var isFile: Bool { !(url?.isFolder ?? true) }
     var isFolder: Bool { url?.isFolder ?? false }
     
-    // Update the name property to use customName when available
     var name: String { videoData.customName ?? url?.lastPathComponent ?? "" }
     var pathExtension: String { url?.pathExtension  ?? "" }
     var lastPathComponent: String { url?.lastPathComponent  ?? "" }
     var sizeString: String { url?.sizeString ?? "" }
     var size: UInt64 { url?.sizeByets ?? 0 }
+    
+    var screenshotsFolder: URL {
+        let fileManager = FileManager.default
+        let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let folderURL = documentsDirectory.appendingPathComponent("Screenshots").appendingPathComponent(id)
+        
+        if !fileManager.fileExists(atPath: folderURL.path) {
+            try? fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        }
+        
+        return folderURL
+    }
     
     var videoData: VideosData
     

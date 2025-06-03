@@ -18,6 +18,7 @@ struct TagFormData {
     var selectedLabelGroups: [String] = []
     var hotkey: String? = nil
     var labelHotkeys: [String: String] = [:]
+    var mapEnabled: Bool = false
     
     init() {}
     
@@ -30,6 +31,7 @@ struct TagFormData {
         self.defaultTimeAfter = tag.defaultTimeAfter
         self.selectedLabelGroups = tag.lablesGroup
         self.hotkey = tag.hotkey
+        self.mapEnabled = tag.mapEnabled ?? false
         self.labelHotkeys = tag.labelHotkeys ?? [:]
     }
     

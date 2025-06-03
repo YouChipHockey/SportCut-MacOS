@@ -4,15 +4,17 @@ import AVKit
 import Foundation
 
 class WindowsManager {
+    var currentVideoId = ""
     static let shared = WindowsManager()
     
     var videoWindow: VideoPlayerWindowController?
     var controlWindow: FullControlWindowController?
     var tagLibraryWindow: TagLibraryWindowController?
     var analyticsWindow: AnalyticsWindowController?
+    var screenshotsWindow: ScreenshotsWindowController?
+    private var editorWindowControllers: [NSWindowController] = []
     private var isClosing = true
     
-    // Add a property to store the collection window delegate
     private var collectionWindowDelegate: CollectionWindowDelegate?
     
     func closeAll() {
@@ -20,14 +22,27 @@ class WindowsManager {
         controlWindow?.window?.delegate = nil
         tagLibraryWindow?.window?.delegate = nil
         analyticsWindow?.window?.delegate = nil
+        screenshotsWindow?.window?.delegate = nil
         
         videoWindow?.close()
         controlWindow?.close()
         tagLibraryWindow?.close()
         analyticsWindow?.close()
+        screenshotsWindow?.close()
         
         VideoPlayerManager.shared.deleteVideo()
         isClosing = true
+    }
+    
+    func showScreenshots() {
+        if screenshotsWindow != nil {
+            screenshotsWindow?.close()
+            return
+        }
+        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else {
+            return
+        }
+        screenshotsWindow = ScreenshotsWindowController(screenshotsFolder: filesFile.screenshotsFolder)
     }
     
     func showAnalytics() {
@@ -56,8 +71,8 @@ class WindowsManager {
         let window = NSWindow(contentViewController: hostingController)
         
         window.title = existingCollection != nil ?
-            "Редактирование коллекции: \(existingCollection?.name ?? "")" :
-            "Создание новой коллекции"
+        "Редактирование коллекции: \(existingCollection?.name ?? "")" :
+        "Создание новой коллекции"
         
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         if let screen = NSScreen.main {
@@ -78,6 +93,7 @@ class WindowsManager {
     }
     
     func openVideo(id: String) {
+        currentVideoId = id
         guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == id }) else { return }
         guard let file = filesFile.url, isClosing else { return }
         
@@ -94,12 +110,12 @@ class WindowsManager {
             TimelineDataManager.shared.lines = filesFile.videoData.timelines
             TimelineDataManager.shared.selectedLineID = nil
         }
-            
-            VideoPlayerManager.shared.loadVideo(from: file)
-            
-            videoWindow = VideoPlayerWindowController()
-            controlWindow = FullControlWindowController()
-            tagLibraryWindow = TagLibraryWindowController()
+        
+        VideoPlayerManager.shared.loadVideo(from: file)
+        
+        videoWindow = VideoPlayerWindowController(id: id)
+        controlWindow = FullControlWindowController()
+        tagLibraryWindow = TagLibraryWindowController()
         
         if let screen = NSScreen.main {
             let screenFrame = screen.frame

@@ -34,6 +34,8 @@ enum AppImage: String {
     case sfStar = "star.fill"
     case sfXmark = "xmark"
     
+    case trialLogo
+    
     var image: Image {
         return Image(rawValue)
     }

@@ -9,6 +9,9 @@ import SwiftUI
 import Foundation
 
 class CustomCollectionManager: ObservableObject {
+    
+    var changedTagIDs: [(oldID: String, newID: String)] = []
+    @Published var playField: PlayField?
     @Published var tagGroups: [TagGroup] = []
     @Published var tags: [Tag] = []
     @Published var labelGroups: [LabelGroupData] = []
@@ -37,7 +40,7 @@ class CustomCollectionManager: ObservableObject {
             objectWillChange.send()
         }
     }
-
+    
     func renameLabelGroup(id: String, newName: String) {
         if let index = labelGroups.firstIndex(where: { $0.id == id }) {
             labelGroups[index] = LabelGroupData(
@@ -48,7 +51,7 @@ class CustomCollectionManager: ObservableObject {
             objectWillChange.send()
         }
     }
-
+    
     func updateLabel(id: String, name: String, description: String) {
         if let index = labels.firstIndex(where: { $0.id == id }) {
             labels[index] = Label(
@@ -59,7 +62,7 @@ class CustomCollectionManager: ObservableObject {
             objectWillChange.send()
         }
     }
-
+    
     func updateTimeEvent(id: String, newName: String) {
         if let index = timeEvents.firstIndex(where: { $0.id == id }) {
             timeEvents[index] = TimeEvent(
@@ -157,8 +160,10 @@ class CustomCollectionManager: ObservableObject {
     private func createTagWithValidatedHotkey(name: String, description: String, color: String,
                                               defaultTimeBefore: Double, defaultTimeAfter: Double,
                                               inGroup groupID: String, hotkey: String?) -> Tag {
+        let id = UUID().uuidString
         let newTag = Tag(
-            id: UUID().uuidString,
+            id: id,
+            primaryID: id,
             name: name,
             description: description,
             color: color,
@@ -216,6 +221,7 @@ class CustomCollectionManager: ObservableObject {
         if let index = tags.firstIndex(where: { $0.id == tagID }) {
             tags[index] = Tag(
                 id: tags[index].id,
+                primaryID: tags[index].primaryID,
                 name: tags[index].name,
                 description: tags[index].description,
                 color: tags[index].color,
@@ -318,8 +324,18 @@ class CustomCollectionManager: ObservableObject {
             
             UserDefaults.standard.saveCollectionBookmark(collectionBookmark)
             originalName = collectionName
+            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
             
-            return true
+            for change in changedTagIDs {
+                NotificationCenter.default.post(
+                    name: .tagUpdated,
+                    object: nil,
+                    userInfo: ["originalID": change.oldID, "newID": change.newID]
+                )
+            }
+            changedTagIDs.removeAll()
+            let fieldSaved = savePlayFieldForCollection()
+            return fieldSaved
         } catch {
             print("Error saving collection: \(error)")
             return false
@@ -492,12 +508,182 @@ class CustomCollectionManager: ObservableObject {
             if isStale {
                 refreshBookmark(collection: collectionName, urls: urls)
             }
-            
+            loadPlayFieldForCollection()
             return true
         } catch {
             print("Unexpected error loading collection: \(error)")
             return false
         }
+    }
+    
+    func updateTagMapEnabled(id: String, mapEnabled: Bool) -> Bool {
+        if let index = tags.firstIndex(where: { $0.id == id }) {
+            let updatedTag = Tag(
+                id: tags[index].id,
+                primaryID: tags[index].primaryID,
+                name: tags[index].name,
+                description: tags[index].description,
+                color: tags[index].color,
+                defaultTimeBefore: tags[index].defaultTimeBefore,
+                defaultTimeAfter: tags[index].defaultTimeAfter,
+                collection: tags[index].collection,
+                lablesGroup: tags[index].lablesGroup,
+                hotkey: tags[index].hotkey,
+                labelHotkeys: tags[index].labelHotkeys,
+                mapEnabled: tags[index].mapEnabled
+            )
+            
+            tags[index] = updatedTag
+            objectWillChange.send()
+            return true
+        }
+        return false
+    }
+    
+    func savePlayFieldForCollection() -> Bool {
+        guard let playField = playField else { return true }
+        
+        do {
+            let fileManager = FileManager.default
+            let playFieldsFolder = URL.appDocumentsDirectory
+                .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+                .fixedFile()
+            
+            if !fileManager.fileExists(atPath: playFieldsFolder.path) {
+                try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
+            }
+            
+            let playFieldDataPath = playFieldsFolder.appendingPathComponent("\(collectionName).json")
+            
+            let updatedField = PlayField(
+                id: playField.id,
+                name: playField.name,
+                imagePath: "",
+                width: playField.width,
+                height: playField.height
+            )
+            
+            let data = try JSONEncoder().encode(updatedField)
+            try data.write(to: playFieldDataPath)
+            
+            return true
+        } catch {
+            print("Error saving play field: \(error)")
+            return false
+        }
+    }
+
+    func loadPlayFieldForCollection() {
+        let fileManager = FileManager.default
+        let playFieldsFolder = URL.appDocumentsDirectory
+            .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+            .fixedFile()
+        
+        // First try the new location format: PlayFields/collectionName.json
+        let newPlayFieldDataPath = playFieldsFolder.appendingPathComponent("\(collectionName).json")
+        
+        if fileManager.fileExists(atPath: newPlayFieldDataPath.path),
+           let data = try? Data(contentsOf: newPlayFieldDataPath) {
+            if var field = try? JSONDecoder().decode(PlayField.self, from: data) {
+                // Update with the current image path convention
+                field.imagePath = "\(collectionName).png"
+                playField = field
+                return
+            }
+        }
+        
+        // Fall back to the old location if new one not found
+        let oldPlayFieldDataPath = playFieldsFolder
+            .appendingPathComponent("\(collectionName)/field.json")
+        
+        if fileManager.fileExists(atPath: oldPlayFieldDataPath.path),
+           let data = try? Data(contentsOf: oldPlayFieldDataPath) {
+            if var field = try? JSONDecoder().decode(PlayField.self, from: data) {
+                // Update with the current image path convention
+                field.imagePath = "\(collectionName).png"
+                playField = field
+                
+                // Migrate the data to the new location
+                try? savePlayFieldForCollection()
+                
+                // After migrating, try to clean up old directory if empty
+                let oldDirectory = playFieldsFolder.appendingPathComponent(collectionName)
+                let contents = try? fileManager.contentsOfDirectory(atPath: oldDirectory.path)
+                if contents?.isEmpty ?? false {
+                    try? fileManager.removeItem(at: oldDirectory)
+                }
+            }
+        }
+    }
+    
+    func setFieldImage(from url: URL) -> Bool {
+        do {
+            let fileManager = FileManager.default
+            let playFieldsFolder = URL.appDocumentsDirectory
+                .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+            
+            if !fileManager.fileExists(atPath: playFieldsFolder.path) {
+                try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
+            }
+            
+            // Use collection name as the image filename
+            let imageName = "\(collectionName).png"
+            let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
+            
+            // Remove existing image if it exists
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            
+            try fileManager.copyItem(at: url, to: destinationURL)
+            
+            if let existingField = playField {
+                playField = PlayField(
+                    id: existingField.id,
+                    name: existingField.name,
+                    imagePath: imageName,
+                    width: existingField.width,
+                    height: existingField.height
+                )
+            } else {
+                playField = PlayField(
+                    id: UUID().uuidString,
+                    name: "Field",
+                    imagePath: imageName,
+                    width: 100.0,  // Default width of 100 meters
+                    height: 60.0   // Default height of 60 meters
+                )
+            }
+            
+            return true
+        } catch {
+            print("Error setting field image: \(error)")
+            return false
+        }
+    }
+    
+    func deleteFieldImage() {
+        guard let field = playField else { return }
+        
+        let fileManager = FileManager.default
+        let playFieldsFolder = URL.appDocumentsDirectory
+            .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+            .fixedFile()
+        
+        let imagePath = playFieldsFolder.appendingPathComponent("\(collectionName).png")
+        
+        if fileManager.fileExists(atPath: imagePath.path) {
+            try? fileManager.removeItem(at: imagePath)
+        }
+        
+        playField = nil
+    }
+    
+    func updateFieldDimensions(width: Double, height: Double) {
+        guard var updatedField = playField else { return }
+        updatedField.width = width
+        updatedField.height = height
+        playField = updatedField
     }
     
     private func stopAccessingResources(urls: [URL]) {
@@ -559,7 +745,7 @@ class CustomCollectionManager: ObservableObject {
         return tags.contains { $0.hotkey == hotkey && $0.id != excludingTagID }
     }
     
-    func updateTag(id: String, name: String, description: String, color: String,
+    func updateTag(id: String, primaryID: String?, name: String, description: String, color: String,
                    defaultTimeBefore: Double, defaultTimeAfter: Double,
                    labelGroupIDs: [String], hotkey: String?, labelHotkeys: [String: String]) -> Bool {
         if let hotkey = hotkey, !hotkey.isEmpty,
@@ -567,19 +753,46 @@ class CustomCollectionManager: ObservableObject {
             return false
         }
         
+        // Generate a new ID for the tag based on the new name
+        let newTagID = UUID().uuidString
+        
         if let index = tags.firstIndex(where: { $0.id == id }) {
+            let originalTag = tags[index]
+            
+            // Сохраняем информацию об изменении ID для последующего использования
+            if !changedTagIDs.contains(where: { $0.oldID == id }) {
+                changedTagIDs.append((oldID: id, newID: newTagID))
+            }
+            
+            // Create updated tag with new ID
             tags[index] = Tag(
-                id: id,
+                id: newTagID,
+                primaryID: primaryID,
                 name: name,
                 description: description,
                 color: color,
                 defaultTimeBefore: defaultTimeBefore,
                 defaultTimeAfter: defaultTimeAfter,
-                collection: tags[index].collection,
+                collection: originalTag.collection,
                 lablesGroup: labelGroupIDs,
                 hotkey: hotkey,
                 labelHotkeys: labelHotkeys
             )
+            
+            // Update references in tag groups
+            for i in 0..<tagGroups.count {
+                if let tagIndex = tagGroups[i].tags.firstIndex(where: { $0 == id }) {
+                    var updatedTags = tagGroups[i].tags
+                    updatedTags[tagIndex] = newTagID
+                    tagGroups[i] = TagGroup(
+                        id: tagGroups[i].id,
+                        name: tagGroups[i].name,
+                        tags: updatedTags
+                    )
+                }
+            }
+            
+            objectWillChange.send()
             return true
         }
         return false

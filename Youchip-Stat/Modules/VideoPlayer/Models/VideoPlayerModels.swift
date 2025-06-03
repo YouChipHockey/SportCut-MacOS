@@ -15,6 +15,7 @@ import UniformTypeIdentifiers
 
 struct Tag: Codable, Identifiable {
     var id: String
+    let primaryID: String?
     var name: String
     var description: String
     var color: String
@@ -24,6 +25,15 @@ struct Tag: Codable, Identifiable {
     var lablesGroup: [String]
     var hotkey: String?
     var labelHotkeys: [String: String]?
+    var mapEnabled: Bool?
+}
+
+struct PlayFieldData: Codable {
+    let field: PlayField
+    
+    init(field: PlayField) {
+        self.field = field
+    }
 }
 
 struct TagGroup: Codable, Identifiable {
@@ -92,12 +102,43 @@ struct TimelineLine: Identifiable, Codable {
     var tagIdForMode: String = ""
 }
 
+struct FullLabelWithGroup: Codable {
+    let id: String
+    let name: String
+    let description: String
+    let group: LabelGroupInfo?
+}
+
+struct LabelGroupInfo: Codable {
+    let id: String
+    let name: String
+}
+
+struct TagGroupInfo: Codable {
+    let id: String
+    let name: String
+}
+
+struct FullTagWithGroup: Codable {
+    let id: String
+    let primaryID: String?
+    let name: String
+    let description: String
+    let color: String
+    let defaultTimeBefore: Double
+    let defaultTimeAfter: Double
+    let collection: String
+    let hotkey: String?
+    let labelHotkeys: [String: String]?
+    let group: TagGroupInfo?
+}
+
 struct FullTimelineStamp: Codable {
     let id: UUID
     let timeStart: String
     let timeFinish: String
-    let tag: Tag
-    let labels: [Label]
+    let tag: FullTagWithGroup
+    let labels: [FullLabelWithGroup]
     let timeEvents: [TimeEvent]
 }
 
@@ -105,6 +146,14 @@ struct FullTimelineLine: Codable {
     let id: UUID
     let name: String
     let stamps: [FullTimelineStamp]
+}
+
+struct PlayField: Codable {
+    let id: String
+    var name: String
+    var imagePath: String
+    var width: Double
+    var height: Double
 }
 
 enum TagCollection {

@@ -44,6 +44,7 @@ struct CreateCustomCollectionsView: View {
         case tagGroups
         case labelGroups
         case timeEvents
+        case fieldMap
     }
     
     var body: some View {
@@ -123,6 +124,7 @@ struct CreateCustomCollectionsView: View {
                 Text("Группы тегов").tag(ViewMode.tagGroups)
                 Text("Группы лейблов").tag(ViewMode.labelGroups)
                 Text("Общие события").tag(ViewMode.timeEvents)
+                Text("Карта поля").tag(ViewMode.fieldMap)
             }
             .pickerStyle(.segmented)
             .frame(width: 700)
@@ -146,10 +148,26 @@ struct CreateCustomCollectionsView: View {
                 }
             } else if viewMode == .timeEvents {
                 timeEventsListSection
+            } else if viewMode == .fieldMap {
+                fieldMapSection
             }
         }
         .listStyle(SidebarListStyle())
         .frame(minWidth: 250)
+    }
+    
+    var fieldMapSection: some View {
+        Section {
+            Text("Настройки карты поля")
+                .font(.headline)
+                .padding(.vertical, 2)
+                .onTapGesture {
+                    // No additional action needed as there's only one item
+                }
+                .background(Color.blue.opacity(0.2))
+        } header: {
+            Text("Карта поля")
+        }
     }
     
     var tagGroupsListSection: some View {
@@ -325,6 +343,7 @@ struct CreateCustomCollectionsView: View {
                         tagFormData.name = editingName
                         collectionManager.updateTag(
                             id: tag.id,
+                            primaryID: tag.primaryID,
                             name: editingName,
                             description: tag.description,
                             color: tag.color,
@@ -334,6 +353,12 @@ struct CreateCustomCollectionsView: View {
                             hotkey: tag.hotkey,
                             labelHotkeys: tag.labelHotkeys ?? [:]
                         )
+                        
+                        if let updatedTag = collectionManager.tags.first(where: { $0.name == editingName }) {
+                            selectedTagID = updatedTag.id
+                            tagFormData = TagFormData(from: updatedTag)
+                        }
+                        
                         isEditingName = false
                     }
             } else {
@@ -573,8 +598,10 @@ struct CreateCustomCollectionsView: View {
     var detailView: some View {
         ScrollView {
             VStack {
-                if let tagID = selectedTagID,
-                   let tag = collectionManager.tags.first(where: { $0.id == tagID })
+                if viewMode == .fieldMap {
+                    fieldMapDetailView
+                } else if let tagID = selectedTagID,
+                          let tag = collectionManager.tags.first(where: { $0.id == tagID })
                 {
                     tagDetailView(tag: tag)
                 }
@@ -620,6 +647,211 @@ struct CreateCustomCollectionsView: View {
         }
     }
     
+    var fieldMapDetailView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Настройки карты поля")
+                .font(.title2)
+                .bold()
+                .padding(.bottom, 8)
+            
+            if let playField = collectionManager.playField {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Текущая карта поля")
+                            .font(.headline)
+                        Spacer()
+                        Button(action: {
+                            collectionManager.deleteFieldImage()
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .help("Удалить карту поля")
+                    }
+                    
+                    let imageURL = URL.appDocumentsDirectory
+                        .appendingPathComponent("YouChip-Stat/PlayFields/\(collectionManager.collectionName).png")
+                    
+                    if let nsImage = NSImage(contentsOf: imageURL) {
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 300)
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                    } else {
+                        Text("Не удалось загрузить изображение")
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    
+                    HStack(spacing: 20) {
+                        VStack(alignment: .leading) {
+                            Text("Ширина поля (м):")
+                            HStack {
+                                TextField("", value: Binding(
+                                    get: { playField.width },
+                                    set: { collectionManager.updateFieldDimensions(width: $0, height: playField.height) }
+                                ), formatter: NumberFormatter())
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .frame(width: 100)
+                                
+                                Stepper("", value: Binding(
+                                    get: { playField.width },
+                                    set: { collectionManager.updateFieldDimensions(width: $0, height: playField.height) }
+                                ), in: 1...1000, step: 1)
+                                .labelsHidden()
+                            }
+                        }
+                        
+                        VStack(alignment: .leading) {
+                            Text("Длина поля (м):")
+                            HStack {
+                                TextField("", value: Binding(
+                                    get: { playField.height },
+                                    set: { collectionManager.updateFieldDimensions(width: playField.width, height: $0) }
+                                ), formatter: NumberFormatter())
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .frame(width: 100)
+                                
+                                Stepper("", value: Binding(
+                                    get: { playField.height },
+                                    set: { collectionManager.updateFieldDimensions(width: playField.width, height: $0) }
+                                ), in: 1...1000, step: 1)
+                                .labelsHidden()
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    
+                    Button(action: {
+                        selectNewFieldImage()
+                    }) {
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("Заменить изображение")
+                        }
+                    }
+                    .buttonStyle(CompatibilityButtonStyle())
+                }
+                
+            } else {
+                // No field image yet
+                VStack(spacing: 20) {
+                    Text("Карта поля не задана")
+                        .font(.headline)
+                    
+                    Image(systemName: "map")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                    
+                    Text("Загрузите изображение карты поля, чтобы отмечать на нём позиции")
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.gray)
+                    
+                    Button(action: {
+                        selectNewFieldImage()
+                    }) {
+                        HStack {
+                            Image(systemName: "photo")
+                            Text("Загрузить карту поля")
+                        }
+                    }
+                    .buttonStyle(CompatibilityButtonStyle())
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            }
+            
+            Divider()
+                .padding(.vertical, 16)
+            
+            Text("Теги для использования с картой")
+                .font(.headline)
+            
+            tagsForFieldMapList
+        }
+        .padding()
+    }
+    
+    var tagsForFieldMapList: some View {
+        // Extract tag groups with their tags first
+        let groupsWithTags = collectionManager.tagGroups.map { group -> (TagGroup, [Tag]) in
+            let groupTags = collectionManager.tags.filter { tag in
+                group.tags.contains(tag.id)
+            }
+            return (group, groupTags)
+        }
+        
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                ForEach(groupsWithTags, id: \.0.id) { groupInfo in
+                    let group = groupInfo.0
+                    let groupTags = groupInfo.1
+                    
+                    if !groupTags.isEmpty {
+                        Section(header: Text(group.name)
+                            .font(.headline)
+                            .padding(.top, 8)) {
+                            
+                            ForEach(groupTags) { tag in
+                                tagMapToggleRow(tag: tag)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .frame(height: 300)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private func tagMapToggleRow(tag: Tag) -> some View {
+        HStack {
+            Rectangle()
+                .fill(Color(hex: tag.color))
+                .frame(width: 16, height: 16)
+            
+            Text(tag.name)
+            
+            Spacer()
+            
+            Toggle("", isOn: Binding(
+                get: { tag.mapEnabled ?? false },
+                set: { collectionManager.updateTagMapEnabled(id: tag.id, mapEnabled: $0) }
+            ))
+            .toggleStyle(.checkbox)
+            .labelsHidden()
+            .disabled(collectionManager.playField == nil)
+            .opacity(collectionManager.playField == nil ? 0.6 : 1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+    }
+    
+    func selectNewFieldImage() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedFileTypes = ["png", "jpg", "jpeg"]
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            _ = collectionManager.setFieldImage(from: url)
+        }
+    }
+    
     func tagDetailView(tag: Tag) -> some View {
         Form {
             Section(header: Text("Информация о теге")) {
@@ -652,6 +884,15 @@ struct CreateCustomCollectionsView: View {
                     Text("\(Int(tagFormData.defaultTimeAfter)) сек")
                         .frame(width: 60, alignment: .trailing)
                 }
+                
+                Toggle("Использовать с картой поля", isOn: Binding(
+                    get: { tag.mapEnabled ?? false },
+                    set: { collectionManager.updateTagMapEnabled(id: tag.id, mapEnabled: $0) }
+                ))
+                .padding(.vertical, 4)
+                .help("Включите, если этот тег должен отображаться на карте поля")
+                .disabled(collectionManager.playField == nil)
+                .opacity(collectionManager.playField == nil ? 0.6 : 1)
                 
                 HStack {
                     Text("Горячая клавиша:")
@@ -689,7 +930,7 @@ struct CreateCustomCollectionsView: View {
                     }
                     
                     if let hotkey = tagFormData.hotkey,
-                        collectionManager.isHotkeyAssigned(hotkey, excludingTagID: tag.id) {
+                       collectionManager.isHotkeyAssigned(hotkey, excludingTagID: tag.id) {
                         Text("Этот хоткей уже используется")
                             .foregroundColor(.red)
                             .font(.caption)
@@ -793,6 +1034,7 @@ struct CreateCustomCollectionsView: View {
             Button("Сохранить изменения") {
                 let success = collectionManager.updateTag(
                     id: tag.id,
+                    primaryID: tag.primaryID,
                     name: tagFormData.name,
                     description: tagFormData.description,
                     color: tagFormData.hexColor,
@@ -802,6 +1044,11 @@ struct CreateCustomCollectionsView: View {
                     hotkey: tagFormData.hotkey,
                     labelHotkeys: tagFormData.labelHotkeys
                 )
+                
+                if success, let updatedTag = collectionManager.tags.first(where: { $0.name == tagFormData.name }) {
+                    selectedTagID = updatedTag.id
+                    tagFormData = TagFormData(from: updatedTag)
+                }
             }
             .buttonStyle(CompatibilityButtonStyle())
             .frame(maxWidth: .infinity, alignment: .center)
@@ -1011,7 +1258,7 @@ struct CreateCustomCollectionsView: View {
                     }
                     
                     if let hotkey = tagFormData.hotkey,
-                        collectionManager.isHotkeyAssigned(hotkey) {
+                       collectionManager.isHotkeyAssigned(hotkey) {
                         Text("Этот хоткей уже используется")
                             .foregroundColor(.red)
                             .font(.caption)
@@ -1042,6 +1289,7 @@ struct CreateCustomCollectionsView: View {
                         if !tagFormData.selectedLabelGroups.isEmpty {
                             collectionManager.updateTag(
                                 id: newTag.id,
+                                primaryID: newTag.primaryID,
                                 name: newTag.name,
                                 description: newTag.description,
                                 color: newTag.color,
