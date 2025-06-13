@@ -7,7 +7,6 @@
 
 import Cocoa
 import UserNotifications
-import Sparkle
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, ObservableObject {
     

@@ -276,50 +276,69 @@ class CustomCollectionManager: ObservableObject {
             let labelGroupsData = LabelGroupsData(labelGroups: labelGroups)
             let labelsData = LabelsData(labels: labels)
             let timeEventsData = TimeEventsData(events: timeEvents)
+            
             let fileManager = FileManager.default
             let collectionsFolder = URL.appDocumentsDirectory
                 .appendingPathComponent("YouChip-Stat/Collections/\(collectionName)", isDirectory: true)
                 .fixedFile()
+            
             if !fileManager.fileExists(atPath: collectionsFolder.path) {
                 try fileManager.createDirectory(at: collectionsFolder, withIntermediateDirectories: true)
             }
             
+            // Create files for all data models
             let tagGroupsURL = collectionsFolder.appendingPathComponent("tagGroups.json")
             let tagsURL = collectionsFolder.appendingPathComponent("tags.json")
             let labelGroupsURL = collectionsFolder.appendingPathComponent("labelGroups.json")
             let labelsURL = collectionsFolder.appendingPathComponent("labels.json")
             let timeEventsURL = collectionsFolder.appendingPathComponent("timeEvents.json")
+            let playFieldURL = collectionsFolder.appendingPathComponent("playField.json")
             
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
             
+            // Save tag groups
             let tagGroupsJSON = try encoder.encode(tagGroupsData)
             try tagGroupsJSON.write(to: tagGroupsURL)
             let tagGroupsBookmark = tagGroupsURL.makeBookmark() ?? Data()
             
+            // Save tags
             let tagsJSON = try encoder.encode(tagsData)
             try tagsJSON.write(to: tagsURL)
             let tagsBookmark = tagsURL.makeBookmark() ?? Data()
             
+            // Save label groups
             let labelGroupsJSON = try encoder.encode(labelGroupsData)
             try labelGroupsJSON.write(to: labelGroupsURL)
             let labelGroupsBookmark = labelGroupsURL.makeBookmark() ?? Data()
             
+            // Save labels
             let labelsJSON = try encoder.encode(labelsData)
             try labelsJSON.write(to: labelsURL)
             let labelsBookmark = labelsURL.makeBookmark() ?? Data()
             
+            // Save time events
             let timeEventsJSON = try encoder.encode(timeEventsData)
             try timeEventsJSON.write(to: timeEventsURL)
             let timeEventsBookmark = timeEventsURL.makeBookmark() ?? Data()
             
+            // Save play field
+            var playFieldBookmark = Data()
+            if let field = playField {
+                let playFieldJSON = try encoder.encode(field)
+                try playFieldJSON.write(to: playFieldURL)
+                playFieldBookmark = playFieldURL.makeBookmark() ?? Data()
+            }
+            
+            // Create collection bookmark with all file references
             let collectionBookmark = CollectionBookmark(
                 name: collectionName,
                 tagGroupsBookmark: tagGroupsBookmark,
                 tagsBookmark: tagsBookmark,
                 labelGroupsBookmark: labelGroupsBookmark,
                 labelsBookmark: labelsBookmark,
-                timeEventsBookmark: timeEventsBookmark
+                timeEventsBookmark: timeEventsBookmark,
+                playFieldBookmark: playFieldBookmark
             )
             
             UserDefaults.standard.saveCollectionBookmark(collectionBookmark)
@@ -334,8 +353,8 @@ class CustomCollectionManager: ObservableObject {
                 )
             }
             changedTagIDs.removeAll()
-            let fieldSaved = savePlayFieldForCollection()
-            return fieldSaved
+            
+            return true
         } catch {
             print("Error saving collection: \(error)")
             return false
@@ -369,6 +388,7 @@ class CustomCollectionManager: ObservableObject {
             var isStale = false
             var urls: [URL] = []
             var accessFlags: [Bool] = []
+            
             do {
                 let tagGroupsURL = try URL(resolvingBookmarkData: bookmark.tagGroupsBookmark,
                                            options: .withSecurityScope,
@@ -423,6 +443,7 @@ class CustomCollectionManager: ObservableObject {
                 print("Error resolving labels bookmark: \(error)")
                 return false
             }
+            
             do {
                 if bookmark.timeEventsBookmark.isEmpty {
                     print("Note: No time events bookmark found in collection - this might be an older collection format")
@@ -439,11 +460,31 @@ class CustomCollectionManager: ObservableObject {
                 stopAccessingResources(urls: urls)
                 print("Error resolving timeEvents bookmark: \(error)")
             }
+            
+            var playFieldURL: URL? = nil
+            do {
+                if let playFieldBookmark = bookmark.playFieldBookmark {
+                    if !playFieldBookmark.isEmpty {
+                        playFieldURL = try URL(resolvingBookmarkData: playFieldBookmark,
+                                               options: .withSecurityScope,
+                                               relativeTo: nil,
+                                               bookmarkDataIsStale: &isStale)
+                        urls.append(playFieldURL!)
+                        let accessFlag = playFieldURL!.startAccessingSecurityScopedResource()
+                        accessFlags.append(accessFlag)
+                    }
+                }
+            } catch {
+                stopAccessingResources(urls: urls)
+                print("Error resolving playField bookmark: \(error)")
+            }
+            
             if urls.count < 4 || accessFlags.contains(false) {
                 stopAccessingResources(urls: urls)
                 print("Error: Failed to access all required resources")
                 return false
             }
+            
             defer {
                 stopAccessingResources(urls: urls)
             }
@@ -504,11 +545,23 @@ class CustomCollectionManager: ObservableObject {
                 self.timeEvents = []
             }
             
+            if let fieldURL = playFieldURL {
+                do {
+                    let fieldData = try Data(contentsOf: fieldURL)
+                    self.playField = try decoder.decode(PlayField.self, from: fieldData)
+                } catch {
+                    print("Error loading play field data: \(error)")
+                    self.playField = nil
+                }
+            } else {
+                self.playField = nil
+            }
+            
             self.collectionName = collectionName
             if isStale {
                 refreshBookmark(collection: collectionName, urls: urls)
             }
-            loadPlayFieldForCollection()
+            
             return true
         } catch {
             print("Unexpected error loading collection: \(error)")
@@ -530,7 +583,7 @@ class CustomCollectionManager: ObservableObject {
                 lablesGroup: tags[index].lablesGroup,
                 hotkey: tags[index].hotkey,
                 labelHotkeys: tags[index].labelHotkeys,
-                mapEnabled: tags[index].mapEnabled
+                mapEnabled: mapEnabled
             )
             
             tags[index] = updatedTag
@@ -579,34 +632,28 @@ class CustomCollectionManager: ObservableObject {
             .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
             .fixedFile()
         
-        // First try the new location format: PlayFields/collectionName.json
         let newPlayFieldDataPath = playFieldsFolder.appendingPathComponent("\(collectionName).json")
         
         if fileManager.fileExists(atPath: newPlayFieldDataPath.path),
            let data = try? Data(contentsOf: newPlayFieldDataPath) {
             if var field = try? JSONDecoder().decode(PlayField.self, from: data) {
-                // Update with the current image path convention
                 field.imagePath = "\(collectionName).png"
                 playField = field
                 return
             }
         }
         
-        // Fall back to the old location if new one not found
         let oldPlayFieldDataPath = playFieldsFolder
             .appendingPathComponent("\(collectionName)/field.json")
         
         if fileManager.fileExists(atPath: oldPlayFieldDataPath.path),
            let data = try? Data(contentsOf: oldPlayFieldDataPath) {
             if var field = try? JSONDecoder().decode(PlayField.self, from: data) {
-                // Update with the current image path convention
                 field.imagePath = "\(collectionName).png"
                 playField = field
                 
-                // Migrate the data to the new location
                 try? savePlayFieldForCollection()
                 
-                // After migrating, try to clean up old directory if empty
                 let oldDirectory = playFieldsFolder.appendingPathComponent(collectionName)
                 let contents = try? fileManager.contentsOfDirectory(atPath: oldDirectory.path)
                 if contents?.isEmpty ?? false {
@@ -621,13 +668,14 @@ class CustomCollectionManager: ObservableObject {
             let fileManager = FileManager.default
             let playFieldsFolder = URL.appDocumentsDirectory
                 .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+                .fixedFile()
             
             if !fileManager.fileExists(atPath: playFieldsFolder.path) {
                 try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
             }
             
             // Use collection name as the image filename
-            let imageName = "\(collectionName).png"
+            let imageName = url.lastPathComponent
             let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
             
             // Remove existing image if it exists
@@ -637,21 +685,26 @@ class CustomCollectionManager: ObservableObject {
             
             try fileManager.copyItem(at: url, to: destinationURL)
             
+            // Create a bookmark for the image
+            let imageBookmark = destinationURL.makeBookmark()
+            
             if let existingField = playField {
                 playField = PlayField(
                     id: existingField.id,
                     name: existingField.name,
                     imagePath: imageName,
                     width: existingField.width,
-                    height: existingField.height
+                    height: existingField.height,
+                    imageBookmark: imageBookmark
                 )
             } else {
                 playField = PlayField(
                     id: UUID().uuidString,
                     name: "Field",
                     imagePath: imageName,
-                    width: 100.0,  // Default width of 100 meters
-                    height: 60.0   // Default height of 60 meters
+                    width: 100.0,
+                    height: 60.0,
+                    imageBookmark: imageBookmark
                 )
             }
             
@@ -670,13 +723,33 @@ class CustomCollectionManager: ObservableObject {
             .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
             .fixedFile()
         
-        let imagePath = playFieldsFolder.appendingPathComponent("\(collectionName).png")
+        let imagePath = playFieldsFolder.appendingPathComponent(field.imagePath)
         
         if fileManager.fileExists(atPath: imagePath.path) {
             try? fileManager.removeItem(at: imagePath)
         }
         
+        for i in 0..<tags.count {
+            if tags[i].mapEnabled == true {
+                tags[i] = Tag(
+                    id: tags[i].id,
+                    primaryID: tags[i].primaryID,
+                    name: tags[i].name,
+                    description: tags[i].description,
+                    color: tags[i].color,
+                    defaultTimeBefore: tags[i].defaultTimeBefore,
+                    defaultTimeAfter: tags[i].defaultTimeAfter,
+                    collection: tags[i].collection,
+                    lablesGroup: tags[i].lablesGroup,
+                    hotkey: tags[i].hotkey,
+                    labelHotkeys: tags[i].labelHotkeys,
+                    mapEnabled: false
+                )
+            }
+        }
+        
         playField = nil
+        objectWillChange.send()
     }
     
     func updateFieldDimensions(width: Double, height: Double) {
@@ -698,11 +771,19 @@ class CustomCollectionManager: ObservableObject {
             let tagsBookmark = try urls[1].bookmarkData()
             let labelGroupsBookmark = try urls[2].bookmarkData()
             let labelsBookmark = try urls[3].bookmarkData()
+            
             let timeEventsBookmark: Data
             if urls.count > 4 {
                 timeEventsBookmark = try urls[4].bookmarkData()
             } else {
                 timeEventsBookmark = Data()
+            }
+            
+            let playFieldBookmark: Data
+            if urls.count > 5 {
+                playFieldBookmark = try urls[5].bookmarkData()
+            } else {
+                playFieldBookmark = Data()
             }
             
             let refreshedBookmark = CollectionBookmark(
@@ -711,7 +792,8 @@ class CustomCollectionManager: ObservableObject {
                 tagsBookmark: tagsBookmark,
                 labelGroupsBookmark: labelGroupsBookmark,
                 labelsBookmark: labelsBookmark,
-                timeEventsBookmark: timeEventsBookmark
+                timeEventsBookmark: timeEventsBookmark,
+                playFieldBookmark: playFieldBookmark
             )
             
             UserDefaults.standard.saveCollectionBookmark(refreshedBookmark)
@@ -759,12 +841,10 @@ class CustomCollectionManager: ObservableObject {
         if let index = tags.firstIndex(where: { $0.id == id }) {
             let originalTag = tags[index]
             
-            // Сохраняем информацию об изменении ID для последующего использования
             if !changedTagIDs.contains(where: { $0.oldID == id }) {
                 changedTagIDs.append((oldID: id, newID: newTagID))
             }
             
-            // Create updated tag with new ID
             tags[index] = Tag(
                 id: newTagID,
                 primaryID: primaryID,

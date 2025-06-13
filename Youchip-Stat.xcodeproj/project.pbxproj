@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */; };
-		DD0567802DDE5C690037A79E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = DD05677F2DDE5C690037A79E /* Sparkle */; };
 		DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */; };
 		DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67E2DBAFB8A00CB2AE0 /* VideosViewModel.swift */; };
 		DD2A70542D74C31B00287BA8 /* VideosState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70532D74C31600287BA8 /* VideosState.swift */; };
@@ -60,6 +59,12 @@
 		DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */; };
 		DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */; };
 		DD494BF02DC0146B003F8BE6 /* VideoPlayerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD494BEF2DC0145F003F8BE6 /* VideoPlayerModels.swift */; };
+		DD5ED4042DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5ED4032DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift */; };
+		DD7E17C92DF7431300342214 /* FieldMapConfigurationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E17C82DF7431200342214 /* FieldMapConfigurationWindowController.swift */; };
+		DD7E17CB2DF7449000342214 /* FieldMapConfigurationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */; };
+		DD8937FE2DEF936B009B1BC2 /* CropImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */; };
+		DD8938182DEFBA42009B1BC2 /* FieldMapVisualizationPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */; };
+		DD89381A2DEFBA4D009B1BC2 /* FieldMapVisualizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */; };
 		DD9233412DB0476C008FFFF1 /* labels.json in Resources */ = {isa = PBXBuildFile; fileRef = DD92333C2DB0476C008FFFF1 /* labels.json */; };
 		DD9233422DB0476C008FFFF1 /* labelsGroups.json in Resources */ = {isa = PBXBuildFile; fileRef = DD92333D2DB0476C008FFFF1 /* labelsGroups.json */; };
 		DD9233432DB0476C008FFFF1 /* tags.json in Resources */ = {isa = PBXBuildFile; fileRef = DD92333E2DB0476C008FFFF1 /* tags.json */; };
@@ -156,6 +161,12 @@
 		DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Alerts.swift"; sourceTree = "<group>"; };
 		DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+CloudFiles.swift"; sourceTree = "<group>"; };
 		DD494BEF2DC0145F003F8BE6 /* VideoPlayerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerModels.swift; sourceTree = "<group>"; };
+		DD5ED4032DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationWindowController.swift; sourceTree = "<group>"; };
+		DD7E17C82DF7431200342214 /* FieldMapConfigurationWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapConfigurationWindowController.swift; sourceTree = "<group>"; };
+		DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapConfigurationView.swift; sourceTree = "<group>"; };
+		DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropImageView.swift; sourceTree = "<group>"; };
+		DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationPicker.swift; sourceTree = "<group>"; };
+		DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationView.swift; sourceTree = "<group>"; };
 		DD92333C2DB0476C008FFFF1 /* labels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labels.json; sourceTree = "<group>"; };
 		DD92333D2DB0476C008FFFF1 /* labelsGroups.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labelsGroups.json; sourceTree = "<group>"; };
 		DD92333E2DB0476C008FFFF1 /* tags.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tags.json; sourceTree = "<group>"; };
@@ -210,7 +221,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DD0567802DDE5C690037A79E /* Sparkle in Frameworks */,
 				DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */,
 				4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */,
 			);
@@ -459,6 +469,8 @@
 		DDCA6B4C2DCA64CE0025EF9E /* Windows */ = {
 			isa = PBXGroup;
 			children = (
+				DD7E17C82DF7431200342214 /* FieldMapConfigurationWindowController.swift */,
+				DD5ED4032DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift */,
 				DDFB1A552DE521D300175D97 /* ScreenshotsWindowController.swift */,
 			);
 			path = Windows;
@@ -513,10 +525,14 @@
 		DDD52CBC2DAEE7F50038158E /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */,
 				DDCA6B722DCA69E10025EF9E /* CreateCustomCollectionsView.swift */,
+				DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */,
 				DDCA6B702DCA69C30025EF9E /* ColorPickerView.swift */,
 				DDCA6B672DCA69130025EF9E /* KeyCaptureView.swift */,
 				DDCA6B612DCA67C50025EF9E /* ExportAnalyticsView.swift */,
+				DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */,
+				DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */,
 				DDCA6B5C2DCA66420025EF9E /* AnalyticsView.swift */,
 				DDCA6B5A2DCA66330025EF9E /* TagStatisticsLegend.swift */,
 				DDCA6B582DCA66210025EF9E /* PieChartView.swift */,
@@ -611,7 +627,6 @@
 			mainGroup = DDB401882D749E0F004A12C2;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				DD05677E2DDE5C690037A79E /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DDB401922D749E0F004A12C2 /* Products */;
@@ -732,10 +747,12 @@
 				DDFB1A4B2DE510E700175D97 /* EditorWebView.swift in Sources */,
 				DDFB1A4C2DE510E700175D97 /* EditorActions.swift in Sources */,
 				DD32C28F2D74A19A0052B5C6 /* AppSetupManager.swift in Sources */,
+				DD8937FE2DEF936B009B1BC2 /* CropImageView.swift in Sources */,
 				DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */,
 				DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */,
 				DDCA6B5B2DCA66330025EF9E /* TagStatisticsLegend.swift in Sources */,
 				DD32C2A32D74A1C80052B5C6 /* Date+Convenience.swift in Sources */,
+				DD89381A2DEFBA4D009B1BC2 /* FieldMapVisualizationView.swift in Sources */,
 				DDCA6B572DCA65C20025EF9E /* AnalyticsModels.swift in Sources */,
 				DDCA6B5D2DCA66420025EF9E /* AnalyticsView.swift in Sources */,
 				DDCA6B712DCA69C30025EF9E /* ColorPickerView.swift in Sources */,
@@ -750,6 +767,7 @@
 				DDFB1A502DE512D900175D97 /* SharingPicker.swift in Sources */,
 				DD2A70582D74C35F00287BA8 /* URL+Convenience.swift in Sources */,
 				DDCA6B4F2DCA64EE0025EF9E /* NSNotification + Convenience.swift in Sources */,
+				DD8938182DEFBA42009B1BC2 /* FieldMapVisualizationPicker.swift in Sources */,
 				DDCA6B622DCA67C60025EF9E /* ExportAnalyticsView.swift in Sources */,
 				DDDB36362D78E16500A1111C /* Color.swift in Sources */,
 				DD32C2A62D74A1C80052B5C6 /* Fonts.swift in Sources */,
@@ -757,6 +775,7 @@
 				DDFB1A562DE521D300175D97 /* ScreenshotsWindowController.swift in Sources */,
 				DDCA6B662DCA68F80025EF9E /* TagFormData.swift in Sources */,
 				DD2A70622D74D27900287BA8 /* FilesDocumentPickerHelper.swift in Sources */,
+				DD7E17C92DF7431300342214 /* FieldMapConfigurationWindowController.swift in Sources */,
 				DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */,
 				DDC938EC2DD2452900B7AB12 /* AuthKeyView.swift in Sources */,
 				DDCA6B602DCA67560025EF9E /* AnalyticsWindowController.swift in Sources */,
@@ -772,8 +791,10 @@
 				DD32C2AA2D74A1C80052B5C6 /* Images.swift in Sources */,
 				DD2A705C2D74C3B100287BA8 /* VideoFilesManager.swift in Sources */,
 				DD32C2AB2D74A1C80052B5C6 /* String+Convenience.swift in Sources */,
+				DD7E17CB2DF7449000342214 /* FieldMapConfigurationView.swift in Sources */,
 				DDCA6B592DCA66220025EF9E /* PieChartView.swift in Sources */,
 				DD2A70542D74C31B00287BA8 /* VideosState.swift in Sources */,
+				DD5ED4042DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift in Sources */,
 				DDCA6B642DCA68C10025EF9E /* CustomCollectionManager.swift in Sources */,
 				DDCA6B6F2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift in Sources */,
 				DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */,
@@ -1010,25 +1031,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		DD05677E2DDE5C690037A79E /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.7.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		DD05677F2DDE5C690037A79E /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DD05677E2DDE5C690037A79E /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DDB401892D749E0F004A12C2 /* Project object */;
 }

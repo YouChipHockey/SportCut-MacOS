@@ -263,8 +263,10 @@ struct TimelineStamp: Identifiable, Codable {
     var timeFinish: String
     var colorHex: String
     var label: String
+    var isActiveForMapView: Bool?
     var labels: [String]
     var timeEvents: [String]
+    var position: CGPoint?
     var color: Color {
         Color(hex: colorHex)
     }
@@ -277,7 +279,8 @@ struct TimelineStamp: Identifiable, Codable {
     var duration: Double {
         finishSeconds - startSeconds
     }
-    init(id: UUID = UUID(), idTag: String, primaryID: String?, timeStart: String, timeFinish: String, colorHex: String, label: String, labels: [String], timeEvents: [String] = []) {
+    
+    init(id: UUID = UUID(), idTag: String, primaryID: String?, timeStart: String, timeFinish: String, colorHex: String, label: String, labels: [String], timeEvents: [String] = [], position: CGPoint? = nil, isActiveForMapView: Bool? = nil) {
         self.id = id
         self.primaryID = primaryID
         self.idTag = idTag
@@ -287,6 +290,8 @@ struct TimelineStamp: Identifiable, Codable {
         self.label = label
         self.labels = labels
         self.timeEvents = timeEvents
+        self.position = position
+        self.isActiveForMapView = isActiveForMapView
     }
 }
 
@@ -366,7 +371,7 @@ class TimelineDataManager: ObservableObject {
         }
     }
     
-    func addStampToSelectedLine(idTag: String, primaryId: String?, name: String, timeStart: String, timeFinish: String, color: String, labels: [String]) {
+    func addStampToSelectedLine(idTag: String, primaryId: String?, name: String, timeStart: String, timeFinish: String, color: String, labels: [String], position: CGPoint? = nil) {
         if MarkupMode.current == .standard {
             guard let lineID = selectedLineID,
                   let idx = lines.firstIndex(where: { $0.id == lineID }) else { return }
@@ -381,33 +386,39 @@ class TimelineDataManager: ObservableObject {
                 colorHex: color,
                 label: name,
                 labels: labels,
-                timeEvents: selectedEvents
+                timeEvents: selectedEvents,
+                position: position,
+                isActiveForMapView: position != nil
             )
             lines[idx].stamps.append(stamp)
             
         } else {
             if let tag = TagLibraryManager.shared.findTagById(idTag) {
                 let lineID = findOrCreateTimelineForTag(tag: tag)
-                guard let idx = lines.firstIndex(where: { $0.id == lineID }) else { return }
                 
-                let selectedEvents = Array(TagLibraryManager.shared.selectedTimeEvents)
-                
-                let stamp = TimelineStamp(
-                    idTag: idTag,
-                    primaryID: primaryId,
-                    timeStart: timeStart,
-                    timeFinish: timeFinish,
-                    colorHex: color,
-                    label: name,
-                    labels: labels,
-                    timeEvents: selectedEvents
-                )
-                lines[idx].stamps.append(stamp)
+                if let idx = lines.firstIndex(where: { $0.id == lineID }) {
+                    let selectedEvents = Array(TagLibraryManager.shared.selectedTimeEvents)
+                    
+                    let stamp = TimelineStamp(
+                        idTag: idTag,
+                        primaryID: primaryId,
+                        timeStart: timeStart,
+                        timeFinish: timeFinish,
+                        colorHex: color,
+                        label: name,
+                        labels: labels,
+                        timeEvents: selectedEvents,
+                        position: position,
+                        isActiveForMapView: position != nil
+                    )
+                    lines[idx].stamps.append(stamp)
+                }
             }
         }
         
         updateTimelines()
     }
+    
     func updateStampLabels(lineID: UUID, stampID: UUID, newLabels: [String]) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
         guard let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }
@@ -729,6 +740,7 @@ struct FullControlView: View {
     @State private var showAddLineSheet = false
     @State private var isExporting: Bool = false
     @State private var showLabelEditSheet = false
+    @State private var showFieldMapVisualizationPicker = false
     @State private var editingStampLineID: UUID?
     @State private var editingStampID: UUID?
     @State private var timelineScale: CGFloat = 1.0
@@ -1443,6 +1455,12 @@ struct FullControlView: View {
                     Button("Мои скриншоты") {
                         WindowsManager.shared.showScreenshots()
                     }
+                    Button("Отобразить на карте") {
+                        WindowsManager.shared.showFieldMapVisualizationPicker()
+                    }
+                    Button("Настроить визуализацию") {
+                        WindowsManager.shared.showFieldMapConfigurationWindow()
+                    }
                     Spacer()
                 }
                 
@@ -1650,7 +1668,8 @@ struct FullControlView: View {
                     timeFinish: stamp.timeFinish,
                     tag: fullTag,
                     labels: fullLabels,
-                    timeEvents: fullTimeEvents
+                    timeEvents: fullTimeEvents,
+                    position: stamp.position
                 )
             }
             
@@ -1820,6 +1839,11 @@ struct TimelineLineView: View {
     @ViewBuilder
     private func menuForTag(stamp: TimelineStamp) -> some View {
         Text("Тег: \(stamp.label)")
+        
+        if let position = stamp.position {
+            Text("Позиция: x: \(String(format: "%.2f", position.x)), y: \(String(format: "%.2f", position.y))")
+        }
+        
         if !stamp.labels.isEmpty {
             ForEach(stamp.labels, id: \.self) { labelID in
                 if let label = tagLibrary.findLabelById(labelID) {
@@ -1873,7 +1897,9 @@ struct TimelineLineView: View {
             timeFinish: stamp.timeFinish,
             colorHex: stamp.colorHex,
             label: stamp.label,
-            labels: stamp.labels
+            labels: stamp.labels,
+            timeEvents: stamp.timeEvents,
+            position: stamp.position
         )
         
         timelineData.lines[destLineIndex].stamps.append(newStamp)
@@ -2175,6 +2201,9 @@ struct TagLibraryView: View {
     @State private var showDeleteAlert = false
     @State private var collectionToDelete: CollectionBookmark? = nil
     @State private var showCollectionsList = false
+    @State private var currentTagForMap: Tag? = nil
+    @State private var currentSelectedLabels: [String] = []
+    @State private var fieldMapBookmark: Data? = nil
     
     func loadUserCollections() {
         userCollections = UserDefaults.standard.getCollectionBookmarks()
@@ -2608,11 +2637,58 @@ struct TagLibraryView: View {
     }
     
     private func addTagToTimeline(tag: Tag, selectedLabels: [String]) {
+        if tag.mapEnabled == true {
+            let collectionManager = CustomCollectionManager()
+            if let collectionName = tagLibrary.currentCollectionType.name,
+               collectionManager.loadCollectionFromBookmarks(named: collectionName),
+               let playField = collectionManager.playField,
+               let imageBookmark = playField.imageBookmark {
+                
+                showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
+                return
+            }
+        }
+        
+        proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil)
+    }
+    
+    private func showFieldMapSelection(tag: Tag, imageBookmark: Data, selectedLabels: [String]) {
+        WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
+            proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: coordinates)
+        }
+    }
+    
+    private func proceedWithTagAddition(tag: Tag, selectedLabels: [String], coordinates: CGPoint?) {
         let currentTime = videoManager.currentTime
         let startTime = max(0, currentTime - tag.defaultTimeBefore)
         let finishTime = startTime + tag.defaultTimeBefore + tag.defaultTimeAfter
         let timeStartString = secondsToTimeString(startTime)
         let timeFinishString = secondsToTimeString(finishTime)
+        
+        // Calculate field coordinates if normalized coordinates are provided
+        var fieldPosition: CGPoint? = nil
+        if let normalizedCoords = coordinates {
+            // Get field dimensions from the collection
+            let collectionManager = CustomCollectionManager()
+            if let collectionName = tagLibrary.currentCollectionType.name,
+               collectionManager.loadCollectionFromBookmarks(named: collectionName),
+               let playField = collectionManager.playField {
+                
+                // Convert normalized coordinates (0-1) to field coordinates
+                // by multiplying with field dimensions
+                let fieldWidth = CGFloat(playField.width)
+                let fieldHeight = CGFloat(playField.height)
+                
+                let fieldX = normalizedCoords.x * fieldWidth
+                let fieldY = normalizedCoords.y * fieldHeight
+                
+                fieldPosition = CGPoint(x: fieldX, y: fieldY)
+                
+                print("Field position selected for tag '\(tag.name)': " +
+                      "normalized: x: \(normalizedCoords.x), y: \(normalizedCoords.y), " +
+                      "field position: x: \(fieldX), y: \(fieldY)")
+            }
+        }
         
         timelineData.addStampToSelectedLine(
             idTag: tag.id,
@@ -2621,14 +2697,15 @@ struct TagLibraryView: View {
             timeStart: timeStartString,
             timeFinish: timeFinishString,
             color: tag.color,
-            labels: selectedLabels
+            labels: selectedLabels,
+            position: fieldPosition
         )
         
         if videoManager.playbackSpeed > 0 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    videoManager.player?.play()
-                }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                videoManager.player?.play()
             }
+        }
     }
     
     @ViewBuilder
@@ -3588,5 +3665,148 @@ extension NSImage {
             return nil
         }
         return bitmapImage.representation(using: .png, properties: [:])
+    }
+}
+
+class FieldMapSelectionWindowController: NSWindowController {
+    init(tag: Tag, imageBookmark: Data, onSave: @escaping (CGPoint) -> Void) {
+        let view = FieldMapSelectionView(tag: tag, imageBookmark: imageBookmark, onSave: onSave)
+        let hostingController = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Выбор позиции на карте для тега: \(tag.name)"
+        super.init(window: window)
+        window.styleMask = [.titled, .closable, .resizable]
+        window.delegate = self
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+extension FieldMapSelectionWindowController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        WindowsManager.shared.fieldMapWindowDidClose()
+    }
+}
+
+struct FieldMapSelectionView: View {
+    let tag: Tag
+    let imageBookmark: Data
+    let onSave: (CGPoint) -> Void
+    
+    @State private var selectedCoordinate: CGPoint? = nil
+    @State private var fieldImage: NSImage? = nil
+    @State private var imageSize: CGSize = .zero
+    @State private var originalImageSize: CGSize = .zero
+    @State private var normalizedCoordinate: CGPoint? = nil
+    @Environment(\.presentationMode) private var presentationMode
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            if let image = fieldImage {
+                ZStack {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.onAppear {
+                                    originalImageSize = image.size
+                                    imageSize = geo.size
+                                }
+                                .onChange(of: geo.size) { newSize in
+                                    imageSize = newSize
+                                    updateSelectedCoordinateForNewSize()
+                                }
+                            }
+                        )
+                        .overlay(
+                            ZStack {
+                                if let coordinate = selectedCoordinate {
+                                    Circle()
+                                        .fill(Color(hex: tag.color))
+                                        .frame(width: 20, height: 20)
+                                        .position(coordinate)
+                                    
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 2)
+                                        .frame(width: 20, height: 20)
+                                        .position(coordinate)
+                                }
+                            }
+                        )
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onEnded { value in
+                                    if value.location.x >= 0 && value.location.x <= imageSize.width &&
+                                       value.location.y >= 0 && value.location.y <= imageSize.height {
+                                        selectedCoordinate = value.location
+                                        normalizedCoordinate = CGPoint(
+                                            x: value.location.x / imageSize.width,
+                                            y: value.location.y / imageSize.height
+                                        )
+                                    }
+                                }
+                        )
+                }
+                .padding()
+                .background(Color.black.opacity(0.05))
+                .cornerRadius(8)
+            } else {
+                Text("Не удалось загрузить карту поля")
+                    .foregroundColor(.red)
+                    .padding()
+            }
+            
+            HStack {
+                Button("Отмена") {
+                    NSApp.keyWindow?.close()
+                }
+                .keyboardShortcut(.escape)
+                
+                Spacer()
+                
+                Button("Сохранить") {
+                    if let normalized = normalizedCoordinate {
+                        onSave(normalized)
+                    }
+                    NSApp.keyWindow?.close()
+                }
+                .keyboardShortcut(.return)
+                .disabled(selectedCoordinate == nil)
+            }
+            .padding()
+        }
+        .frame(minWidth: 500, minHeight: 400)
+        .onAppear {
+            loadFieldImage()
+        }
+    }
+    
+    private func updateSelectedCoordinateForNewSize() {
+        guard let normalized = normalizedCoordinate else { return }
+        selectedCoordinate = CGPoint(
+            x: normalized.x * imageSize.width,
+            y: normalized.y * imageSize.height
+        )
+    }
+    
+    private func loadFieldImage() {
+        do {
+            var isStale = false
+            let url = try URL(resolvingBookmarkData: imageBookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
+            
+            if url.startAccessingSecurityScopedResource() {
+                if let image = NSImage(contentsOf: url) {
+                    fieldImage = image
+                    originalImageSize = image.size
+                }
+                url.stopAccessingSecurityScopedResource()
+            }
+        } catch {
+            print("Error loading field image: \(error)")
+        }
     }
 }

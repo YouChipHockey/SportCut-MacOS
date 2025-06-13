@@ -3,7 +3,7 @@ import AppKit
 import AVKit
 import Foundation
 
-class WindowsManager {
+class WindowsManager: NSObject {
     var currentVideoId = ""
     static let shared = WindowsManager()
     
@@ -12,8 +12,13 @@ class WindowsManager {
     var tagLibraryWindow: TagLibraryWindowController?
     var analyticsWindow: AnalyticsWindowController?
     var screenshotsWindow: ScreenshotsWindowController?
+    var fieldMapConfigurationWindow: FieldMapConfigurationWindowController?
+
+    private var fieldMapWindow: NSWindowController?
+
     private var editorWindowControllers: [NSWindowController] = []
     private var isClosing = true
+    private var isWindowsLocked = false
     
     private var collectionWindowDelegate: CollectionWindowDelegate?
     
@@ -23,7 +28,9 @@ class WindowsManager {
         tagLibraryWindow?.window?.delegate = nil
         analyticsWindow?.window?.delegate = nil
         screenshotsWindow?.window?.delegate = nil
+        fieldMapConfigurationWindow = nil
         
+        fieldMapConfigurationWindow?.close()
         videoWindow?.close()
         controlWindow?.close()
         tagLibraryWindow?.close()
@@ -32,6 +39,32 @@ class WindowsManager {
         
         VideoPlayerManager.shared.deleteVideo()
         isClosing = true
+    }
+    
+    func showFieldMapVisualizationPicker() {
+        let controller = FieldMapVisualizationWindowController()
+        controller.showWindow(nil)
+    }
+    
+    func showFieldMapVisualization(collection: CollectionBookmark, mode: VisualizationMode, stamps: [TimelineStamp]) {
+        let view = FieldMapVisualizationView(collection: collection, mode: mode, stamps: stamps)
+        let hostingController = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: hostingController)
+        
+        window.title = "Визуализация карты поля"
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            let windowSize = NSSize(width: screenFrame.width * 0.7, height: screenFrame.height * 0.7)
+            window.setContentSize(windowSize)
+            window.center()
+        } else {
+            window.setContentSize(NSSize(width: 800, height: 600))
+            window.center()
+        }
+        
+        window.makeKeyAndOrderFront(nil)
     }
     
     func showScreenshots() {
@@ -90,6 +123,31 @@ class WindowsManager {
         window.delegate = self.collectionWindowDelegate
         NotificationCenter.default.post(name: .collectionEditorOpened, object: nil)
         window.makeKeyAndOrderFront(nil)
+    }
+    
+    func showFieldMapConfigurationWindow() {
+        if fieldMapConfigurationWindow != nil {
+            if let window = fieldMapConfigurationWindow?.window {
+                maximizeWindowToFullScreen(window)
+            }
+            fieldMapConfigurationWindow?.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        
+        fieldMapConfigurationWindow = FieldMapConfigurationWindowController()
+        if let window = fieldMapConfigurationWindow?.window {
+            maximizeWindowToFullScreen(window)
+        }
+        
+        fieldMapConfigurationWindow?.showWindow(nil)
+        fieldMapConfigurationWindow?.window?.makeKeyAndOrderFront(nil)
+    }
+    
+    private func maximizeWindowToFullScreen(_ window: NSWindow) {
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            window.setFrame(screenFrame, display: true)
+        }
     }
     
     func openVideo(id: String) {
@@ -151,4 +209,25 @@ class WindowsManager {
         controlWindow?.showWindow(nil)
         tagLibraryWindow?.showWindow(nil)
     }
+    
+    func showFieldMapSelection(tag: Tag, imageBookmark: Data, onSave: @escaping (CGPoint) -> Void) {
+        let controller = FieldMapSelectionWindowController(tag: tag, imageBookmark: imageBookmark, onSave: onSave)
+        fieldMapWindow = controller
+        
+        lockMainWindows(true)
+        
+        controller.showWindow(nil)
+        controller.window?.center()
+    }
+    
+    func lockMainWindows(_ locked: Bool) {
+        isWindowsLocked = locked
+        tagLibraryWindow?.window?.ignoresMouseEvents = locked
+    }
+    
+    func fieldMapWindowDidClose() {
+        lockMainWindows(false)
+        fieldMapWindow = nil
+    }
+
 }

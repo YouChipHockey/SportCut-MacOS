@@ -13,7 +13,7 @@ import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
 
-struct Tag: Codable, Identifiable {
+struct Tag: Identifiable, Codable {
     var id: String
     let primaryID: String?
     var name: String
@@ -109,6 +109,18 @@ struct FullLabelWithGroup: Codable {
     let group: LabelGroupInfo?
 }
 
+enum ActiveAlert: Identifiable {
+    case fieldChange
+    case fieldDelete
+    
+    var id: Int {
+        switch self {
+        case .fieldChange: return 0
+        case .fieldDelete: return 1
+        }
+    }
+}
+
 struct LabelGroupInfo: Codable {
     let id: String
     let name: String
@@ -140,6 +152,7 @@ struct FullTimelineStamp: Codable {
     let tag: FullTagWithGroup
     let labels: [FullLabelWithGroup]
     let timeEvents: [TimeEvent]
+    let position: CGPoint?
 }
 
 struct FullTimelineLine: Codable {
@@ -154,11 +167,21 @@ struct PlayField: Codable {
     var imagePath: String
     var width: Double
     var height: Double
+    var imageBookmark: Data?
 }
 
 enum TagCollection {
     case standard
     case user(name: String)
+    
+    var name: String? {
+        switch self {
+        case .standard:
+            return nil
+        case .user(let name):
+            return name
+        }
+    }
 }
 
 struct TagButtonViewModel {
@@ -180,13 +203,22 @@ struct ColorOption {
     let hex: String
 }
 
-struct CollectionBookmark: Codable {
+struct CollectionBookmark: Codable, Hashable {
     let name: String
     let tagGroupsBookmark: Data
     let tagsBookmark: Data
     let labelGroupsBookmark: Data
     let labelsBookmark: Data
     let timeEventsBookmark: Data
+    let playFieldBookmark: Data?
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+    }
+    
+    static func == (lhs: CollectionBookmark, rhs: CollectionBookmark) -> Bool {
+        return lhs.name == rhs.name
+    }
 }
 
 struct StampDragInfo: Codable {

@@ -16,6 +16,7 @@ struct CreateCustomCollectionsView: View {
     @State private var isEditingName: Bool = false
     @State private var isEditingGroupName: Bool = false
     @State private var editingName: String = ""
+    @State private var activeAlert: ActiveAlert? = nil
     @State private var showAddTagSheet = false
     @State private var showAddLabelSheet = false
     @State private var showAddTimeEventSheet = false
@@ -31,6 +32,12 @@ struct CreateCustomCollectionsView: View {
     @State private var newTimeEventName = ""
     @State private var showSaveSuccess = false
     @State private var isCapturingTagHotkey = false
+    @State private var showCropSheet = false
+    @State private var showFieldChangeAlert = false
+    @State private var showFieldDeleteAlert = false
+    @State private var activeTagsOnTimelines = 0
+    @State private var tempImageURL: URL? = nil
+    @State private var tempImageBookmark: Data? = nil
     @State private var isCapturingLabelHotkeys: [String: Bool] = [:]
     
     init() {
@@ -62,6 +69,42 @@ struct CreateCustomCollectionsView: View {
         .onDisappear {
             NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
         }
+        .sheet(isPresented: $showCropSheet) {
+            let tempImageBookmarkMemory = UserDefaults.standard.data(forKey: "tempImageBookmark")
+            if let bookmarkData = tempImageBookmarkMemory {
+                if let tempUrl = resolveBookmark(bookmarkData) {
+                    CropImageView(imageURL: tempUrl) { croppedImage in
+                        handleCroppedImage(croppedImage, tempUrl: tempUrl)
+                    }
+                }
+            }
+        }
+        .alert(item: $activeAlert) { alertType in
+            switch alertType {
+            case .fieldChange:
+                return Alert(
+                    title: Text("Изменение карты поля"),
+                    message: Text("На таймлайнах есть \(activeTagsOnTimelines) тегов, использующих текущую карту. При изменении карты поля их позиции останутся, но будут соответствовать старой карте.\n\nПродолжить?"),
+                    primaryButton: .default(Text("Сбросить позиции")) {
+                        resetTagPositionsOnTimelines()
+                        selectNewFieldImage()
+                    },
+                    secondaryButton: .destructive(Text("Сохранить позиции")) {
+                        selectNewFieldImage()
+                    }
+                )
+            case .fieldDelete:
+                return Alert(
+                    title: Text("Удаление карты поля"),
+                    message: Text("На таймлайнах есть \(activeTagsOnTimelines) тегов, использующих текущую карту. При удалении карты поля эти теги больше не смогут быть визуализированы на карте."),
+                    primaryButton: .destructive(Text("Удалить карту")) {
+                        collectionManager.deleteFieldImage()
+                        resetTagPositionsOnTimelines()
+                    },
+                    secondaryButton: .cancel(Text("Отмена"))
+                )
+            }
+        }
         .sheet(isPresented: $showAddTagGroupSheet) {
             addGroupSheet(title: "Добавить группу тегов") {
                 let _ = collectionManager.createTagGroup(name: newGroupName)
@@ -82,6 +125,21 @@ struct CreateCustomCollectionsView: View {
         }
         .sheet(isPresented: $showAddTimeEventSheet) {
             addTimeEventSheet()
+        }
+    }
+    
+    private func resolveBookmark(_ bookmark: Data) -> URL? {
+        do {
+            var isStale = false
+            let url = try URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
+            
+            if url.startAccessingSecurityScopedResource() {
+                return url
+            }
+            return nil
+        } catch {
+            print("Error resolving bookmark: \(error)")
+            return nil
         }
     }
     
@@ -304,6 +362,35 @@ struct CreateCustomCollectionsView: View {
                 }
             }
         }
+    }
+    
+    private func countActiveMapTagsOnTimelines() -> Int {
+        let timelineData = TimelineDataManager.shared
+        let currentCollectionName = collectionManager.collectionName
+        
+        return timelineData.lines.flatMap { $0.stamps }.filter { stamp in
+            guard let tag = collectionManager.tags.first(where: { $0.id == stamp.idTag }) else {
+                return false
+            }
+            return stamp.position != nil && (stamp.isActiveForMapView ?? false)
+        }.count
+    }
+
+    private func resetTagPositionsOnTimelines() {
+        let timelineData = TimelineDataManager.shared
+        let currentCollectionName = collectionManager.collectionName
+        
+        for lineIndex in timelineData.lines.indices {
+            for stampIndex in timelineData.lines[lineIndex].stamps.indices {
+                let stamp = timelineData.lines[lineIndex].stamps[stampIndex]
+                
+                if collectionManager.tags.contains(where: { $0.id == stamp.idTag }) {
+                    timelineData.lines[lineIndex].stamps[stampIndex].isActiveForMapView = false
+                }
+            }
+        }
+        
+        timelineData.updateTimelines()
     }
     
     var addTagButton: some View {
@@ -647,6 +734,22 @@ struct CreateCustomCollectionsView: View {
         }
     }
     
+    func saveFieldImage(_ image: NSImage) {
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = UUID().uuidString + ".png"
+        let tempUrl = tempDir.appendingPathComponent(fileName)
+        
+        if let tiffData = image.tiffRepresentation,
+           let bitmapImage = NSBitmapImageRep(data: tiffData),
+           let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+            try? pngData.write(to: tempUrl)
+            
+            _ = collectionManager.setFieldImage(from: tempUrl)
+            
+            try? FileManager.default.removeItem(at: tempUrl)
+        }
+    }
+    
     var fieldMapDetailView: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Настройки карты поля")
@@ -656,24 +759,23 @@ struct CreateCustomCollectionsView: View {
             
             if let playField = collectionManager.playField {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Текущая карта поля")
-                            .font(.headline)
-                        Spacer()
-                        Button(action: {
+                    Button(action: {
+                        activeTagsOnTimelines = countActiveMapTagsOnTimelines()
+                        if activeTagsOnTimelines > 0 {
+                            activeAlert = .fieldDelete // Change this line
+                        } else {
                             collectionManager.deleteFieldImage()
-                        }) {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
                         }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .help("Удалить карту поля")
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
                     }
+                    .buttonStyle(BorderlessButtonStyle())
+                    .help("Удалить карту поля")
                     
-                    let imageURL = URL.appDocumentsDirectory
-                        .appendingPathComponent("YouChip-Stat/PlayFields/\(collectionManager.collectionName).png")
-                    
-                    if let nsImage = NSImage(contentsOf: imageURL) {
+                    if let imageBookmark = collectionManager.playField?.imageBookmark,
+                        let imageURL = createImageUrl(imageBookmark),
+                        let nsImage = NSImage(contentsOf: imageURL) {
                         Image(nsImage: nsImage)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
@@ -732,7 +834,12 @@ struct CreateCustomCollectionsView: View {
                     }
                     
                     Button(action: {
-                        selectNewFieldImage()
+                        activeTagsOnTimelines = countActiveMapTagsOnTimelines()
+                        if activeTagsOnTimelines > 0 {
+                            activeAlert = .fieldChange // Change this line
+                        } else {
+                            selectNewFieldImage()
+                        }
                     }) {
                         HStack {
                             Image(systemName: "arrow.triangle.2.circlepath")
@@ -779,6 +886,17 @@ struct CreateCustomCollectionsView: View {
             tagsForFieldMapList
         }
         .padding()
+    }
+    
+    func createImageUrl(_ bookmark: Data) -> URL? {
+        do {
+            var isStale = false
+            let restoredUrl = try URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
+            guard restoredUrl.startAccessingSecurityScopedResource() else { return nil }
+            return restoredUrl
+        } catch {
+            return nil
+        }
     }
     
     var tagsForFieldMapList: some View {
@@ -848,8 +966,39 @@ struct CreateCustomCollectionsView: View {
         panel.allowedFileTypes = ["png", "jpg", "jpeg"]
         
         if panel.runModal() == .OK, let url = panel.url {
-            _ = collectionManager.setFieldImage(from: url)
+            let tempDir = FileManager.default.temporaryDirectory
+            let fileName = UUID().uuidString + "." + url.pathExtension
+            let tempUrl = tempDir.appendingPathComponent(fileName)
+            
+            do {
+                try FileManager.default.copyItem(at: url, to: tempUrl)
+                let bookmarkData = try tempUrl.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+                self.tempImageBookmark = bookmarkData
+                
+                UserDefaults.standard.setValue(bookmarkData, forKey: "tempImageBookmark")
+                
+                self.showCropSheet = true
+            } catch {
+                print("Error preparing image for cropping: \(error)")
+            }
         }
+    }
+
+    func handleCroppedImage(_ image: NSImage, tempUrl: URL) {
+        if let tiffData = image.tiffRepresentation,
+           let bitmapImage = NSBitmapImageRep(data: tiffData),
+           let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+            do {
+                try pngData.write(to: tempUrl)
+                _ = collectionManager.setFieldImage(from: tempUrl)
+            } catch {
+                print("Error saving cropped image: \(error)")
+            }
+        }
+        
+        tempUrl.stopAccessingSecurityScopedResource()
+        try? FileManager.default.removeItem(at: tempUrl)
+        tempImageBookmark = nil
     }
     
     func tagDetailView(tag: Tag) -> some View {
