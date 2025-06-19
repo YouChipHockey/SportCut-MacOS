@@ -98,6 +98,13 @@
 		DD5CFA032E046937009CD51A /* DispatchWorkItem+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA022E046932009CD51A /* DispatchWorkItem+Convenience.swift */; };
 		DD5CFA052E04694A009CD51A /* FieldMapSelectionWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA042E04694A009CD51A /* FieldMapSelectionWindowController.swift */; };
 		DD5CFA072E046965009CD51A /* FieldMapSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA062E046964009CD51A /* FieldMapSelectionView.swift */; };
+		DD5CFA522E047ACB009CD51A /* StreamsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA512E047ACA009CD51A /* StreamsView.swift */; };
+		DD5CFA542E047B6D009CD51A /* SynchronizationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA532E047B69009CD51A /* SynchronizationManager.swift */; };
+		DD5CFA562E047BCD009CD51A /* SyncMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA552E047BCC009CD51A /* SyncMetadata.swift */; };
+		DD5CFA582E047BEA009CD51A /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA572E047BE9009CD51A /* NetworkMonitor.swift */; };
+		DD5CFA5A2E047C29009CD51A /* SyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA592E047C25009CD51A /* SyncView.swift */; };
+		DD5CFA5C2E047C58009CD51A /* StreamManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA5B2E047C55009CD51A /* StreamManager.swift */; };
+		DD5CFA5E2E047C6A009CD51A /* MarkersAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA5D2E047C68009CD51A /* MarkersAPIService.swift */; };
 		DD5ED4042DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5ED4032DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift */; };
 		DD7E17C92DF7431300342214 /* FieldMapConfigurationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E17C82DF7431200342214 /* FieldMapConfigurationWindowController.swift */; };
 		DD7E17CB2DF7449000342214 /* FieldMapConfigurationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */; };
@@ -241,6 +248,13 @@
 		DD5CFA022E046932009CD51A /* DispatchWorkItem+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DispatchWorkItem+Convenience.swift"; sourceTree = "<group>"; };
 		DD5CFA042E04694A009CD51A /* FieldMapSelectionWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapSelectionWindowController.swift; sourceTree = "<group>"; };
 		DD5CFA062E046964009CD51A /* FieldMapSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapSelectionView.swift; sourceTree = "<group>"; };
+		DD5CFA512E047ACA009CD51A /* StreamsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamsView.swift; sourceTree = "<group>"; };
+		DD5CFA532E047B69009CD51A /* SynchronizationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynchronizationManager.swift; sourceTree = "<group>"; };
+		DD5CFA552E047BCC009CD51A /* SyncMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMetadata.swift; sourceTree = "<group>"; };
+		DD5CFA572E047BE9009CD51A /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		DD5CFA592E047C25009CD51A /* SyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncView.swift; sourceTree = "<group>"; };
+		DD5CFA5B2E047C55009CD51A /* StreamManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamManager.swift; sourceTree = "<group>"; };
+		DD5CFA5D2E047C68009CD51A /* MarkersAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkersAPIService.swift; sourceTree = "<group>"; };
 		DD5ED4032DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationWindowController.swift; sourceTree = "<group>"; };
 		DD7E17C82DF7431200342214 /* FieldMapConfigurationWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapConfigurationWindowController.swift; sourceTree = "<group>"; };
 		DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapConfigurationView.swift; sourceTree = "<group>"; };
@@ -597,6 +611,7 @@
 				DDCA6B502DCA65210025EF9E /* MarkupMode.swift */,
 				DD5CF9B62E04627E009CD51A /* TapLocationPreferenceKey.swift */,
 				DD5CF9B82E04628B009CD51A /* TagOnMap.swift */,
+				DD5CFA552E047BCC009CD51A /* SyncMetadata.swift */,
 				DDCA6B4E2DCA64E70025EF9E /* NSNotification + Convenience.swift */,
 				DD7E18142DFDCFA400342214 /* FieldMapFilters.swift */,
 				DD5CF9C62E0465A9009CD51A /* TimelineStamp.swift */,
@@ -630,6 +645,8 @@
 				DD5CF9C02E0464E0009CD51A /* MainFuncs.swift */,
 				DD5CF9BE2E046406009CD51A /* ImageSizePreferenceKey.swift */,
 				DDCA6B6E2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift */,
+				DD5CFA5D2E047C68009CD51A /* MarkersAPIService.swift */,
+				DD5CFA572E047BE9009CD51A /* NetworkMonitor.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -642,6 +659,8 @@
 				DD5CF9D62E04673C009CD51A /* HotKeyManager.swift */,
 				DDCA6B632DCA684D0025EF9E /* CustomCollectionManager.swift */,
 				DD5CF9F62E046889009CD51A /* FocusStateManager.swift */,
+				DD5CFA5B2E047C55009CD51A /* StreamManager.swift */,
+				DD5CFA532E047B69009CD51A /* SynchronizationManager.swift */,
 				DDD52CB82DAEE7F50038158E /* WindowsManager.swift */,
 				DD5CF9CA2E0465D6009CD51A /* VideoPlayerManager.swift */,
 			);
@@ -660,8 +679,10 @@
 				DD5CF9EB2E04680D009CD51A /* StampLabelsOverlayView.swift */,
 				DD7E18182DFDEDE200342214 /* HeatMapView.swift */,
 				DD7E18162DFDCFBE00342214 /* FieldMapFilterView.swift */,
+				DD5CFA512E047ACA009CD51A /* StreamsView.swift */,
 				DD5CF9DC2E04677E009CD51A /* TagLibraryView.swift */,
 				DDCA6B702DCA69C30025EF9E /* ColorPickerView.swift */,
+				DD5CFA592E047C25009CD51A /* SyncView.swift */,
 				DDCA6B672DCA69130025EF9E /* KeyCaptureView.swift */,
 				DD5CF9F82E04689A009CD51A /* FocusAwareTextField.swift */,
 				DDCA6B612DCA67C50025EF9E /* ExportAnalyticsView.swift */,
@@ -874,6 +895,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DD5CFA5A2E047C29009CD51A /* SyncView.swift in Sources */,
 				DD2A70602D74D26000287BA8 /* PreferenceManager.swift in Sources */,
 				DD5CF9BB2E046313009CD51A /* UserDefaults+Convenience.swift in Sources */,
 				DD2A706D2D74D32C00287BA8 /* VideoThumbnailManager.swift in Sources */,
@@ -886,6 +908,7 @@
 				DDFB1A482DE510E700175D97 /* EditorState.swift in Sources */,
 				DD5CF9CB2E0465D7009CD51A /* VideoPlayerManager.swift in Sources */,
 				DDFB1A492DE510E700175D97 /* EditorView.swift in Sources */,
+				DD5CFA542E047B6D009CD51A /* SynchronizationManager.swift in Sources */,
 				DDFB1A4A2DE510E700175D97 /* EditorViewModel.swift in Sources */,
 				DDFB1A4B2DE510E700175D97 /* EditorWebView.swift in Sources */,
 				DDFB1A4C2DE510E700175D97 /* EditorActions.swift in Sources */,
@@ -899,6 +922,7 @@
 				DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */,
 				DDCA6B5B2DCA66330025EF9E /* TagStatisticsLegend.swift in Sources */,
 				DD32C2A32D74A1C80052B5C6 /* Date+Convenience.swift in Sources */,
+				DD5CFA522E047ACB009CD51A /* StreamsView.swift in Sources */,
 				DD5CF9EE2E046826009CD51A /* TimeEventChip.swift in Sources */,
 				DD5CF9C32E0464F7009CD51A /* TagLibraryManager.swift in Sources */,
 				DD89381A2DEFBA4D009B1BC2 /* FieldMapVisualizationView.swift in Sources */,
@@ -913,6 +937,8 @@
 				DD2A705A2D74C37D00287BA8 /* FilesFileFormat.swift in Sources */,
 				DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */,
 				DD5CFA052E04694A009CD51A /* FieldMapSelectionWindowController.swift in Sources */,
+				DD5CFA562E047BCD009CD51A /* SyncMetadata.swift in Sources */,
+				DD5CFA5E2E047C6A009CD51A /* MarkersAPIService.swift in Sources */,
 				DDCA6B542DCA657B0025EF9E /* CollectionWindowDelegate.swift in Sources */,
 				DDFB1A542DE5131F00175D97 /* SheetToolbarView.swift in Sources */,
 				DD2A705E2D74C66700287BA8 /* VideosActions.swift in Sources */,
@@ -921,6 +947,7 @@
 				DDFB1A502DE512D900175D97 /* SharingPicker.swift in Sources */,
 				DD2A70582D74C35F00287BA8 /* URL+Convenience.swift in Sources */,
 				DDCA6B4F2DCA64EE0025EF9E /* NSNotification + Convenience.swift in Sources */,
+				DD5CFA5C2E047C58009CD51A /* StreamManager.swift in Sources */,
 				DD8938182DEFBA42009B1BC2 /* FieldMapVisualizationPicker.swift in Sources */,
 				DD5CF9FB2E0468B0009CD51A /* FocusTrackingView.swift in Sources */,
 				DD5CF9C92E0465BE009CD51A /* TimelineDataManager.swift in Sources */,
@@ -972,6 +999,7 @@
 				DD5CF9D32E046645009CD51A /* FullControlView.swift in Sources */,
 				DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */,
 				DDC938E92DD2447A00B7AB12 /* AuthManager.swift in Sources */,
+				DD5CFA582E047BEA009CD51A /* NetworkMonitor.swift in Sources */,
 				DD5CF9D12E04660C009CD51A /* VideoPlayerWindowController.swift in Sources */,
 				DD7E18172DFDCFC800342214 /* FieldMapFilterView.swift in Sources */,
 				DD5CF9C72E0465AA009CD51A /* TimelineStamp.swift in Sources */,
