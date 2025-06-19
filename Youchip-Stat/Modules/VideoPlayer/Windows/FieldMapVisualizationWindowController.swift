@@ -13,6 +13,8 @@ class FieldMapVisualizationWindowController: NSWindowController, ObservableObjec
     @Published var selectedCollection: CollectionBookmark?
     @Published var selectedMode: VisualizationMode = .all
     @Published var selectedStamps: [TimelineStamp] = []
+    
+    @Published var heatmapEnabled = false
 
     private var windowContent: NSHostingController<AnyView>?
 
@@ -33,10 +35,17 @@ class FieldMapVisualizationWindowController: NSWindowController, ObservableObjec
         self.windowContent = hosting
         self.window?.title = "Визуализация карты поля"
         self.window?.styleMask = [.titled, .closable, .miniaturizable]
-        self.window?.setContentSize(NSSize(width: 1000, height: 500))
         self.window?.center()
     }
-
+    
+    override func showWindow(_ sender: Any?) {
+        super.showWindow(sender)
+        
+        if let window = self.window, let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            window.setFrame(screenFrame, display: true)
+        }
+    }
 
     required init?(coder: NSCoder) { fatalError() }
 
@@ -47,7 +56,10 @@ class FieldMapVisualizationWindowController: NSWindowController, ObservableObjec
                 mode: selectedMode,
                 stamps: selectedStamps
             )
+                .environmentObject(self)
+            
             windowContent?.rootView = AnyView(view)
+            window?.title = "Визуализация карты поля - \(collection.name)"
         }
     }
 }

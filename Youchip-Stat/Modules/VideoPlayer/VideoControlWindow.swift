@@ -65,11 +65,11 @@ class TagLibraryManager: ObservableObject {
         }
         
         NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(handleTagUpdated),
-                name: .tagUpdated,
-                object: nil
-            )
+            self,
+            selector: #selector(handleTagUpdated),
+            name: .tagUpdated,
+            object: nil
+        )
         
         allTags = tags
         allTagGroups = tagGroups
@@ -255,7 +255,7 @@ extension NSColor {
     }
 }
 
-struct TimelineStamp: Identifiable, Codable {
+struct TimelineStamp: Identifiable, Codable, Equatable {
     let id: UUID
     var idTag: String
     let primaryID: String?
@@ -292,6 +292,10 @@ struct TimelineStamp: Identifiable, Codable {
         self.timeEvents = timeEvents
         self.position = position
         self.isActiveForMapView = isActiveForMapView
+    }
+    
+    static func == (lhs: TimelineStamp, rhs: TimelineStamp) -> Bool {
+        lhs.id == rhs.id
     }
 }
 
@@ -588,7 +592,7 @@ struct VideoPlayerWindow: View {
     init(id: String) {
         self.id = id
     }
-
+    
     var body: some View {
         VStack {
             if let player = videoManager.player {
@@ -650,7 +654,7 @@ struct VideoPlayerWindow: View {
             print("Ошибка создания скриншота: \(error.localizedDescription)")
         }
     }
-
+    
     private func saveScreenshot(with name: String) {
         guard let nsImage = tempScreenshotImage,
               let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == id }) else {
@@ -673,7 +677,7 @@ struct VideoPlayerWindow: View {
         
         let editorView = EditorView()
             .environmentObject(editorViewModel)
-            
+        
         let hostingController = NSHostingController(rootView: editorView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Редактирование скриншота"
@@ -1271,32 +1275,32 @@ struct FullControlView: View {
                                             .fill(Color.red)
                                             .frame(width: 15, height: 15)
                                             .rotationEffect(.degrees(45))
-                                            
+                                        
                                         Rectangle()
                                             .fill(Color.clear)
                                             .frame(width: 30, height: 30)
                                             .contentShape(Rectangle())
                                             .gesture(
                                                 DragGesture(minimumDistance: 1, coordinateSpace: .local)
-                                                                .onChanged { value in
-                                                                    if videoManager.player?.timeControlStatus == .playing {
-                                                                        videoManager.player?.pause()
-                                                                    }
-                                                                    let newPosition = max(0, min(value.location.x, gridWidth))
-                                                                    let newTime = (newPosition / gridWidth) * duration
-                                                                    videoManager.currentTime = newTime
-                                                                }
-                                                                .onEnded { value in
-                                                                    let newPosition = max(0, min(value.location.x, gridWidth))
-                                                                    let newTime = (newPosition / gridWidth) * duration
-                                                                    videoManager.currentTime = newTime
-                                                                    videoManager.seek(to: newTime)
-                                                                    if videoManager.playbackSpeed > 0 {
-                                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                                                            videoManager.player?.play()
-                                                                        }
-                                                                    }
-                                                                }
+                                                    .onChanged { value in
+                                                        if videoManager.player?.timeControlStatus == .playing {
+                                                            videoManager.player?.pause()
+                                                        }
+                                                        let newPosition = max(0, min(value.location.x, gridWidth))
+                                                        let newTime = (newPosition / gridWidth) * duration
+                                                        videoManager.currentTime = newTime
+                                                    }
+                                                    .onEnded { value in
+                                                        let newPosition = max(0, min(value.location.x, gridWidth))
+                                                        let newTime = (newPosition / gridWidth) * duration
+                                                        videoManager.currentTime = newTime
+                                                        videoManager.seek(to: newTime)
+                                                        if videoManager.playbackSpeed > 0 {
+                                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                                videoManager.player?.play()
+                                                            }
+                                                        }
+                                                    }
                                             )
                                             .onHover { isHovering in
                                                 if isHovering {
@@ -3741,7 +3745,7 @@ struct FieldMapSelectionView: View {
                             DragGesture(minimumDistance: 0)
                                 .onEnded { value in
                                     if value.location.x >= 0 && value.location.x <= imageSize.width &&
-                                       value.location.y >= 0 && value.location.y <= imageSize.height {
+                                        value.location.y >= 0 && value.location.y <= imageSize.height {
                                         selectedCoordinate = value.location
                                         normalizedCoordinate = CGPoint(
                                             x: value.location.x / imageSize.width,

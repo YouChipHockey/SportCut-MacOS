@@ -8,7 +8,6 @@
 import SwiftUI
 
 enum VisualizationMode {
-    case byTags
     case byTimeline
     case all
 }
@@ -34,50 +33,51 @@ struct FieldMapVisualizationPicker: View {
     }
     
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Визуализация карты поля")
-                .font(.headline)
-            
-            if availableCollections.isEmpty {
-                Text("Нет коллекций с настроенной картой поля")
-                    .foregroundColor(.secondary)
-            } else {
-                collectionSelectionSection
+        VStack {
+            VStack(spacing: 20) {
+                Text("Визуализация карты поля")
+                    .font(.headline)
                 
-                if selectedCollection != nil {
-                    visualizationModeSection
+                if availableCollections.isEmpty {
+                    Text("Нет коллекций с настроенной картой поля")
+                        .foregroundColor(.secondary)
+                } else {
+                    collectionSelectionSection
                     
-                    switch selectedMode {
-                    case .byTags:
-                        tagSelectionSection
-                    case .byTimeline:
-                        timelineSelectionSection
-                    case .all:
-                        allTagsSection
+                    if selectedCollection != nil {
+                        visualizationModeSection
+                        
+                        switch selectedMode {
+                        case .byTimeline:
+                            timelineSelectionSection
+                        case .all:
+                            allTagsSection
+                        }
                     }
                 }
-            }
-            
-            HStack {
-                Button("Отмена") {
-                    onCancel()
-                }
                 
-                Spacer()
-                .help("Настроить отображение тегов на карте поля")
-                
-                Button("Визуализировать") {
-                    if let collection = selectedCollection {
-                        let stamps = getSelectedStamps()
-                        onVisualize(collection, selectedMode, stamps)
+                HStack {
+                    Button("Отмена") {
+                        onCancel()
                     }
+                    
+                    Spacer()
+                        .help("Настроить отображение тегов на карте поля")
+                    
+                    Button("Визуализировать") {
+                        if let collection = selectedCollection {
+                            let stamps = getSelectedStamps()
+                            onVisualize(collection, selectedMode, stamps)
+                        }
+                    }
+                    .disabled(selectedCollection == nil || !canVisualize())
                 }
-                .disabled(selectedCollection == nil || !canVisualize())
+                .padding(.top)
             }
-            .padding(.top)
+            .frame(width: 500, height: 500)
+            .padding()
         }
-        .frame(width: 500, height: 500)
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             loadCollections()
         }
@@ -110,7 +110,6 @@ struct FieldMapVisualizationPicker: View {
                 .bold()
             
             Picker("", selection: $selectedMode) {
-                Text("По тегам").tag(VisualizationMode.byTags)
                 Text("По таймлайнам").tag(VisualizationMode.byTimeline)
                 Text("Все теги").tag(VisualizationMode.all)
             }
@@ -315,15 +314,6 @@ struct FieldMapVisualizationPicker: View {
         guard let collection = selectedCollection else { return [] }
         
         switch selectedMode {
-        case .byTags:
-            return timelineData.lines.flatMap { line in
-                line.stamps.filter { stamp in
-                    stamp.position != nil &&
-                    selectedTagIDs.contains(stamp.idTag) &&
-                    isTagFromCollection(stamp.idTag, collection: collection)
-                }
-            }
-            
         case .byTimeline:
             return timelineData.lines.filter { line in
                 selectedTimelineIDs.contains(line.id)
@@ -340,12 +330,8 @@ struct FieldMapVisualizationPicker: View {
         }
     }
     
-    private func canVisualize() -> Bool {
-        guard let collection = selectedCollection else { return false }
-        
+    private func canVisualize() -> Bool {        
         switch selectedMode {
-        case .byTags:
-            return !selectedTagIDs.isEmpty
         case .byTimeline:
             return !selectedTimelineIDs.isEmpty
         case .all:
