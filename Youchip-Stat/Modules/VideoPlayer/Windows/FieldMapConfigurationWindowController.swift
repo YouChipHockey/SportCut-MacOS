@@ -9,6 +9,7 @@ import Cocoa
 import SwiftUI
 
 class FieldMapConfigurationWindowController: NSWindowController, NSWindowDelegate {
+    
     private var windowContent: NSHostingController<AnyView>?
     
     init() {
@@ -35,7 +36,6 @@ class FieldMapConfigurationWindowController: NSWindowController, NSWindowDelegat
         }
     }
     
-    func windowWillClose(_ notification: Notification) {
-        // Nothing specific needed here
-    }
+    func windowWillClose(_ notification: Notification) { }
+    
 }

@@ -85,8 +85,6 @@ struct VideosView: View {
         }
     }
     
-    // MARK: - Вспомогательные представления
-    
     private var loadingOverlay: some View {
         Group {
             if viewModel.state.showHUD {

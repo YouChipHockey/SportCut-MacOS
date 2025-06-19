@@ -9,6 +9,14 @@ import SwiftUI
 
 extension NSImage {
     
+    func pngData() -> Data? {
+        guard let tiffRepresentation = tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffRepresentation) else {
+            return nil
+        }
+        return bitmapImage.representation(using: .png, properties: [:])
+    }
+    
     func flipped() -> NSImage? {
         guard let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil

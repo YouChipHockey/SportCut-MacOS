@@ -139,7 +139,6 @@ struct HeatMapView: View {
                    fieldDimensions.width > 0 && fieldDimensions.height > 0 {
                     
                     let normalizedX = position.x / fieldDimensions.width
-                    // Инвертируем Y-координату если ось Y направлена сверху вниз
                     let normalizedY = position.y / fieldDimensions.height
                     
                     if normalizedX.isFinite && normalizedY.isFinite &&

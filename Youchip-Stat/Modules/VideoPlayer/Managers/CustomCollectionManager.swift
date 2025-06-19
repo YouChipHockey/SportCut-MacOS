@@ -286,7 +286,6 @@ class CustomCollectionManager: ObservableObject {
                 try fileManager.createDirectory(at: collectionsFolder, withIntermediateDirectories: true)
             }
             
-            // Create files for all data models
             let tagGroupsURL = collectionsFolder.appendingPathComponent("tagGroups.json")
             let tagsURL = collectionsFolder.appendingPathComponent("tags.json")
             let labelGroupsURL = collectionsFolder.appendingPathComponent("labelGroups.json")
@@ -297,32 +296,26 @@ class CustomCollectionManager: ObservableObject {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
             
-            // Save tag groups
             let tagGroupsJSON = try encoder.encode(tagGroupsData)
             try tagGroupsJSON.write(to: tagGroupsURL)
             let tagGroupsBookmark = tagGroupsURL.makeBookmark() ?? Data()
             
-            // Save tags
             let tagsJSON = try encoder.encode(tagsData)
             try tagsJSON.write(to: tagsURL)
             let tagsBookmark = tagsURL.makeBookmark() ?? Data()
             
-            // Save label groups
             let labelGroupsJSON = try encoder.encode(labelGroupsData)
             try labelGroupsJSON.write(to: labelGroupsURL)
             let labelGroupsBookmark = labelGroupsURL.makeBookmark() ?? Data()
             
-            // Save labels
             let labelsJSON = try encoder.encode(labelsData)
             try labelsJSON.write(to: labelsURL)
             let labelsBookmark = labelsURL.makeBookmark() ?? Data()
             
-            // Save time events
             let timeEventsJSON = try encoder.encode(timeEventsData)
             try timeEventsJSON.write(to: timeEventsURL)
             let timeEventsBookmark = timeEventsURL.makeBookmark() ?? Data()
             
-            // Save play field
             var playFieldBookmark = Data()
             if let field = playField {
                 let playFieldJSON = try encoder.encode(field)
@@ -330,7 +323,6 @@ class CustomCollectionManager: ObservableObject {
                 playFieldBookmark = playFieldURL.makeBookmark() ?? Data()
             }
             
-            // Create collection bookmark with all file references
             let collectionBookmark = CollectionBookmark(
                 name: collectionName,
                 tagGroupsBookmark: tagGroupsBookmark,
@@ -674,18 +666,15 @@ class CustomCollectionManager: ObservableObject {
                 try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
             }
             
-            // Use collection name as the image filename
             let imageName = url.lastPathComponent
             let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
             
-            // Remove existing image if it exists
             if fileManager.fileExists(atPath: destinationURL.path) {
                 try fileManager.removeItem(at: destinationURL)
             }
             
             try fileManager.copyItem(at: url, to: destinationURL)
             
-            // Create a bookmark for the image
             let imageBookmark = destinationURL.makeBookmark()
             
             if let existingField = playField {
@@ -835,7 +824,6 @@ class CustomCollectionManager: ObservableObject {
             return false
         }
         
-        // Generate a new ID for the tag based on the new name
         let newTagID = UUID().uuidString
         
         if let index = tags.firstIndex(where: { $0.id == id }) {
@@ -859,7 +847,6 @@ class CustomCollectionManager: ObservableObject {
                 labelHotkeys: labelHotkeys
             )
             
-            // Update references in tag groups
             for i in 0..<tagGroups.count {
                 if let tagIndex = tagGroups[i].tags.firstIndex(where: { $0 == id }) {
                     var updatedTags = tagGroups[i].tags

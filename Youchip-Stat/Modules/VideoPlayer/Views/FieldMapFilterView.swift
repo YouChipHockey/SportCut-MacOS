@@ -11,7 +11,7 @@ struct FieldMapFilterView: View {
     @Binding var filters: FieldMapFilters
     @State private var availableEvents: [TimeEvent] = []
     @State private var availableTagGroups: [TagGroup] = []
-    @State private var availableTags: [String: String] = [:] // ID -> Name
+    @State private var availableTags: [String: String] = [:]
     @State private var availableLabelGroups: [LabelGroupData] = []
     @State private var availableLabels: [Label] = []
     
@@ -40,35 +40,26 @@ struct FieldMapFilterView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Events filter section
                     filterSection(
                         title: "События",
                         items: availableEvents.map { ($0.id, $0.name) },
                         selectedIds: $filters.selectedEvents
                     )
-                    
-                    // Tag groups filter section
                     filterSection(
                         title: "Группы тегов",
                         items: availableTagGroups.map { ($0.id, $0.name) },
                         selectedIds: $filters.selectedTagGroups
                     )
-                    
-                    // Tags filter section
                     filterSection(
                         title: "Теги",
                         items: availableTags.map { ($0, $1) },
                         selectedIds: $filters.selectedTags
                     )
-                    
-                    // Label groups filter section
                     filterSection(
                         title: "Группы лейблов",
                         items: availableLabelGroups.map { ($0.id, $0.name) },
                         selectedIds: $filters.selectedLabelGroups
                     )
-                    
-                    // Labels filter section
                     filterSection(
                         title: "Лейблы",
                         items: availableLabels.map { ($0.id, $0.name) },

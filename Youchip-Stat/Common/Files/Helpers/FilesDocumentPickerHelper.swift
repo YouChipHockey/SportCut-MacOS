@@ -1,3 +1,10 @@
+//
+//  FilesDocumentPickerHelper.swift
+//  printer
+//
+//  Created by Сергей Бекезин on 22.08.2024.
+//
+
 import SwiftUI
 import UniformTypeIdentifiers
 import AppKit

@@ -1,8 +1,16 @@
+//
+//  FieldMapVisualizationView.swift
+//  Youchip-Stat
+//
+//  Created by Сергей Бекезин on 6/4/25.
+//
+
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
 struct FieldMapVisualizationView: View {
+    
     let collection: CollectionBookmark
     let mode: VisualizationMode
     let stamps: [TimelineStamp]
@@ -38,7 +46,6 @@ struct FieldMapVisualizationView: View {
     var body: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                // Tag list sidebar
                 VStack {
                     Text("Список тегов")
                         .font(.headline)
@@ -303,15 +310,9 @@ struct FieldMapVisualizationView: View {
     }
     
     private func exportCurrentView() {
-        // Запуск процесса экспорта в основном потоке с небольшой задержкой
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            // 1. Создаем глобальный идентификатор для области карты
             let mapAreaID = "map-area-for-export"
-            
-            // 2. Создаем окно с контентом для экспорта
             let captureWindow = self.makeMapCaptureView(id: mapAreaID)
-            
-            // 3. Открываем панель сохранения
             let savePanel = NSSavePanel()
             savePanel.allowedContentTypes = [UTType.png]
             savePanel.canCreateDirectories = true
@@ -320,13 +321,10 @@ struct FieldMapVisualizationView: View {
             savePanel.message = "Выберите место для сохранения изображения карты"
             savePanel.nameFieldStringValue = "Карта поля.png"
             
-            // Даем время окну полностью отрендериться
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 savePanel.beginSheetModal(for: captureWindow) { response in
                     if response == .OK, let url = savePanel.url {
-                        // 4. Выполняем скриншот и сохраняем изображение
                         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == mapAreaID }) {
-                            // Создаем скриншот окна с помощью CGWindow API вместо dataWithPDF
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                 if let cgImage = CGWindowListCreateImage(
                                     .zero,
@@ -337,8 +335,6 @@ struct FieldMapVisualizationView: View {
                                     let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
                                     let image = NSImage(size: bitmapRep.size)
                                     image.addRepresentation(bitmapRep)
-                                    
-                                    // Обрезаем изображение, чтобы удалить рамку окна
                                     if let croppedImage = self.cropWindowDecorations(image, window: window) {
                                         if let tiffData = croppedImage.tiffRepresentation,
                                            let bitmap = NSBitmapImageRep(data: tiffData),
@@ -364,25 +360,20 @@ struct FieldMapVisualizationView: View {
             }
         }
     }
-
-    // Метод для обрезки рамки окна от снимка
+    
     private func cropWindowDecorations(_ image: NSImage, window: NSWindow) -> NSImage? {
         guard let contentView = window.contentView else { return image }
         
-        // Определяем область контента без рамки
         let windowFrame = window.frame
         let contentRect = window.contentRect(forFrameRect: windowFrame)
         
         let titlebarHeight = windowFrame.height - contentRect.height
-        let yOffset = titlebarHeight  // Высота заголовка окна
+        let yOffset = titlebarHeight
         
-        // Создаем обрезанное изображение
         let croppedImage = NSImage(size: contentView.bounds.size)
-        
         croppedImage.lockFocus()
-        let destRect = NSRect(origin: .zero, size: contentView.bounds.size)
         
-        // Вычисляем область источника без полей окна
+        let destRect = NSRect(origin: .zero, size: contentView.bounds.size)
         let sourceRect = NSRect(
             x: 0,
             y: yOffset,
@@ -404,10 +395,8 @@ struct FieldMapVisualizationView: View {
         alert.addButton(withTitle: "ОК")
         alert.runModal()
     }
-
-    // Создает окно для захвата изображения карты
+    
     private func makeMapCaptureView(id: String) -> NSWindow {
-        // Создаем представление, содержащее только карту с оверлеем
         let captureContent = AnyView(
             ZStack {
                 if let image = fieldImage {
@@ -469,7 +458,6 @@ struct FieldMapVisualizationView: View {
             }
         )
         
-        // Создаем окно для захвата
         let hostingController = NSHostingController(rootView: captureContent)
         let window = NSWindow(contentViewController: hostingController)
         window.setContentSize(NSSize(width: 1024, height: 768))
@@ -847,40 +835,5 @@ struct FieldMapVisualizationView: View {
             x: imageFrame.minX + (normalizedX * imageFrame.width),
             y: imageFrame.minY + (normalizedY * imageFrame.height)
         )
-    }
-}
-
-struct ImageSizePreferenceKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
-    }
-}
-
-extension TagLibraryManager {
-    func findTagGroupForTag(_ tagID: String) -> TagGroup? {
-        return allTagGroups.first { group in
-            group.tags.contains(tagID)
-        }
-    }
-}
-
-extension CGPoint: Codable {
-    enum CodingKeys: String, CodingKey {
-        case x, y
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let x = try container.decode(CGFloat.self, forKey: .x)
-        let y = try container.decode(CGFloat.self, forKey: .y)
-        self.init(x: x, y: y)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(x, forKey: .x)
-        try container.encode(y, forKey: .y)
     }
 }

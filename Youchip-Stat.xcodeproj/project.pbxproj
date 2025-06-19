@@ -59,6 +59,45 @@
 		DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */; };
 		DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */; };
 		DD494BF02DC0146B003F8BE6 /* VideoPlayerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD494BEF2DC0145F003F8BE6 /* VideoPlayerModels.swift */; };
+		DD5CF9B52E046265009CD51A /* MapTapHandlerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9B42E046265009CD51A /* MapTapHandlerView.swift */; };
+		DD5CF9B72E04627F009CD51A /* TapLocationPreferenceKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9B62E04627E009CD51A /* TapLocationPreferenceKey.swift */; };
+		DD5CF9B92E04628C009CD51A /* TagOnMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9B82E04628B009CD51A /* TagOnMap.swift */; };
+		DD5CF9BB2E046313009CD51A /* UserDefaults+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9BA2E046313009CD51A /* UserDefaults+Convenience.swift */; };
+		DD5CF9BD2E0463E8009CD51A /* CGPoint+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9BC2E0463E8009CD51A /* CGPoint+Convenience.swift */; };
+		DD5CF9BF2E046406009CD51A /* ImageSizePreferenceKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9BE2E046406009CD51A /* ImageSizePreferenceKey.swift */; };
+		DD5CF9C12E0464E7009CD51A /* MainFuncs.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9C02E0464E0009CD51A /* MainFuncs.swift */; };
+		DD5CF9C32E0464F7009CD51A /* TagLibraryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9C22E0464F7009CD51A /* TagLibraryManager.swift */; };
+		DD5CF9C52E046581009CD51A /* NSColor+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9C42E046581009CD51A /* NSColor+Convenience.swift */; };
+		DD5CF9C72E0465AA009CD51A /* TimelineStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9C62E0465A9009CD51A /* TimelineStamp.swift */; };
+		DD5CF9C92E0465BE009CD51A /* TimelineDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9C82E0465BE009CD51A /* TimelineDataManager.swift */; };
+		DD5CF9CB2E0465D7009CD51A /* VideoPlayerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9CA2E0465D6009CD51A /* VideoPlayerManager.swift */; };
+		DD5CF9CD2E0465EB009CD51A /* VideoPlayerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9CC2E0465EA009CD51A /* VideoPlayerWindow.swift */; };
+		DD5CF9CF2E0465FC009CD51A /* FullControlWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9CE2E0465FB009CD51A /* FullControlWindowController.swift */; };
+		DD5CF9D12E04660C009CD51A /* VideoPlayerWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9D02E04660B009CD51A /* VideoPlayerWindowController.swift */; };
+		DD5CF9D32E046645009CD51A /* FullControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9D22E046644009CD51A /* FullControlView.swift */; };
+		DD5CF9D52E046730009CD51A /* TimelineLineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9D42E04672F009CD51A /* TimelineLineView.swift */; };
+		DD5CF9D72E04673D009CD51A /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9D62E04673C009CD51A /* HotKeyManager.swift */; };
+		DD5CF9D92E046760009CD51A /* Notification+Conveniece.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9D82E046755009CD51A /* Notification+Conveniece.swift */; };
+		DD5CF9DB2E04676E009CD51A /* TagLibraryWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9DA2E04676D009CD51A /* TagLibraryWindowController.swift */; };
+		DD5CF9DD2E04677F009CD51A /* TagLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9DC2E04677E009CD51A /* TagLibraryView.swift */; };
+		DD5CF9DF2E04679D009CD51A /* AddLineSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9DE2E04679B009CD51A /* AddLineSheet.swift */; };
+		DD5CF9E42E0467C3009CD51A /* EditTimelineNameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9E32E0467C2009CD51A /* EditTimelineNameSheet.swift */; };
+		DD5CF9E62E0467D6009CD51A /* LabelSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9E52E0467D6009CD51A /* LabelSelectionSheet.swift */; };
+		DD5CF9E82E0467EB009CD51A /* ExportModeSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9E72E0467EA009CD51A /* ExportModeSelectionSheet.swift */; };
+		DD5CF9EA2E0467FA009CD51A /* TagSelectionSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9E92E0467FA009CD51A /* TagSelectionSheetView.swift */; };
+		DD5CF9EC2E04680E009CD51A /* StampLabelsOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9EB2E04680D009CD51A /* StampLabelsOverlayView.swift */; };
+		DD5CF9EE2E046826009CD51A /* TimeEventChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9ED2E046825009CD51A /* TimeEventChip.swift */; };
+		DD5CF9F32E04683C009CD51A /* LabelChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9F22E04683C009CD51A /* LabelChip.swift */; };
+		DD5CF9F52E04687D009CD51A /* String+Conveniece.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9F42E046879009CD51A /* String+Conveniece.swift */; };
+		DD5CF9F72E04688A009CD51A /* FocusStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9F62E046889009CD51A /* FocusStateManager.swift */; };
+		DD5CF9F92E04689B009CD51A /* FocusAwareTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9F82E04689A009CD51A /* FocusAwareTextField.swift */; };
+		DD5CF9FB2E0468B0009CD51A /* FocusTrackingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9FA2E0468AF009CD51A /* FocusTrackingView.swift */; };
+		DD5CF9FD2E0468C1009CD51A /* TimeGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9FC2E0468C0009CD51A /* TimeGridView.swift */; };
+		DD5CF9FF2E0468D0009CD51A /* TimelineTimestampsHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9FE2E0468D0009CD51A /* TimelineTimestampsHeaderView.swift */; };
+		DD5CFA012E0468E2009CD51A /* EventSelectionSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA002E0468E1009CD51A /* EventSelectionSheetView.swift */; };
+		DD5CFA032E046937009CD51A /* DispatchWorkItem+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA022E046932009CD51A /* DispatchWorkItem+Convenience.swift */; };
+		DD5CFA052E04694A009CD51A /* FieldMapSelectionWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA042E04694A009CD51A /* FieldMapSelectionWindowController.swift */; };
+		DD5CFA072E046965009CD51A /* FieldMapSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CFA062E046964009CD51A /* FieldMapSelectionView.swift */; };
 		DD5ED4042DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5ED4032DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift */; };
 		DD7E17C92DF7431300342214 /* FieldMapConfigurationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E17C82DF7431200342214 /* FieldMapConfigurationWindowController.swift */; };
 		DD7E17CB2DF7449000342214 /* FieldMapConfigurationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */; };
@@ -91,15 +130,10 @@
 		DDCA6B6F2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCA6B6E2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift */; };
 		DDCA6B712DCA69C30025EF9E /* ColorPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCA6B702DCA69C30025EF9E /* ColorPickerView.swift */; };
 		DDCA6B732DCA69E10025EF9E /* CreateCustomCollectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCA6B722DCA69E10025EF9E /* CreateCustomCollectionsView.swift */; };
-		DDCA6B752DCA6B900025EF9E /* VideoControlWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCA6B742DCA6B900025EF9E /* VideoControlWindow.swift */; };
 		DDD52CBA2DAEE7F50038158E /* WindowsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD52CB82DAEE7F50038158E /* WindowsManager.swift */; };
 		DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDD60A952D7A5D7E0097600D /* AVKit.framework */; };
 		DDDB36362D78E16500A1111C /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDB36352D78E16100A1111C /* Color.swift */; };
 		DDE2F3282DB6CDB40040B011 /* timeEvents.json in Resources */ = {isa = PBXBuildFile; fileRef = DDE2F3272DB6CDB40040B011 /* timeEvents.json */; };
-		DDEF30902E03F89100BCA1A4 /* MarkersAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEF308F2E03F89000BCA1A4 /* MarkersAPIService.swift */; };
-		DDEF30922E03FEA600BCA1A4 /* StreamsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEF30912E03FEA600BCA1A4 /* StreamsView.swift */; };
-		DDEF30942E03FEDC00BCA1A4 /* StreamManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEF30932E03FEDB00BCA1A4 /* StreamManager.swift */; };
-		DDEF30962E04030A00BCA1A4 /* SynchronizationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEF30952E04030900BCA1A4 /* SynchronizationManager.swift */; };
 		DDFB1A482DE510E700175D97 /* EditorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A412DE510E700175D97 /* EditorState.swift */; };
 		DDFB1A492DE510E700175D97 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A452DE510E700175D97 /* EditorView.swift */; };
 		DDFB1A4A2DE510E700175D97 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A3F2DE510E700175D97 /* EditorViewModel.swift */; };
@@ -168,6 +202,45 @@
 		DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Alerts.swift"; sourceTree = "<group>"; };
 		DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+CloudFiles.swift"; sourceTree = "<group>"; };
 		DD494BEF2DC0145F003F8BE6 /* VideoPlayerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerModels.swift; sourceTree = "<group>"; };
+		DD5CF9B42E046265009CD51A /* MapTapHandlerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTapHandlerView.swift; sourceTree = "<group>"; };
+		DD5CF9B62E04627E009CD51A /* TapLocationPreferenceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapLocationPreferenceKey.swift; sourceTree = "<group>"; };
+		DD5CF9B82E04628B009CD51A /* TagOnMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagOnMap.swift; sourceTree = "<group>"; };
+		DD5CF9BA2E046313009CD51A /* UserDefaults+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserDefaults+Convenience.swift"; sourceTree = "<group>"; };
+		DD5CF9BC2E0463E8009CD51A /* CGPoint+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CGPoint+Convenience.swift"; sourceTree = "<group>"; };
+		DD5CF9BE2E046406009CD51A /* ImageSizePreferenceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSizePreferenceKey.swift; sourceTree = "<group>"; };
+		DD5CF9C02E0464E0009CD51A /* MainFuncs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainFuncs.swift; sourceTree = "<group>"; };
+		DD5CF9C22E0464F7009CD51A /* TagLibraryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagLibraryManager.swift; sourceTree = "<group>"; };
+		DD5CF9C42E046581009CD51A /* NSColor+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSColor+Convenience.swift"; sourceTree = "<group>"; };
+		DD5CF9C62E0465A9009CD51A /* TimelineStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineStamp.swift; sourceTree = "<group>"; };
+		DD5CF9C82E0465BE009CD51A /* TimelineDataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineDataManager.swift; sourceTree = "<group>"; };
+		DD5CF9CA2E0465D6009CD51A /* VideoPlayerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerManager.swift; sourceTree = "<group>"; };
+		DD5CF9CC2E0465EA009CD51A /* VideoPlayerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerWindow.swift; sourceTree = "<group>"; };
+		DD5CF9CE2E0465FB009CD51A /* FullControlWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullControlWindowController.swift; sourceTree = "<group>"; };
+		DD5CF9D02E04660B009CD51A /* VideoPlayerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerWindowController.swift; sourceTree = "<group>"; };
+		DD5CF9D22E046644009CD51A /* FullControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullControlView.swift; sourceTree = "<group>"; };
+		DD5CF9D42E04672F009CD51A /* TimelineLineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineLineView.swift; sourceTree = "<group>"; };
+		DD5CF9D62E04673C009CD51A /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
+		DD5CF9D82E046755009CD51A /* Notification+Conveniece.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Notification+Conveniece.swift"; sourceTree = "<group>"; };
+		DD5CF9DA2E04676D009CD51A /* TagLibraryWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagLibraryWindowController.swift; sourceTree = "<group>"; };
+		DD5CF9DC2E04677E009CD51A /* TagLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagLibraryView.swift; sourceTree = "<group>"; };
+		DD5CF9DE2E04679B009CD51A /* AddLineSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddLineSheet.swift; sourceTree = "<group>"; };
+		DD5CF9E32E0467C2009CD51A /* EditTimelineNameSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTimelineNameSheet.swift; sourceTree = "<group>"; };
+		DD5CF9E52E0467D6009CD51A /* LabelSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelSelectionSheet.swift; sourceTree = "<group>"; };
+		DD5CF9E72E0467EA009CD51A /* ExportModeSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportModeSelectionSheet.swift; sourceTree = "<group>"; };
+		DD5CF9E92E0467FA009CD51A /* TagSelectionSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagSelectionSheetView.swift; sourceTree = "<group>"; };
+		DD5CF9EB2E04680D009CD51A /* StampLabelsOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StampLabelsOverlayView.swift; sourceTree = "<group>"; };
+		DD5CF9ED2E046825009CD51A /* TimeEventChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeEventChip.swift; sourceTree = "<group>"; };
+		DD5CF9F22E04683C009CD51A /* LabelChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelChip.swift; sourceTree = "<group>"; };
+		DD5CF9F42E046879009CD51A /* String+Conveniece.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Conveniece.swift"; sourceTree = "<group>"; };
+		DD5CF9F62E046889009CD51A /* FocusStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusStateManager.swift; sourceTree = "<group>"; };
+		DD5CF9F82E04689A009CD51A /* FocusAwareTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusAwareTextField.swift; sourceTree = "<group>"; };
+		DD5CF9FA2E0468AF009CD51A /* FocusTrackingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusTrackingView.swift; sourceTree = "<group>"; };
+		DD5CF9FC2E0468C0009CD51A /* TimeGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeGridView.swift; sourceTree = "<group>"; };
+		DD5CF9FE2E0468D0009CD51A /* TimelineTimestampsHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineTimestampsHeaderView.swift; sourceTree = "<group>"; };
+		DD5CFA002E0468E1009CD51A /* EventSelectionSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventSelectionSheetView.swift; sourceTree = "<group>"; };
+		DD5CFA022E046932009CD51A /* DispatchWorkItem+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DispatchWorkItem+Convenience.swift"; sourceTree = "<group>"; };
+		DD5CFA042E04694A009CD51A /* FieldMapSelectionWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapSelectionWindowController.swift; sourceTree = "<group>"; };
+		DD5CFA062E046964009CD51A /* FieldMapSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapSelectionView.swift; sourceTree = "<group>"; };
 		DD5ED4032DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationWindowController.swift; sourceTree = "<group>"; };
 		DD7E17C82DF7431200342214 /* FieldMapConfigurationWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapConfigurationWindowController.swift; sourceTree = "<group>"; };
 		DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapConfigurationView.swift; sourceTree = "<group>"; };
@@ -201,15 +274,10 @@
 		DDCA6B6E2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompatibilityButtonStyle.swift; sourceTree = "<group>"; };
 		DDCA6B702DCA69C30025EF9E /* ColorPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerView.swift; sourceTree = "<group>"; };
 		DDCA6B722DCA69E10025EF9E /* CreateCustomCollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateCustomCollectionsView.swift; sourceTree = "<group>"; };
-		DDCA6B742DCA6B900025EF9E /* VideoControlWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoControlWindow.swift; sourceTree = "<group>"; };
 		DDD52CB82DAEE7F50038158E /* WindowsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowsManager.swift; sourceTree = "<group>"; };
 		DDD60A952D7A5D7E0097600D /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 		DDDB36352D78E16100A1111C /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
 		DDE2F3272DB6CDB40040B011 /* timeEvents.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = timeEvents.json; sourceTree = "<group>"; };
-		DDEF308F2E03F89000BCA1A4 /* MarkersAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkersAPIService.swift; sourceTree = "<group>"; };
-		DDEF30912E03FEA600BCA1A4 /* StreamsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamsView.swift; sourceTree = "<group>"; };
-		DDEF30932E03FEDB00BCA1A4 /* StreamManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamManager.swift; sourceTree = "<group>"; };
-		DDEF30952E04030900BCA1A4 /* SynchronizationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynchronizationManager.swift; sourceTree = "<group>"; };
 		DDFB1A3F2DE510E700175D97 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
 		DDFB1A412DE510E700175D97 /* EditorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorState.swift; sourceTree = "<group>"; };
 		DDFB1A422DE510E700175D97 /* EditorActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorActions.swift; sourceTree = "<group>"; };
@@ -339,7 +407,6 @@
 				DDCA6B4C2DCA64CE0025EF9E /* Windows */,
 				DDD52CBC2DAEE7F50038158E /* Views */,
 				DDD52CB92DAEE7F50038158E /* Managers */,
-				DDCA6B742DCA6B900025EF9E /* VideoControlWindow.swift */,
 			);
 			path = VideoPlayer;
 			sourceTree = "<group>";
@@ -442,15 +509,43 @@
 				DD32C2942D74A1C80052B5C6 /* Images.swift */,
 				DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */,
 				DD32C2962D74A1C80052B5C6 /* NSError+Convenience.swift */,
+				DD5CF9F42E046879009CD51A /* String+Conveniece.swift */,
+				DD5CF9BA2E046313009CD51A /* UserDefaults+Convenience.swift */,
 				DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */,
+				DD5CF9BC2E0463E8009CD51A /* CGPoint+Convenience.swift */,
+				DD5CFA022E046932009CD51A /* DispatchWorkItem+Convenience.swift */,
+				DD5CF9C42E046581009CD51A /* NSColor+Convenience.swift */,
 				DD32C2992D74A1C80052B5C6 /* SKProduct+Convenience.swift */,
 				DD32C29A2D74A1C80052B5C6 /* String+Convenience.swift */,
+				DD5CF9D82E046755009CD51A /* Notification+Conveniece.swift */,
 				DD32C29B2D74A1C80052B5C6 /* UInt64+Convenience.swift */,
 				DD2A70572D74C35E00287BA8 /* URL+Convenience.swift */,
 				DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */,
 				DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */,
 			);
 			path = Extensions;
+			sourceTree = "<group>";
+		};
+		DD5CF9E22E0467BD009CD51A /* Sheets */ = {
+			isa = PBXGroup;
+			children = (
+				DD5CF9E32E0467C2009CD51A /* EditTimelineNameSheet.swift */,
+				DD5CF9E72E0467EA009CD51A /* ExportModeSelectionSheet.swift */,
+				DD5CFA002E0468E1009CD51A /* EventSelectionSheetView.swift */,
+				DD5CF9E52E0467D6009CD51A /* LabelSelectionSheet.swift */,
+				DD5CF9E92E0467FA009CD51A /* TagSelectionSheetView.swift */,
+				DD5CF9DE2E04679B009CD51A /* AddLineSheet.swift */,
+			);
+			path = Sheets;
+			sourceTree = "<group>";
+		};
+		DD5CF9F12E046839009CD51A /* Chips */ = {
+			isa = PBXGroup;
+			children = (
+				DD5CF9ED2E046825009CD51A /* TimeEventChip.swift */,
+				DD5CF9F22E04683C009CD51A /* LabelChip.swift */,
+			);
+			path = Chips;
 			sourceTree = "<group>";
 		};
 		DDB401882D749E0F004A12C2 = {
@@ -484,7 +579,11 @@
 			isa = PBXGroup;
 			children = (
 				DD7E17C82DF7431200342214 /* FieldMapConfigurationWindowController.swift */,
+				DD5CF9CC2E0465EA009CD51A /* VideoPlayerWindow.swift */,
 				DD5ED4032DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift */,
+				DD5CF9D02E04660B009CD51A /* VideoPlayerWindowController.swift */,
+				DD5CFA062E046964009CD51A /* FieldMapSelectionView.swift */,
+				DD5CF9CE2E0465FB009CD51A /* FullControlWindowController.swift */,
 				DDFB1A552DE521D300175D97 /* ScreenshotsWindowController.swift */,
 			);
 			path = Windows;
@@ -496,8 +595,11 @@
 				DDCA6B652DCA68F70025EF9E /* TagFormData.swift */,
 				DDCA6B562DCA65C20025EF9E /* AnalyticsModels.swift */,
 				DDCA6B502DCA65210025EF9E /* MarkupMode.swift */,
+				DD5CF9B62E04627E009CD51A /* TapLocationPreferenceKey.swift */,
+				DD5CF9B82E04628B009CD51A /* TagOnMap.swift */,
 				DDCA6B4E2DCA64E70025EF9E /* NSNotification + Convenience.swift */,
 				DD7E18142DFDCFA400342214 /* FieldMapFilters.swift */,
+				DD5CF9C62E0465A9009CD51A /* TimelineStamp.swift */,
 				DDCA6B692DCA69340025EF9E /* NSApplication + Convenience.swift */,
 				DD494BEF2DC0145F003F8BE6 /* VideoPlayerModels.swift */,
 			);
@@ -516,6 +618,8 @@
 			isa = PBXGroup;
 			children = (
 				DDCA6B5F2DCA67560025EF9E /* AnalyticsWindowController.swift */,
+				DD5CFA042E04694A009CD51A /* FieldMapSelectionWindowController.swift */,
+				DD5CF9DA2E04676D009CD51A /* TagLibraryWindowController.swift */,
 			);
 			path = Controllers;
 			sourceTree = "<group>";
@@ -523,9 +627,8 @@
 		DDCA6B6D2DCA69A50025EF9E /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
-				DDEF30932E03FEDB00BCA1A4 /* StreamManager.swift */,
-				DDEF30952E04030900BCA1A4 /* SynchronizationManager.swift */,
-				DDEF308F2E03F89000BCA1A4 /* MarkersAPIService.swift */,
+				DD5CF9C02E0464E0009CD51A /* MainFuncs.swift */,
+				DD5CF9BE2E046406009CD51A /* ImageSizePreferenceKey.swift */,
 				DDCA6B6E2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift */,
 			);
 			path = Helpers;
@@ -534,8 +637,13 @@
 		DDD52CB92DAEE7F50038158E /* Managers */ = {
 			isa = PBXGroup;
 			children = (
+				DD5CF9C22E0464F7009CD51A /* TagLibraryManager.swift */,
+				DD5CF9C82E0465BE009CD51A /* TimelineDataManager.swift */,
+				DD5CF9D62E04673C009CD51A /* HotKeyManager.swift */,
 				DDCA6B632DCA684D0025EF9E /* CustomCollectionManager.swift */,
+				DD5CF9F62E046889009CD51A /* FocusStateManager.swift */,
 				DDD52CB82DAEE7F50038158E /* WindowsManager.swift */,
+				DD5CF9CA2E0465D6009CD51A /* VideoPlayerManager.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -543,19 +651,29 @@
 		DDD52CBC2DAEE7F50038158E /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				DDEF30912E03FEA600BCA1A4 /* StreamsView.swift */,
+				DD5CF9F12E046839009CD51A /* Chips */,
+				DD5CF9E22E0467BD009CD51A /* Sheets */,
 				DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */,
+				DD5CF9B42E046265009CD51A /* MapTapHandlerView.swift */,
 				DDCA6B722DCA69E10025EF9E /* CreateCustomCollectionsView.swift */,
 				DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */,
+				DD5CF9EB2E04680D009CD51A /* StampLabelsOverlayView.swift */,
 				DD7E18182DFDEDE200342214 /* HeatMapView.swift */,
 				DD7E18162DFDCFBE00342214 /* FieldMapFilterView.swift */,
+				DD5CF9DC2E04677E009CD51A /* TagLibraryView.swift */,
 				DDCA6B702DCA69C30025EF9E /* ColorPickerView.swift */,
 				DDCA6B672DCA69130025EF9E /* KeyCaptureView.swift */,
+				DD5CF9F82E04689A009CD51A /* FocusAwareTextField.swift */,
 				DDCA6B612DCA67C50025EF9E /* ExportAnalyticsView.swift */,
 				DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */,
+				DD5CF9D42E04672F009CD51A /* TimelineLineView.swift */,
+				DD5CF9D22E046644009CD51A /* FullControlView.swift */,
+				DD5CF9FA2E0468AF009CD51A /* FocusTrackingView.swift */,
 				DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */,
 				DDCA6B5C2DCA66420025EF9E /* AnalyticsView.swift */,
+				DD5CF9FC2E0468C0009CD51A /* TimeGridView.swift */,
 				DDCA6B5A2DCA66330025EF9E /* TagStatisticsLegend.swift */,
+				DD5CF9FE2E0468D0009CD51A /* TimelineTimestampsHeaderView.swift */,
 				DDCA6B582DCA66210025EF9E /* PieChartView.swift */,
 			);
 			path = Views;
@@ -757,83 +875,117 @@
 			buildActionMask = 2147483647;
 			files = (
 				DD2A70602D74D26000287BA8 /* PreferenceManager.swift in Sources */,
+				DD5CF9BB2E046313009CD51A /* UserDefaults+Convenience.swift in Sources */,
 				DD2A706D2D74D32C00287BA8 /* VideoThumbnailManager.swift in Sources */,
+				DD5CF9F52E04687D009CD51A /* String+Conveniece.swift in Sources */,
 				DD32C28B2D74A1190052B5C6 /* AppDelegate.swift in Sources */,
 				DDCA6B512DCA65220025EF9E /* MarkupMode.swift in Sources */,
 				DD2A707A2D74E0AF00287BA8 /* VideoThumbnailView.swift in Sources */,
 				DD2A70782D74D79B00287BA8 /* FileOpenHelper.swift in Sources */,
+				DD5CF9E62E0467D6009CD51A /* LabelSelectionSheet.swift in Sources */,
 				DDFB1A482DE510E700175D97 /* EditorState.swift in Sources */,
-				DDEF30902E03F89100BCA1A4 /* MarkersAPIService.swift in Sources */,
+				DD5CF9CB2E0465D7009CD51A /* VideoPlayerManager.swift in Sources */,
 				DDFB1A492DE510E700175D97 /* EditorView.swift in Sources */,
 				DDFB1A4A2DE510E700175D97 /* EditorViewModel.swift in Sources */,
 				DDFB1A4B2DE510E700175D97 /* EditorWebView.swift in Sources */,
 				DDFB1A4C2DE510E700175D97 /* EditorActions.swift in Sources */,
-				DDEF30962E04030A00BCA1A4 /* SynchronizationManager.swift in Sources */,
+				DD5CF9D92E046760009CD51A /* Notification+Conveniece.swift in Sources */,
 				DD32C28F2D74A19A0052B5C6 /* AppSetupManager.swift in Sources */,
 				DD8937FE2DEF936B009B1BC2 /* CropImageView.swift in Sources */,
+				DD5CF9E42E0467C3009CD51A /* EditTimelineNameSheet.swift in Sources */,
+				DD5CF9C52E046581009CD51A /* NSColor+Convenience.swift in Sources */,
 				DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */,
+				DD5CF9F32E04683C009CD51A /* LabelChip.swift in Sources */,
 				DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */,
 				DDCA6B5B2DCA66330025EF9E /* TagStatisticsLegend.swift in Sources */,
 				DD32C2A32D74A1C80052B5C6 /* Date+Convenience.swift in Sources */,
-				DDEF30922E03FEA600BCA1A4 /* StreamsView.swift in Sources */,
+				DD5CF9EE2E046826009CD51A /* TimeEventChip.swift in Sources */,
+				DD5CF9C32E0464F7009CD51A /* TagLibraryManager.swift in Sources */,
 				DD89381A2DEFBA4D009B1BC2 /* FieldMapVisualizationView.swift in Sources */,
 				DDCA6B572DCA65C20025EF9E /* AnalyticsModels.swift in Sources */,
 				DDCA6B5D2DCA66420025EF9E /* AnalyticsView.swift in Sources */,
 				DDCA6B712DCA69C30025EF9E /* ColorPickerView.swift in Sources */,
+				DD5CFA032E046937009CD51A /* DispatchWorkItem+Convenience.swift in Sources */,
 				DD32C2A42D74A1C80052B5C6 /* UInt64+Convenience.swift in Sources */,
+				DD5CF9CD2E0465EB009CD51A /* VideoPlayerWindow.swift in Sources */,
 				DD2A70642D74D28E00287BA8 /* CustomTypes.swift in Sources */,
+				DD5CF9CF2E0465FC009CD51A /* FullControlWindowController.swift in Sources */,
 				DD2A705A2D74C37D00287BA8 /* FilesFileFormat.swift in Sources */,
 				DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */,
+				DD5CFA052E04694A009CD51A /* FieldMapSelectionWindowController.swift in Sources */,
 				DDCA6B542DCA657B0025EF9E /* CollectionWindowDelegate.swift in Sources */,
 				DDFB1A542DE5131F00175D97 /* SheetToolbarView.swift in Sources */,
 				DD2A705E2D74C66700287BA8 /* VideosActions.swift in Sources */,
+				DD5CF9BF2E046406009CD51A /* ImageSizePreferenceKey.swift in Sources */,
 				DD2A706B2D74D31600287BA8 /* VideosPreviewManager.swift in Sources */,
 				DDFB1A502DE512D900175D97 /* SharingPicker.swift in Sources */,
 				DD2A70582D74C35F00287BA8 /* URL+Convenience.swift in Sources */,
 				DDCA6B4F2DCA64EE0025EF9E /* NSNotification + Convenience.swift in Sources */,
 				DD8938182DEFBA42009B1BC2 /* FieldMapVisualizationPicker.swift in Sources */,
+				DD5CF9FB2E0468B0009CD51A /* FocusTrackingView.swift in Sources */,
+				DD5CF9C92E0465BE009CD51A /* TimelineDataManager.swift in Sources */,
 				DDCA6B622DCA67C60025EF9E /* ExportAnalyticsView.swift in Sources */,
+				DD5CF9DD2E04677F009CD51A /* TagLibraryView.swift in Sources */,
+				DD5CF9B52E046265009CD51A /* MapTapHandlerView.swift in Sources */,
 				DDDB36362D78E16500A1111C /* Color.swift in Sources */,
+				DD5CF9F92E04689B009CD51A /* FocusAwareTextField.swift in Sources */,
 				DD32C2A62D74A1C80052B5C6 /* Fonts.swift in Sources */,
 				DD32C2A72D74A1C80052B5C6 /* SKProduct+Convenience.swift in Sources */,
 				DDFB1A562DE521D300175D97 /* ScreenshotsWindowController.swift in Sources */,
+				DD5CF9B92E04628C009CD51A /* TagOnMap.swift in Sources */,
+				DD5CF9D52E046730009CD51A /* TimelineLineView.swift in Sources */,
 				DDCA6B662DCA68F80025EF9E /* TagFormData.swift in Sources */,
 				DD2A70622D74D27900287BA8 /* FilesDocumentPickerHelper.swift in Sources */,
 				DD7E17C92DF7431300342214 /* FieldMapConfigurationWindowController.swift in Sources */,
+				DD5CFA072E046965009CD51A /* FieldMapSelectionView.swift in Sources */,
 				DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */,
 				DDC938EC2DD2452900B7AB12 /* AuthKeyView.swift in Sources */,
 				DDCA6B602DCA67560025EF9E /* AnalyticsWindowController.swift in Sources */,
 				DDCA6B682DCA69140025EF9E /* KeyCaptureView.swift in Sources */,
+				DD5CF9F72E04688A009CD51A /* FocusStateManager.swift in Sources */,
 				DD2A70742D74D63300287BA8 /* ViewsFactory.swift in Sources */,
 				DD32C2A82D74A1C80052B5C6 /* FileManager+Convenience.swift in Sources */,
 				DDFB1A522DE5130C00175D97 /* AppNavigationButtonsView.swift in Sources */,
+				DD5CF9EC2E04680E009CD51A /* StampLabelsOverlayView.swift in Sources */,
 				DD494BF02DC0146B003F8BE6 /* VideoPlayerModels.swift in Sources */,
 				DD2A70762D74D77C00287BA8 /* AppCloudFilesHelper.swift in Sources */,
 				DDCA6B6A2DCA69340025EF9E /* NSApplication + Convenience.swift in Sources */,
+				DD5CF9FD2E0468C1009CD51A /* TimeGridView.swift in Sources */,
 				DD32C2A92D74A1C80052B5C6 /* View+Alerts.swift in Sources */,
 				DDCA6B732DCA69E10025EF9E /* CreateCustomCollectionsView.swift in Sources */,
 				DD32C2AA2D74A1C80052B5C6 /* Images.swift in Sources */,
+				DD5CF9FF2E0468D0009CD51A /* TimelineTimestampsHeaderView.swift in Sources */,
 				DD2A705C2D74C3B100287BA8 /* VideoFilesManager.swift in Sources */,
 				DD32C2AB2D74A1C80052B5C6 /* String+Convenience.swift in Sources */,
 				DD7E17CB2DF7449000342214 /* FieldMapConfigurationView.swift in Sources */,
 				DDCA6B592DCA66220025EF9E /* PieChartView.swift in Sources */,
+				DD5CF9D72E04673D009CD51A /* HotKeyManager.swift in Sources */,
+				DD5CF9B72E04627F009CD51A /* TapLocationPreferenceKey.swift in Sources */,
 				DD2A70542D74C31B00287BA8 /* VideosState.swift in Sources */,
 				DD5ED4042DF0E19300FF83AF /* FieldMapVisualizationWindowController.swift in Sources */,
+				DD5CFA012E0468E2009CD51A /* EventSelectionSheetView.swift in Sources */,
+				DD5CF9E82E0467EB009CD51A /* ExportModeSelectionSheet.swift in Sources */,
+				DD5CF9BD2E0463E8009CD51A /* CGPoint+Convenience.swift in Sources */,
 				DDCA6B642DCA68C10025EF9E /* CustomCollectionManager.swift in Sources */,
 				DDCA6B6F2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift in Sources */,
 				DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */,
+				DD5CF9D32E046645009CD51A /* FullControlView.swift in Sources */,
 				DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */,
 				DDC938E92DD2447A00B7AB12 /* AuthManager.swift in Sources */,
+				DD5CF9D12E04660C009CD51A /* VideoPlayerWindowController.swift in Sources */,
 				DD7E18172DFDCFC800342214 /* FieldMapFilterView.swift in Sources */,
+				DD5CF9C72E0465AA009CD51A /* TimelineStamp.swift in Sources */,
+				DD5CF9C12E0464E7009CD51A /* MainFuncs.swift in Sources */,
 				DD2A70702D74D5CD00287BA8 /* VideosView.swift in Sources */,
+				DD5CF9DF2E04679D009CD51A /* AddLineSheet.swift in Sources */,
 				DD7E18192DFDEDE300342214 /* HeatMapView.swift in Sources */,
 				DD2A70562D74C33E00287BA8 /* FilesFile.swift in Sources */,
+				DD5CF9DB2E04676E009CD51A /* TagLibraryWindowController.swift in Sources */,
 				DD7E18152DFDCFA500342214 /* FieldMapFilters.swift in Sources */,
 				DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */,
-				DDEF30942E03FEDC00BCA1A4 /* StreamManager.swift in Sources */,
+				DD5CF9EA2E0467FA009CD51A /* TagSelectionSheetView.swift in Sources */,
 				DD32C2662D74A00C0052B5C6 /* Youchip_StatApp.swift in Sources */,
 				DDD52CBA2DAEE7F50038158E /* WindowsManager.swift in Sources */,
-				DDCA6B752DCA6B900025EF9E /* VideoControlWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

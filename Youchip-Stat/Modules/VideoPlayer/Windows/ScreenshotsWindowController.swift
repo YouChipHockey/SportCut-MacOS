@@ -9,6 +9,7 @@ import SwiftUI
 import AppKit
 
 class ScreenshotsWindowController: NSWindowController, NSWindowDelegate {
+    
     let screenshotsFolder: URL
     
     init(screenshotsFolder: URL) {
@@ -200,4 +201,5 @@ struct ScreenshotItemView: View {
         window.center()
         window.makeKeyAndOrderFront(nil)
     }
+    
 }

@@ -115,7 +115,6 @@ struct FieldMapVisualizationPicker: View {
             }
             .pickerStyle(SegmentedPickerStyle())
             .onChange(of: selectedMode) { _ in
-                // Reset selections when mode changes
                 selectedTagIDs.removeAll()
                 selectedTimelineIDs.removeAll()
             }

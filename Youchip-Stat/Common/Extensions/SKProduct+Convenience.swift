@@ -18,12 +18,8 @@ extension SKProduct {
         formatter.locale = priceLocale
         
         let defaultFractionDigits = formatter.maximumFractionDigits
-        
-        // Convert price to a double value for comparison
         let priceValue = price.doubleValue
         let isInteger = floor(priceValue) == priceValue
-        
-        // Adjust fraction digits based on the actual price
         if isInteger {
             formatter.maximumFractionDigits = 0
         } else {
@@ -43,12 +39,8 @@ extension SKProductDiscount {
         formatter.locale = priceLocale
         
         let defaultFractionDigits = formatter.maximumFractionDigits
-        
-        // Convert price to a double value for comparison
         let priceValue = price.doubleValue
         let isInteger = floor(priceValue) == priceValue
-        
-        // Adjust fraction digits based on the actual price
         if isInteger {
             formatter.maximumFractionDigits = 0
         } else {

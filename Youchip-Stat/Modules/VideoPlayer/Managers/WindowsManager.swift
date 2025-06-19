@@ -1,9 +1,17 @@
+//
+//  CustomCollectionManager.swift
+//  Youchip-Stat
+//
+//  Created by Сергей Бекезин on 06.05.2025.
+//
+
 import SwiftUI
 import AppKit
 import AVKit
 import Foundation
 
 class WindowsManager: NSObject {
+    
     var currentVideoId = ""
     static let shared = WindowsManager()
     

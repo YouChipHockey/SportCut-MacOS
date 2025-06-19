@@ -117,11 +117,9 @@ class VideoFilesManager {
     }
     
     func renameFile(file: FilesFile, newName: String) {
-        // Find the file in the array and update its custom name
         if let index = files.firstIndex(where: { $0.videoData.bookmark == file.videoData.bookmark }) {
             files[index].videoData.customName = newName
             
-            // Also update the custom name in videosData
             if let dataIndex = videosData.firstIndex(where: { $0.bookmark == file.videoData.bookmark }) {
                 videosData[dataIndex].customName = newName
                 saveBookmarks()
