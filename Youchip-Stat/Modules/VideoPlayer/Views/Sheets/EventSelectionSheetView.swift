@@ -20,11 +20,11 @@ struct EventSelectionSheetView: View {
     
     var body: some View {
         VStack(spacing: 10) {
-            Text("Выберите событие для экспорта")
+            Text(^String.Titles.selectEventForExport)
                 .font(.headline)
             
             List {
-                Section(header: Text("Доступные события").font(.subheadline).bold()) {
+                Section(header: Text(^String.Titles.availableEvents).font(.subheadline).bold()) {
                     ForEach(timeEvents) { event in
                         Button(event.name) {
                             onSelect(event)
@@ -34,7 +34,7 @@ struct EventSelectionSheetView: View {
             }
             .frame(width: 300)
             
-            Button("Отмена") {
+            Button(^String.Titles.collectionsButtonCancel) {
                 presentationMode.wrappedValue.dismiss()
             }
             .padding(.top, 10)

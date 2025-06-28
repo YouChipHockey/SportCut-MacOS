@@ -17,13 +17,13 @@ struct AuthKeyView: View {
     var body: some View {
         VStack(spacing: 20) {
             HStack {
-                Text("Введите лицензию")
+                Text(^String.Titles.enterLicense)
                     .font(.title)
                 
                 Spacer()
                 
                 Link(destination: URL(string: "https://sportcut.youchip.pro/mac-pay")!) {
-                    Text("Купить лицензию")
+                    Text(^String.Titles.buyLicense)
                         .foregroundColor(.blue)
                         .font(.system(size: 12))
                 }
@@ -32,7 +32,7 @@ struct AuthKeyView: View {
             .padding(.top)
             .padding(.horizontal)
             
-            TextField("Лицензия", text: $authKey)
+            TextField(^String.Titles.license, text: $authKey)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
                 .frame(width: 350)
@@ -48,7 +48,7 @@ struct AuthKeyView: View {
                 Button(action: {
                     presentationMode.wrappedValue.dismiss()
                 }) {
-                    Text("Отменить")
+                    Text(^String.Titles.cancel)
                         .frame(width: 100)
                 }
                 .buttonStyle(.bordered)
@@ -60,7 +60,7 @@ struct AuthKeyView: View {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
                     } else {
-                        Text("Подтвердить")
+                        Text(^String.Titles.confirm)
                             .frame(width: 100)
                     }
                 }

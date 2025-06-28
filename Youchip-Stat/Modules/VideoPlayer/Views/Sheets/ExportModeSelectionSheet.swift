@@ -18,19 +18,19 @@ struct ExportModeSelectionSheet: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("Экспортировать как:")
+            Text(^String.Titles.exportAs)
                 .font(.headline)
             HStack(spacing: 20) {
-                Button("Фильм") {
+                Button(^String.Titles.movie) {
                     onSelect(.film)
                     presentationMode.wrappedValue.dismiss()
                 }
-                Button("Плейлист") {
+                Button(^String.Titles.playlist) {
                     onSelect(.playlist)
                     presentationMode.wrappedValue.dismiss()
                 }
             }
-            Button("Отмена") {
+            Button(^String.Titles.collectionsButtonCancel) {
                 presentationMode.wrappedValue.dismiss()
             }
         }

@@ -17,7 +17,7 @@ class ScreenshotsWindowController: NSWindowController, NSWindowDelegate {
         let view = ScreenshotsGalleryView(screenshotsFolder: screenshotsFolder)
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Мои скриншоты"
+        window.title = ^String.Titles.fullControlButtonScreenshots
         
         super.init(window: window)
         window.delegate = self
@@ -57,15 +57,15 @@ struct ScreenshotsGalleryView: View {
     var body: some View {
         VStack {
             if isLoading {
-                ProgressView("Загрузка скриншотов...")
+                ProgressView(^String.Titles.loadingScreenshots)
             } else if screenshots.isEmpty {
                 VStack {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 50))
                         .padding()
-                    Text("Скриншоты отсутствуют")
+                    Text(^String.Titles.videoPlayerScreenshotMissing)
                         .font(.headline)
-                    Text("Сделайте скриншоты видео, нажав кнопку камеры во время воспроизведения")
+                    Text(^String.Titles.videoPlayerScreenshotHelp)
                         .multilineTextAlignment(.center)
                         .padding()
                 }
@@ -195,7 +195,7 @@ struct ScreenshotItemView: View {
             
         let hostingController = NSHostingController(rootView: editorView)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Редактирование скриншота"
+        window.title = ^String.Titles.editScreenshot
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         window.setContentSize(NSSize(width: 800, height: 600))
         window.center()

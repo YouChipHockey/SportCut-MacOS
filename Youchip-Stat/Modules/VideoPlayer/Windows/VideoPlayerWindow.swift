@@ -48,12 +48,12 @@ struct VideoPlayerWindow: View {
                                 .buttonStyle(BorderlessButtonStyle())
                                 .padding()
                                 .padding(.bottom, 40)
-                                .help("Создать скриншот и открыть редактор")
+                                .help(^String.Titles.createScreenshotAndOpenEditor)
                             }
                         }
                     )
             } else {
-                Text("Видео не загружено")
+                Text(^String.Titles.videoPlayerVideoNotLoaded)
                     .foregroundColor(.gray)
             }
         }
@@ -84,7 +84,7 @@ struct VideoPlayerWindow: View {
             tempScreenshotImage = nsImage
             showScreenshotNameSheet = true
         } catch {
-            print("Ошибка создания скриншота: \(error.localizedDescription)")
+            print(String(format: ^String.Titles.videoPlayerErrorScreenshot, error.localizedDescription))
         }
     }
     
@@ -113,7 +113,7 @@ struct VideoPlayerWindow: View {
         
         let hostingController = NSHostingController(rootView: editorView)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Редактирование скриншота"
+        window.title = ^String.Titles.editScreenshot
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         window.setContentSize(NSSize(width: 800, height: 600))
         window.center()

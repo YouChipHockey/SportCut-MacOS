@@ -24,19 +24,19 @@ struct EditTimelineNameSheet: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("Редактировать название таймлайна")
+            Text(^String.Titles.editTimelineName)
                 .font(.headline)
             
-            FocusAwareTextField(text: $lineName, placeholder: "Название таймлайна")
+            FocusAwareTextField(text: $lineName, placeholder: ^String.Titles.timelineName)
                 .padding()
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     NotificationCenter.default.post(name: NSNotification.Name("SheetDismissed"), object: nil)
                     presentationMode.wrappedValue.dismiss()
                 }
                 
-                Button("Сохранить") {
+                Button(^String.Titles.saveButtonTitle) {
                     if !lineName.isEmpty {
                         onSave(lineName)
                         NotificationCenter.default.post(name: NSNotification.Name("SheetDismissed"), object: nil)

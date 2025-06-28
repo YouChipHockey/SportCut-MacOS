@@ -73,7 +73,7 @@ class AuthManager: ObservableObject {
     
     func validateAuth(code: String) {
         guard !code.isEmpty else {
-            validationError = "Пожалуйста, введите данные"
+            validationError = ^String.Titles.pleaseEnterData
             return
         }
         
@@ -82,7 +82,7 @@ class AuthManager: ObservableObject {
         
         guard let deviceID = UserDefaults.standard.string(forKey: deviceIDKey) else {
             isValidating = false
-            validationError = "Не удалось идентифицировать устройство"
+            validationError = ^String.Titles.deviceIdentificationFailed
             return
         }
         let requestData: [String: String] = [
@@ -92,7 +92,7 @@ class AuthManager: ObservableObject {
         
         guard let jsonData = try? JSONEncoder().encode(requestData) else {
             isValidating = false
-            validationError = "Не удалось подготовить запрос"
+            validationError = ^String.Titles.requestPreparationFailed
             return
         }
         
@@ -111,7 +111,7 @@ class AuthManager: ObservableObject {
                 }
                 
                 guard let data = data else {
-                    self?.validationError = "Данные с сервера не получены"
+                    self?.validationError = ^String.Titles.serverDataNotReceived
                     return
                 }
                 
@@ -126,10 +126,10 @@ class AuthManager: ObservableObject {
                     } else if let detail = response.detail {
                         self?.validationError = detail
                     } else {
-                        self?.validationError = "Аккаунта нету"
+                        self?.validationError = ^String.Titles.accountNotFound
                     }
                 } catch {
-                    self?.validationError = "Не удалось обработать ответ сервера"
+                    self?.validationError = ^String.Titles.serverResponseProcessingFailed
                 }
             }
         }.resume()

@@ -17,7 +17,7 @@ class CustomCollectionManager: ObservableObject {
     @Published var labelGroups: [LabelGroupData] = []
     @Published var labels: [Label] = []
     @Published var timeEvents: [TimeEvent] = []
-    @Published var collectionName: String = "МояКоллекция"
+    @Published var collectionName: String = ^String.Titles.myCollection
     @Published var isEditingExisting: Bool = false
     var originalName: String = ""
     

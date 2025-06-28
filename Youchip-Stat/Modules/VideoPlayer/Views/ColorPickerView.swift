@@ -52,12 +52,12 @@ struct ColorPickerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Цвет:")
+                Text(^String.Titles.fieldMapDetailColor)
                 Spacer()
                 Button(action: {
                     isExpanded.toggle()
                 }) {
-                    Text(isExpanded ? "Свернуть" : "Больше цветов")
+                    Text(isExpanded ? ^String.Titles.collapse : ^String.Titles.moreColors)
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                 }
                 .buttonStyle(.borderless)

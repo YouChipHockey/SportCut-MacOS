@@ -130,6 +130,8 @@
 		DDCA6B6F2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCA6B6E2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift */; };
 		DDCA6B712DCA69C30025EF9E /* ColorPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCA6B702DCA69C30025EF9E /* ColorPickerView.swift */; };
 		DDCA6B732DCA69E10025EF9E /* CreateCustomCollectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCA6B722DCA69E10025EF9E /* CreateCustomCollectionsView.swift */; };
+		DDD1236C2E0C8F2900116F7D /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD1236B2E0C8F2900116F7D /* MiniPlayerView.swift */; };
+		DDD123C72E10984F00116F7D /* AiReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD123C62E10984E00116F7D /* AiReportSheet.swift */; };
 		DDD52CBA2DAEE7F50038158E /* WindowsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD52CB82DAEE7F50038158E /* WindowsManager.swift */; };
 		DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDD60A952D7A5D7E0097600D /* AVKit.framework */; };
 		DDDB36362D78E16500A1111C /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDB36352D78E16100A1111C /* Color.swift */; };
@@ -274,6 +276,9 @@
 		DDCA6B6E2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompatibilityButtonStyle.swift; sourceTree = "<group>"; };
 		DDCA6B702DCA69C30025EF9E /* ColorPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerView.swift; sourceTree = "<group>"; };
 		DDCA6B722DCA69E10025EF9E /* CreateCustomCollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateCustomCollectionsView.swift; sourceTree = "<group>"; };
+		DDD1236B2E0C8F2900116F7D /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
+		DDD1236D2E0CB0F400116F7D /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
+		DDD123C62E10984E00116F7D /* AiReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiReportSheet.swift; sourceTree = "<group>"; };
 		DDD52CB82DAEE7F50038158E /* WindowsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowsManager.swift; sourceTree = "<group>"; };
 		DDD60A952D7A5D7E0097600D /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 		DDDB36352D78E16100A1111C /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
@@ -667,9 +672,11 @@
 				DDCA6B612DCA67C50025EF9E /* ExportAnalyticsView.swift */,
 				DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */,
 				DD5CF9D42E04672F009CD51A /* TimelineLineView.swift */,
+				DDD123C62E10984E00116F7D /* AiReportSheet.swift */,
 				DD5CF9D22E046644009CD51A /* FullControlView.swift */,
 				DD5CF9FA2E0468AF009CD51A /* FocusTrackingView.swift */,
 				DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */,
+				DDD1236B2E0C8F2900116F7D /* MiniPlayerView.swift */,
 				DDCA6B5C2DCA66420025EF9E /* AnalyticsView.swift */,
 				DD5CF9FC2E0468C0009CD51A /* TimeGridView.swift */,
 				DDCA6B5A2DCA66330025EF9E /* TagStatisticsLegend.swift */,
@@ -762,6 +769,7 @@
 			knownRegions = (
 				en,
 				Base,
+				ru,
 			);
 			mainGroup = DDB401882D749E0F004A12C2;
 			minimizedProjectReferenceProxies = 1;
@@ -889,6 +897,7 @@
 				DDFB1A4A2DE510E700175D97 /* EditorViewModel.swift in Sources */,
 				DDFB1A4B2DE510E700175D97 /* EditorWebView.swift in Sources */,
 				DDFB1A4C2DE510E700175D97 /* EditorActions.swift in Sources */,
+				DDD1236C2E0C8F2900116F7D /* MiniPlayerView.swift in Sources */,
 				DD5CF9D92E046760009CD51A /* Notification+Conveniece.swift in Sources */,
 				DD32C28F2D74A19A0052B5C6 /* AppSetupManager.swift in Sources */,
 				DD8937FE2DEF936B009B1BC2 /* CropImageView.swift in Sources */,
@@ -986,6 +995,7 @@
 				DD5CF9EA2E0467FA009CD51A /* TagSelectionSheetView.swift in Sources */,
 				DD32C2662D74A00C0052B5C6 /* Youchip_StatApp.swift in Sources */,
 				DDD52CBA2DAEE7F50038158E /* WindowsManager.swift in Sources */,
+				DDD123C72E10984F00116F7D /* AiReportSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -996,6 +1006,7 @@
 			isa = PBXVariantGroup;
 			children = (
 				DD32C26A2D74A0420052B5C6 /* Localizable.strings */,
+				DDD1236D2E0CB0F400116F7D /* ru */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
@@ -1008,6 +1019,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -1071,6 +1083,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";

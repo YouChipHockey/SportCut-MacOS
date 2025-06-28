@@ -29,7 +29,7 @@ struct CropImageView: View {
     
     var body: some View {
         VStack {
-            Text("Выберите область для карты поля")
+            Text(^String.Titles.selectFieldMapArea)
                 .font(.headline)
                 .padding(.top)
             
@@ -122,13 +122,13 @@ struct CropImageView: View {
             .padding()
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     presentationMode.wrappedValue.dismiss()
                 }
                 
                 Spacer()
                 
-                Button("Повторить") {
+                Button(^String.Titles.rrepeat) {
                     hasSelection = false
                     cropRect = .zero
                 }
@@ -136,7 +136,7 @@ struct CropImageView: View {
                 
                 Spacer()
                 
-                Button("Применить") {
+                Button(^String.Titles.apply) {
                     if let image = image, hasSelection {
                         let croppedImage = cropImage(image: image)
                         onCrop(croppedImage)

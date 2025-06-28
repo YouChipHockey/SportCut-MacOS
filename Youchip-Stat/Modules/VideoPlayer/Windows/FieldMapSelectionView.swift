@@ -77,20 +77,20 @@ struct FieldMapSelectionView: View {
                 .background(Color.black.opacity(0.05))
                 .cornerRadius(8)
             } else {
-                Text("Не удалось загрузить карту поля")
+                Text(^String.Titles.failedToLoadFieldMap)
                     .foregroundColor(.red)
                     .padding()
             }
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     NSApp.keyWindow?.close()
                 }
                 .keyboardShortcut(.escape)
                 
                 Spacer()
                 
-                Button("Сохранить") {
+                Button(^String.Titles.saveButtonTitle) {
                     if let normalized = normalizedCoordinate {
                         onSave(normalized)
                     }

@@ -33,7 +33,7 @@ class FieldMapVisualizationWindowController: NSWindowController, ObservableObjec
         let hosting = NSHostingController(rootView: AnyView(content.environmentObject(self)))
         self.window = NSWindow(contentViewController: hosting)
         self.windowContent = hosting
-        self.window?.title = "Визуализация карты поля"
+        self.window?.title = ^String.Titles.fieldMapVisualization
         self.window?.styleMask = [.titled, .closable, .miniaturizable]
         self.window?.center()
     }
@@ -59,7 +59,7 @@ class FieldMapVisualizationWindowController: NSWindowController, ObservableObjec
                 .environmentObject(self)
             
             windowContent?.rootView = AnyView(view)
-            window?.title = "Визуализация карты поля - \(collection.name)"
+            window?.title = "\(^String.Titles.fieldMapVisualization) - \(collection.name)"
         }
     }
 }

@@ -17,7 +17,7 @@ class FullControlWindowController: NSWindowController, NSWindowDelegate {
         let view = FullControlView()
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Таймлайны"
+        window.title = ^String.Titles.timelines
         super.init(window: window)
         window.styleMask.insert(.closable)
         window.delegate = self

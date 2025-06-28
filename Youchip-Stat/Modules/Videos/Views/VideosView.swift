@@ -32,7 +32,7 @@ struct VideosView: View {
         }
         .frame(minWidth: 650, minHeight: 600)
         .background(Color.appSystemGray)
-        .navigationTitle(^String.Titles.rootVideosTitle)
+        .navigationTitle(^String.Titles.video)
         .overlay(loadingOverlay)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -40,14 +40,14 @@ struct VideosView: View {
                     .font(.system(size: 12))
                     .foregroundColor(.white)
                     .padding(.horizontal, 8)
-                ViewsFactory.whiteBarButton(title: "Гайды") {
+                ViewsFactory.whiteBarButton(title: ^String.Titles.videosViewButtonGuides) {
                     viewModel.action.send(.openGuide)
                 }
                 ViewsFactory.whiteBarButton(title: ^String.Titles.addVideoTitle) {
                     viewModel.action.send(.openFiles)
                 }
                 
-                ViewsFactory.whiteBarButton(title: viewModel.authManager.isAuthValid ? "Продлить лицензию" : "Купить лицензию") {
+                ViewsFactory.whiteBarButton(title: viewModel.authManager.isAuthValid ? ^String.Titles.renewLicense : ^String.Titles.buyLicense) {
                     viewModel.action.send(.showAuthSheet)
                 }
             }
@@ -96,24 +96,24 @@ struct VideosView: View {
     
     private var videoMetadataSheet: some View {
         VStack(spacing: 20) {
-            Text("Информация о матче")
+            Text(^String.Titles.videosViewTitleMatchInfo)
                 .font(.headline)
                 .padding(.top)
             
             Form {
-                TextField("Команда 1", text: $team1Name)
+                TextField(^String.Titles.videosViewFieldTeam1, text: $team1Name)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
                 
-                TextField("Команда 2", text: $team2Name)
+                TextField(^String.Titles.videosViewFieldTeam2, text: $team2Name)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
                 
-                TextField("Счёт (например: 2-1)", text: $score)
+                TextField(^String.Titles.videosViewFieldScore, text: $score)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
                 
-                DatePicker("Дата и время матча",
+                DatePicker(^String.Titles.videosViewFieldDateTime,
                            selection: $selectedDate,
                            displayedComponents: [.date, .hourAndMinute]
                 )
@@ -121,11 +121,11 @@ struct VideosView: View {
             }
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     viewModel.state.showMetadataSheet = false
                 }
                 
-                Button("Сохранить") {
+                Button(^String.Titles.saveButtonTitle) {
                     if let url = viewModel.state.videoMetadata.url {
                         viewModel.action.send(.saveVideoMetadata(
                             url: url,
@@ -151,22 +151,22 @@ struct VideosView: View {
     
     private var videoRenameSheet: some View {
         VStack(spacing: 20) {
-            Text("Переименовать видео")
+            Text(^String.Titles.videosViewDialogRenameVideo)
                 .font(.headline)
                 .padding(.top)
             
             Form {
-                TextField("Имя файла", text: $viewModel.state.newFileName)
+                TextField(^String.Titles.videosViewFieldFileName, text: $viewModel.state.newFileName)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
             }
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     viewModel.state.showRenameSheet = false
                 }
                 
-                Button("Сохранить") {
+                Button(^String.Titles.saveButtonTitle) {
                     if let file = viewModel.state.fileToRename {
                         viewModel.action.send(.renameSimpleVideo(
                             file: file,

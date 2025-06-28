@@ -148,7 +148,7 @@ class VideoFilesManager {
             let encoded = try JSONEncoder().encode(videosData)
             UserDefaults.standard.set(encoded, forKey: "videosData")
         } catch {
-            print("Ошибка кодирования: \(error)")
+            print("\(^String.Titles.fileManagerErrorEncoding) \(error)")
         }
     }
     
@@ -174,7 +174,7 @@ class VideoFilesManager {
                 let videosData = try JSONDecoder().decode([VideosData].self, from: data)
                 self.videosData = videosData
             } catch {
-                print("Ошибка декодирования: \(error)")
+                print("\(^String.Titles.fileManagerErrorDecoding) \(error)")
             }
         }
     }

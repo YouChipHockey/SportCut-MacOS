@@ -8,6 +8,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import AVKit
 
 struct FieldMapVisualizationView: View {
     
@@ -46,219 +47,19 @@ struct FieldMapVisualizationView: View {
     var body: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                VStack {
-                    Text("Список тегов")
-                        .font(.headline)
-                        .padding([.top, .horizontal])
-                    
-                    HStack {
-                        Button(action: {
-                            showFilters = true
-                        }) {
-                            HStack {
-                                Image(systemName: "line.3.horizontal.decrease.circle")
-                                Text("Фильтры")
-                            }
-                        }
-                        .buttonStyle(.borderless)
-                        
-                        if filters.isAnyFilterActive {
-                            Button(action: {
-                                filters = FieldMapFilters()
-                                updateFilteredStamps()
-                            }) {
-                                Image(systemName: "xmark.circle")
-                                    .foregroundColor(.secondary)
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Сбросить фильтры")
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    
-                    List {
-                        ForEach(stamps, id: \.id) { stamp in
-                            HStack {
-                                Toggle("", isOn: Binding(
-                                    get: { visibleStampIDs.contains(stamp.id) },
-                                    set: { isVisible in
-                                        if isVisible {
-                                            visibleStampIDs.insert(stamp.id)
-                                        } else {
-                                            visibleStampIDs.remove(stamp.id)
-                                        }
-                                    }
-                                ))
-                                .labelsHidden()
-                                .toggleStyle(CheckboxToggleStyle())
-                                .disabled(!filteredStampIDs.contains(stamp.id))
-                                .opacity(filteredStampIDs.contains(stamp.id) ? 1.0 : 0.5)
-                                
-                                Circle()
-                                    .fill(Color(hex: stamp.colorHex))
-                                    .frame(width: 10, height: 10)
-                                
-                                VStack(alignment: .leading) {
-                                    HStack {
-                                        Text(stamp.label)
-                                            .font(.subheadline)
-                                            .lineLimit(1)
-                                            .foregroundColor(filteredStampIDs.contains(stamp.id) ? .primary : .secondary)
-                                        
-                                        if let number = numberedStamps[stamp.id] {
-                                            Text("(№\(number))")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                                .frame(width: 40, alignment: .leading)
-                                        }
-                                    }
-                                    
-                                    Text(stamp.timeStart)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                if selectedStamp?.id == stamp.id {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(.blue)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedStamp = stamp
-                            }
-                            .opacity(filteredStampIDs.contains(stamp.id) ? 1.0 : 0.6)
-                        }
-                    }
-                    
-                    HStack {
-                        if filters.isAnyFilterActive {
-                            Text("Отфильтровано: \(filteredStampIDs.count) из \(stamps.count)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Text("Отображается: \(displayedStamps.count) из \(stamps.count)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal)
-                }
-                .frame(width: 250)
+                tagListView
                 
                 Divider()
                 
-                VStack {
-                    HStack {
-                        Spacer()
-                        Picker("Режим отображения", selection: $displayMode) {
-                            Text("Теги").tag(DisplayMode.tags)
-                            Text("Тепловая карта").tag(DisplayMode.heatmap)
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                        .frame(width: 300)
-                        Button(action: {
-                                exportCurrentView()
-                            }) {
-                                Text("Экспорт")
-                            }
-                            .help("Экспортировать как изображение")
-                            .buttonStyle(.borderless)
-                            .padding(.leading, 8)
-                    }
-                    .frame(height: 30)
-                    .padding([.top, .trailing])
-                    
-                    HStack {
-                        ZStack {
-                            if let image = fieldImage {
-                                ZStack(alignment: .center) {
-                                    Image(nsImage: image)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .overlay(
-                                            GeometryReader { geo in
-                                                ZStack {
-                                                    if displayMode == .tags {
-                                                        ForEach(displayedStamps.filter { $0.position != nil }, id: \.id) { stamp in
-                                                            if let position = stamp.position {
-                                                                let screenPosition = fieldPositionToScreenPosition(
-                                                                    position,
-                                                                    fieldDimensions: (CGFloat(fieldDimensions.width), CGFloat(fieldDimensions.height)),
-                                                                    imageSize: geo.size
-                                                                )
-                                                                
-                                                                ZStack {
-                                                                    Circle()
-                                                                        .fill(Color(hex: stamp.colorHex))
-                                                                        .frame(width: 20, height: 20)
-                                                                    
-                                                                    if let number = numberedStamps[stamp.id] {
-                                                                        Text("\(number)")
-                                                                            .font(.system(size: 10, weight: .bold))
-                                                                            .foregroundColor(.white)
-                                                                    }
-                                                                    
-                                                                    if selectedStamp?.id == stamp.id {
-                                                                        Circle()
-                                                                            .stroke(Color.black, lineWidth: 2)
-                                                                            .frame(width: 22, height: 22)
-                                                                        Circle()
-                                                                            .stroke(Color.red, lineWidth: 2)
-                                                                            .frame(width: 24, height: 24)
-                                                                        Circle()
-                                                                            .stroke(Color.black, lineWidth: 2)
-                                                                            .frame(width: 26, height: 26)
-                                                                    }
-                                                                }
-                                                                .position(screenPosition)
-                                                                .contextMenu {
-                                                                    stampContextMenu(stamp)
-                                                                }
-                                                            }
-                                                        }
-                                                    } else {
-                                                        HeatMapView(
-                                                            stamps: displayedStamps.filter { $0.position != nil },
-                                                            fieldDimensions: (CGFloat(fieldDimensions.width), CGFloat(fieldDimensions.height)),
-                                                            viewSize: geo.size
-                                                        )
-                                                        .opacity(0.7)
-                                                    }
-                                                }
-                                            }
-                                        )
-                                }
-                                .padding()
-                            } else {
-                                Text("Загрузка карты...")
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            }
-                        }
-                        if let stamp = selectedStamp {
-                            VStack {
-                                Spacer()
-                                
-                                stampInfoView(stamp)
-                                    .background(Color(NSColor.windowBackgroundColor))
-                                    .cornerRadius(8)
-                                    .shadow(radius: 5)
-                                    .padding()
-                            }
-                        }
-                    }
-                }
+                mapContentView
             }
             .onAppear {
                 loadFieldImageAndDimensions()
                 initializeVisibility()
                 assignStampNumbers()
+            }
+            .onDisappear {
+                selectedStamp = nil
             }
             .sheet(isPresented: $showFilters) {
                 FieldMapFilterView(
@@ -279,23 +80,446 @@ struct FieldMapVisualizationView: View {
         }
     }
     
+    // MARK: - Tag List View
+        private var tagListView: some View {
+            VStack {
+                Text(^String.Titles.fieldMapTitleTagsList)
+                    .font(.headline)
+                    .padding([.top, .horizontal])
+                    
+                tagListFilterControls
+                    
+                tagListContent
+                    
+                tagListFooter
+            }
+            .frame(width: 250)
+        }
+        
+        private var tagListFilterControls: some View {
+            HStack {
+                Button(action: {
+                    showFilters = true
+                }) {
+                    HStack {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                        Text(^String.Titles.fieldMapButtonFilters)
+                    }
+                }
+                .buttonStyle(.borderless)
+                
+                if filters.isAnyFilterActive {
+                    Button(action: {
+                        filters = FieldMapFilters()
+                        updateFilteredStamps()
+                    }) {
+                        Image(systemName: "xmark.circle")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(^String.Titles.fieldMapHelpResetFilters)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal)
+        }
+        
+        private var tagListContent: some View {
+            List {
+                ForEach(stamps, id: \.id) { stamp in
+                    tagListItem(stamp)
+                }
+            }
+            .listStyle(PlainListStyle()) // Use plain style for better height management
+            .environment(\.defaultMinListRowHeight, 1) // Allow rows to be as small as needed
+        }
+        
+        private func tagListItem(_ stamp: TimelineStamp) -> some View {
+            DisclosureGroup {
+                tagDetailView(for: stamp)
+            } label: {
+                tagListItemLabel(stamp)
+            }
+            .opacity(filteredStampIDs.contains(stamp.id) ? 1.0 : 0.6)
+            .fixedSize(horizontal: false, vertical: true) // Allow height to grow as needed
+        }
+        
+        private func tagListItemLabel(_ stamp: TimelineStamp) -> some View {
+            HStack(alignment: .top) { // Changed to .top alignment for better vertical layout
+                Toggle("", isOn: Binding(
+                    get: { visibleStampIDs.contains(stamp.id) },
+                    set: { isVisible in
+                        if isVisible {
+                            visibleStampIDs.insert(stamp.id)
+                        } else {
+                            visibleStampIDs.remove(stamp.id)
+                        }
+                    }
+                ))
+                .labelsHidden()
+                .toggleStyle(CheckboxToggleStyle())
+                .disabled(!filteredStampIDs.contains(stamp.id))
+                .opacity(filteredStampIDs.contains(stamp.id) ? 1.0 : 0.5)
+                
+                Circle()
+                    .fill(Color(hex: stamp.colorHex))
+                    .frame(width: 10, height: 10)
+                
+                tagListItemContent(stamp)
+                
+                Spacer()
+                
+                if selectedStamp?.id == stamp.id {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.blue)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                let previousStamp = selectedStamp
+                selectedStamp = nil
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if previousStamp?.id != stamp.id {
+                        selectedStamp = stamp
+                    }
+                }
+            }
+        }
+        
+        private func tagListItemContent(_ stamp: TimelineStamp) -> some View {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(stamp.label)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                        .foregroundColor(filteredStampIDs.contains(stamp.id) ? .primary : .secondary)
+                    
+                    if let number = numberedStamps[stamp.id] {
+                        Text("(№\(number))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 40, alignment: .leading)
+                    }
+                }
+                
+                Text(stamp.timeStart)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    
+                tagCompactLabelsAndEvents(stamp)
+            }
+        }
+        
+        private func tagCompactLabelsAndEvents(_ stamp: TimelineStamp) -> some View {
+            Group {
+                if !stamp.labels.isEmpty || !stamp.timeEvents.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if !stamp.labels.isEmpty {
+                            tagCompactLabels(stamp)
+                        }
+                        
+                        if !stamp.timeEvents.isEmpty {
+                            tagCompactEvents(stamp)
+                        }
+                    }
+                    .padding(.top, 1)
+                }
+            }
+        }
+        
+        private func tagCompactLabels(_ stamp: TimelineStamp) -> some View {
+            let allLabels = stamp.labels.compactMap { labelId in
+                TagLibraryManager.shared.findLabelById(labelId)
+            }
+            
+            return Group {
+                if !allLabels.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(^String.Titles.fieldMapLabelLabels)
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary)
+                        
+                        Text(allLabels.prefix(2).map { $0.name }.joined(separator: ", "))
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                        
+                        if allLabels.count > 2 {
+                            Text("+\(allLabels.count - 2)")
+                                .font(.system(size: 8))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        
+        private func tagCompactEvents(_ stamp: TimelineStamp) -> some View {
+            let events = getEvents(for: stamp.timeEvents)
+            
+            return Group {
+                if !events.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(^String.Titles.fieldMapLabelEvents)
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary)
+                        
+                        Text(events.prefix(1).map { $0.name }.joined(separator: ", "))
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                        
+                        if events.count > 1 {
+                            Text("+\(events.count - 1)")
+                                .font(.system(size: 8))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        
+        private func tagDetailView(for stamp: TimelineStamp) -> some View {
+            VStack(alignment: .leading, spacing: 8) {
+                if !stamp.labels.isEmpty {
+                    labelsDetailView(for: stamp)
+                    
+                    if !stamp.timeEvents.isEmpty {
+                        Divider()
+                    }
+                }
+                
+                if !stamp.timeEvents.isEmpty {
+                    eventsDetailView(for: stamp)
+                }
+            }
+            .padding(.vertical, 4)
+            .padding(.leading, 20)
+        }
+        
+        private func labelsDetailView(for stamp: TimelineStamp) -> some View {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(^String.Titles.fieldMapLabelLabels)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                
+                ForEach(getGroupedLabels(for: stamp.labels), id: \.0) { groupName, labels in
+                    VStack(alignment: .leading, spacing: 2) {
+                        if groupName != ^String.Titles.fieldMapDetailNoGroup {
+                            Text(groupName)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        ForEach(labels, id: \.id) { label in
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .frame(width: 6, height: 6)
+                                
+                                Text(label.name)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                            }
+                            .padding(.leading, 4)
+                        }
+                    }
+                    .padding(.leading, 4)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        
+        private func eventsDetailView(for stamp: TimelineStamp) -> some View {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(^String.Titles.fieldMapLabelEvents)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                
+                ForEach(getEvents(for: stamp.timeEvents), id: \.id) { event in
+                    HStack(spacing: 4) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.orange)
+                        
+                        Text(event.name)
+                            .font(.caption)
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, 4)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        
+        private var tagListFooter: some View {
+            HStack {
+                if filters.isAnyFilterActive {
+                    Text(String(format: ^String.Titles.fieldMapFooterFiltered, filteredStampIDs.count, stamps.count))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Text(String(format: ^String.Titles.fieldMapFooterDisplayed, displayedStamps.count, stamps.count))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+        }
+        
+        // MARK: - Map Content View
+        private var mapContentView: some View {
+            VStack {
+                mapHeaderView
+                
+                mapAreaView
+            }
+        }
+        
+        private var mapHeaderView: some View {
+            HStack {
+                Spacer()
+                Picker(^String.Titles.displayMode, selection: $displayMode) {
+                    Text(^String.Titles.fieldMapViewTags).tag(DisplayMode.tags)
+                    Text(^String.Titles.fieldMapViewHeatmap).tag(DisplayMode.heatmap)
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .frame(width: 300)
+                Button(action: {
+                    exportCurrentView()
+                }) {
+                    Text(^String.Titles.fieldMapButtonExport)
+                }
+                .help(^String.Titles.fieldMapHelpExportImage)
+                .buttonStyle(.borderless)
+                .padding(.leading, 8)
+            }
+            .frame(height: 30)
+            .padding([.top, .trailing])
+        }
+        
+        private var mapAreaView: some View {
+            HStack {
+                mapAreaContent
+                
+                if let stamp = selectedStamp {
+                    VStack {
+                        Spacer()
+                        
+                        stampInfoView(stamp)
+                            .background(Color(NSColor.windowBackgroundColor))
+                            .cornerRadius(8)
+                            .shadow(radius: 5)
+                            .padding()
+                    }
+                }
+            }
+        }
+        
+        private var mapAreaContent: some View {
+            ZStack {
+                if let image = fieldImage {
+                    ZStack(alignment: .center) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .overlay(
+                                GeometryReader { geo in
+                                    mapOverlayContent(geo)
+                                }
+                            )
+                    }
+                    .padding()
+                } else {
+                    Text(^String.Titles.fieldMapLoading)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
+        
+        @ViewBuilder
+        private func mapOverlayContent(_ geo: GeometryProxy) -> some View {
+            ZStack {
+                if displayMode == .tags {
+                    mapTagsOverlay(geo)
+                } else {
+                    HeatMapView(
+                        stamps: displayedStamps.filter { $0.position != nil },
+                        fieldDimensions: (CGFloat(fieldDimensions.width), CGFloat(fieldDimensions.height)),
+                        viewSize: geo.size
+                    )
+                    .opacity(0.7)
+                }
+            }
+        }
+        
+        private func mapTagsOverlay(_ geo: GeometryProxy) -> some View {
+            ForEach(displayedStamps.filter { $0.position != nil }, id: \.id) { stamp in
+                if let position = stamp.position {
+                    let screenPosition = fieldPositionToScreenPosition(
+                        position,
+                        fieldDimensions: (CGFloat(fieldDimensions.width), CGFloat(fieldDimensions.height)),
+                        imageSize: geo.size
+                    )
+                    
+                    mapTagMarker(stamp, at: screenPosition)
+                }
+            }
+        }
+        
+        private func mapTagMarker(_ stamp: TimelineStamp, at position: CGPoint) -> some View {
+            ZStack {
+                Circle()
+                    .fill(Color(hex: stamp.colorHex))
+                    .frame(width: 20, height: 20)
+                
+                if let number = numberedStamps[stamp.id] {
+                    Text("\(number)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                
+                if selectedStamp?.id == stamp.id {
+                    Circle()
+                        .stroke(Color.black, lineWidth: 2)
+                        .frame(width: 22, height: 22)
+                    Circle()
+                        .stroke(Color.red, lineWidth: 2)
+                        .frame(width: 24, height: 24)
+                    Circle()
+                        .stroke(Color.black, lineWidth: 2)
+                        .frame(width: 26, height: 26)
+                }
+            }
+            .position(position)
+            .contextMenu {
+                stampContextMenu(stamp)
+            }
+        }
+    
     @ViewBuilder
     private func stampContextMenu(_ stamp: TimelineStamp) -> some View {
         if let number = numberedStamps[stamp.id] {
-            Text("Тег №\(number): \(stamp.label)")
+            Text("\(^String.Titles.fieldMapTagTitle)\(number): \(stamp.label)")
         } else {
-            Text("Тег: \(stamp.label)")
+            Text("\(^String.Titles.fieldMapTagTitleNoNumber) \(stamp.label)")
         }
         
-        Text("Время: \(stamp.timeStart) - \(stamp.timeFinish)")
+        Text("\(^String.Titles.time): \(stamp.timeStart) - \(stamp.timeFinish)")
         if let position = stamp.position {
-            Text("Позиция: \(String(format: "x: %.2f, y: %.2f", position.x, position.y))")
+            Text("\(^String.Titles.fieldMapDetailPosition) \(String(format: "x: %.2f, y: %.2f", position.x, position.y))")
         }
         Divider()
-        Button("Информация") {
+        Button(^String.Titles.fieldMapMenuInfo) {
             selectedStamp = stamp
         }
-        Button(visibleStampIDs.contains(stamp.id) ? "Скрыть" : "Показать") {
+        Button(visibleStampIDs.contains(stamp.id) ? ^String.Titles.fieldMapMenuHide : ^String.Titles.fieldMapMenuShow) {
             if visibleStampIDs.contains(stamp.id) {
                 visibleStampIDs.remove(stamp.id)
             } else {
@@ -303,7 +527,7 @@ struct FieldMapVisualizationView: View {
             }
         }
         if !filteredStampIDs.contains(stamp.id) {
-            Text("Тег не соответствует фильтрам")
+            Text(^String.Titles.fieldMapTagNoFilters)
                 .foregroundColor(.secondary)
                 .font(.caption)
         }
@@ -317,9 +541,9 @@ struct FieldMapVisualizationView: View {
             savePanel.allowedContentTypes = [UTType.png]
             savePanel.canCreateDirectories = true
             savePanel.isExtensionHidden = false
-            savePanel.title = "Сохранить карту"
-            savePanel.message = "Выберите место для сохранения изображения карты"
-            savePanel.nameFieldStringValue = "Карта поля.png"
+            savePanel.title = ^String.Titles.fieldMapSavePanelTitle
+            savePanel.message = ^String.Titles.fieldMapSavePanelMessage
+            savePanel.nameFieldStringValue = ^String.Titles.fieldMapSavePanelDefaultName
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 savePanel.beginSheetModal(for: captureWindow) { response in
@@ -342,7 +566,7 @@ struct FieldMapVisualizationView: View {
                                             do {
                                                 try pngData.write(to: url)
                                             } catch {
-                                                self.showErrorAlert(message: "Ошибка при сохранении изображения: \(error.localizedDescription)")
+                                                self.showErrorAlert(message: "\(^String.Titles.imageSaveError) \(error.localizedDescription)")
                                             }
                                         }
                                     }
@@ -351,7 +575,7 @@ struct FieldMapVisualizationView: View {
                                 window.close()
                             }
                         } else {
-                            self.showErrorAlert(message: "Не удалось сделать снимок карты")
+                            self.showErrorAlert(message: ^String.Titles.snapshotFailed)
                         }
                     } else if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == mapAreaID }) {
                         window.close()
@@ -389,10 +613,10 @@ struct FieldMapVisualizationView: View {
     
     private func showErrorAlert(message: String) {
         let alert = NSAlert()
-        alert.messageText = "Ошибка экспорта"
+        alert.messageText = ^String.Titles.fieldMapAlertErrorTitle
         alert.informativeText = message
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "ОК")
+        alert.addButton(withTitle: ^String.Titles.fieldMapButtonOK)
         alert.runModal()
     }
     
@@ -453,7 +677,7 @@ struct FieldMapVisualizationView: View {
                             }
                         )
                 } else {
-                    Text("Карта не загружена")
+                    Text(^String.Titles.fieldMapNoMap)
                 }
             }
         )
@@ -462,7 +686,7 @@ struct FieldMapVisualizationView: View {
         let window = NSWindow(contentViewController: hostingController)
         window.setContentSize(NSSize(width: 1024, height: 768))
         window.styleMask = [.titled, .closable]
-        window.title = "Экспорт карты"
+        window.title = ^String.Titles.fieldMapWindowExportTitle
         window.identifier = NSUserInterfaceItemIdentifier(rawValue: id)
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -515,7 +739,7 @@ struct FieldMapVisualizationView: View {
             
             if let tagGroup = TagLibraryManager.shared.findTagGroupForTag(stamp.idTag) {
                 HStack {
-                    Text("Группа:")
+                    Text(^String.Titles.fieldMapDetailGroup)
                         .foregroundColor(.secondary)
                         .frame(width: 80, alignment: .leading)
                     Text(tagGroup.name)
@@ -524,31 +748,31 @@ struct FieldMapVisualizationView: View {
             }
             
             HStack {
-                Text("Время:")
+                Text("\(^String.Titles.time):")
                     .foregroundColor(.secondary)
                     .frame(width: 80, alignment: .leading)
                 Text("\(stamp.timeStart) - \(stamp.timeFinish)")
             }
             
             HStack {
-                Text("Длительность:")
+                Text(^String.Titles.fieldMapDetailDuration)
                     .foregroundColor(.secondary)
                     .frame(width: 80, alignment: .leading)
-                Text("\(String(format: "%.2f", stamp.duration)) сек")
+                Text(String(format: ^String.Titles.fieldMapFormatDuration, stamp.duration))
             }
             
             if let position = stamp.position {
                 HStack {
-                    Text("Позиция:")
+                    Text(^String.Titles.fieldMapDetailPosition)
                         .foregroundColor(.secondary)
                         .frame(width: 80, alignment: .leading)
-                    Text(String(format: "x: %.2f м, y: %.2f м", position.x, position.y))
+                    Text(String(format: ^String.Titles.fieldMapFormatPosition, position.x, position.y))
                 }
             }
             
             if !stamp.labels.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Лейблы:")
+                    Text(^String.Titles.fieldMapLabelLabels)
                         .foregroundColor(.secondary)
                         .font(.subheadline)
                     
@@ -575,7 +799,7 @@ struct FieldMapVisualizationView: View {
             
             if !stamp.timeEvents.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("События:")
+                    Text(^String.Titles.fieldMapLabelEvents)
                         .foregroundColor(.secondary)
                         .font(.subheadline)
                     
@@ -592,7 +816,7 @@ struct FieldMapVisualizationView: View {
             
             HStack {
                 Spacer()
-                Button("Выбрать") {
+                Button(^String.Titles.fieldMapButtonSelect) {
                     selectedStamp = stamp
                     showContextMenu = false
                 }
@@ -632,7 +856,7 @@ struct FieldMapVisualizationView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 if let number = numberedStamps[stamp.id] {
-                    Text("Тег №\(number)")
+                    Text("\(^String.Titles.fieldMapTagTitle)\(number)")
                         .font(.headline)
                         .foregroundColor(.primary)
                 }
@@ -663,21 +887,21 @@ struct FieldMapVisualizationView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Group {
                         if let tagGroup = TagLibraryManager.shared.findTagGroupForTag(stamp.idTag) {
-                            detailRow(title: "Группа:", value: tagGroup.name)
+                            detailRow(title: ^String.Titles.fieldMapDetailGroup, value: tagGroup.name)
                         }
+//                        
+                        detailRow(title: "\(^String.Titles.time):", value: "\(stamp.timeStart) - \(stamp.timeFinish)")
                         
-                        detailRow(title: "Время:", value: "\(stamp.timeStart) - \(stamp.timeFinish)")
-                        
-                        detailRow(title: "Длительность:", value: "\(String(format: "%.2f", stamp.duration)) сек")
+                        detailRow(title: ^String.Titles.fieldMapDetailDuration, value: String(format: ^String.Titles.fieldMapFormatDuration, stamp.duration))
                         
                         if let position = stamp.position {
-                            detailRow(title: "Позиция:", value: String(format: "x: %.2f м, y: %.2f м", position.x, position.y))
+                            detailRow(title: ^String.Titles.fieldMapDetailPosition, value: String(format: ^String.Titles.fieldMapFormatPosition, position.x, position.y))
                         }
                     }
                     
                     if !stamp.labels.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Лейблы:")
+                            Text(^String.Titles.fieldMapLabelLabels)
                                 .foregroundColor(.secondary)
                                 .font(.headline)
                                 .padding(.bottom, 2)
@@ -709,7 +933,7 @@ struct FieldMapVisualizationView: View {
                     
                     if !stamp.timeEvents.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("События:")
+                            Text(^String.Titles.fieldMapLabelEvents)
                                 .foregroundColor(.secondary)
                                 .font(.headline)
                                 .padding(.bottom, 2)
@@ -734,7 +958,7 @@ struct FieldMapVisualizationView: View {
                     
                     Group {
                         HStack(alignment: .center) {
-                            Text("Цвет:")
+                            Text(^String.Titles.fieldMapDetailColor)
                                 .foregroundColor(.secondary)
                             Rectangle()
                                 .fill(Color(hex: stamp.colorHex))
@@ -744,6 +968,14 @@ struct FieldMapVisualizationView: View {
                                 .font(.caption)
                         }
                     }
+                    
+                    Divider()
+                    
+                    MiniPlayerView(
+                        stamp: stamp,
+                        initialVideoURL: VideoPlayerManager.shared.getCurrentVideoURL()
+                    )
+                    .frame(maxWidth: .infinity)
                 }
                 .padding(.horizontal, 8)
             }
@@ -767,7 +999,7 @@ struct FieldMapVisualizationView: View {
         
         for labelID in labelIDs {
             if let label = TagLibraryManager.shared.findLabelById(labelID) {
-                var groupName = "Без группы"
+                var groupName = ^String.Titles.fieldMapDetailNoGroup
                 
                 for group in TagLibraryManager.shared.allLabelGroups {
                     if group.lables.contains(labelID) {

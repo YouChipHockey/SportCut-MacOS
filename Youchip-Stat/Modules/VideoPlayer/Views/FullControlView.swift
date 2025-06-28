@@ -69,6 +69,7 @@ struct FullControlView: View {
     @State private var parentWindowHeight: CGFloat = 600
     @State private var showEditNameSheet = false
     @State private var showEventSelectionSheet: Bool = false
+    @State private var showAiReportSheet: Bool = false
     
     func getSegmentsForExport(type: CutsExportType) -> [ExportSegment] {
         var result: [ExportSegment] = []
@@ -190,17 +191,17 @@ struct FullControlView: View {
         switch type {
         case .currentTimeline:
             if let lineName = segments.first?.lineName {
-                fileName = "\(lineName)_фильм.mp4"
+                fileName = "\(lineName)\(^String.Titles.fullControlFileTimelineFile)"
             } else {
-                fileName = "timeline_фильм.mp4"
+                fileName = "timeline\(^String.Titles.fullControlFileTimelineFile)"
             }
         case .tag(let selectedTag):
             let groupName = segments.first?.groupName ?? "group"
-            fileName = "\(groupName)_\(selectedTag.name)_фильм.mp4"
+            fileName = "\(groupName)_\(selectedTag.name)\(^String.Titles.fullControlFileTimelineFile)"
         case .timeEvent(let selectedEvent):
-            fileName = "событие_\(selectedEvent.name)_фильм.mp4"
+            fileName = "\(^String.Titles.fullControlFileEventFile)_\(selectedEvent.name)\(^String.Titles.fullControlFileTimelineFile)"
         case .allTimelines:
-            fileName = "все моменты.mp4"
+            fileName = ^String.Titles.fullControlFileAllTimelinesFile
         }
         
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -268,11 +269,11 @@ struct FullControlView: View {
             
             switch type {
             case .currentTimeline:
-                let lineName = segment.lineName ?? "таймлайн"
+                let lineName = segment.lineName ?? ^String.Titles.fullControlFileTimeline
                 fileName = "\(lineName)_\(segment.tagName)_\(index + 1).mp4"
                 
             case .allTimelines:
-                let lineName = segment.lineName ?? "таймлайн"
+                let lineName = segment.lineName ?? ^String.Titles.fullControlFileTimeline
                 fileName = "\(lineName)_\(segment.tagName)_\(index + 1).mp4"
                 
             case .tag(let selectedTag):
@@ -280,7 +281,7 @@ struct FullControlView: View {
                 fileName = "\(groupName)_\(selectedTag.name)_\(index + 1).mp4"
                 
             case .timeEvent(let selectedEvent):
-                fileName = "событие_\(selectedEvent.name)_\(index + 1).mp4"
+                fileName = "\(^String.Titles.fullControlFileEventFile)_\(selectedEvent.name)_\(index + 1).mp4"
             }
             
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -374,13 +375,13 @@ struct FullControlView: View {
                         if panel.runModal() == .OK, let url = panel.url {
                             do {
                                 try FileManager.default.copyItem(at: outputURL, to: url)
-                                print("Фильм экспортирован и сохранён по \(url)")
+                                print("\(^String.Titles.fullControlExportFilmSuccess) \(url)")
                             } catch {
                                 print("Ошибка сохранения фильма: \(error)")
                             }
                         }
                     case .failure(let error):
-                        print("Ошибка экспорта фильма: \(error)")
+                        print("\(^String.Titles.fullControlExportFilmError) \(error)")
                     }
                 }
             }
@@ -472,14 +473,14 @@ struct FullControlView: View {
                                     .font(.caption)
                             }
                             .buttonStyle(BorderlessButtonStyle())
-                            .help("Редактировать название таймлайна")
+                            .help(^String.Titles.editTimelineName)
                         }
                         .frame(width: 75, height: 30, alignment: .leading)
                         .contextMenu {
-                            Button("Редактировать название") {
+                            Button(^String.Titles.editName) {
                                 showEditNameSheet = true
                             }
-                            Button("Удалить таймлайн") {
+                            Button(^String.Titles.timelineButtonDeleteTimeline) {
                                 let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
                                 TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
                                 if isSelectedLine {
@@ -606,6 +607,14 @@ struct FullControlView: View {
                         .frame(width: gridWidth)
                     }
                 }
+                .sheet(isPresented: $showAiReportSheet) {
+                    AiReportSheet(onSubmit: { teamName, opponentName, venue, matchDate in
+                        generateAndDownloadAiReport(teamName: teamName,
+                                                    opponentName: opponentName,
+                                                    venue: venue,
+                                                    matchDate: matchDate)
+                    })
+                }
                 .sheet(isPresented: $showEditNameSheet) {
                     if let lineID = timelineData.selectedLineID,
                        let line = timelineData.lines.first(where: { $0.id == lineID }) {
@@ -617,6 +626,92 @@ struct FullControlView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+    
+    func generateAndDownloadAiReport(teamName: String, opponentName: String, venue: String, matchDate: String) {
+        let fullLines = transformToFullTimelineLines()
+        
+        struct AIReportRequest: Encodable {
+            let match_data: MatchData
+            let team_name: String
+            let opponent_name: String
+            let venue: String
+            let match_date: String
+            
+            struct MatchData: Encodable {
+                let data: [FullTimelineLine]
+            }
+        }
+        
+        let request = AIReportRequest(
+            match_data: AIReportRequest.MatchData(data: fullLines),
+            team_name: teamName,
+            opponent_name: opponentName,
+            venue: venue,
+            match_date: matchDate
+        )
+        
+        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-match-report") else {
+            print("Invalid URL")
+            return
+        }
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        isExporting = true
+        
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            urlRequest.httpBody = try encoder.encode(request)
+            
+            URLSession.shared.dataTask(with: urlRequest) { data, response, error in
+                DispatchQueue.main.async {
+                    self.isExporting = false
+                    
+                    if let error = error {
+                        print("Error: \(error.localizedDescription)")
+                        return
+                    }
+                    
+                    guard let data = data, let httpResponse = response as? HTTPURLResponse else {
+                        print("No data returned or invalid response")
+                        return
+                    }
+                    
+                    if httpResponse.statusCode == 200 {
+                        self.saveReportFile(data: data, teamName: teamName, opponentName: opponentName)
+                    } else {
+                        print("Server error: \(httpResponse.statusCode)")
+                        if let responseString = String(data: data, encoding: .utf8) {
+                            print("Response: \(responseString)")
+                        }
+                    }
+                }
+            }.resume()
+        } catch {
+            DispatchQueue.main.async {
+                self.isExporting = false
+                print("Failed to encode request: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func saveReportFile(data: Data, teamName: String, opponentName: String) {
+        let panel = NSSavePanel()
+        panel.allowedFileTypes = ["pdf"]
+        panel.nameFieldStringValue = "ИИ_Отчет_\(teamName)_vs_\(opponentName).pdf"
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try data.write(to: url)
+                print("Report saved successfully at \(url)")
+            } catch {
+                print("Failed to save report: \(error.localizedDescription)")
             }
         }
     }
@@ -648,7 +743,7 @@ struct FullControlView: View {
                     Spacer()
                 }
                 HStack {
-                    Text("Таймлайны:")
+                    Text(^String.Titles.timelines)
                     if markupMode == .standard {
                         Button {
                             showAddLineSheet = true
@@ -656,14 +751,14 @@ struct FullControlView: View {
                             Image(systemName: "plus.circle")
                                 .font(.title2)
                         }
-                        .help("Добавить таймлайн")
+                        .help(^String.Titles.fullControlButtonAddTimeline)
                     }
                     Menu {
                         Button(action: {
                             WindowsManager.shared.setMarkupMode(.standard)
                         }) {
                             HStack {
-                                Text("Стандартный режим")
+                                Text(^String.Titles.fullControlModeStandard)
                                 if markupMode == .standard {
                                     Image(systemName: "checkmark")
                                 }
@@ -674,7 +769,7 @@ struct FullControlView: View {
                             WindowsManager.shared.setMarkupMode(.tagBased)
                         }) {
                             HStack {
-                                Text("Режим по тегам")
+                                Text(^String.Titles.fullControlModeTagBased)
                                 if markupMode == .tagBased {
                                     Image(systemName: "checkmark")
                                 }
@@ -682,13 +777,13 @@ struct FullControlView: View {
                         }
                     } label: {
                         if markupMode == .standard {
-                            Text("Стандартный режим")
+                            Text(^String.Titles.fullControlModeStandard)
                         } else {
-                            Text("Режим по тегам")
+                            Text(^String.Titles.fullControlModeTagBased)
                         }
                     }
-                    .help("Режим разметки")
-                    Button("Скачать упрощенный JSON") {
+                    .help(^String.Titles.fullControlModeHelp)
+                    Button(^String.Titles.fullControlButtonJSONSimple) {
                         let encoder = JSONEncoder()
                         encoder.outputFormatting = .prettyPrinted
                         do {
@@ -703,7 +798,7 @@ struct FullControlView: View {
                             print("Ошибка сохранения JSON: \(error)")
                         }
                     }
-                    Button("Скачать полный JSON") {
+                    Button(^String.Titles.fullControlButtonJSONFull) {
                         let encoder = JSONEncoder()
                         encoder.outputFormatting = .prettyPrinted
                         let fullLines = transformToFullTimelineLines()
@@ -720,32 +815,35 @@ struct FullControlView: View {
                             print("Ошибка сохранения полного JSON: \(error)")
                         }
                     }
-                    Menu("Нарезки") {
-                        Button("Экспорт текущего таймлайна") {
+                    Menu(^String.Titles.fullControlMenuExport) {
+                        Button(^String.Titles.fullControlButtonExportTimeline) {
                             selectedExportType = .currentTimeline
                             showExportModeSheet = true
                         }
-                        Button("Экспорт всего") {
+                        Button(^String.Titles.fullControlButtonExportAll) {
                             selectedExportType = .allTimelines
                             showExportModeSheet = true
                         }
-                        Button("Экспорт тегов") {
+                        Button(^String.Titles.fullControlButtonExportTags) {
                             showTagSelectionSheet = true
                         }
-                        Button("Экспорт событий") {
+                        Button(^String.Titles.fullControlButtonExportEvents) {
                             showEventSelectionSheet = true
                         }
                     }
-                    Button("Отчет") {
+                    Button(^String.Titles.fullControlButtonReport) {
                         WindowsManager.shared.showAnalytics()
                     }
-                    Button("Мои скриншоты") {
+                    Button(^String.Titles.aIReports) {
+                        showAiReportSheet = true
+                    }
+                    Button(^String.Titles.fullControlButtonScreenshots) {
                         WindowsManager.shared.showScreenshots()
                     }
-                    Button("Отобразить на карте") {
+                    Button(^String.Titles.fullControlButtonMap) {
                         WindowsManager.shared.showFieldMapVisualizationPicker()
                     }
-                    Button("Настроить визуализацию") {
+                    Button(^String.Titles.configureVisualization) {
                         WindowsManager.shared.showFieldMapConfigurationWindow()
                     }
                     Spacer()
@@ -757,14 +855,14 @@ struct FullControlView: View {
                     } label: {
                         Image(systemName: "minus.magnifyingglass")
                     }
-                    .help("Отдалить таймлайн")
+                    .help(^String.Titles.fullControlButtonTimelineZoomOut)
                     
                     Button {
                         timelineScale += 0.5
                     } label: {
                         Image(systemName: "plus.magnifyingglass")
                     }
-                    .help("Приблизить таймлайн")
+                    .help(^String.Titles.fullControlButtonTimelineZoomIn)
                     
                     Text(String(format: "%.1fx", timelineScale))
                         .padding(.leading, 8)
@@ -848,10 +946,10 @@ struct FullControlView: View {
                         }
                     }
                 } else {
-                    Text("Ошибка: не найден таймстемп")
+                    Text(^String.Titles.fullControlExportErrorStampNotFound)
                 }
             } else {
-                Text("Ошибка: не найден таймстемп")
+                Text(^String.Titles.fullControlExportErrorStampNotFound)
             }
         }
         .sheet(isPresented: $showExportModeSheet) {

@@ -19,7 +19,7 @@ class FieldMapConfigurationWindowController: NSWindowController, NSWindowDelegat
         let hosting = NSHostingController(rootView: AnyView(content))
         self.window = NSWindow(contentViewController: hosting)
         self.windowContent = hosting
-        self.window?.title = "Настройка визуализации карты поля"
+        self.window?.title = ^String.Titles.fieldMapVisualizationSettings
         self.window?.styleMask = [.titled, .closable, .miniaturizable]
         self.window?.center()
         self.window?.delegate = self

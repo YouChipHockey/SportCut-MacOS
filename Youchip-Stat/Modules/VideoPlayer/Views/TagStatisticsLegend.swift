@@ -17,7 +17,7 @@ struct TagStatisticsLegend: View {
                     Circle()
                         .fill(stat.color)
                         .frame(width: 12, height: 12)
-                    Text("\(stat.tagName): \(Int(stat.duration)) шт. (\(String(format: "%.1f", stat.percentage))%)")
+                    Text("\(stat.tagName): \(Int(stat.duration)) \(^String.Titles.itemsCount). (\(String(format: "%.1f", stat.percentage))%)")
                         .font(.subheadline)
                 }
             }

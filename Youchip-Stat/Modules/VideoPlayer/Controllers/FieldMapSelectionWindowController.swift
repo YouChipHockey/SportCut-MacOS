@@ -17,7 +17,7 @@ class FieldMapSelectionWindowController: NSWindowController, NSWindowDelegate {
         let view = FieldMapSelectionView(tag: tag, imageBookmark: imageBookmark, onSave: onSave)
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Выбор позиции на карте для тега: \(tag.name)"
+        window.title = "\(^String.Titles.selectMapPositionForTag) \(tag.name)"
         super.init(window: window)
         window.styleMask = [.titled, .closable, .resizable]
         window.delegate = self

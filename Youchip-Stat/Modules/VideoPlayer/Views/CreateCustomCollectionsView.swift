@@ -84,30 +84,30 @@ struct CreateCustomCollectionsView: View {
             switch alertType {
             case .fieldChange:
                 return Alert(
-                    title: Text("Изменение карты поля"),
-                    message: Text("На таймлайнах есть \(activeTagsOnTimelines) тегов, использующих текущую карту. При изменении карты поля их позиции останутся, но будут соответствовать старой карте.\n\nПродолжить?"),
-                    primaryButton: .default(Text("Сбросить позиции")) {
+                    title: Text(^String.Titles.fieldMapChange),
+                    message: Text(String(format: ^String.Titles.fieldMapChangeWarning, activeTagsOnTimelines)),
+                    primaryButton: .default(Text(^String.Titles.resetPositions)) {
                         resetTagPositionsOnTimelines()
                         selectNewFieldImage()
                     },
-                    secondaryButton: .destructive(Text("Сохранить позиции")) {
+                    secondaryButton: .destructive(Text(^String.Titles.savePositions)) {
                         selectNewFieldImage()
                     }
                 )
             case .fieldDelete:
                 return Alert(
-                    title: Text("Удаление карты поля"),
-                    message: Text("На таймлайнах есть \(activeTagsOnTimelines) тегов, использующих текущую карту. При удалении карты поля эти теги больше не смогут быть визуализированы на карте."),
-                    primaryButton: .destructive(Text("Удалить карту")) {
+                    title: Text(^String.Titles.deleteFieldMap),
+                    message: Text(String(format: ^String.Titles.fieldMapChangeWarning, activeTagsOnTimelines)),
+                    primaryButton: .destructive(Text(^String.Titles.deleteMap)) {
                         collectionManager.deleteFieldImage()
                         resetTagPositionsOnTimelines()
                     },
-                    secondaryButton: .cancel(Text("Отмена"))
+                    secondaryButton: .cancel(Text(^String.Titles.collectionsButtonCancel))
                 )
             }
         }
         .sheet(isPresented: $showAddTagGroupSheet) {
-            addGroupSheet(title: "Добавить группу тегов") {
+            addGroupSheet(title: ^String.Titles.addTagGroup) {
                 let _ = collectionManager.createTagGroup(name: newGroupName)
                 newGroupName = ""
             }
@@ -154,7 +154,7 @@ struct CreateCustomCollectionsView: View {
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(5)
             } else {
-                FocusAwareTextField(text: $collectionManager.collectionName, placeholder: "Имя коллекции")
+                FocusAwareTextField(text: $collectionManager.collectionName, placeholder: ^String.Titles.collectionName)
                     .frame(width: 200)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
             }
@@ -168,22 +168,22 @@ struct CreateCustomCollectionsView: View {
                     }
                 }
             }) {
-                Text(collectionManager.isEditingExisting ? "Обновить коллекцию" : "Сохранить коллекцию")
+                Text(collectionManager.isEditingExisting ? ^String.Titles.updateCollection : ^String.Titles.saveCollection)
             }
             .buttonStyle(CompatibilityButtonStyle())
             
             if showSaveSuccess {
-                Text("Сохранено!")
+                Text(^String.Titles.saved)
                     .foregroundColor(.green)
             }
             
             Spacer()
             
             Picker("", selection: $viewMode) {
-                Text("Группы тегов").tag(ViewMode.tagGroups)
-                Text("Группы лейблов").tag(ViewMode.labelGroups)
-                Text("Общие события").tag(ViewMode.timeEvents)
-                Text("Карта поля").tag(ViewMode.fieldMap)
+                Text(^String.Titles.tagGroups).tag(ViewMode.tagGroups)
+                Text(^String.Titles.labelGroups).tag(ViewMode.labelGroups)
+                Text(^String.Titles.commonEvents).tag(ViewMode.timeEvents)
+                Text(^String.Titles.fieldMap).tag(ViewMode.fieldMap)
             }
             .pickerStyle(.segmented)
             .frame(width: 700)
@@ -217,12 +217,12 @@ struct CreateCustomCollectionsView: View {
     
     var fieldMapSection: some View {
         Section {
-            Text("Настройки карты поля")
+            Text(^String.Titles.fieldMapSettings)
                 .font(.headline)
                 .padding(.vertical, 2)
                 .background(Color.blue.opacity(0.2))
         } header: {
-            Text("Карта поля")
+            Text(^String.Titles.fieldMap)
         }
     }
     
@@ -234,7 +234,7 @@ struct CreateCustomCollectionsView: View {
             
             addTagGroupButton
         } header: {
-            Text("Группы тегов")
+            Text(^String.Titles.tagGroups)
         }
     }
     
@@ -246,7 +246,7 @@ struct CreateCustomCollectionsView: View {
             
             addTimeEventButton
         } header: {
-            Text("Общие события")
+            Text(^String.Titles.commonEvents)
         }
     }
     
@@ -269,7 +269,7 @@ struct CreateCustomCollectionsView: View {
         }) {
             HStack {
                 Image(systemName: "plus.circle")
-                Text("Добавить событие")
+                Text(^String.Titles.addEvent)
             }
         }
     }
@@ -277,7 +277,7 @@ struct CreateCustomCollectionsView: View {
     func tagGroupRowView(group: TagGroup) -> some View {
         HStack {
             if selectedTagGroupID == group.id && isEditingGroupName {
-                FocusAwareTextField(text: $newGroupName, placeholder: "Название группы")
+                FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: .infinity)
                     .onAppear {
@@ -304,7 +304,7 @@ struct CreateCustomCollectionsView: View {
                         .foregroundColor(.blue)
                 }
                 .buttonStyle(BorderlessButtonStyle())
-                .help("Переименовать группу")
+                .help(^String.Titles.renameGroup)
             }
             
             Button(action: {
@@ -339,7 +339,7 @@ struct CreateCustomCollectionsView: View {
         }) {
             HStack {
                 Image(systemName: "plus.circle")
-                Text("Добавить группу")
+                Text(^String.Titles.addGroup)
             }
         }
     }
@@ -356,7 +356,7 @@ struct CreateCustomCollectionsView: View {
                     
                     addTagButton
                 } header: {
-                    Text("Теги в группе \"\(group.name)\"")
+                    Text("\(^String.Titles.tagsInGroup) \"\(group.name)\"")
                 }
             }
         }
@@ -397,7 +397,7 @@ struct CreateCustomCollectionsView: View {
         }) {
             HStack {
                 Image(systemName: "plus.circle")
-                Text("Добавить тег")
+                Text(^String.Titles.addTag)
             }
         }
     }
@@ -418,7 +418,7 @@ struct CreateCustomCollectionsView: View {
                 .frame(width: 16, height: 16)
             
             if selectedTagID == tag.id && isEditingName {
-                FocusAwareTextField(text: $editingName, placeholder: "Название тега")
+                FocusAwareTextField(text: $editingName, placeholder: ^String.Titles.tagName)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: .infinity)
                     .onAppear {
@@ -471,7 +471,7 @@ struct CreateCustomCollectionsView: View {
                         .foregroundColor(.blue)
                 }
                 .buttonStyle(BorderlessButtonStyle())
-                .help("Переименовать тег")
+                .help(^String.Titles.renameTag)
             }
             
             Button(action: {
@@ -505,14 +505,14 @@ struct CreateCustomCollectionsView: View {
             
             addLabelGroupButton
         } header: {
-            Text("Группы лейблов")
+            Text(^String.Titles.labelGroups)
         }
     }
     
     func labelGroupRowView(group: LabelGroupData) -> some View {
         HStack {
             if selectedLabelGroupID == group.id && isEditingGroupName {
-                FocusAwareTextField(text: $newGroupName, placeholder: "Название группы")
+                FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: .infinity)
                     .onAppear {
@@ -539,7 +539,7 @@ struct CreateCustomCollectionsView: View {
                         .foregroundColor(.blue)
                 }
                 .buttonStyle(BorderlessButtonStyle())
-                .help("Переименовать группу")
+                .help(^String.Titles.renameGroup)
             }
             
             Button(action: {
@@ -574,7 +574,7 @@ struct CreateCustomCollectionsView: View {
         }) {
             HStack {
                 Image(systemName: "plus.circle")
-                Text("Добавить группу")
+                Text(^String.Titles.addGroup)
             }
         }
     }
@@ -591,7 +591,7 @@ struct CreateCustomCollectionsView: View {
                     
                     addLabelButton
                 } header: {
-                    Text("Лейблы в группе \"\(group.name)\"")
+                    Text(String(format: ^String.Titles.collectionsLabelGroupName, group.name))
                 }
             }
         }
@@ -605,7 +605,7 @@ struct CreateCustomCollectionsView: View {
         }) {
             HStack {
                 Image(systemName: "plus.circle")
-                Text("Добавить лейбл")
+                Text(^String.Titles.collectionsButtonAddLabel)
             }
         }
     }
@@ -622,7 +622,7 @@ struct CreateCustomCollectionsView: View {
     func labelRowView(label: Label) -> some View {
         HStack {
             if selectedLabelID == label.id && isEditingName {
-                FocusAwareTextField(text: $editingName, placeholder: "Название лейбла")
+                FocusAwareTextField(text: $editingName, placeholder: ^String.Titles.renameLabelPlaceholder)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: .infinity)
                     .onAppear {
@@ -653,7 +653,7 @@ struct CreateCustomCollectionsView: View {
                         .foregroundColor(.blue)
                 }
                 .buttonStyle(BorderlessButtonStyle())
-                .help("Переименовать лейбл")
+                .help(^String.Titles.helpRenameLabel)
             }
             
             Button(action: {
@@ -702,26 +702,26 @@ struct CreateCustomCollectionsView: View {
                 }
                 else if selectedTagGroupID != nil || selectedLabelGroupID != nil {
                     if viewMode == .tagGroups {
-                        Text("Выберите тег или создайте новый")
+                        Text(^String.Titles.collectionsTagEmpty)
                             .font(.headline)
                     } else if viewMode == .labelGroups {
-                        Text("Выберите лейбл или создайте новый")
+                        Text(^String.Titles.collectionsLabelEmpty)
                             .font(.headline)
                     }
                 }
                 else {
                     if viewMode == .tagGroups {
-                        Text("Выберите группу тегов или создайте новую")
+                        Text(^String.Titles.collectionsGroupEmpty)
                             .font(.headline)
                     } else if viewMode == .labelGroups {
-                        Text("Выберите группу лейблов или создайте новую")
+                        Text(^String.Titles.CollectionsLabelGroupEmpty)
                             .font(.headline)
                     } else if viewMode == .timeEvents {
                         if collectionManager.timeEvents.isEmpty {
-                            Text("Добавьте временное событие")
+                            Text(^String.Titles.collectionsEventEmpty)
                                 .font(.headline)
                         } else {
-                            Text("Выберите временное событие для редактирования")
+                            Text(^String.Titles.selectTimeEventForEditing)
                                 .font(.headline)
                         }
                     }
@@ -750,7 +750,7 @@ struct CreateCustomCollectionsView: View {
     
     var fieldMapDetailView: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Настройки карты поля")
+            Text(^String.Titles.fieldMapSettings)
                 .font(.title2)
                 .bold()
                 .padding(.bottom, 8)
@@ -784,7 +784,7 @@ struct CreateCustomCollectionsView: View {
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                             )
                     } else {
-                        Text("Не удалось загрузить изображение")
+                        Text(^String.Titles.failedToLoadImage)
                             .padding()
                             .frame(maxWidth: .infinity)
                             .background(Color.gray.opacity(0.1))
@@ -793,7 +793,7 @@ struct CreateCustomCollectionsView: View {
                     
                     HStack(spacing: 20) {
                         VStack(alignment: .leading) {
-                            Text("Ширина поля (м):")
+                            Text(^String.Titles.collectionsFieldHeight)
                             HStack {
                                 TextField("", value: Binding(
                                     get: { playField.width },
@@ -811,7 +811,7 @@ struct CreateCustomCollectionsView: View {
                         }
                         
                         VStack(alignment: .leading) {
-                            Text("Длина поля (м):")
+                            Text(^String.Titles.collectionsFieldWidth)
                             HStack {
                                 TextField("", value: Binding(
                                     get: { playField.height },
@@ -841,7 +841,7 @@ struct CreateCustomCollectionsView: View {
                     }) {
                         HStack {
                             Image(systemName: "arrow.triangle.2.circlepath")
-                            Text("Заменить изображение")
+                            Text(^String.Titles.replaceImage)
                         }
                     }
                     .buttonStyle(CompatibilityButtonStyle())
@@ -849,14 +849,14 @@ struct CreateCustomCollectionsView: View {
                 
             } else {
                 VStack(spacing: 20) {
-                    Text("Карта поля не задана")
+                    Text(^String.Titles.fieldMapNotSet)
                         .font(.headline)
                     
                     Image(systemName: "map")
                         .font(.system(size: 60))
                         .foregroundColor(.gray)
                     
-                    Text("Загрузите изображение карты поля, чтобы отмечать на нём позиции")
+                    Text(^String.Titles.uploadFieldMapHint)
                         .multilineTextAlignment(.center)
                         .foregroundColor(.gray)
                     
@@ -865,7 +865,7 @@ struct CreateCustomCollectionsView: View {
                     }) {
                         HStack {
                             Image(systemName: "photo")
-                            Text("Загрузить карту поля")
+                            Text(^String.Titles.uploadFieldMap)
                         }
                     }
                     .buttonStyle(CompatibilityButtonStyle())
@@ -877,7 +877,7 @@ struct CreateCustomCollectionsView: View {
             Divider()
                 .padding(.vertical, 16)
             
-            Text("Теги для использования с картой")
+            Text(^String.Titles.collectionsTagsForMap)
                 .font(.headline)
             
             tagsForFieldMapList
@@ -999,8 +999,8 @@ struct CreateCustomCollectionsView: View {
     
     func tagDetailView(tag: Tag) -> some View {
         Form {
-            Section(header: Text("Информация о теге")) {
-                FocusAwareTextField(text: $tagFormData.name, placeholder: "Название")
+            Section(header: Text(^String.Titles.tagInfo)) {
+                FocusAwareTextField(text: $tagFormData.name, placeholder: ^String.Titles.title)
                 
                 TextEditor(text: $tagFormData.description)
                     .frame(height: 100)
@@ -1013,41 +1013,41 @@ struct CreateCustomCollectionsView: View {
                 ColorPickerView(selectedColor: $tagFormData.color, hexString: $tagFormData.hexColor)
                 
                 HStack {
-                    Text("Время до:")
+                    Text(^String.Titles.collectionsTagTimeBefore)
                     Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1) {
-                        Text("\(Int(tagFormData.defaultTimeBefore)) сек")
+                        Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
                     }
-                    Text("\(Int(tagFormData.defaultTimeBefore)) сек")
+                    Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
                         .frame(width: 60, alignment: .trailing)
                 }
                 
                 HStack {
-                    Text("Время после:")
+                    Text(^String.Titles.collectionsTagTimeAfter)
                     Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1) {
-                        Text("\(Int(tagFormData.defaultTimeAfter)) сек")
+                        Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
                     }
-                    Text("\(Int(tagFormData.defaultTimeAfter)) сек")
+                    Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
                         .frame(width: 60, alignment: .trailing)
                 }
                 
-                Toggle("Использовать с картой поля", isOn: Binding(
+                Toggle(^String.Titles.collectionsTagUseWithMap, isOn: Binding(
                     get: { tag.mapEnabled ?? false },
                     set: { collectionManager.updateTagMapEnabled(id: tag.id, mapEnabled: $0) }
                 ))
                 .padding(.vertical, 4)
-                .help("Включите, если этот тег должен отображаться на карте поля")
+                .help(^String.Titles.collectionsTagMapHelp)
                 .disabled(collectionManager.playField == nil)
                 .opacity(collectionManager.playField == nil ? 0.6 : 1)
                 
                 HStack {
-                    Text("Горячая клавиша:")
+                    Text(^String.Titles.collectionsTagHotkey)
                     
                     ZStack {
                         Button(action: {
                             isCapturingTagHotkey = true
                         }) {
                             HStack {
-                                Text(tagFormData.hotkey ?? "Нажмите для назначения")
+                                Text(tagFormData.hotkey ?? ^String.Titles.collectionsTagNoHotkey)
                                     .foregroundColor(isCapturingTagHotkey ? .blue : .primary)
                                 Spacer()
                                 
@@ -1076,14 +1076,14 @@ struct CreateCustomCollectionsView: View {
                     
                     if let hotkey = tagFormData.hotkey,
                        collectionManager.isHotkeyAssigned(hotkey, excludingTagID: tag.id) {
-                        Text("Этот хоткей уже используется")
+                        Text(^String.Titles.collectionsLabelHotkeyUsed)
                             .foregroundColor(.red)
                             .font(.caption)
                     }
                 }
             }
             
-            Section(header: Text("Связанные группы лейблов")) {
+            Section(header: Text(^String.Titles.collectionsLabelLabelGroups)) {
                 VStack(spacing: 12) {
                     ForEach(collectionManager.labelGroups) { group in
                         VStack(alignment: .leading, spacing: 4) {
@@ -1119,7 +1119,7 @@ struct CreateCustomCollectionsView: View {
                                                 isCapturingLabelHotkeys[label.id] = true
                                             }) {
                                                 HStack {
-                                                    Text(tagFormData.labelHotkeys[label.id] ?? "Назначить")
+                                                    Text(tagFormData.labelHotkeys[label.id] ?? ^String.Titles.assign)
                                                         .foregroundColor(isCapturingLabelHotkeys[label.id] == true ? .blue : .primary)
                                                         .lineLimit(1)
                                                     
@@ -1161,7 +1161,7 @@ struct CreateCustomCollectionsView: View {
                                            tagFormData.isLabelHotkeyUsed(hotkey, exceptLabel: label.id) {
                                             Image(systemName: "exclamationmark.triangle.fill")
                                                 .foregroundColor(.orange)
-                                                .help("Этот хоткей уже используется другим лейблом")
+                                                .help(^String.Titles.hotkeyAlreadyUsed)
                                         }
                                     }
                                     .padding(.vertical, 2)
@@ -1176,7 +1176,7 @@ struct CreateCustomCollectionsView: View {
                 .padding(.vertical, 4)
             }
             
-            Button("Сохранить изменения") {
+            Button(^String.Titles.collectionsButtonSaveChanges) {
                 let success = collectionManager.updateTag(
                     id: tag.id,
                     primaryID: tag.primaryID,
@@ -1212,8 +1212,8 @@ struct CreateCustomCollectionsView: View {
     
     func labelDetailView(label: Label) -> some View {
         Form {
-            Section(header: Text("Информация о лейбле")) {
-                FocusAwareTextField(text: $newLabelName, placeholder: "Название")
+            Section(header: Text(^String.Titles.labelInfo)) {
+                FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title)
                 
                 TextEditor(text: $newLabelDescription)
                     .frame(height: 100)
@@ -1224,7 +1224,7 @@ struct CreateCustomCollectionsView: View {
                     .padding(.vertical, 4)
             }
             
-            Section(header: Text("Связанные теги")) {
+            Section(header: Text(^String.Titles.relatedTags)) {
                 List {
                     ForEach(collectionManager.tags.filter { tag in
                         tag.lablesGroup.contains { groupID in
@@ -1245,12 +1245,12 @@ struct CreateCustomCollectionsView: View {
                 }
                 .frame(height: 150)
                 
-                Text("Для изменения связей, выберите тег и добавьте группу лейблов к нему.")
+                Text(^String.Titles.collectionsLabelTagAssociations)
                     .font(.caption)
                     .foregroundColor(.gray)
             }
             
-            Button("Сохранить изменения") {
+            Button(^String.Titles.collectionsButtonSaveChanges) {
                 if let index = collectionManager.labels.firstIndex(where: { $0.id == label.id }) {
                     collectionManager.labels[index] = Label(
                         id: label.id,
@@ -1268,11 +1268,11 @@ struct CreateCustomCollectionsView: View {
     
     func timeEventDetailView(event: TimeEvent) -> some View {
         Form {
-            Section(header: Text("Информация о событии")) {
-                FocusAwareTextField(text: $newTimeEventName, placeholder: "Название")
+            Section(header: Text(^String.Titles.eventInfo)) {
+                FocusAwareTextField(text: $newTimeEventName, placeholder: ^String.Titles.title)
             }
             
-            Button("Сохранить изменения") {
+            Button(^String.Titles.collectionsButtonSaveChanges) {
                 if let index = collectionManager.timeEvents.firstIndex(where: { $0.id == event.id }) {
                     collectionManager.timeEvents[index] = TimeEvent(
                         id: event.id,
@@ -1284,7 +1284,7 @@ struct CreateCustomCollectionsView: View {
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top)
             
-            Button("Удалить событие") {
+            Button(^String.Titles.deleteEvent) {
                 collectionManager.removeTimeEvent(id: event.id)
                 selectedTimeEventID = nil
             }
@@ -1301,13 +1301,13 @@ struct CreateCustomCollectionsView: View {
                 .font(.headline)
                 .padding(.top)
             
-            FocusAwareTextField(text: $newGroupName, placeholder: "Название группы")
+            FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
             
             HStack {
-                Button("Отмена") {
-                    if title.contains("тегов") {
+                Button(^String.Titles.collectionsButtonCancel) {
+                    if title.contains(^String.Titles.fieldMapPickerTagsCount) {
                         showAddTagGroupSheet = false
                     } else {
                         showAddLabelGroupSheet = false
@@ -1315,9 +1315,9 @@ struct CreateCustomCollectionsView: View {
                 }
                 .keyboardShortcut(.escape)
                 
-                Button("Добавить") {
+                Button(^String.Titles.collectionsButtonAdd) {
                     onAdd()
-                    if title.contains("тегов") {
+                    if title.contains(^String.Titles.fieldMapPickerTagsCount) {
                         showAddTagGroupSheet = false
                     } else {
                         showAddLabelGroupSheet = false
@@ -1335,12 +1335,12 @@ struct CreateCustomCollectionsView: View {
     
     func addTagSheet() -> some View {
         VStack(spacing: 16) {
-            Text("Добавить новый тег")
+            Text(^String.Titles.addNewTag)
                 .font(.headline)
                 .padding(.top)
             
             Form {
-                FocusAwareTextField(text: $tagFormData.name, placeholder: "Название")
+                FocusAwareTextField(text: $tagFormData.name, placeholder: ^String.Titles.title)
                 
                 TextEditor(text: $tagFormData.description)
                     .frame(height: 100)
@@ -1353,28 +1353,28 @@ struct CreateCustomCollectionsView: View {
                 ColorPickerView(selectedColor: $tagFormData.color, hexString: $tagFormData.hexColor)
                 
                 HStack {
-                    Text("Время до:")
+                    Text(^String.Titles.collectionsTagTimeBefore)
                     Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
-                    Text("\(Int(tagFormData.defaultTimeBefore)) сек")
+                    Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
                         .frame(width: 60, alignment: .trailing)
                 }
                 
                 HStack {
-                    Text("Время после:")
+                    Text(^String.Titles.collectionsTagTimeAfter)
                     Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
-                    Text("\(Int(tagFormData.defaultTimeAfter)) сек")
+                    Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
                         .frame(width: 60, alignment: .trailing)
                 }
                 
                 HStack {
-                    Text("Горячая клавиша:")
+                    Text(^String.Titles.collectionsTagHotkey)
                     
                     ZStack {
                         Button(action: {
                             isCapturingTagHotkey = true
                         }) {
                             HStack {
-                                Text(tagFormData.hotkey ?? "Нажмите для назначения")
+                                Text(tagFormData.hotkey ?? ^String.Titles.collectionsTagNoHotkey)
                                     .foregroundColor(isCapturingTagHotkey ? .blue : .primary)
                                 Spacer()
                                 
@@ -1404,7 +1404,7 @@ struct CreateCustomCollectionsView: View {
                     
                     if let hotkey = tagFormData.hotkey,
                        collectionManager.isHotkeyAssigned(hotkey) {
-                        Text("Этот хоткей уже используется")
+                        Text(^String.Titles.collectionsLabelHotkeyUsed)
                             .foregroundColor(.red)
                             .font(.caption)
                     }
@@ -1413,13 +1413,13 @@ struct CreateCustomCollectionsView: View {
             .padding()
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     showAddTagSheet = false
                     tagFormData = TagFormData()
                 }
                 .keyboardShortcut(.escape)
                 
-                Button("Добавить") {
+                Button(^String.Titles.collectionsButtonAdd) {
                     if let groupID = selectedTagGroupID {
                         let newTag = collectionManager.createTag(
                             name: tagFormData.name,
@@ -1465,12 +1465,12 @@ struct CreateCustomCollectionsView: View {
     
     func addLabelSheet() -> some View {
         VStack(spacing: 16) {
-            Text("Добавить новый лейбл")
+            Text(^String.Titles.collectionsDialogAddLabel)
                 .font(.headline)
                 .padding(.top)
             
             Form {
-                FocusAwareTextField(text: $newLabelName, placeholder: "Название")
+                FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title)
                 
                 TextEditor(text: $newLabelDescription)
                     .frame(height: 100)
@@ -1483,14 +1483,14 @@ struct CreateCustomCollectionsView: View {
             .padding()
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     showAddLabelSheet = false
                     newLabelName = ""
                     newLabelDescription = ""
                 }
                 .keyboardShortcut(.escape)
                 
-                Button("Добавить") {
+                Button(^String.Titles.collectionsButtonAdd) {
                     if let groupID = selectedLabelGroupID {
                         collectionManager.createLabel(
                             name: newLabelName,
@@ -1513,23 +1513,23 @@ struct CreateCustomCollectionsView: View {
     
     func addTimeEventSheet() -> some View {
         VStack(spacing: 16) {
-            Text("Добавить новое временное событие")
+            Text(^String.Titles.collectionsDialogAddTimeEvent)
                 .font(.headline)
                 .padding(.top)
             
             Form {
-                FocusAwareTextField(text: $newTimeEventName, placeholder: "Название")
+                FocusAwareTextField(text: $newTimeEventName, placeholder: ^String.Titles.title)
             }
             .padding()
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     showAddTimeEventSheet = false
                     newTimeEventName = ""
                 }
                 .keyboardShortcut(.escape)
                 
-                Button("Добавить") {
+                Button(^String.Titles.collectionsButtonAdd) {
                     collectionManager.createTimeEvent(name: newTimeEventName)
                     newTimeEventName = ""
                     showAddTimeEventSheet = false

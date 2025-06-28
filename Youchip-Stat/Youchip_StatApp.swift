@@ -34,14 +34,14 @@ struct Youchip_StatApp: App {
                     }
                 }
                 .alert("Предупреждение", isPresented: $showTimeManipulationAlert) {
-                    Button("ОК") {
+                    Button(^String.Titles.fieldMapButtonOK) {
                         NSApplication.shared.terminate(nil)
                     }
                 } message: {
                     Text("Пиратить и читерить - Плохо!!!!!")
                 }
                 .alert("Устаревшая версия", isPresented: $showVersionOutdatedAlert) {
-                    Button("ОК") {
+                    Button(^String.Titles.fieldMapButtonOK) {
                         NSApplication.shared.terminate(nil)
                     }
                 } message: {

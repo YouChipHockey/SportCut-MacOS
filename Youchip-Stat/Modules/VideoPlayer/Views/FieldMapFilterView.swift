@@ -23,7 +23,7 @@ struct FieldMapFilterView: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                Text("Фильтры")
+                Text(^String.Titles.fieldMapButtonFilters)
                     .font(.headline)
                 Spacer()
                 
@@ -35,33 +35,33 @@ struct FieldMapFilterView: View {
                         .font(.system(size: 16))
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Закрыть без применения")
+                .help(^String.Titles.closeWithoutApplying)
             }
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     filterSection(
-                        title: "События",
+                        title: ^String.Titles.events,
                         items: availableEvents.map { ($0.id, $0.name) },
                         selectedIds: $filters.selectedEvents
                     )
                     filterSection(
-                        title: "Группы тегов",
+                        title: ^String.Titles.tagGroups,
                         items: availableTagGroups.map { ($0.id, $0.name) },
                         selectedIds: $filters.selectedTagGroups
                     )
                     filterSection(
-                        title: "Теги",
+                        title: ^String.Titles.fieldMapViewTags,
                         items: availableTags.map { ($0, $1) },
                         selectedIds: $filters.selectedTags
                     )
                     filterSection(
-                        title: "Группы лейблов",
+                        title: ^String.Titles.labelGroups,
                         items: availableLabelGroups.map { ($0.id, $0.name) },
                         selectedIds: $filters.selectedLabelGroups
                     )
                     filterSection(
-                        title: "Лейблы",
+                        title: ^String.Titles.labels,
                         items: availableLabels.map { ($0.id, $0.name) },
                         selectedIds: $filters.selectedLabels
                     )
@@ -72,14 +72,14 @@ struct FieldMapFilterView: View {
             Divider()
             
             HStack {
-                Button("Сбросить") {
+                Button(^String.Titles.reset) {
                     resetFilters()
                     onReset()
                 }
                 
                 Spacer()
                 
-                Button("Применить") {
+                Button(^String.Titles.apply) {
                     onApply()
                 }
                 .buttonStyle(.borderedProminent)
@@ -111,7 +111,7 @@ struct FieldMapFilterView: View {
                 }
                 
                 if items.isEmpty {
-                    Text("Нет доступных элементов")
+                    Text(^String.Titles.noItemsAvailable)
                         .foregroundColor(.secondary)
                         .font(.caption)
                 }

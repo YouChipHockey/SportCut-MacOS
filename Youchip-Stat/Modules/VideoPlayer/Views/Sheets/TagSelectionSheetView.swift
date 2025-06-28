@@ -25,7 +25,7 @@ struct TagSelectionSheetView: View {
     
     var body: some View {
         VStack(spacing: 10) {
-            Text("Выберите тег для экспорта")
+            Text(^String.Titles.selectTagForExport)
                 .font(.headline)
             
             List {
@@ -41,7 +41,7 @@ struct TagSelectionSheetView: View {
             }
             .frame(width: 300)
             
-            Button("Отмена") {
+            Button(^String.Titles.collectionsButtonCancel) {
                 presentationMode.wrappedValue.dismiss()
             }
             .padding(.top, 10)
@@ -52,7 +52,7 @@ struct TagSelectionSheetView: View {
     private func tagGroupsWithTags() -> [TagGroupWithTags] {
         let allGroups = tagLibrary.allTagGroups
         var groupsWithTags: [String: (name: String, tags: [Tag])] = [:]
-        groupsWithTags["uncategorized"] = ("Без группы", [])
+        groupsWithTags["uncategorized"] = (^String.Titles.fieldMapDetailNoGroup, [])
         for tag in uniqueTags {
             var foundGroup = false
             

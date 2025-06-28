@@ -131,7 +131,7 @@ class EditorViewModel: ObservableObject {
     
     private func handleActionAfterGetImageWithError(error: String? = nil) {
         state.showHUD = false
-        action.send(.showError(error: error ?? "Что то пошло не так"))
+        action.send(.showError(error: error ?? ^String.Titles.somethingWentWrong))
         
         switch currentAction {
         case .close:
@@ -223,7 +223,7 @@ class EditorViewModel: ObservableObject {
             
             try data.write(to: state.inputFile)
             state.image = image
-            state.infoTitle = "Файл успешно сохранен"
+            state.infoTitle = ^String.Titles.fileSavedSuccessfully
             state.showInfo = true
         } catch {
             state.errorTitle = error.localizedDescription
@@ -235,7 +235,7 @@ class EditorViewModel: ObservableObject {
         let fileManager = FileManager.default
         do {
             try fileManager.copyItem(at: state.bufferFile, to: file)
-            self.state.infoTitle = "Файл успешно сохранен"
+            self.state.infoTitle = ^String.Titles.fileSavedSuccessfully
             self.state.showInfo = true
         } catch {
             self.state.errorTitle = error.localizedDescription
@@ -260,19 +260,19 @@ struct ScreenshotNameSheet: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("Название скриншота")
+            Text(^String.Titles.screenshotName)
                 .font(.headline)
             
-            FocusAwareTextField(text: $screenshotName, placeholder: "Введите название")
+            FocusAwareTextField(text: $screenshotName, placeholder: ^String.Titles.enterName)
                 .padding()
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     NotificationCenter.default.post(name: NSNotification.Name("SheetDismissed"), object: nil)
                     presentationMode.wrappedValue.dismiss()
                 }
                 
-                Button("Сохранить") {
+                Button(^String.Titles.saveButtonTitle) {
                     if !screenshotName.isEmpty {
                         onSave(screenshotName)
                     } else {

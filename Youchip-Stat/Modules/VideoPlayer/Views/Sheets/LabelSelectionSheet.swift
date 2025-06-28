@@ -31,18 +31,18 @@ struct LabelSelectionSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if markupMode == .tagBased && tag != nil {
-                Text("Тег будет добавлен в таймлайн: \(tag?.name ?? "")")
+                Text("\(^String.Titles.labelSheetInfoTagAdd) \(tag?.name ?? "")")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .padding(.bottom, 4)
             } else if markupMode == .standard && timelineData.selectedLineID == nil {
-                Text("Выберите таймлайн перед добавлением тега")
+                Text(^String.Titles.labelSheetErrorNoTimeline)
                     .font(.subheadline)
                     .foregroundColor(.red)
                     .padding(.bottom, 4)
             }
             
-            Text("Таймстемп: \(stampName)")
+            Text("\(^String.Titles.labelSheetTimestamp) \(stampName)")
                 .font(.headline)
             
             ScrollView {
@@ -105,10 +105,10 @@ struct LabelSelectionSheet: View {
             }
             HStack {
                 Spacer()
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     dismissSheet()
                 }
-                Button("Добавить") {
+                Button(^String.Titles.collectionsButtonAdd) {
                     completeSelection()
                 }
             }

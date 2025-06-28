@@ -161,12 +161,12 @@ struct AnalyticsView: View {
         var issues: [String] = []
         let shortStamps = timelineData.lines.flatMap { $0.stamps }.filter { $0.duration < 1.0 }
         if !shortStamps.isEmpty {
-            issues.append("Найдены очень короткие события (меньше 1 секунды): \(shortStamps.count) шт.")
+            issues.append(String(format: ^String.Titles.analyticsIssueShortStamps, shortStamps.count))
         }
         
         let emptyTimelines = timelineData.lines.filter { $0.stamps.isEmpty }
         if !emptyTimelines.isEmpty {
-            issues.append("Таймлайны без разметки: \(emptyTimelines.map { $0.name }.joined(separator: ", "))")
+            issues.append(String(format: ^String.Titles.analyticsIssueEmptyTimelines, emptyTimelines.map { $0.name }.joined(separator: ", ")))
         }
         
         for line in timelineData.lines {
@@ -176,7 +176,7 @@ struct AnalyticsView: View {
                     let current = stamps[i]
                     let next = stamps[i + 1]
                     if current.label == next.label && timeStringToSeconds(current.timeFinish) > timeStringToSeconds(next.timeStart) {
-                        issues.append("Перекрытие тегов '\(current.label)' в таймлайне '\(line.name)'")
+                        issues.append(String(format: ^String.Titles.tagsOverlapFormat, current.label, line.name))
                     }
                 }
             }
@@ -204,21 +204,21 @@ struct AnalyticsView: View {
     
     @ViewBuilder
     func TagDensitySection() -> some View {
-        Text("Плотность тегов во времени")
+        Text(^String.Titles.tagsDensityOverTime)
             .font(.title)
         
         if #available(macOS 13.0, *) {
             Chart(tagDensity, id: \.time) { point in
                 LineMark(
-                    x: .value("Время", point.time),
-                    y: .value("Количество тегов", point.count)
+                    x: .value(^String.Titles.time, point.time),
+                    y: .value(^String.Titles.tagsCount, point.count)
                 )
                 .foregroundStyle(.blue)
                 .interpolationMethod(.catmullRom)
                 
                 AreaMark(
-                    x: .value("Время", point.time),
-                    y: .value("Количество тегов", point.count)
+                    x: .value(^String.Titles.time, point.time),
+                    y: .value(^String.Titles.tagsCount, point.count)
                 )
                 .foregroundStyle(
                     .linearGradient(
@@ -229,21 +229,21 @@ struct AnalyticsView: View {
                 )
                 .interpolationMethod(.catmullRom)
             }
-            .chartXAxisLabel("Время видео (секунды)")
-            .chartYAxisLabel("Количество активных тегов")
+            .chartXAxisLabel(^String.Titles.videoTime)
+            .chartYAxisLabel(^String.Titles.activeTagsCount)
             .frame(height: 250)
         } else {
-            Text("График плотности тегов доступен в macOS 13.0 и выше")
+            Text(^String.Titles.analyticsChartDensityNotAvailable)
         }
         
         VStack(alignment: .leading, spacing: 8) {
             if let maxDensity = tagDensity.max(by: { $0.count < $1.count }) {
-                Text("Пик плотности тегов: \(maxDensity.count) тегов на \(secondsToTimeString(maxDensity.time))")
+                Text(String(format: ^String.Titles.analyticsTagDensityPeak, maxDensity.count, secondsToTimeString(maxDensity.time)))
                     .font(.headline)
             }
             
             let avgDensity = tagDensity.reduce(0.0) { $0 + Double($1.count) } / Double(max(1, tagDensity.count))
-            Text("Средняя плотность тегов: \(String(format: "%.1f", avgDensity))")
+            Text(String(format: ^String.Titles.analyticsTagDensityAverage, avgDensity))
         }
         .padding()
         .background(Color.gray.opacity(0.1))
@@ -252,14 +252,14 @@ struct AnalyticsView: View {
     
     @ViewBuilder
     func TopLabelsSection() -> some View {
-        Text("Наиболее используемые лейблы")
+        Text(^String.Titles.analyticsLabelMostUsed)
             .font(.title)
         
         if #available(macOS 13.0, *), !topUsedLabels.isEmpty {
             Chart(topUsedLabels) { label in
                 BarMark(
-                    x: .value("Количество", label.count),
-                    y: .value("Лейбл", label.label)
+                    x: .value(^String.Titles.count, label.count),
+                    y: .value(^String.Titles.label, label.label)
                 )
                 .foregroundStyle(
                     .linearGradient(
@@ -269,14 +269,14 @@ struct AnalyticsView: View {
                     )
                 )
             }
-            .chartXAxisLabel("Количество использований")
+            .chartXAxisLabel(^String.Titles.usageCount)
             .frame(height: 300)
         } else {
-            Text("График топ-лейблов доступен в macOS 13.0 и выше")
+            Text(^String.Titles.analyticsChartNotAvailable)
         }
         
         VStack(alignment: .leading, spacing: 8) {
-            Text("Самые популярные лейблы по всем типам тегов")
+            Text(^String.Titles.analyticsLabelMostPopular)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -287,37 +287,37 @@ struct AnalyticsView: View {
     
     @ViewBuilder
     func TagDurationStatsSection() -> some View {
-        Text("Статистика длительности тегов")
+        Text(^String.Titles.tagsDurationStatistics)
             .font(.title)
         
         if #available(macOS 13.0, *), !tagDurationStats.isEmpty {
             Chart(tagDurationStats) { stat in
                 BarMark(
-                    x: .value("Тег", stat.tagName),
-                    y: .value("Средняя длительность", stat.averageDuration)
+                    x: .value(^String.Titles.tag, stat.tagName),
+                    y: .value(^String.Titles.midDuration, stat.averageDuration)
                 )
                 .foregroundStyle(stat.color)
                 
                 RectangleMark(
-                    x: .value("Тег", stat.tagName),
-                    yStart: .value("Мин. длительность", stat.minDuration),
-                    yEnd: .value("Макс. длительность", stat.maxDuration),
+                    x: .value(^String.Titles.tag, stat.tagName),
+                    yStart: .value(^String.Titles.minDuration, stat.minDuration),
+                    yEnd: .value(^String.Titles.maxDuration, stat.maxDuration),
                     width: 20
                 )
                 .foregroundStyle(stat.color.opacity(0.3))
             }
-            .chartYAxisLabel("Длительность (секунды)")
+            .chartYAxisLabel(^String.Titles.durationSeconds)
             .frame(height: 300)
         } else {
-            Text("График статистики длительности доступен в macOS 13.0 и выше")
+            Text(^String.Titles.durationStatisticsUnavailable)
         }
         
         VStack(alignment: .leading, spacing: 8) {
-            Text("Статистика длительности тегов по типам")
+            Text(^String.Titles.tagsDurationStatisticsByType)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
-            Text("Столбцы показывают среднюю длительность, а вертикальные линии - диапазон от минимальной до максимальной длительности")
+            Text(^String.Titles.durationStatisticsDescription)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -328,14 +328,14 @@ struct AnalyticsView: View {
     
     @ViewBuilder
     func SummarySection() -> some View {
-        Text("Общая статистика")
+        Text(^String.Titles.generalStatistics)
             .font(.title)
         
         VStack(alignment: .leading, spacing: 10) {
-            Text("Количество таймлайнов: \(timelineData.lines.count)")
-            Text("Общее количество тегов: \(timelineData.lines.flatMap { $0.stamps }.count)")
+            Text("\(^String.Titles.timelinesCount) \(timelineData.lines.count)")
+            Text("\(^String.Titles.totalTagsCount) \(timelineData.lines.flatMap { $0.stamps }.count)")
             if let totalDuration = timelineData.lines.flatMap({ $0.stamps }).map({ $0.duration }).reduce(0, +) as Double? {
-                Text("Общая длительность разметки: \(secondsToTimeString(totalDuration))")
+                Text("\(^String.Titles.analyticsStatsDurationTotal) \(secondsToTimeString(totalDuration))")
             }
         }
         .padding()
@@ -345,7 +345,7 @@ struct AnalyticsView: View {
     
     @ViewBuilder
     func TagDistributionSection() -> some View {
-        Text("Распределение тегов")
+        Text(^String.Titles.analyticsTitleDistribution)
             .font(.title)
         
         HStack {
@@ -361,13 +361,13 @@ struct AnalyticsView: View {
     
     @ViewBuilder
     func LabelUsageSection() -> some View {
-        Text("Статистика по лейблам")
+        Text(^String.Titles.labelStatistics)
             .font(.title)
         
         ForEach(Array(labelStatistics.keys.sorted()), id: \.self) { tagName in
             if let stats = labelStatistics[tagName]?.prefix(5) {
                 VStack(alignment: .leading) {
-                    Text("Тег: \(tagName)")
+                    Text("\(^String.Titles.fieldMapTagTitleNoNumber) \(tagName)")
                         .font(.headline)
                     ForEach(stats, id: \.label) { usage in
                         Text("\(usage.label): \(usage.count)")
@@ -382,7 +382,7 @@ struct AnalyticsView: View {
     
     @ViewBuilder
     func TimelineStatisticsSection() -> some View {
-        Text("Статистика по таймлайнам")
+        Text(^String.Titles.timelineStatistics)
             .font(.title)
         
         ForEach(timelineStats, id: \.name) { stat in
@@ -390,7 +390,7 @@ struct AnalyticsView: View {
                 Text(stat.name)
                     .font(.headline)
                 Text("Количество тегов: \(stat.tagCount)")
-                Text("Общая длительность: \(secondsToTimeString(stat.totalDuration))")
+                Text("\(^String.Titles.totalDuration) \(secondsToTimeString(stat.totalDuration))")
                 ForEach(stat.tagPercentages, id: \.tagName) { tagData in
                     Text("\(tagData.tagName): \(String(format: "%.1f", tagData.percentage))%")
                         .font(.subheadline)
@@ -405,7 +405,7 @@ struct AnalyticsView: View {
     @ViewBuilder
     func AnomaliesSection() -> some View {
         if !anomalies.isEmpty {
-            Text("Обнаруженные проблемы")
+            Text(^String.Titles.detectedIssues)
                 .font(.title)
             
             ForEach(anomalies, id: \.self) { issue in

@@ -58,12 +58,12 @@ class VideosViewModel: ObservableObject {
         if authManager.isAuthValid {
             if let deadlineString = UserDefaults.standard.string(forKey: "auth_deadline"),
                let deadline = formatAuthDate(deadlineString) {
-                state.limitInfoText = "У вас активна подписка до \(deadline)"
+                state.limitInfoText = "\(^String.Titles.subscriptionActiveUntil) \(deadline)"
             } else {
-                state.limitInfoText = "У вас активна подписка"
+                state.limitInfoText = ^String.Titles.subscriptionActive
             }
         } else {
-            state.limitInfoText = "Вы можете загрузить еще \(remainingVideos) видео из \(maxFreeVideos)"
+            state.limitInfoText = String(format: ^String.Titles.videoUploadLimit, remainingVideos, maxFreeVideos)
         }
     }
     
@@ -97,7 +97,7 @@ class VideosViewModel: ObservableObject {
     
     private func openFiles() {
         if !canAddMoreVideos() {
-            action.send(.showError(error: "Достигнут лимит загрузки видео. Войдите для загрузки большего количества файлов."))
+            action.send(.showError(error: ^String.Titles.videoUploadLimitReached))
             return
         }
         

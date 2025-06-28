@@ -36,16 +36,16 @@ struct FieldMapConfigurationView: View {
                 if let image = fieldImage {
                     mapWithTagsSection(image)
                 } else {
-                    Text("Загрузка карты...")
+                    Text(^String.Titles.fieldMapLoading)
                         .frame(height: 300)
                 }
                 
                 Divider()
                 
                 HStack(alignment: .top, spacing: 0) {
-                    tagsListView(title: "Активные теги", tags: activeTags, isActive: true)
+                    tagsListView(title: ^String.Titles.activeTags, tags: activeTags, isActive: true)
                         .frame(maxWidth: .infinity)
-                    tagsListView(title: "Неактивные теги", tags: inactiveTags, isActive: false)
+                    tagsListView(title: ^String.Titles.inactiveTags, tags: inactiveTags, isActive: false)
                         .frame(maxWidth: .infinity)
                 }
                 .padding()
@@ -75,11 +75,11 @@ struct FieldMapConfigurationView: View {
     
     private var collectionSelectionSection: some View {
         VStack(alignment: .leading) {
-            Text("Выберите коллекцию с картой поля:")
+            Text(^String.Titles.selectCollectionWithFieldMap)
                 .font(.headline)
             
-            Picker(selection: $selectedCollection, label: Text("Коллекция")) {
-                Text("Выберите коллекцию").tag(nil as CollectionBookmark?)
+            Picker(selection: $selectedCollection, label: Text(^String.Titles.collection)) {
+                Text(^String.Titles.selectCollection).tag(nil as CollectionBookmark?)
                 
                 ForEach(collectionsWithFieldMap, id: \.name) { collection in
                     Text(collection.name).tag(collection as CollectionBookmark?)
@@ -119,7 +119,7 @@ struct FieldMapConfigurationView: View {
         
         var body: some View {
             VStack {
-                Text("Перетащите теги для изменения их положения на карте")
+                Text(^String.Titles.toggleTagsToChangePosition)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .padding(.bottom, 4)
@@ -295,9 +295,9 @@ struct FieldMapConfigurationView: View {
                 showContextMenu = true
             }
             .contextMenu {
-                Text("Тег: \(tag.name)")
-                Text("Время: \(tag.timeStart) - \(tag.timeFinish)")
-                Text("Позиция: (\(Int(tag.position.x)), \(Int(tag.position.y)))")
+                Text("\(^String.Titles.fieldMapTagTitleNoNumber) \(tag.name)")
+                Text("\(^String.Titles.time): \(tag.timeStart) - \(tag.timeFinish)")
+                Text("\(^String.Titles.fieldMapDetailPosition) (\(Int(tag.position.x)), \(Int(tag.position.y)))")
             }
         }
         
@@ -362,7 +362,7 @@ struct FieldMapConfigurationView: View {
     
     private struct EmptyTagsView: View {
         var body: some View {
-            Text("Нет тегов")
+            Text(^String.Titles.noTags)
                 .foregroundColor(.secondary)
                 .padding()
         }
@@ -426,12 +426,12 @@ struct FieldMapConfigurationView: View {
             .background(Color.gray.opacity(0.1))
             .cornerRadius(4)
             .contextMenu {
-                Text("Тег: \(tag.name)")
-                Text("Время: \(tag.timeStart) - \(tag.timeFinish)")
+                Text("\(^String.Titles.fieldMapTagTitleNoNumber) \(tag.name)")
+                Text("\(^String.Titles.time): \(tag.timeStart) - \(tag.timeFinish)")
                 
                 Divider()
                 
-                Button(isActive ? "Деактивировать" : "Активировать") {
+                Button(isActive ? ^String.Titles.deactivate : ^String.Titles.activate) {
                     onToggleStatus(tag, !isActive)
                 }
             }
@@ -440,13 +440,13 @@ struct FieldMapConfigurationView: View {
     
     private func tagContextMenu(_ tag: TagOnMap) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Тег: \(tag.name)")
+            Text("\(^String.Titles.fieldMapTagTitleNoNumber) \(tag.name)")
                 .font(.headline)
-            Text("Время: \(tag.timeStart) - \(tag.timeFinish)")
+            Text("\(^String.Titles.time): \(tag.timeStart) - \(tag.timeFinish)")
             
             Divider()
             
-            Button("Закрыть") {
+            Button(^String.Titles.closeButtonTitle) {
                 showContextMenu = false
             }
         }

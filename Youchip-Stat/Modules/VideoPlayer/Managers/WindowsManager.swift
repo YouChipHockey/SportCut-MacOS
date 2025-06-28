@@ -59,7 +59,7 @@ class WindowsManager: NSObject {
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
-        window.title = "Визуализация карты поля"
+        window.title = ^String.Titles.fieldMapVisualization
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         
         if let screen = NSScreen.main {
@@ -112,8 +112,8 @@ class WindowsManager: NSObject {
         let window = NSWindow(contentViewController: hostingController)
         
         window.title = existingCollection != nil ?
-        "Редактирование коллекции: \(existingCollection?.name ?? "")" :
-        "Создание новой коллекции"
+        "\(^String.Titles.editingCollection): \(existingCollection?.name ?? "")" :
+        ^String.Titles.creatingNewCollection
         
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         if let screen = NSScreen.main {

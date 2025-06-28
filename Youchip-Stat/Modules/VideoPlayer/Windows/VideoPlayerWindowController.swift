@@ -17,7 +17,7 @@ class VideoPlayerWindowController: NSWindowController, NSWindowDelegate {
         let view = VideoPlayerWindow(id: id)
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Видео"
+        window.title = ^String.Titles.video
         super.init(window: window)
         window.styleMask.insert(.closable)
         window.delegate = self

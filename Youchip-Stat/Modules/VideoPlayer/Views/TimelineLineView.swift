@@ -155,10 +155,10 @@ struct TimelineLineView: View {
     
     @ViewBuilder
     private func menuForTag(stamp: TimelineStamp) -> some View {
-        Text("Тег: \(stamp.label)")
+        Text("\(^String.Titles.fieldMapTagTitleNoNumber) \(stamp.label)")
         
         if let position = stamp.position {
-            Text("Позиция: x: \(String(format: "%.2f", position.x)), y: \(String(format: "%.2f", position.y))")
+            Text(String(format: ^String.Titles.fieldMapTagPosition, position.x, position.y))
         }
         
         if !stamp.labels.isEmpty {
@@ -174,7 +174,7 @@ struct TimelineLineView: View {
             Divider()
         }
         if !stamp.timeEvents.isEmpty {
-            Text("События:")
+            Text(^String.Titles.fieldMapLabelEvents)
             ForEach(stamp.timeEvents, id: \.self) { eventID in
                 if let event = tagLibrary.allTimeEvents.first(where: { $0.id == eventID }) {
                     Text("• \(event.name)")
@@ -182,13 +182,13 @@ struct TimelineLineView: View {
             }
             Divider()
         }
-        Button("Удалить тег") {
+        Button(^String.Titles.timelineButtonDeleteTag) {
             TimelineDataManager.shared.removeStamp(lineID: line.id, stampID: stamp.id)
             if timelineData.selectedStampID == stamp.id {
                 timelineData.selectStamp(stampID: nil)
             }
         }
-        Button("Редактировать лейблы") {
+        Button(^String.Titles.timelineButtonEditLabels) {
             onEditLabelsRequest(stamp.id)
         }
     }

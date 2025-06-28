@@ -81,4 +81,7 @@ class VideoPlayerManager: ObservableObject {
         return track.nominalFrameRate
     }
     
+    func getCurrentVideoURL() -> URL? {
+        return player?.currentItem?.asset as? AVURLAsset != nil ? (player?.currentItem?.asset as? AVURLAsset)?.url : nil
+    }
 }

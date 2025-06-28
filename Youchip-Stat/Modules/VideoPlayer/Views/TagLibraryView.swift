@@ -90,8 +90,8 @@ struct TagLibraryView: View {
     private var collectionTitleView: some View {
         HStack {
             Text(isUserCollectionActive ?
-                 "Пользовательская коллекция: \(selectedUserCollection?.name ?? "")" :
-                    "Группы тегов")
+                 "\(^String.Titles.customCollection) \(selectedUserCollection?.name ?? "")" :
+                    ^String.Titles.tagGroups)
             .font(.headline)
             
             if isUserCollectionActive && selectedUserCollection != nil {
@@ -110,7 +110,7 @@ struct TagLibraryView: View {
                     .foregroundColor(.blue)
             }
             .buttonStyle(.borderless)
-            .help("Редактировать коллекцию")
+            .help(^String.Titles.editCollection)
             
             Button(action: {
                 collectionToDelete = selectedUserCollection
@@ -120,7 +120,7 @@ struct TagLibraryView: View {
                     .foregroundColor(.red)
             }
             .buttonStyle(.borderless)
-            .help("Удалить коллекцию")
+            .help(^String.Titles.deleteCollection)
         }
     }
     
@@ -133,11 +133,11 @@ struct TagLibraryView: View {
         } label: {
             HStack {
                 Image(systemName: "folder.badge.plus")
-                Text("Коллекции")
+                Text(^String.Titles.collections)
             }
         }
         .buttonStyle(.borderless)
-        .help("Управление пользовательскими коллекциями тегов")
+        .help(^String.Titles.manageCustomTagCollections)
     }
     
     private var createCollectionButton: some View {
@@ -146,7 +146,7 @@ struct TagLibraryView: View {
         }) {
             HStack {
                 Image(systemName: "plus")
-                Text("Создать коллекцию")
+                Text(^String.Titles.createCollection)
             }
         }
     }
@@ -158,7 +158,7 @@ struct TagLibraryView: View {
             selectedUserCollection = nil
         }) {
             HStack {
-                Text("Стандартная коллекция")
+                Text(^String.Titles.standardCollection)
                 Spacer()
                 if !isUserCollectionActive {
                     Image(systemName: "checkmark")
@@ -171,7 +171,7 @@ struct TagLibraryView: View {
     private var userCollectionsSection: some View {
         if !userCollections.isEmpty {
             Divider()
-            Text("Пользовательские коллекции")
+            Text(^String.Titles.customCollections)
             
             ForEach(userCollections, id: \.name) { collection in
                 userCollectionRow(for: collection)
@@ -201,7 +201,7 @@ struct TagLibraryView: View {
                 }) {
                     HStack {
                         Image(systemName: "pencil")
-                        Text("Редактировать")
+                        Text(^String.Titles.editButtonTitle)
                     }
                 }
                 
@@ -211,7 +211,7 @@ struct TagLibraryView: View {
                 }) {
                     HStack {
                         Image(systemName: "trash")
-                        Text("Удалить")
+                        Text(^String.Titles.delete)
                     }
                 }
             } label: {
@@ -234,7 +234,7 @@ struct TagLibraryView: View {
                 }) {
                     HStack {
                         Image(systemName: showCollectionsList ? "folder.badge.minus" : "folder.badge.plus")
-                        Text("Коллекции")
+                        Text(^String.Titles.collections)
                     }
                 }
                 .buttonStyle(.borderless)
@@ -246,7 +246,7 @@ struct TagLibraryView: View {
     private var legacyCollectionsListView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Управление коллекциями")
+                Text(^String.Titles.manageCollections)
                     .font(.headline)
                 Spacer()
                 Button(action: {
@@ -266,7 +266,7 @@ struct TagLibraryView: View {
             }) {
                 HStack {
                     Image(systemName: "plus.circle")
-                    Text("Создать новую коллекцию")
+                    Text(^String.Titles.createNewCollection)
                     Spacer()
                 }
                 .padding(5)
@@ -280,7 +280,7 @@ struct TagLibraryView: View {
                 showCollectionsList = false
             }) {
                 HStack {
-                    Text("Стандартная коллекция")
+                    Text(^String.Titles.standardCollection)
                     Spacer()
                     if !isUserCollectionActive {
                         Image(systemName: "checkmark")
@@ -294,7 +294,7 @@ struct TagLibraryView: View {
             
             if !userCollections.isEmpty {
                 Divider()
-                Text("Пользовательские коллекции:")
+                Text("\(^String.Titles.customCollections):")
                     .font(.headline)
                     .padding(.top, 5)
                 
@@ -341,7 +341,7 @@ struct TagLibraryView: View {
                     .foregroundColor(.blue)
             }
             .buttonStyle(.borderless)
-            .help("Редактировать коллекцию")
+            .help(^String.Titles.editCollection)
             
             Button(action: {
                 collectionToDelete = collection
@@ -351,7 +351,7 @@ struct TagLibraryView: View {
                     .foregroundColor(.red)
             }
             .buttonStyle(.borderless)
-            .help("Удалить коллекцию")
+            .help(^String.Titles.deleteCollection)
         }
     }
     
@@ -366,7 +366,7 @@ struct TagLibraryView: View {
                 }
                 .padding(.horizontal)
             } label: {
-                Text("Общие события")
+                Text(^String.Titles.commonEvents)
                     .font(.headline)
             }
             .padding(.horizontal)
@@ -553,7 +553,7 @@ struct TagLibraryView: View {
                     }
                 } else {
                     VStack {
-                        Text("Добавление тега...")
+                        Text(^String.Titles.tagLibraryAddingTag)
                             .onAppear {
                                 addTagToTimeline(tag: tag, selectedLabels: [])
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -580,7 +580,7 @@ struct TagLibraryView: View {
                     }
                 } else {
                     VStack {
-                        Text("Добавление тега...")
+                        Text(^String.Titles.tagLibraryAddingTag)
                             .onAppear {
                                 addTagToTimeline(tag: tag, selectedLabels: [])
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -590,11 +590,7 @@ struct TagLibraryView: View {
                     }
                 }
             } else {
-                Text("""
-                 Тег не может быть добавлен до выбора таймлайна.
-                 Выберите его, нажав на название таймлайна.
-                 Если таймлайна нет, то сначала создайте его, нажав на 􀁌
-                 """)
+                Text(^String.Titles.tagLibraryNoTimeline)
                 .padding()
                 .multilineTextAlignment(.center)
             }
@@ -603,14 +599,14 @@ struct TagLibraryView: View {
     
     private var deleteCollectionAlert: Alert {
         Alert(
-            title: Text("Удаление коллекции"),
-            message: Text("Вы действительно хотите удалить коллекцию \"\(collectionToDelete?.name ?? "")\"?"),
-            primaryButton: .destructive(Text("Удалить")) {
+            title: Text(^String.Titles.tagLibraryDeleteTitle),
+            message: Text("\(^String.Titles.confirmDeleteCollection) \"\(collectionToDelete?.name ?? "")\"?"),
+            primaryButton: .destructive(Text(^String.Titles.delete)) {
                 if let collection = collectionToDelete {
                     deleteCollection(collection)
                 }
             },
-            secondaryButton: .cancel(Text("Отмена"))
+            secondaryButton: .cancel(Text(^String.Titles.collectionsButtonCancel))
         )
     }
     

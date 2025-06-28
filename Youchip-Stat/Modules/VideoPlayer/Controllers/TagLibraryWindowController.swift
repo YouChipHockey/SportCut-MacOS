@@ -16,7 +16,7 @@ class TagLibraryWindowController: NSWindowController, NSWindowDelegate {
         let view = TagLibraryView()
         let hostingController = NSHostingController(rootView: view)
         let w = NSWindow(contentViewController: hostingController)
-        w.title = "Библиотека тегов"
+        w.title = ^String.Titles.tagLibrary
         super.init(window: w)
         w.styleMask.insert(.closable)
         w.delegate = self

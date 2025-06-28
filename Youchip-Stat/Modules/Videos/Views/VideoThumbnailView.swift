@@ -45,7 +45,7 @@ struct VideoThumbnailView: View {
                 }) {
                     HStack {
                         Image(systemName: "play")
-                        Text("Открыть")
+                        Text(^String.Titles.openButtonTitle)
                     }
                 }
                 
@@ -54,7 +54,7 @@ struct VideoThumbnailView: View {
                 }) {
                     HStack {
                         Image(systemName: "pencil")
-                        Text("Переименовать")
+                        Text(^String.Titles.renameButtonTitle)
                     }
                 }
                 

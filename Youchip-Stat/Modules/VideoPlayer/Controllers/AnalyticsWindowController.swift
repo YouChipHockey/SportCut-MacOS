@@ -14,7 +14,7 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
         let view = AnalyticsView()
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Аналитика разметки"
+        window.title = ^String.Titles.layoutAnalytics
         super.init(window: window)
         window.styleMask.insert(NSWindow.StyleMask.closable)
         window.delegate = self
@@ -52,8 +52,8 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
     @objc func exportAsImage(_ sender: Any) {
         guard let window = self.window else { return }
         let savePanel = NSSavePanel()
-        savePanel.title = "Экспорт аналитики в изображение"
-        savePanel.nameFieldStringValue = "Аналитика_разметки.png"
+        savePanel.title = ^String.Titles.exportAnalyticsToImage
+        savePanel.nameFieldStringValue = ^String.Titles.layoutAnalyticsPng
         savePanel.allowedContentTypes = [UTType.jpeg]
         savePanel.canCreateDirectories = true
         
@@ -76,7 +76,7 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
         progressIndicator.startAnimation(nil)
         
         let label = NSTextField(frame: NSRect(x: window.frame.width/2 - 100, y: window.frame.height/2 + 40, width: 200, height: 30))
-        label.stringValue = "Создание изображения..."
+        label.stringValue = "\(^String.Titles.creatingImage)"
         label.alignment = .center
         label.isBezeled = false
         label.drawsBackground = false
@@ -90,19 +90,13 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if let scrollView = self.findScrollView(in: window.contentView) {
                 if let documentView = scrollView.documentView {
-                    // Сохраняем текущие позиции прокрутки
                     let savedOrigin = scrollView.contentView.bounds.origin
-                    
-                    // Получаем полные размеры контента
                     let fullBounds = documentView.bounds
                     let totalHeight = documentView.bounds.height
                     let viewportHeight = scrollView.contentView.bounds.height
                     let viewportWidth = scrollView.contentView.bounds.width
                     
                     var imageParts: [NSImage] = []
-                    
-                    // Начинаем с верхней части документа и идем вниз
-                    // Создаем массив смещений для прокрутки в правильном порядке сверху вниз
                     let yOffsets = stride(from: 0.0, to: totalHeight, by: viewportHeight).map { $0 }
                     
                     for yOffset in yOffsets {
@@ -122,7 +116,7 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
                         imageParts.insert(image, at: 0)
                         DispatchQueue.main.async {
                             let progress = min(1.0, (yOffset + viewportHeight) / totalHeight)
-                            label.stringValue = "Создание изображения... \(Int(progress * 100))%"
+                            label.stringValue = "\(^String.Titles.creatingImage) \(Int(progress * 100))%"
                         }
                     }
                     scrollView.contentView.scroll(to: savedOrigin)
@@ -149,25 +143,25 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
                         } catch {
                             DispatchQueue.main.async {
                                 progressView.removeFromSuperview()
-                                self.showExportError(message: "Не удалось сохранить изображение: \(error.localizedDescription)")
+                                self.showExportError(message: "\(^String.Titles.failedToCreateImage): \(error.localizedDescription)")
                             }
                         }
                     } else {
                         DispatchQueue.main.async {
                             progressView.removeFromSuperview()
-                            self.showExportError(message: "Не удалось создать изображение")
+                            self.showExportError(message: ^String.Titles.failedToCreateImage)
                         }
                     }
                 } else {
                     DispatchQueue.main.async {
                         progressView.removeFromSuperview()
-                        self.showExportError(message: "Не удалось найти содержимое ScrollView")
+                        self.showExportError(message: ^String.Titles.scrollViewContentNotFound)
                     }
                 }
             } else {
                 DispatchQueue.main.async {
                     progressView.removeFromSuperview()
-                    self.showExportError(message: "Не удалось найти ScrollView в окне")
+                    self.showExportError(message: ^String.Titles.scrollViewNotFound)
                 }
             }
         }
@@ -175,8 +169,8 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
     
     private func showSuccessNotification(filePath: String) {
         let notification = NSUserNotification()
-        notification.title = "Экспорт успешно завершен"
-        notification.informativeText = "Изображение сохранено по пути: \(filePath)"
+        notification.title = ^String.Titles.exportCompleted
+        notification.informativeText = "\(^String.Titles.imageSavedPath) \(filePath)"
         NSUserNotificationCenter.default.deliver(notification)
         NSWorkspace.shared.selectFile(filePath, inFileViewerRootedAtPath: "")
     }
@@ -197,10 +191,10 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
     
     private func showExportError(message: String) {
         let alert = NSAlert()
-        alert.messageText = "Ошибка экспорта PDF"
+        alert.messageText = ^String.Titles.pdfExportError
         alert.informativeText = message
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: ^String.Titles.alertsOkTitle)
         alert.runModal()
     }
     
@@ -210,9 +204,9 @@ extension AnalyticsWindowController: NSToolbarDelegate {
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         if itemIdentifier.rawValue == "ExportImage" {
             let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-            item.label = "Экспорт в изображение"
-            item.paletteLabel = "Экспорт в изображение"
-            item.toolTip = "Экспортировать аналитику как изображение"
+            item.label = ^String.Titles.exportToImage
+            item.paletteLabel = ^String.Titles.exportToImage
+            item.toolTip = ^String.Titles.exportAnalyticsAsImage
             item.image = NSImage(systemSymbolName: "arrow.down.doc.fill", accessibilityDescription: "Export")
             item.target = self
             item.action = #selector(exportAsImage(_:))

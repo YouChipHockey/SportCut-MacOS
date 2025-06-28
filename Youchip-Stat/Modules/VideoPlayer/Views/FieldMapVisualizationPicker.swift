@@ -35,11 +35,11 @@ struct FieldMapVisualizationPicker: View {
     var body: some View {
         VStack {
             VStack(spacing: 20) {
-                Text("Визуализация карты поля")
+                Text(^String.Titles.fieldMapVisualization)
                     .font(.headline)
                 
                 if availableCollections.isEmpty {
-                    Text("Нет коллекций с настроенной картой поля")
+                    Text(^String.Titles.noCollectionsWithFieldMap)
                         .foregroundColor(.secondary)
                 } else {
                     collectionSelectionSection
@@ -57,14 +57,14 @@ struct FieldMapVisualizationPicker: View {
                 }
                 
                 HStack {
-                    Button("Отмена") {
+                    Button(^String.Titles.collectionsButtonCancel) {
                         onCancel()
                     }
                     
                     Spacer()
-                        .help("Настроить отображение тегов на карте поля")
+                        .help(^String.Titles.configureTagsOnFieldMap)
                     
-                    Button("Визуализировать") {
+                    Button(^String.Titles.visualize) {
                         if let collection = selectedCollection {
                             let stamps = getSelectedStamps()
                             onVisualize(collection, selectedMode, stamps)
@@ -85,12 +85,12 @@ struct FieldMapVisualizationPicker: View {
     
     private var collectionSelectionSection: some View {
         VStack(alignment: .leading) {
-            Text("Выберите коллекцию:")
+            Text("\(^String.Titles.selectCollection):")
                 .font(.subheadline)
                 .bold()
             
-            Picker(selection: $selectedCollection, label: Text("Коллекция")) {
-                Text("Выберите коллекцию").tag(nil as CollectionBookmark?)
+            Picker(selection: $selectedCollection, label: Text(^String.Titles.collection)) {
+                Text(^String.Titles.selectCollection).tag(nil as CollectionBookmark?)
                 
                 ForEach(availableCollections, id: \.name) { collection in
                     Text(collection.name).tag(collection as CollectionBookmark?)
@@ -105,13 +105,13 @@ struct FieldMapVisualizationPicker: View {
     
     private var visualizationModeSection: some View {
         VStack(alignment: .leading) {
-            Text("Режим визуализации:")
+            Text(^String.Titles.visualizationMode)
                 .font(.subheadline)
                 .bold()
             
             Picker("", selection: $selectedMode) {
-                Text("По таймлайнам").tag(VisualizationMode.byTimeline)
-                Text("Все теги").tag(VisualizationMode.all)
+                Text(^String.Titles.byTimelines).tag(VisualizationMode.byTimeline)
+                Text(^String.Titles.allTags).tag(VisualizationMode.all)
             }
             .pickerStyle(SegmentedPickerStyle())
             .onChange(of: selectedMode) { _ in
@@ -123,12 +123,12 @@ struct FieldMapVisualizationPicker: View {
     
     private var tagSelectionSection: some View {
         VStack(alignment: .leading) {
-            Text("Выберите теги:")
+            Text(^String.Titles.selectTags)
                 .font(.subheadline)
                 .bold()
             
             if availableTagsForCollection().isEmpty {
-                Text("Нет доступных тегов с позицией для данной коллекции")
+                Text(^String.Titles.noTagsWithPositionAvailable)
                     .foregroundColor(.secondary)
                     .padding(.top, 5)
             } else {
@@ -174,12 +174,12 @@ struct FieldMapVisualizationPicker: View {
     
     private var timelineSelectionSection: some View {
         VStack(alignment: .leading) {
-            Text("Выберите таймлайны:")
+            Text(^String.Titles.fieldMapPickerLabelSelectTimelines)
                 .font(.subheadline)
                 .bold()
             
             if availableTimelinesForCollection().isEmpty {
-                Text("Нет доступных таймлайнов с тегами с позицией для данной коллекции")
+                Text(^String.Titles.fieldMapPickerNoTimelines)
                     .foregroundColor(.secondary)
                     .padding(.top, 5)
             } else {
@@ -193,7 +193,7 @@ struct FieldMapVisualizationPicker: View {
                                 
                                 Spacer()
                                 
-                                Text("\(countPositionedStampsInTimeline(timeline)) тегов")
+                                Text("\(countPositionedStampsInTimeline(timeline)) \(^String.Titles.fieldMapPickerTagsCount)")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 
@@ -225,18 +225,18 @@ struct FieldMapVisualizationPicker: View {
     
     private var allTagsSection: some View {
         VStack(alignment: .leading) {
-            Text("Все теги:")
+            Text(^String.Titles.fieldMapPickerLabelAllTags)
                 .font(.subheadline)
                 .bold()
             
             let tagCount = allPositionedStampsForCollection().count
             
             if tagCount == 0 {
-                Text("Нет тегов с позицией для этой коллекции")
+                Text(^String.Titles.fieldMapPickerNoPositionTags)
                     .foregroundColor(.secondary)
                     .padding(.top, 5)
             } else {
-                Text("Будет отображено \(tagCount) тегов с заданной позицией")
+                Text(String(format: ^String.Titles.fieldMapPickerTagsDisplayCount, tagCount))
                     .padding(.vertical, 5)
             }
         }

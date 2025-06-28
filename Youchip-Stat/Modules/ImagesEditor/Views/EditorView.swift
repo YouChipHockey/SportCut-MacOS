@@ -14,7 +14,7 @@ struct EditorView: View {
     
     var body: some View {
         SheetToolbarView(
-            title: "Фоторедактор",
+            title: ^String.Titles.photoEditor,
             leadingView: leadingView,
             trailingView: tralingView,
             contentView: contentView,
@@ -22,12 +22,12 @@ struct EditorView: View {
             color: Color.hex_2E2E2E
         )
         .infoAlert(
-            title: "Ошибка",
+            title: ^String.Titles.alertsErrorTitle,
             message: viewModel.state.errorTitle,
             show: $viewModel.state.showError
         )
         .infoAlert(
-            title: "Информация",
+            title: ^String.Titles.fieldMapMenuInfo,
             message: viewModel.state.infoTitle,
             show: $viewModel.state.showInfo
         )
@@ -70,7 +70,7 @@ struct EditorView: View {
                 viewModel.action.send(.download)
             }
             
-            ViewsFactory.blueBarButton(title: "Сохранить") {
+            ViewsFactory.blueBarButton(title: ^String.Titles.saveButtonTitle) {
                 viewModel.action.send(.save)
             }
         }

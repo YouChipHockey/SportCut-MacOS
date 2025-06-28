@@ -12,7 +12,7 @@ struct ExportAnalyticsView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Аналитика разметки")
+            Text(^String.Titles.layoutAnalytics)
                 .font(.largeTitle)
                 .bold()
                 .padding(.bottom, 20)
@@ -28,7 +28,7 @@ struct ExportAnalyticsView: View {
             if !analyticsView.anomalies.isEmpty {
                 analyticsView.AnomaliesSection()
             }
-            Text("Отчет сгенерирован: \(formattedCurrentDate())")
+            Text("\(^String.Titles.reportGenerated) \(formattedCurrentDate())")
                 .font(.footnote)
                 .foregroundColor(.secondary)
                 .padding(.top, 20)

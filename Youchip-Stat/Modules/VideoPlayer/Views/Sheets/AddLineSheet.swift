@@ -19,16 +19,16 @@ struct AddLineSheet: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("Добавить таймлайн")
+            Text(^String.Titles.fullControlButtonAddTimeline)
                 .font(.headline)
-            FocusAwareTextField(text: $lineName, placeholder: "Название таймлайна")
+            FocusAwareTextField(text: $lineName, placeholder: ^String.Titles.timelineName)
                 .padding()
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     NotificationCenter.default.post(name: NSNotification.Name("SheetDismissed"), object: nil)
                     presentationMode.wrappedValue.dismiss()
                 }
-                Button("Добавить") {
+                Button(^String.Titles.collectionsButtonAdd) {
                     onAdd(lineName)
                     NotificationCenter.default.post(name: NSNotification.Name("SheetDismissed"), object: nil)
                     presentationMode.wrappedValue.dismiss()
