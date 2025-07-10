@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "categories": [
+    {
+      "identifier": "custom_emoji",
+      "name": "Emoji",
+      "thumbnailURI": "./emoji/thumb.png",
+      "stickers": [
+        {
+          "identifier": "happy_face",
+          "name": "Happy Face",
+          "uri": "./emoji/happy_face.png"
+        },
+        {
+          "identifier": "sad_face", 
+          "name": "Sad Face",
+          "uri": "./emoji/sad_face.png"
+        },
+        {
+          "identifier": "love_face",
+          "name": "Love Face", 
+          "uri": "./emoji/love_face.png"
+        }
+      ]
+    },
+    {
+      "identifier": "custom_shapes",
+      "name": "Shapes",
+      "thumbnailURI": "./shapes/thumb.png",
+      "stickers": [
+        {
+          "identifier": "arrow_right",
+          "name": "Arrow Right",
+          "uri": "./shapes/arrow_right.png"
+        },
+        {
+          "identifier": "star",
+          "name": "Star",
+          "uri": "./shapes/star.png"
+        },
+        {
+          "identifier": "heart",
+          "name": "Heart",
+          "uri": "./shapes/heart.png"
+        }
+      ]
+    }
+  ]
+} 
