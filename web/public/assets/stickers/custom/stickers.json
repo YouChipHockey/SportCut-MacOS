@@ -2,46 +2,43 @@
   "version": "1.0",
   "categories": [
     {
-      "identifier": "custom_emoji",
-      "name": "Emoji",
-      "thumbnailURI": "./emoji/thumb.png",
+      "identifier": "custom_emoji", 
+      "name": "Stickers",
       "stickers": [
         {
-          "identifier": "happy_face",
-          "name": "Happy Face",
-          "uri": "./emoji/happy_face.png"
+          "identifier": "distance_control",
+          "name": "Distance Control",
+          "uri": "./emoji/distance_control.svg"
         },
         {
-          "identifier": "sad_face", 
-          "name": "Sad Face",
-          "uri": "./emoji/sad_face.png"
+          "identifier": "distance_control_1",
+          "name": "Distance Control 1",
+          "uri": "./emoji/distance_control_1.svg"
         },
         {
-          "identifier": "love_face",
-          "name": "Love Face", 
-          "uri": "./emoji/love_face.png"
-        }
-      ]
-    },
-    {
-      "identifier": "custom_shapes",
-      "name": "Shapes",
-      "thumbnailURI": "./shapes/thumb.png",
-      "stickers": [
-        {
-          "identifier": "arrow_right",
-          "name": "Arrow Right",
-          "uri": "./shapes/arrow_right.png"
+          "identifier": "distance_control_2",
+          "name": "Distance Control 2",
+          "uri": "./emoji/distance_control_2.svg"
         },
         {
-          "identifier": "star",
-          "name": "Star",
-          "uri": "./shapes/star.png"
+          "identifier": "player",
+          "name": "Player",
+          "uri": "./emoji/player.svg"
         },
         {
-          "identifier": "heart",
-          "name": "Heart",
-          "uri": "./shapes/heart.png"
+          "identifier": "select_player",
+          "name": "Select Player",
+          "uri": "./emoji/select_player.svg"
+        },
+        {
+          "identifier": "select_player_left",
+          "name": "Select Player Left",
+          "uri": "./emoji/select_player_left.svg"
+        },
+        {
+          "identifier": "select_player_right", 
+          "name": "Select Player Right",
+          "uri": "./emoji/select_player_right.svg"
         }
       ]
     }

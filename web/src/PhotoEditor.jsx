@@ -4,9 +4,6 @@ import { PhotoEditorSDKUI } from 'photoeditorsdk';
 export const PhotoEditor = () => {
   const [editor, setEditor] = useState(null);
   const [exportedImageURL, setExportedImageURL] = useState('');
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [isEditorInitialized, setIsEditorInitialized] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
 
   const initEditor = async (imageBase64, isDraw) => {
     try {
@@ -27,70 +24,32 @@ export const PhotoEditor = () => {
         layout: 'basic',
         mainCanvasActions: ['undo', 'redo'],
         tools,
-        // Настройка кастомных стикеров
         sticker: {
           categories: [
             {
-              identifier: 'custom_emoji',
-              name: 'Emoji',
+              identifier: 'custom_stickers',
+              name: 'Stickers',
               items: [
                 {
-                  identifier: 'happy_face',
-                  name: 'Happy Face',
-                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDAiIGZpbGw9IiNGRkMxMDciIHN0cm9rZT0iI0ZGOTgwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMzUiIGN5PSI0MCIgcj0iNCIgZmlsbD0iIzIxMjEyMSIvPjxjaXJjbGUgY3g9IjY1IiBjeT0iNDAiIHI9IjQiIGZpbGw9IiMyMTIxMjEiLz48cGF0aCBkPSJNIDMwIDYwIFEgNTAgNzUgNzAgNjAiIHN0cm9rZT0iIzIxMjEyMSIgc3Ryb2tlLXdpZHRoPSIzIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=',
-                  stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDAiIGZpbGw9IiNGRkMxMDciIHN0cm9rZT0iI0ZGOTgwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMzUiIGN5PSI0MCIgcj0iNCIgZmlsbD0iIzIxMjEyMSIvPjxjaXJjbGUgY3g9IjY1IiBjeT0iNDAiIHI9IjQiIGZpbGw9IiMyMTIxMjEiLz48cGF0aCBkPSJNIDMwIDYwIFEgNTAgNzUgNzAgNjAiIHN0cm9rZT0iIzIxMjEyMSIgc3Ryb2tlLXdpZHRoPSIzIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4='
+                  identifier: 'select_player',
+                  name: 'Select Player',
+                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTE0IiBoZWlnaHQ9IjY2IiB2aWV3Qm94PSIwIDAgMTE0IDY2IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNODQuODUyOCAxNi43MzY3QzEwMC44NjQgMjUuOTgwMSAxMDEuMzM5IDQwLjY5MjYgODUuOTEzNCA0OS41OTc4TDg1LjE4MzUgNTAuMDA4NUM2OS42OTQxIDU4LjQ5MjQgNDQuNzUyNyA1OC4wODQ2IDI4Ljk5MTIgNDguOTg1NkwyOC4yNTIxIDQ4LjU0ODFDMTMuMjExNSAzOS40MzA2IDEyLjc1NjggMjUuMzQ1OCAyNy4yMTk0IDE2LjU0NThMMjcuOTMwNyAxNi4xMjQ0QzQzLjM1NjQgNy4yMTkxOCA2OC44NDEzIDcuNDkzMjkgODQuODUyOCAxNi43MzY3Wk04MC41MjI2IDE5LjIzNjVDNjYuNzQ5IDExLjI4NTEgNDUuMTQ0NCAxMS4xODY2IDMyLjI2MDkgMTguNjI0M0MxOS4zNzc1IDI2LjA2MTkgMTkuNTQ4IDM4LjUzNDMgMzMuMzIxNSA0Ni40ODU3QzQ3LjA5NSA1NC40MzcyIDY4LjY5OTYgNTQuNTM1NiA4MS41ODMxIDQ3LjA5OEM5NC40NjY2IDM5LjY2MDQgOTQuMjk2MSAyNy4xODggODAuNTIyNiAxOS4yMzY1WiIgZmlsbD0iI0ZGMDAwMCIvPgo8L3N2Zz4K',
+                  stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTE0IiBoZWlnaHQ9IjY2IiB2aWV3Qm94PSIwIDAgMTE0IDY2IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNODQuODUyOCAxNi43MzY3QzEwMC44NjQgMjUuOTgwMSAxMDEuMzM5IDQwLjY5MjYgODUuOTEzNCA0OS41OTc4TDg1LjE4MzUgNTAuMDA4NUM2OS42OTQxIDU4LjQ5MjQgNDQuNzUyNyA1OC4wODQ2IDI4Ljk5MTIgNDguOTg1NkwyOC4yNTIxIDQ4LjU0ODFDMTMuMjExNSAzOS40MzA2IDEyLjc1NjggMjUuMzQ1OCAyNy4yMTk0IDE2LjU0NThMMjcuOTMwNyAxNi4xMjQ0QzQzLjM1NjQgNy4yMTkxOCA2OC44NDEzIDcuNDkzMjkgODQuODUyOCAxNi43MzY3Wk04MC41MjI2IDE5LjIzNjVDNjYuNzQ5IDExLjI4NTEgNDUuMTQ0NCAxMS4xODY2IDMyLjI2MDkgMTguNjI0M0MxOS4zNzc1IDI2LjA2MTkgMTkuNTQ4IDM4LjUzNDMgMzMuMzIxNSA0Ni40ODU3QzQ3LjA5NSA1NC40MzcyIDY4LjY5OTYgNTQuNTM1NiA4MS41ODMxIDQ3LjA5OEM5NC40NjY2IDM5LjY2MDQgOTQuMjk2MSAyNy4xODggODAuNTIyNiAxOS4yMzY1WiIgZmlsbD0iI0ZGMDAwMCIvPgo8L3N2Zz4K'
                 },
                 {
-                  identifier: 'sad_face',
-                  name: 'Sad Face',
-                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDAiIGZpbGw9IiNGRkMxMDciIHN0cm9rZT0iI0ZGOTgwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMzUiIGN5PSI0MCIgcj0iNCIgZmlsbD0iIzIxMjEyMSIvPjxjaXJjbGUgY3g9IjY1IiBjeT0iNDAiIHI9IjQiIGZpbGw9IiMyMTIxMjEiLz48cGF0aCBkPSJNIDMwIDcwIFEgNTAgNTUgNzAgNzAiIHN0cm9rZT0iIzIxMjEyMSIgc3Ryb2tlLXdpZHRoPSIzIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=',
-                  stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDAiIGZpbGw9IiNGRkMxMDciIHN0cm9rZT0iI0ZGOTgwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMzUiIGN5PSI0MCIgcj0iNCIgZmlsbD0iIzIxMjEyMSIvPjxjaXJjbGUgY3g9IjY1IiBjeT0iNDAiIHI9IjQiIGZpbGw9IiMyMTIxMjEiLz48cGF0aCBkPSJNIDMwIDcwIFEgNTAgNTUgNzAgNzAiIHN0cm9rZT0iIzIxMjEyMSIgc3Ryb2tlLXdpZHRoPSIzIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4='
-                },
-                {
-                  identifier: 'love_face',
-                  name: 'Love Face',
-                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDAiIGZpbGw9IiNGRkMxMDciIHN0cm9rZT0iI0ZGOTgwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHBhdGggZD0iTSAzMCAzNSBMIDMyIDMyIFEgMzUgMjkgMzggMzIgUSA0MSAyOSA0NCAzMiBMIDM1IDQ1IFoiIGZpbGw9IiNFOTFFNjMiLz48cGF0aCBkPSJNIDU2IDM1IEwgNTggMzIgUSA2MSAyOSA2NCAzMiBRIDY3IDI5IDcwIDMyIEwgNjEgNDUgWiIgZmlsbD0iI0U5MUU2MyIvPjxwYXRoIGQ9Ik0gMzAgNjAgUSA1MCA3NSA3MCA2MCIgc3Ryb2tlPSIjMjEyMTIxIiBzdHJva2Utd2lkdGg9IjMiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==',
-                  stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDAiIGZpbGw9IiNGRkMxMDciIHN0cm9rZT0iI0ZGOTgwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHBhdGggZD0iTSAzMCAzNSBMIDMyIDMyIFEgMzUgMjkgMzggMzIgUSA0MSAyOSA0NCAzMiBMIDM1IDQ1IFoiIGZpbGw9IiNFOTFFNjMiLz48cGF0aCBkPSJNIDU2IDM1IEwgNTggMzIgUSA2MSAyOSA2NCAzMiBRIDY3IDI5IDcwIDMyIEwgNjEgNDUgWiIgZmlsbD0iI0U5MUU2MyIvPjxwYXRoIGQ9Ik0gMzAgNjAgUSA1MCA3NSA3MCA2MCIgc3Ryb2tlPSIjMjEyMTIxIiBzdHJva2Utd2lkdGg9IjMiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg=='
+                  identifier: 'select_player_left',
+                  name: 'Select Player Left',
+                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYyIiBoZWlnaHQ9Ijk0IiB2aWV3Qm94PSIwIDAgMTYyIDk0IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8bWFzayBpZD0icGF0aC0xLWluc2lkZS0xXzdfMTEiIGZpbGw9IndoaXRlIj4KPHBhdGggZD0iTTkyLjQ2NDUgMTQuNDczNEMxMDIuNDY1IDE1LjgwMTkgMTExLjcwOSAxOC42NTI2IDExOS4yMjkgMjIuNzI2OEMxMjYuNzQ5IDI2LjgwMTEgMTMyLjI2NyAzMS45NDg5IDEzNS4yMDYgMzcuNjMwOEMxMzguMTQ1IDQzLjMxMjcgMTM4LjM5NyA0OS4zMTk3IDEzNS45MzQgNTUuMDIyMkMxMzMuNDcxIDYwLjcyNDggMTI4LjM4NSA2NS45MTMgMTIxLjIwOCA3MC4wNDM0QzExNC4wMzIgNzQuMTczNyAxMDUuMDI5IDc3LjA5NCA5NS4xNDI5IDc4LjQ5ODVDODUuMjU3IDc5LjkwMjkgNzQuODUyIDc5LjczOTYgNjUuMDE4MiA3OC4wMjU4QzU1LjE4NDMgNzYuMzEyMSA0Ni4yODM2IDczLjExMDggMzkuMjQ4NiA2OC43NTc1QzMyLjIxMzYgNjQuNDA0MyAyNy4zMDMzIDU5LjA1OTIgMjUuMDMyMiA1My4yODI0TDM0LjE2NDcgNTIuMTczOUMzNi4wNjI2IDU3LjAwMTQgNDAuMTY2IDYxLjQ2ODIgNDYuMDQ1MSA2NS4xMDYyQzUxLjkyNDEgNjguNzQ0MiA1OS4zNjIzIDcxLjQxOTQgNjcuNTgwMiA3Mi44NTE2Qzc1Ljc5ODIgNzQuMjgzNyA4NC40OTM1IDc0LjQyMDEgOTIuNzU0OSA3My4yNDY1QzEwMS4wMTYgNzIuMDcyOSAxMDguNTQgNjkuNjMyNCAxMTQuNTM3IDY2LjE4MDdDMTIwLjUzNSA2Mi43MjkxIDEyNC43ODUgNTguMzkzNCAxMjYuODQzIDUzLjYyNzhDMTI4LjkwMSA0OC44NjIzIDEyOC42OTEgNDMuODQyNCAxMjYuMjM1IDM5LjA5NDFDMTIzLjc3OSAzNC4zNDU4IDExOS4xNjcgMzAuMDQzOSAxMTIuODgzIDI2LjYzOTFDMTA2LjU5OSAyMy4yMzQ0IDk4Ljg3MzcgMjAuODUyMSA5MC41MTY2IDE5Ljc0MTlMOTIuNDY0NSAxNC40NzM0WiIvPgo8L21hc2s+CjxwYXRoIGQ9Ik05Mi40NjQ1IDE0LjQ3MzRDMTAyLjQ2NSAxNS44MDE5IDExMS43MDkgMTguNjUyNiAxMTkuMjI5IDIyLjcyNjhDMTI2Ljc0OSAyNi44MDExIDEzMi4yNjcgMzEuOTQ4OSAxMzUuMjA2IDM3LjYzMDhDMTM4LjE0NSA0My4zMTI3IDEzOC4zOTcgNDkuMzE5NyAxMzUuOTM0IDU1LjAyMjJDMTMzLjQ3MSA2MC43MjQ4IDEyOC4zODUgNjUuOTEzIDEyMS4yMDggNzAuMDQzNEMxMTQuMDMyIDc0LjE3MzcgMTA1LjAyOSA3Ny4wOTQgOTUuMTQyOSA3OC40OTg1Qzg1LjI1NyA3OS45MDI5IDc0Ljg1MiA3OS43Mzk2IDY1LjAxODIgNzguMDI1OEM1NS4xODQzIDc2LjMxMjEgNDYuMjgzNiA3My4xMTA4IDM5LjI0ODYgNjguNzU3NUMzMi4yMTM2IDY0LjQwNDMgMjcuMzAzMyA1OS4wNTkyIDI1LjAzMjIgNTMuMjgyNEwzNC4xNjQ3IDUyLjE3MzlDMzYuMDYyNiA1Ny4wMDE0IDQwLjE2NiA2MS40NjgyIDQ2LjA0NTEgNjUuMTA2MkM1MS45MjQxIDY4Ljc0NDIgNTkuMzYyMyA3MS40MTk0IDY3LjU4MDIgNzIuODUxNkM3NS43OTgyIDc0LjI4MzcgODQuNDkzNSA3NC40MjAxIDkyLjc1NDkgNzMuMjQ2NUMxMDEuMDE2IDcyLjA3MjkgMTA4LjU0IDY5LjYzMjQgMTE0LjUzNyA2Ni4xODA3QzEyMC41MzUgNjIuNzI5MSAxMjQuNzg1IDU4LjM5MzQgMTI2Ljg0MyA1My42Mjc4QzEyOC45MDEgNDguODYyMyAxMjguNjkxIDQzLjg0MjQgMTI2LjIzNSAzOS4wOTQxQzEyMy43NzkgMzQuMzQ1OCAxMTkuMTY3IDMwLjA0MzkgMTEyLjg4MyAyNi42MzkxQzEwNi41OTkgMjMuMjM0NCA5OC44NzM3IDIwLjg1MjEgOTAuNTE2NiAxOS43NDE5TDkyLjQ2NDUgMTQuNDczNFoiIGZpbGw9IiNFMTAwMDAiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMiIgbWFzaz0idXJsKCNwYXRoLTEtaW5zaWRlLTFfN18xMSkiLz4KPC9zdmc+Cg==',
+                  stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYyIiBoZWlnaHQ9Ijk0IiB2aWV3Qm94PSIwIDAgMTYyIDk0IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8bWFzayBpZD0icGF0aC0xLWluc2lkZS0xXzdfMTEiIGZpbGw9IndoaXRlIj4KPHBhdGggZD0iTTkyLjQ2NDUgMTQuNDczNEMxMDIuNDY1IDE1LjgwMTkgMTExLjcwOSAxOC42NTI2IDExOS4yMjkgMjIuNzI2OEMxMjYuNzQ5IDI2LjgwMTEgMTMyLjI2NyAzMS45NDg5IDEzNS4yMDYgMzcuNjMwOEMxMzguMTQ1IDQzLjMxMjcgMTM4LjM5NyA0OS4zMTk3IDEzNS45MzQgNTUuMDIyMkMxMzMuNDcxIDYwLjcyNDggMTI4LjM4NSA2NS45MTMgMTIxLjIwOCA3MC4wNDM0QzExNC4wMzIgNzQuMTczNyAxMDUuMDI5IDc3LjA5NCA5NS4xNDI5IDc4LjQ5ODVDODUuMjU3IDc5LjkwMjkgNzQuODUyIDc5LjczOTYgNjUuMDE4MiA3OC4wMjU4QzU1LjE4NDMgNzYuMzEyMSA0Ni4yODM2IDczLjExMDggMzkuMjQ4NiA2OC43NTc1QzMyLjIxMzYgNjQuNDA0MyAyNy4zMDMzIDU5LjA1OTIgMjUuMDMyMiA1My4yODI0TDM0LjE2NDcgNTIuMTczOUMzNi4wNjI2IDU3LjAwMTQgNDAuMTY2IDYxLjQ2ODIgNDYuMDQ1MSA2NS4xMDYyQzUxLjkyNDEgNjguNzQ0MiA1OS4zNjIzIDcxLjQxOTQgNjcuNTgwMiA3Mi44NTE2Qzc1Ljc5ODIgNzQuMjgzNyA4NC40OTM1IDc0LjQyMDEgOTIuNzU0OSA3My4yNDY1QzEwMS4wMTYgNzIuMDcyOSAxMDguNTQgNjkuNjMyNCAxMTQuNTM3IDY2LjE4MDdDMTIwLjUzNSA2Mi43MjkxIDEyNC43ODUgNTguMzkzNCAxMjYuODQzIDUzLjYyNzhDMTI4LjkwMSA0OC44NjIzIDEyOC42OTEgNDMuODQyNCAxMjYuMjM1IDM5LjA5NDFDMTIzLjc3OSAzNC4zNDU4IDExOS4xNjcgMzAuMDQzOSAxMTIuODgzIDI2LjYzOTFDMTA2LjU5OSAyMy4yMzQ0IDk4Ljg3MzcgMjAuODUyMSA5MC41MTY2IDE5Ljc0MTlMOTIuNDY0NSAxNC40NzM0WiIvPgo8L21hc2s+CjxwYXRoIGQ9Ik05Mi40NjQ1IDE0LjQ3MzRDMTAyLjQ2NSAxNS44MDE5IDExMS43MDkgMTguNjUyNiAxMTkuMjI5IDIyLjcyNjhDMTI2Ljc0OSAyNi44MDExIDEzMi4yNjcgMzEuOTQ4OSAxMzUuMjA2IDM3LjYzMDhDMTM4LjE0NSA0My4zMTI3IDEzOC4zOTcgNDkuMzE5NyAxMzUuOTM0IDU1LjAyMjJDMTMzLjQ3MSA2MC43MjQ4IDEyOC4zODUgNjUuOTEzIDEyMS4yMDggNzAuMDQzNEMxMTQuMDMyIDc0LjE3MzcgMTA1LjAyOSA3Ny4wOTQgOTUuMTQyOSA3OC40OTg1Qzg1LjI1NyA3OS45MDI5IDc0Ljg1MiA3OS43Mzk2IDY1LjAxODIgNzguMDI1OEM1NS4xODQzIDc2LjMxMjEgNDYuMjgzNiA3My4xMTA4IDM5LjI0ODYgNjguNzU3NUMzMi4yMTM2IDY0LjQwNDMgMjcuMzAzMyA1OS4wNTkyIDI1LjAzMjIgNTMuMjgyNEwzNC4xNjQ3IDUyLjE3MzlDMzYuMDYyNiA1Ny4wMDE0IDQwLjE2NiA2MS40NjgyIDQ2LjA0NTEgNjUuMTA2MkM1MS45MjQxIDY4Ljc0NDIgNTkuMzYyMyA3MS40MTk0IDY3LjU4MDIgNzIuODUxNkM3NS43OTgyIDc0LjI4MzcgODQuNDkzNSA3NC40MjAxIDkyLjc1NDkgNzMuMjQ2NUMxMDEuMDE2IDcyLjA3MjkgMTA4LjU0IDY5LjYzMjQgMTE0LjUzNyA2Ni4xODA3QzEyMC41MzUgNjIuNzI5MSAxMjQuNzg1IDU4LjM5MzQgMTI2Ljg0MyA1My42Mjc4QzEyOC45MDEgNDguODYyMyAxMjguNjkxIDQzLjg0MjQgMTI2LjIzNSAzOS4wOTQxQzEyMy43NzkgMzQuMzQ1OCAxMTkuMTY3IDMwLjA0MzkgMTEyLjg4MyAyNi42MzkxQzEwNi41OTkgMjMuMjM0NCA5OC44NzM3IDIwLjg1MjEgOTAuNTE2NiAxOS43NDE5TDkyLjQ2NDUgMTQuNDczNFoiIGZpbGw9IiNFMTAwMDAiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMiIgbWFzaz0idXJsKCNwYXRoLTEtaW5zaWRlLTFfN18xMSkiLz4KPC9zdmc+Cg=='
                 },
                 {
                   identifier: 'distance_control',
                   name: 'Distance Control',
-                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjYxIiBoZWlnaHQ9Ijc5IiB2aWV3Qm94PSIwIDAgMjYxIDc5IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNNDEgMi41QzYyLjM1MTYgMi41IDc5LjUgMTkuMTUyNSA3OS41IDM5LjVDNzkuNSA1OS44NDc1IDYyLjM1MTYgNzYuNSA0MSA3Ni41QzE5LjY0ODQgNzYuNSAyLjUgNTkuODQ3NSAyLjUgMzkuNUMyLjUgMTkuMTUyNSAxOS42NDg0IDIuNSA0MSAyLjVaIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjUiLz4KPGxpbmUgeDE9IjgyIiB5MT0iNDEuNSIgeDI9IjI1NiIgeTI9IjQxLjUiIHN0cm9rZT0iIzA5MDkwOSIgc3Ryb2tlLXdpZHRoPSI1Ii8+CjxsaW5lIHgxPSIyNTguNSIgeDI9IjI1OC41IiB5Mj0iNzkiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iNSIvPgo8L3N2Zz4K',
                   stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjYxIiBoZWlnaHQ9Ijc5IiB2aWV3Qm94PSIwIDAgMjYxIDc5IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNNDEgMi41QzYyLjM1MTYgMi41IDc5LjUgMTkuMTUyNSA3OS41IDM5LjVDNzkuNSA1OS44NDc1IDYyLjM1MTYgNzYuNSA0MSA3Ni41QzE5LjY0ODQgNzYuNSAyLjUgNTkuODQ3NSAyLjUgMzkuNUMyLjUgMTkuMTUyNSAxOS42NDg0IDIuNSA0MSAyLjVaIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjUiLz4KPGxpbmUgeDE9IjgyIiB5MT0iNDEuNSIgeDI9IjI1NiIgeTI9IjQxLjUiIHN0cm9rZT0iIzA5MDkwOSIgc3Ryb2tlLXdpZHRoPSI1Ii8+CjxsaW5lIHgxPSIyNTguNSIgeDI9IjI1OC41IiB5Mj0iNzkiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iNSIvPgo8L3N2Zz4K'
-                },
-                {
-                  identifier: 'player',
-                  name: 'Player',
-                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTE0IiBoZWlnaHQ9IjY2IiB2aWV3Qm94PSIwIDAgMTE0IDY2IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNODQuODUyOCAxNi43MzY3QzEwMC44NjQgMjUuOTgwMSAxMDEuMzM5IDQwLjY5MjYgODUuOTEzNCA0OS41OTc4TDg1LjE4MzUgNTAuMDA4NUM2OS42OTQxIDU4LjQ5MjQgNDQuNzUyNyA1OC4wODQ2IDI4Ljk5MTIgNDguOTg1NkwyOC4yNTIxIDQ4LjU0ODFDMTMuMjExNSAzOS40MzA2IDEyLjc1NjggMjUuMzQ1OCAyNy4yMTk0IDE2LjU0NThMMjcuOTMwNyAxNi4xMjQ0QzQzLjM1NjQgNy4yMTkxOCA2OC44NDEzIDcuNDkzMjkgODQuODUyOCAxNi43MzY3Wk04MC41MjI2IDE5LjIzNjVDNjYuNzQ5IDExLjI4NTEgNDUuMTQ0NCAxMS4xODY2IDMyLjI2MDkgMTguNjI0M0MxOS4zNzc1IDI2LjA2MTkgMTkuNTQ4IDM4LjUzNDMgMzMuMzIxNSA0Ni40ODU3QzQ3LjA5NSA1NC40MzcyIDY4LjY5OTYgNTQuNTM1NiA4MS41ODMxIDQ3LjA5OEM5NC40NjY2IDM5LjY2MDQgOTQuMjk2MSAyNy4xODggODAuNTIyNiAxOS4yMzY1WiIgZmlsbD0iI0ZGMDAwMCIvPgo8L3N2Zz4K',
-                  stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTE0IiBoZWlnaHQ9IjY2IiB2aWV3Qm94PSIwIDAgMTE0IDY2IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNODQuODUyOCAxNi43MzY3QzEwMC44NjQgMjUuOTgwMSAxMDEuMzM5IDQwLjY5MjYgODUuOTEzNCA0OS41OTc4TDg1LjE4MzUgNTAuMDA4NUM2OS42OTQxIDU4LjQ5MjQgNDQuNzUyNyA1OC4wODQ2IDI4Ljk5MTIgNDguOTg1NkwyOC4yNTIxIDQ4LjU0ODFDMTMuMjExNSAzOS40MzA2IDEyLjc1NjggMjUuMzQ1OCAyNy4yMTk0IDE2LjU0NThMMjcuOTMwNyAxNi4xMjQ0QzQzLjM1NjQgNy4yMTkxOCA2OC44NDEzIDcuNDkzMjkgODQuODUyOCAxNi43MzY3Wk04MC41MjI2IDE5LjIzNjVDNjYuNzQ5IDExLjI4NTEgNDUuMTQ0NCAxMS4xODY2IDMyLjI2MDkgMTguNjI0M0MxOS4zNzc1IDI2LjA2MTkgMTkuNTQ4IDM4LjUzNDMgMzMuMzIxNSA0Ni40ODU3QzQ3LjA5NSA1NC40MzcyIDY4LjY5OTYgNTQuNTM1NiA4MS41ODMxIDQ3LjA5OEM5NC40NjY2IDM5LjY2MDQgOTQuMjk2MSAyNy4xODggODAuNTIyNiAxOS4yMzY1WiIgZmlsbD0iI0ZGMDAwMCIvPgo8L3N2Zz4K'
-                }
-              ]
-            },
-            {
-              identifier: 'custom_shapes',
-              name: 'Shapes',
-              items: [
-                {
-                  identifier: 'arrow_right',
-                  name: 'Arrow Right',
-                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTSAyMCAzMCBMIDYwIDMwIEwgNjAgMjAgTCA4MCA1MCBMIDYwIDgwIEwgNjAgNzAgTCAyMCA3MCBaIiBmaWxsPSIjMjE5NkYzIiBzdHJva2U9IiMxOTc2RDIiIHN0cm9rZS13aWR0aD0iMSIvPjwvc3ZnPg==',
-                  stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTSAyMCAzMCBMIDYwIDMwIEwgNjAgMjAgTCA4MCA1MCBMIDYwIDgwIEwgNjAgNzAgTCAyMCA3MCBaIiBmaWxsPSIjMjE5NkYzIiBzdHJva2U9IiMxOTc2RDIiIHN0cm9rZS13aWR0aD0iMSIvPjwvc3ZnPg=='
-                },
-                {
-                  identifier: 'star',
-                  name: 'Star',
-                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTSA1MCAxMCBMIDU5IDMyIEwgODMgMzIgTCA2NSA0NyBMIDc0IDY5IEwgNTAgNTQgTCAyNiA2OSBMIDM1IDQ3IEwgMTcgMzIgTCA0MSAzMiBaIiBmaWxsPSIjRkZENzAwIiBzdHJva2U9IiNGRkEwMDAiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg==',
-                  stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTSA1MCAxMCBMIDU5IDMyIEwgODMgMzIgTCA2NSA0NyBMIDc0IDY5IEwgNTAgNTQgTCAyNiA2OSBMIDM1IDQ3IEwgMTcgMzIgTCA0MSAzMiBaIiBmaWxsPSIjRkZENzAwIiBzdHJva2U9IiNGRkEwMDAiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg=='
-                },
-                {
-                  identifier: 'heart',
-                  name: 'Heart',
-                  thumbnailURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTSA1MCA4NSBDIDIwIDYwLCA1IDI1LCAyNSAxNSBDIDQwIDUsIDUwIDIwLCA1MCAyMCBDIDUwIDIwLCA2MCA1LCA3NSAxNSBDIDk1IDI1LCA4MCA2MCwgNTAgODUgWiIgZmlsbD0iI0U5MUU2MyIgc3Ryb2tlPSIjQzIxODVCIiBzdHJva2Utd2lkdGg9IjIiLz48L3N2Zz4=',
-                  stickerURI: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTSA1MCA4NSBDIDIwIDYwLCA1IDI1LCAyNSAxNSBDIDQwIDUsIDUwIDIwLCA1MCAyMCBDIDUwIDIwLCA2MCA1LCA3NSAxNSBDIDk1IDI1LCA4MCA2MCwgNTAgODUgWiIgZmlsbD0iI0U5MUU2MyIgc3Ryb2tlPSIjQzIxODVCIiBzdHJva2Utd2lkdGg9IjIiLz48L3N2Zz4='
                 }
               ]
             }
-          ]
+          ],
         },
         brush: {
           colors: [
@@ -128,14 +87,11 @@ export const PhotoEditor = () => {
         },
       });
 
-      console.log('PhotoEditor SDK инициализирован успешно');
       setEditor(editorInstance);
-      setIsLoading(false);
 
       window.exportImage = exportImage;
     } catch (error) {
-      console.error('Ошибка инициализации PhotoEditor SDK:', error);
-      setIsLoading(false);
+      console.error('Error initializing PhotoEditorSDKUI:', error);
     }
   };
 
@@ -172,39 +128,6 @@ export const PhotoEditor = () => {
     }
   };
 
-  const handleFileSelection = (event) => {
-    const file = event.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-      console.log('Файл выбран:', file.name, file.type, file.size);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const base64String = e.target.result;
-        console.log('Base64 загружен, длина:', base64String.length);
-        setSelectedImage(base64String);
-        setIsEditorInitialized(true);
-        setIsLoading(true);
-        // Даем время на рендер перед инициализацией редактора
-        setTimeout(() => {
-          initEditor(base64String, false);
-        }, 100);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      console.error('Неверный тип файла');
-    }
-  };
-
-  const resetEditor = () => {
-    if (editor) {
-      editor.dispose();
-      setEditor(null);
-    }
-    setSelectedImage(null);
-    setIsEditorInitialized(false);
-    setIsLoading(false);
-    setExportedImageURL('');
-  };
-
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data.type === 'initEditor') {
@@ -228,137 +151,9 @@ export const PhotoEditor = () => {
     };
   }, [editor]);
 
-  // Если редактор не инициализирован, показываем экран выбора файла
-  if (!isEditorInitialized) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        width: '100vw', 
-        height: '100vh',
-        backgroundColor: '#f5f5f5',
-        fontFamily: 'Arial, sans-serif'
-      }}>
-        <div style={{
-          backgroundColor: 'white',
-          padding: '40px',
-          borderRadius: '12px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-          textAlign: 'center',
-          maxWidth: '500px',
-          width: '90%'
-        }}>
-          <h1 style={{ 
-            marginBottom: '20px', 
-            color: '#333',
-            fontSize: '24px'
-          }}>
-            Photo Editor
-          </h1>
-          <p style={{ 
-            marginBottom: '30px', 
-            color: '#666',
-            fontSize: '16px',
-            lineHeight: '1.5'
-          }}>
-            Выберите изображение для редактирования
-          </p>
-          
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelection}
-            style={{ display: 'none' }}
-            id="fileInput"
-          />
-          
-          <label
-            htmlFor="fileInput"
-            style={{
-              display: 'inline-block',
-              padding: '12px 24px',
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              border: 'none',
-              transition: 'background-color 0.3s'
-            }}
-            onMouseOver={(e) => e.target.style.backgroundColor = '#45a049'}
-            onMouseOut={(e) => e.target.style.backgroundColor = '#4CAF50'}
-          >
-            Выбрать изображение
-          </label>
-          
-          <div style={{ 
-            marginTop: '20px', 
-            fontSize: '14px', 
-            color: '#888' 
-          }}>
-            Поддерживаемые форматы: JPG, PNG, GIF, WebP
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
-      {isLoading && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000,
-          fontSize: '18px',
-          color: '#333'
-        }}>
-          <div style={{ marginBottom: '20px' }}>
-            Загрузка редактора...
-          </div>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '4px solid #f3f3f3',
-            borderTop: '4px solid #4CAF50',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
-          }}></div>
-        </div>
-      )}
-      
       <div id="editor" style={{ width: '100%', height: '100%' }}></div>
-      
-      {/* Кнопка для возврата к выбору файла */}
-      <button
-        onClick={resetEditor}
-        style={{
-          position: 'absolute',
-          top: '10px',
-          left: '10px',
-          zIndex: 1000,
-          padding: '8px 16px',
-          backgroundColor: '#f44336',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '14px'
-        }}
-      >
-        ← Выбрать другое фото
-      </button>
-
       <button
         id="exportButton"
         onClick={exportImage}
