@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "categories": [
+    {
+      "identifier": "custom_emoji", 
+      "name": "Stickers",
+      "stickers": [
+        {
+          "identifier": "distance_control",
+          "name": "Distance Control",
+          "uri": "./emoji/distance_control.svg"
+        },
+        {
+          "identifier": "distance_control_1",
+          "name": "Distance Control 1",
+          "uri": "./emoji/distance_control_1.svg"
+        },
+        {
+          "identifier": "distance_control_2",
+          "name": "Distance Control 2",
+          "uri": "./emoji/distance_control_2.svg"
+        },
+        {
+          "identifier": "player",
+          "name": "Player",
+          "uri": "./emoji/player.svg"
+        },
+        {
+          "identifier": "select_player",
+          "name": "Select Player",
+          "uri": "./emoji/select_player.svg"
+        },
+        {
+          "identifier": "select_player_left",
+          "name": "Select Player Left",
+          "uri": "./emoji/select_player_left.svg"
+        },
+        {
+          "identifier": "select_player_right", 
+          "name": "Select Player Right",
+          "uri": "./emoji/select_player_right.svg"
+        }
+      ]
+    }
+  ]
+} 
