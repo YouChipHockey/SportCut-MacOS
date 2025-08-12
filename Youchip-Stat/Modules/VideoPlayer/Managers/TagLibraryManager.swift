@@ -11,6 +11,15 @@ import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
 
+struct StandardCollection {
+    let name: String
+    let tags: [Tag]
+    let tagGroups: [TagGroup]
+    let labelGroups: [LabelGroupData]
+    let labels: [Label]
+    let timeEvents: [TimeEvent]
+}
+
 class TagLibraryManager: ObservableObject {
     static let shared = TagLibraryManager()
     @Published var tags: [Tag] = []
@@ -33,26 +42,13 @@ class TagLibraryManager: ObservableObject {
     
     @Published var currentCollectionType: TagCollection = .standard
     
+    @Published var standardCollections: [StandardCollection] = []
+    @Published var selectedStandardCollectionName: String? = nil
+    
     private init() {
-        if let loadedTags: TagsData = loadJSON(filename: "tags.json") {
-            self.tags = loadedTags.tags
-            self.defaultTags = loadedTags.tags
-        }
-        if let loadedTagGroups: TagGroupsData = loadJSON(filename: "tagsGroups.json") {
-            self.tagGroups = loadedTagGroups.tagGroups
-            self.defaultTagGroups = loadedTagGroups.tagGroups
-        }
-        if let loadedLabelGroups: LabelGroupsData = loadJSON(filename: "labelsGroups.json") {
-            self.labelGroups = loadedLabelGroups.labelGroups
-            self.defaultLabelGroups = loadedLabelGroups.labelGroups
-        }
-        if let loadedLabels: LabelsData = loadJSON(filename: "labels.json") {
-            self.labels = loadedLabels.labels
-            self.defaultLabels = loadedLabels.labels
-        }
-        if let loadedTimeEvents: TimeEventsData = loadJSON(filename: "timeEvents.json") {
-            self.timeEvents = loadedTimeEvents.events
-            self.defaultTimeEvents = loadedTimeEvents.events
+        loadBaseCollections()
+        if let first = standardCollections.first {
+            applyStandardCollection(named: first.name)
         }
         
         NotificationCenter.default.addObserver(
@@ -68,6 +64,80 @@ class TagLibraryManager: ObservableObject {
         allLabels = labels
         allTimeEvents = timeEvents
         loadAllUserCollections()
+    }
+    
+    private func loadBaseCollections() {
+        guard let namesUrl = Bundle.main.url(forResource: "names", withExtension: "json") else { return }
+        let names: [String] = if let loadedTags: NamesData = loadJSON(url: namesUrl) {
+            loadedTags.names
+        } else { [] }
+        for name in names {
+            let tagsURL = Bundle.main.url(forResource: "tags(\(name))", withExtension: "json")
+            let tagsGroupsURL = Bundle.main.url(forResource: "tagsGroups(\(name))", withExtension: "json")
+            let labelsGroupsURL = Bundle.main.url(forResource: "labelsGroups(\(name))", withExtension: "json")
+            let labelsURL = Bundle.main.url(forResource: "labels(\(name))", withExtension: "json")
+            let timeEventsURL = Bundle.main.url(forResource: "timeEvents(\(name))", withExtension: "json")
+            
+            var tags: [Tag] = []
+            var tagGroups: [TagGroup] = []
+            var labelGroups: [LabelGroupData] = []
+            var labels: [Label] = []
+            var timeEvents: [TimeEvent] = []
+            
+            if let tagsURL = tagsURL {
+                if let loadedTags: TagsData = loadJSON(url: tagsURL) {
+                    tags = loadedTags.tags
+                }
+            }
+            
+            if let tagsGroupsURL = tagsGroupsURL {
+                if let loadedTags: TagGroupsData = loadJSON(url: tagsGroupsURL) {
+                    tagGroups = loadedTags.tagGroups
+                }
+            }
+            
+            if let labelsGroupsURL = labelsGroupsURL {
+                if let loadedTags: LabelGroupsData = loadJSON(url: labelsGroupsURL) {
+                    labelGroups = loadedTags.labelGroups
+                }
+            }
+            
+            if let labelsURL = labelsURL {
+                if let loadedTags: LabelsData = loadJSON(url: labelsURL) {
+                    labels = loadedTags.labels
+                }
+            }
+            
+            if let timeEventsURL = timeEventsURL {
+                if let loadedTags: TimeEventsData = loadJSON(url: timeEventsURL) {
+                    timeEvents = loadedTags.events
+                }
+            }
+            
+            let collection = StandardCollection(
+                name: name,
+                tags: tags,
+                tagGroups: tagGroups,
+                labelGroups: labelGroups,
+                labels: labels,
+                timeEvents: timeEvents
+            )
+            standardCollections.append(collection)
+        }
+    }
+    
+    func applyStandardCollection(named name: String) {
+        guard let collection = standardCollections.first(where: { $0.name == name }) else { return }
+        tags = collection.tags
+        tagGroups = collection.tagGroups
+        labelGroups = collection.labelGroups
+        labels = collection.labels
+        timeEvents = collection.timeEvents
+        currentCollectionType = .standard
+        selectedStandardCollectionName = name
+        selectedTimeEvents.removeAll()
+        refreshGlobalPools()
+        applyHotkeysFromCurrentCollection()
     }
     
     func findTagById(_ id: String) -> Tag? {
@@ -167,17 +237,14 @@ class TagLibraryManager: ObservableObject {
         applyHotkeysFromCurrentCollection()
     }
     
-    func restoreDefaultData() {
-        tags = defaultTags
-        tagGroups = defaultTagGroups
-        labelGroups = defaultLabelGroups
-        labels = defaultLabels
-        timeEvents = defaultTimeEvents
-        currentCollectionType = .standard
-        
-        selectedTimeEvents.removeAll()
-        refreshGlobalPools()
-    }
+        func restoreDefaultData() {
+            if let first = standardCollections.first {
+                applyStandardCollection(named: first.name)
+            }
+            currentCollectionType = .standard
+            selectedTimeEvents.removeAll()
+            refreshGlobalPools()
+        }
     
     func applyHotkeysFromCurrentCollection() {
         HotKeyManager.shared.clearHotkeys()

@@ -27,6 +27,12 @@ func loadJSON<T: Decodable>(filename: String) -> T? {
     }
 }
 
+func loadJSON<T: Decodable>(url: URL) -> T? {
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    let decoder = JSONDecoder()
+    return try? decoder.decode(T.self, from: data)
+}
+
 func secondsToTimeString(_ seconds: Double) -> String {
     let hours = Int(seconds / 3600)
     let minutes = Int((seconds.truncatingRemainder(dividingBy: 3600)) / 60)

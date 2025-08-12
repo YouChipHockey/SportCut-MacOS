@@ -19,6 +19,7 @@ struct TagFormData {
     var hotkey: String? = nil
     var labelHotkeys: [String: String] = [:]
     var mapEnabled: Bool = false
+    var isInterval: Bool = false
     
     init() {}
     
@@ -33,6 +34,7 @@ struct TagFormData {
         self.hotkey = tag.hotkey
         self.mapEnabled = tag.mapEnabled ?? false
         self.labelHotkeys = tag.labelHotkeys ?? [:]
+        self.isInterval = tag.isInterval ?? false
     }
     
     func hexStringFromColor(_ color: Color) -> String {

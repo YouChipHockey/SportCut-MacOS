@@ -358,6 +358,9 @@ extension String {
         case renewLicense
         case midDuration
         case aIReports
+        case standardCollections
+        case collectionsTagIsInterval
+        case collectionsTagIsIntervalHelp
     }
     
 }

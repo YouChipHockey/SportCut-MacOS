@@ -436,7 +436,8 @@ struct CreateCustomCollectionsView: View {
                             defaultTimeAfter: tag.defaultTimeAfter,
                             labelGroupIDs: tag.lablesGroup,
                             hotkey: tag.hotkey,
-                            labelHotkeys: tag.labelHotkeys ?? [:]
+                            labelHotkeys: tag.labelHotkeys ?? [:],
+                            isInterval: tag.isInterval ?? false
                         )
                         
                         if let updatedTag = collectionManager.tags.first(where: { $0.name == editingName }) {
@@ -1014,18 +1015,14 @@ struct CreateCustomCollectionsView: View {
                 
                 HStack {
                     Text(^String.Titles.collectionsTagTimeBefore)
-                    Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1) {
-                        Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
-                    }
+                    Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
                     Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
                         .frame(width: 60, alignment: .trailing)
                 }
                 
                 HStack {
                     Text(^String.Titles.collectionsTagTimeAfter)
-                    Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1) {
-                        Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
-                    }
+                    Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
                     Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
                         .frame(width: 60, alignment: .trailing)
                 }
@@ -1038,6 +1035,10 @@ struct CreateCustomCollectionsView: View {
                 .help(^String.Titles.collectionsTagMapHelp)
                 .disabled(collectionManager.playField == nil)
                 .opacity(collectionManager.playField == nil ? 0.6 : 1)
+                
+                Toggle(^String.Titles.collectionsTagIsInterval, isOn: $tagFormData.isInterval)
+                    .padding(.vertical, 4)
+                    .help(^String.Titles.collectionsTagIsIntervalHelp)
                 
                 HStack {
                     Text(^String.Titles.collectionsTagHotkey)
@@ -1187,7 +1188,8 @@ struct CreateCustomCollectionsView: View {
                     defaultTimeAfter: tagFormData.defaultTimeAfter,
                     labelGroupIDs: tagFormData.selectedLabelGroups,
                     hotkey: tagFormData.hotkey,
-                    labelHotkeys: tagFormData.labelHotkeys
+                    labelHotkeys: tagFormData.labelHotkeys,
+                    isInterval: tagFormData.isInterval
                 )
                 
                 if success, let updatedTag = collectionManager.tags.first(where: { $0.name == tagFormData.name }) {
@@ -1366,6 +1368,10 @@ struct CreateCustomCollectionsView: View {
                         .frame(width: 60, alignment: .trailing)
                 }
                 
+                Toggle(^String.Titles.collectionsTagIsInterval, isOn: $tagFormData.isInterval)
+                    .padding(.vertical, 4)
+                    .help(^String.Titles.collectionsTagIsIntervalHelp)
+                
                 HStack {
                     Text(^String.Titles.collectionsTagHotkey)
                     
@@ -1428,7 +1434,8 @@ struct CreateCustomCollectionsView: View {
                             defaultTimeBefore: tagFormData.defaultTimeBefore,
                             defaultTimeAfter: tagFormData.defaultTimeAfter,
                             inGroup: groupID,
-                            hotkey: tagFormData.hotkey
+                            hotkey: tagFormData.hotkey,
+                            isInterval: tagFormData.isInterval
                         )
                         
                         if !tagFormData.selectedLabelGroups.isEmpty {
@@ -1442,7 +1449,8 @@ struct CreateCustomCollectionsView: View {
                                 defaultTimeAfter: newTag.defaultTimeAfter,
                                 labelGroupIDs: tagFormData.selectedLabelGroups,
                                 hotkey: newTag.hotkey,
-                                labelHotkeys: tagFormData.labelHotkeys
+                                labelHotkeys: tagFormData.labelHotkeys,
+                                isInterval: newTag.isInterval ?? false
                             )
                         }
                         tagFormData = TagFormData()

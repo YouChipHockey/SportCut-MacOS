@@ -26,6 +26,7 @@ struct Tag: Identifiable, Codable {
     var hotkey: String?
     var labelHotkeys: [String: String]?
     var mapEnabled: Bool?
+    var isInterval: Bool?
 }
 
 struct PlayFieldData: Codable {
@@ -40,6 +41,10 @@ struct TagGroup: Codable, Identifiable {
     var id: String
     var name: String
     var tags: [String]
+}
+
+struct NamesData: Codable {
+    var names: [String]
 }
 
 struct TagsData: Codable {

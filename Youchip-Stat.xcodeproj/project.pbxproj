@@ -107,10 +107,6 @@
 		DD8937FE2DEF936B009B1BC2 /* CropImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */; };
 		DD8938182DEFBA42009B1BC2 /* FieldMapVisualizationPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */; };
 		DD89381A2DEFBA4D009B1BC2 /* FieldMapVisualizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */; };
-		DD9233412DB0476C008FFFF1 /* labels.json in Resources */ = {isa = PBXBuildFile; fileRef = DD92333C2DB0476C008FFFF1 /* labels.json */; };
-		DD9233422DB0476C008FFFF1 /* labelsGroups.json in Resources */ = {isa = PBXBuildFile; fileRef = DD92333D2DB0476C008FFFF1 /* labelsGroups.json */; };
-		DD9233432DB0476C008FFFF1 /* tags.json in Resources */ = {isa = PBXBuildFile; fileRef = DD92333E2DB0476C008FFFF1 /* tags.json */; };
-		DD9233442DB0476C008FFFF1 /* tagsGroups.json in Resources */ = {isa = PBXBuildFile; fileRef = DD92333F2DB0476C008FFFF1 /* tagsGroups.json */; };
 		DDC938E72DD2338300B7AB12 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = DDC938E62DD2338300B7AB12 /* GoogleService-Info.plist */; };
 		DDC938E92DD2447A00B7AB12 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDC938E82DD2447900B7AB12 /* AuthManager.swift */; };
 		DDC938EC2DD2452900B7AB12 /* AuthKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDC938EB2DD2452800B7AB12 /* AuthKeyView.swift */; };
@@ -135,7 +131,6 @@
 		DDD52CBA2DAEE7F50038158E /* WindowsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD52CB82DAEE7F50038158E /* WindowsManager.swift */; };
 		DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDD60A952D7A5D7E0097600D /* AVKit.framework */; };
 		DDDB36362D78E16500A1111C /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDB36352D78E16100A1111C /* Color.swift */; };
-		DDE2F3282DB6CDB40040B011 /* timeEvents.json in Resources */ = {isa = PBXBuildFile; fileRef = DDE2F3272DB6CDB40040B011 /* timeEvents.json */; };
 		DDFB1A482DE510E700175D97 /* EditorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A412DE510E700175D97 /* EditorState.swift */; };
 		DDFB1A492DE510E700175D97 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A452DE510E700175D97 /* EditorView.swift */; };
 		DDFB1A4A2DE510E700175D97 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A3F2DE510E700175D97 /* EditorViewModel.swift */; };
@@ -252,10 +247,6 @@
 		DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropImageView.swift; sourceTree = "<group>"; };
 		DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationPicker.swift; sourceTree = "<group>"; };
 		DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationView.swift; sourceTree = "<group>"; };
-		DD92333C2DB0476C008FFFF1 /* labels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labels.json; sourceTree = "<group>"; };
-		DD92333D2DB0476C008FFFF1 /* labelsGroups.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = labelsGroups.json; sourceTree = "<group>"; };
-		DD92333E2DB0476C008FFFF1 /* tags.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tags.json; sourceTree = "<group>"; };
-		DD92333F2DB0476C008FFFF1 /* tagsGroups.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tagsGroups.json; sourceTree = "<group>"; };
 		DDB401912D749E0F004A12C2 /* SportCut.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SportCut.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DDC938E62DD2338300B7AB12 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		DDC938E82DD2447900B7AB12 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
@@ -282,7 +273,6 @@
 		DDD52CB82DAEE7F50038158E /* WindowsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowsManager.swift; sourceTree = "<group>"; };
 		DDD60A952D7A5D7E0097600D /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 		DDDB36352D78E16100A1111C /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
-		DDE2F3272DB6CDB40040B011 /* timeEvents.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = timeEvents.json; sourceTree = "<group>"; };
 		DDFB1A3F2DE510E700175D97 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
 		DDFB1A412DE510E700175D97 /* EditorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorState.swift; sourceTree = "<group>"; };
 		DDFB1A422DE510E700175D97 /* EditorActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorActions.swift; sourceTree = "<group>"; };
@@ -295,6 +285,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		DD8971AA2E420A6A00DD2AB8 /* BaseCollections */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BaseCollections;
+			sourceTree = "<group>";
+		};
 		DDFB1A352DE510CF00175D97 /* dist */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			name = dist;
@@ -474,11 +469,7 @@
 				DDC938E62DD2338300B7AB12 /* GoogleService-Info.plist */,
 				DD32C25E2D74A00C0052B5C6 /* Assets.xcassets */,
 				DD32C26B2D74A0420052B5C6 /* Localizable.strings */,
-				DD92333C2DB0476C008FFFF1 /* labels.json */,
-				DDE2F3272DB6CDB40040B011 /* timeEvents.json */,
-				DD92333D2DB0476C008FFFF1 /* labelsGroups.json */,
-				DD92333E2DB0476C008FFFF1 /* tags.json */,
-				DD92333F2DB0476C008FFFF1 /* tagsGroups.json */,
+				DD8971AA2E420A6A00DD2AB8 /* BaseCollections */,
 			);
 			path = Resourses;
 			sourceTree = "<group>";
@@ -741,6 +732,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				DD8971AA2E420A6A00DD2AB8 /* BaseCollections */,
 				DDFB1A352DE510CF00175D97 /* dist */,
 			);
 			name = "Youchip-Stat";
@@ -794,7 +786,6 @@
 				DD32C27C2D74A0480052B5C6 /* SFCompactText-Medium.ttf in Resources */,
 				DD32C27D2D74A0480052B5C6 /* SFProDisplay-Bold.ttf in Resources */,
 				DD32C27E2D74A0480052B5C6 /* SFProRounded-Semibold.otf in Resources */,
-				DDE2F3282DB6CDB40040B011 /* timeEvents.json in Resources */,
 				DD32C27F2D74A0480052B5C6 /* SFMono-Regular.otf in Resources */,
 				DD32C2802D74A0480052B5C6 /* SFCompactText-Semibold.ttf in Resources */,
 				DD32C2812D74A0480052B5C6 /* SFProDisplay-Semibold.ttf in Resources */,
@@ -804,10 +795,6 @@
 				DD32C2852D74A0480052B5C6 /* SFCompactText-Regular.ttf in Resources */,
 				DD32C2862D74A0480052B5C6 /* SFProDisplay-Regular.ttf in Resources */,
 				DD32C2872D74A0480052B5C6 /* SFProText-Regular.ttf in Resources */,
-				DD9233412DB0476C008FFFF1 /* labels.json in Resources */,
-				DD9233422DB0476C008FFFF1 /* labelsGroups.json in Resources */,
-				DD9233432DB0476C008FFFF1 /* tags.json in Resources */,
-				DD9233442DB0476C008FFFF1 /* tagsGroups.json in Resources */,
 				DD32C2632D74A00C0052B5C6 /* Preview Assets.xcassets in Resources */,
 				DD32C26C2D74A0420052B5C6 /* Localizable.strings in Resources */,
 				DD32C2642D74A00C0052B5C6 /* Assets.xcassets in Resources */,

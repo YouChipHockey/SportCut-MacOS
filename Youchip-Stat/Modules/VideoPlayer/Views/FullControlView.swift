@@ -732,13 +732,13 @@ struct FullControlView: View {
                         Image(systemName: "goforward.10")
                     }
                     Menu {
-                        ForEach([0.5, 1.0, 2.0, 5.0], id: \.self) { speed in
-                            Button(String(format: "%.1fx", speed)) {
+                        ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0], id: \.self) { speed in
+                            Button(String(format: "%.2fx", speed)) {
                                 videoManager.changePlaybackSpeed(to: speed)
                             }
                         }
                     } label: {
-                        Text("Speed x\(String(format: "%.1f", videoManager.playbackSpeed))")
+                        Text("Speed x\(String(format: "%.2f", videoManager.playbackSpeed))")
                     }
                     Spacer()
                 }
@@ -830,9 +830,6 @@ struct FullControlView: View {
                         Button(^String.Titles.fullControlButtonExportEvents) {
                             showEventSelectionSheet = true
                         }
-                    }
-                    Button(^String.Titles.fullControlButtonReport) {
-                        WindowsManager.shared.showAnalytics()
                     }
                     Button(^String.Titles.aIReports) {
                         showAiReportSheet = true

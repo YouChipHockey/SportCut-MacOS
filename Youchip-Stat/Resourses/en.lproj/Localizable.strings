@@ -356,4 +356,7 @@
 
 
 // New
-"AIReports" = "AI Reports";
+"AIReports" = "Report";
+"StandardCollections" = "Standard Collections";
+"CollectionsTagIsInterval" = "Interval tag";  // ^String.Titles.collectionsTagIsInterval
+"CollectionsTagIsIntervalHelp" = "If enabled, tag duration is determined automatically and cannot be changed manually.";  // ^String.Titles.collectionsTagIsIntervalHelp

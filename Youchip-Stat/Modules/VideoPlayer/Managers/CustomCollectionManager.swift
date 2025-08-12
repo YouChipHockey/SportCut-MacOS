@@ -81,20 +81,20 @@ class CustomCollectionManager: ObservableObject {
     
     func createTag(name: String, description: String, color: String,
                    defaultTimeBefore: Double, defaultTimeAfter: Double,
-                   inGroup groupID: String, hotkey: String? = nil) -> Tag {
+                   inGroup groupID: String, hotkey: String? = nil, isInterval: Bool) -> Tag {
         if let hotkey = hotkey, !hotkey.isEmpty {
             if tags.contains(where: { $0.hotkey == hotkey }) {
                 return createTagWithValidatedHotkey(name: name, description: description, color: color,
                                                     defaultTimeBefore: defaultTimeBefore,
                                                     defaultTimeAfter: defaultTimeAfter,
-                                                    inGroup: groupID, hotkey: nil)
+                                                    inGroup: groupID, hotkey: nil, isInterval: isInterval)
             }
         }
         
         return createTagWithValidatedHotkey(name: name, description: description, color: color,
                                             defaultTimeBefore: defaultTimeBefore,
                                             defaultTimeAfter: defaultTimeAfter,
-                                            inGroup: groupID, hotkey: hotkey)
+                                            inGroup: groupID, hotkey: hotkey, isInterval: isInterval)
     }
     
     func deleteTag(id: String) {
@@ -159,7 +159,7 @@ class CustomCollectionManager: ObservableObject {
     
     private func createTagWithValidatedHotkey(name: String, description: String, color: String,
                                               defaultTimeBefore: Double, defaultTimeAfter: Double,
-                                              inGroup groupID: String, hotkey: String?) -> Tag {
+                                              inGroup groupID: String, hotkey: String?, isInterval: Bool?) -> Tag {
         let id = UUID().uuidString
         let newTag = Tag(
             id: id,
@@ -172,7 +172,8 @@ class CustomCollectionManager: ObservableObject {
             collection: collectionName,
             lablesGroup: [],
             hotkey: hotkey,
-            labelHotkeys: [:]
+            labelHotkeys: [:],
+            isInterval: isInterval
         )
         
         tags.append(newTag)
@@ -818,7 +819,7 @@ class CustomCollectionManager: ObservableObject {
     
     func updateTag(id: String, primaryID: String?, name: String, description: String, color: String,
                    defaultTimeBefore: Double, defaultTimeAfter: Double,
-                   labelGroupIDs: [String], hotkey: String?, labelHotkeys: [String: String]) -> Bool {
+                   labelGroupIDs: [String], hotkey: String?, labelHotkeys: [String: String], isInterval: Bool) -> Bool {
         if let hotkey = hotkey, !hotkey.isEmpty,
            isHotkeyAssigned(hotkey, excludingTagID: id) {
             return false
@@ -844,7 +845,8 @@ class CustomCollectionManager: ObservableObject {
                 collection: originalTag.collection,
                 lablesGroup: labelGroupIDs,
                 hotkey: hotkey,
-                labelHotkeys: labelHotkeys
+                labelHotkeys: labelHotkeys,
+                isInterval: isInterval
             )
             
             for i in 0..<tagGroups.count {

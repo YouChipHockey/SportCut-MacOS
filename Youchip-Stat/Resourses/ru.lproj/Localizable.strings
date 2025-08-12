@@ -356,4 +356,7 @@
 
 
 // New
-"AIReports" = "ИИ Отчеты";
+"AIReports" = "Отчет";
+"StandardCollections" = "Стандарные Коллекции";
+"CollectionsTagIsInterval" = "Интервальный тег";  // ^String.Titles.collectionsTagIsInterval
+"CollectionsTagIsIntervalHelp" = "Если включено, длительность тега определяется автоматически и не может быть изменена вручную.";  // ^String.Titles.collectionsTagIsIntervalHelp

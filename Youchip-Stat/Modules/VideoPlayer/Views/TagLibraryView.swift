@@ -37,6 +37,9 @@ struct TagLibraryView: View {
     @State private var currentTagForMap: Tag? = nil
     @State private var currentSelectedLabels: [String] = []
     @State private var fieldMapBookmark: Data? = nil
+    @State private var intervalTagInProgress: Bool = false
+    @State private var intervalTagStartTime: Double = 0
+    @State private var intervalTag: Tag? = nil
     
     func loadUserCollections() {
         userCollections = UserDefaults.standard.getCollectionBookmarks()
@@ -76,6 +79,22 @@ struct TagLibraryView: View {
         .alert(isPresented: $showDeleteAlert) {
             deleteCollectionAlert
         }
+        .overlay(
+            Group {
+                if intervalTagInProgress, let tag = intervalTag {
+                    VStack {
+                        Text("Запись интервала: \(tag.name)")
+                            .font(.headline)
+                        Text("Нажмите еще раз для завершения интервала")
+                            .font(.caption)
+                    }
+                    .padding()
+                    .background(Color.yellow.opacity(0.95))
+                    .cornerRadius(8)
+                    .shadow(radius: 10)
+                }
+            }
+        )
     }
     
     private var modernHeaderView: some View {
@@ -119,7 +138,7 @@ struct TagLibraryView: View {
                 Image(systemName: "trash.circle")
                     .foregroundColor(.red)
             }
-            .buttonStyle(.borderless)
+           
             .help(^String.Titles.deleteCollection)
         }
     }
@@ -128,7 +147,7 @@ struct TagLibraryView: View {
         Menu {
             createCollectionButton
             Divider()
-            standardCollectionButton
+            standardCollectionsSection
             userCollectionsSection
         } label: {
             HStack {
@@ -138,6 +157,31 @@ struct TagLibraryView: View {
         }
         .buttonStyle(.borderless)
         .help(^String.Titles.manageCustomTagCollections)
+        .disabled(intervalTagInProgress) // Disable when interval in progress
+    }
+    
+    @ViewBuilder
+    private var standardCollectionsSection: some View {
+        if !tagLibrary.standardCollections.isEmpty {
+            Text(^String.Titles.standardCollections)
+            ForEach(tagLibrary.standardCollections, id: \.name) { collection in
+                Button(action: {
+                    isUserCollectionActive = false
+                    selectedUserCollection = nil
+                    tagLibrary.applyStandardCollection(named: collection.name)
+                }) {
+                    HStack {
+                        Text(collection.name)
+                        Spacer()
+                        if tagLibrary.selectedStandardCollectionName == collection.name && !isUserCollectionActive {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .disabled(intervalTagInProgress)
+            }
+            Divider()
+        }
     }
     
     private var createCollectionButton: some View {
@@ -175,6 +219,7 @@ struct TagLibraryView: View {
             
             ForEach(userCollections, id: \.name) { collection in
                 userCollectionRow(for: collection)
+                    .disabled(intervalTagInProgress)
             }
         }
     }
@@ -421,21 +466,20 @@ struct TagLibraryView: View {
     
     private func tagButton(for tag: Tag) -> some View {
         Button {
-            videoManager.player?.pause()
-            selectedTag = tag
-            
-            let hasValidTimeline = timelineData.selectedLineID != nil &&
-            timelineData.lines.contains(where: { $0.id == timelineData.selectedLineID })
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                showLabelSheet = true
-            }
+            handleTagButtonTap(tag: tag)
         } label: {
             VStack(alignment: .center, spacing: 2) {
                 HStack(alignment: .center, spacing: 4) {
-                    Text(tag.name)
-                        .lineLimit(nil)
-                        .multilineTextAlignment(.leading)
+                    if #available(macOS 13.0, *) {
+                        Text(tag.name)
+                            .lineLimit(nil)
+                            .bold(intervalTagInProgress && intervalTag?.id == tag.id)
+                            .multilineTextAlignment(.leading)
+                    } else {
+                        Text(tag.name)
+                            .lineLimit(nil)
+                            .multilineTextAlignment(.leading)
+                    }
                     if let hotkey = tag.hotkey, !hotkey.isEmpty {
                         HStack(spacing: 2) {
                             Image(systemName: "button.roundedtop.horizontal.fill")
@@ -452,13 +496,24 @@ struct TagLibraryView: View {
                 .frame(width: 135, alignment: .leading)
             }
             .padding(5)
-            .foregroundColor(Color(hex: tag.color).isDark ? .white : .black)
+            .foregroundColor(intervalTagInProgress && intervalTag?.id == tag.id ? Color.red : Color(hex: tag.color).isDark ? .white : .black)
         }
-        .background(Color(hex: tag.color))
+        .background(
+            Group {
+                if intervalTagInProgress && intervalTag?.id == tag.id {
+                    Color.blue.opacity(0.25)
+                } else {
+                    Color(hex: tag.color)
+                }
+            }
+        )
         .cornerRadius(4)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(hoveredTagID == tag.id ? Color.blue : Color.clear, lineWidth: 2)
+                .stroke(
+                    (hoveredTagID == tag.id ? Color.blue : Color.clear),
+                    lineWidth: 2
+                )
         )
         .onHover { hovering in
             if hovering {
@@ -467,6 +522,7 @@ struct TagLibraryView: View {
                 hoveredTagID = nil
             }
         }
+        .disabled(intervalTagInProgress && intervalTag?.id != tag.id)
     }
     
     private func addTagToTimeline(tag: Tag, selectedLabels: [String]) {
@@ -541,7 +597,7 @@ struct TagLibraryView: View {
         if markupMode == .tagBased {
             if let tag = selectedTag {
                 let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
-                
+
                 if hasLabels {
                     LabelSelectionSheet(
                         stampName: tag.name,
@@ -549,13 +605,44 @@ struct TagLibraryView: View {
                         tag: tag,
                         tagLibrary: TagLibraryManager.shared
                     ) { selectedLabels in
-                        addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                        if tag.isInterval == true, intervalTagInProgress == false {
+                            addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                        } else if tag.isInterval == true, intervalTagInProgress == false {
+                            addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                        } else if tag.isInterval == true, intervalTagInProgress == true {
+                            let start = intervalTagStartTime - tag.defaultTimeBefore
+                            let end = videoManager.currentTime + tag.defaultTimeAfter
+                            let timeStart = min(start, end)
+                            let timeFinish = max(start, end)
+                            let timeStartString = secondsToTimeString(timeStart)
+                            let timeFinishString = secondsToTimeString(timeFinish)
+                            intervalTagInProgress = false
+                            intervalTag = nil
+                            addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: selectedLabels)
+                        } else {
+                            addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            showLabelSheet = false
+                        }
                     }
                 } else {
                     VStack {
                         Text(^String.Titles.tagLibraryAddingTag)
                             .onAppear {
-                                addTagToTimeline(tag: tag, selectedLabels: [])
+                                if tag.isInterval == true, intervalTagInProgress == true {
+                                    let start = intervalTagStartTime - tag.defaultTimeBefore
+                                    let end = videoManager.currentTime + tag.defaultTimeAfter
+                                    let timeStart = min(start, end)
+                                    let timeFinish = max(start, end)
+                                    let timeStartString = secondsToTimeString(timeStart)
+                                    let timeFinishString = secondsToTimeString(timeFinish)
+                                    intervalTagInProgress = false
+                                    intervalTag = nil
+                                    addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
+                                } else {
+                                    addTagToTimeline(tag: tag, selectedLabels: [])
+                                }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     showLabelSheet = false
                                 }
@@ -568,7 +655,7 @@ struct TagLibraryView: View {
                timelineData.lines.contains(where: { $0.id == selectedLineID }),
                let tag = selectedTag {
                 let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
-                
+
                 if hasLabels {
                     LabelSelectionSheet(
                         stampName: tag.name,
@@ -576,13 +663,40 @@ struct TagLibraryView: View {
                         tag: tag,
                         tagLibrary: TagLibraryManager.shared
                     ) { selectedLabels in
-                        addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                        if tag.isInterval == true, intervalTagInProgress == true {
+                            let start = intervalTagStartTime - tag.defaultTimeBefore
+                            let end = videoManager.currentTime + tag.defaultTimeAfter
+                            let timeStart = min(start, end)
+                            let timeFinish = max(start, end)
+                            let timeStartString = secondsToTimeString(timeStart)
+                            let timeFinishString = secondsToTimeString(timeFinish)
+                            intervalTagInProgress = false
+                            intervalTag = nil
+                            addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: selectedLabels)
+                        } else {
+                            addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            showLabelSheet = false
+                        }
                     }
                 } else {
                     VStack {
                         Text(^String.Titles.tagLibraryAddingTag)
                             .onAppear {
-                                addTagToTimeline(tag: tag, selectedLabels: [])
+                                if tag.isInterval == true, intervalTagInProgress == true {
+                                    let start = intervalTagStartTime - tag.defaultTimeBefore
+                                    let end = videoManager.currentTime + tag.defaultTimeAfter
+                                    let timeStart = min(start, end)
+                                    let timeFinish = max(start, end)
+                                    let timeStartString = secondsToTimeString(timeStart)
+                                    let timeFinishString = secondsToTimeString(timeFinish)
+                                    intervalTagInProgress = false
+                                    intervalTag = nil
+                                    addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
+                                } else {
+                                    addTagToTimeline(tag: tag, selectedLabels: [])
+                                }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     showLabelSheet = false
                                 }
@@ -692,4 +806,92 @@ struct TagLibraryView: View {
         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
     }
     
+    private func handleTagButtonTap(tag: Tag) {
+        if tag.isInterval == true {
+            if !intervalTagInProgress {
+                intervalTagInProgress = true
+                intervalTag = tag
+                intervalTagStartTime = videoManager.currentTime
+            } else if intervalTag?.id == tag.id {
+                let start = intervalTagStartTime - tag.defaultTimeBefore
+                let end = videoManager.currentTime + tag.defaultTimeAfter
+                let timeStart = min(start, end)
+                let timeFinish = max(start, end)
+                let timeStartString = secondsToTimeString(timeStart)
+                let timeFinishString = secondsToTimeString(timeFinish)
+                intervalTag = nil
+                selectedTag = tag
+                showLabelSheet = false
+                DispatchQueue.main.async {
+                    videoManager.player?.pause()
+                    let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
+                    if hasLabels {
+                        showLabelSheet = true
+                    } else {
+                        intervalTagInProgress = false
+                        addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
+                    }
+                }
+            }
+            return
+        }
+        videoManager.player?.pause()
+        selectedTag = tag
+        let hasValidTimeline = timelineData.selectedLineID != nil &&
+            timelineData.lines.contains(where: { $0.id == timelineData.selectedLineID })
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            showLabelSheet = true
+        }
+    }
+
+    private func addTagToTimelineInterval(tag: Tag, timeStartString: String, timeFinishString: String, selectedLabels: [String]) {
+        if tag.mapEnabled == true {
+            let collectionManager = CustomCollectionManager()
+            if let collectionName = tagLibrary.currentCollectionType.name,
+               collectionManager.loadCollectionFromBookmarks(named: collectionName),
+               let playField = collectionManager.playField,
+               let imageBookmark = playField.imageBookmark {
+                showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: selectedLabels)
+                return
+            }
+        }
+        proceedWithTagAdditionInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, coordinates: nil, selectedLabels: selectedLabels)
+    }
+
+    private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartString: String, timeFinishString: String, selectedLabels: [String]) {
+        WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
+            proceedWithTagAdditionInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, coordinates: coordinates, selectedLabels: selectedLabels)
+        }
+    }
+
+    private func proceedWithTagAdditionInterval(tag: Tag, timeStartString: String, timeFinishString: String, coordinates: CGPoint?, selectedLabels: [String]) {
+        var fieldPosition: CGPoint? = nil
+        if let normalizedCoords = coordinates {
+            let collectionManager = CustomCollectionManager()
+            if let collectionName = tagLibrary.currentCollectionType.name,
+               collectionManager.loadCollectionFromBookmarks(named: collectionName),
+               let playField = collectionManager.playField {
+                let fieldWidth = CGFloat(playField.width)
+                let fieldHeight = CGFloat(playField.height)
+                let fieldX = normalizedCoords.x * fieldWidth
+                let fieldY = normalizedCoords.y * fieldHeight
+                fieldPosition = CGPoint(x: fieldX, y: fieldY)
+            }
+        }
+        timelineData.addStampToSelectedLine(
+            idTag: tag.id,
+            primaryId: tag.primaryID,
+            name: tag.name,
+            timeStart: timeStartString,
+            timeFinish: timeFinishString,
+            color: tag.color,
+            labels: selectedLabels,
+            position: fieldPosition
+        )
+        if videoManager.playbackSpeed > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                videoManager.player?.play()
+            }
+        }
+    }
 }
