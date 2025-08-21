@@ -240,7 +240,6 @@ class HotKeyManager: ObservableObject {
     
     private func selectTag(_ tag: Tag) {
         print("Hotkey activated for tag: \(tag.name)")
-        VideoPlayerManager.shared.player?.pause()
         NotificationCenter.default.post(name: .showLabelSheet, object: tag)
     }
     

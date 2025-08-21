@@ -37,9 +37,14 @@ struct TagLibraryView: View {
     @State private var currentTagForMap: Tag? = nil
     @State private var currentSelectedLabels: [String] = []
     @State private var fieldMapBookmark: Data? = nil
-    @State private var intervalTagInProgress: Bool = false
-    @State private var intervalTagStartTime: Double = 0
-    @State private var intervalTag: Tag? = nil
+    
+    @State var activeIntervalTags: [ActiveIntervalTag] = []
+    
+    struct ActiveIntervalTag: Identifiable {
+        let id: String
+        let tag: Tag
+        var startTime: Double
+    }
     
     func loadUserCollections() {
         userCollections = UserDefaults.standard.getCollectionBookmarks()
@@ -79,22 +84,6 @@ struct TagLibraryView: View {
         .alert(isPresented: $showDeleteAlert) {
             deleteCollectionAlert
         }
-        .overlay(
-            Group {
-                if intervalTagInProgress, let tag = intervalTag {
-                    VStack {
-                        Text("Запись интервала: \(tag.name)")
-                            .font(.headline)
-                        Text("Нажмите еще раз для завершения интервала")
-                            .font(.caption)
-                    }
-                    .padding()
-                    .background(Color.yellow.opacity(0.95))
-                    .cornerRadius(8)
-                    .shadow(radius: 10)
-                }
-            }
-        )
     }
     
     private var modernHeaderView: some View {
@@ -138,7 +127,7 @@ struct TagLibraryView: View {
                 Image(systemName: "trash.circle")
                     .foregroundColor(.red)
             }
-           
+            
             .help(^String.Titles.deleteCollection)
         }
     }
@@ -157,7 +146,7 @@ struct TagLibraryView: View {
         }
         .buttonStyle(.borderless)
         .help(^String.Titles.manageCustomTagCollections)
-        .disabled(intervalTagInProgress) // Disable when interval in progress
+        .disabled(!activeIntervalTags.isEmpty)
     }
     
     @ViewBuilder
@@ -178,7 +167,7 @@ struct TagLibraryView: View {
                         }
                     }
                 }
-                .disabled(intervalTagInProgress)
+                .disabled(!activeIntervalTags.isEmpty)
             }
             Divider()
         }
@@ -219,7 +208,6 @@ struct TagLibraryView: View {
             
             ForEach(userCollections, id: \.name) { collection in
                 userCollectionRow(for: collection)
-                    .disabled(intervalTagInProgress)
             }
         }
     }
@@ -239,6 +227,7 @@ struct TagLibraryView: View {
                     }
                 }
             }
+            .disabled(!activeIntervalTags.isEmpty)
             
             Menu {
                 Button(action: {
@@ -377,6 +366,7 @@ struct TagLibraryView: View {
             .background(isUserCollectionActive && selectedUserCollection?.name == collection.name
                         ? Color.blue.opacity(0.1) : Color.clear)
             .cornerRadius(4)
+            .disabled(!activeIntervalTags.isEmpty)
             
             Button(action: {
                 WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: collection)
@@ -473,7 +463,7 @@ struct TagLibraryView: View {
                     if #available(macOS 13.0, *) {
                         Text(tag.name)
                             .lineLimit(nil)
-                            .bold(intervalTagInProgress && intervalTag?.id == tag.id)
+                            .bold(activeIntervalTags.contains(where: { $0.tag.id == tag.id }))
                             .multilineTextAlignment(.leading)
                     } else {
                         Text(tag.name)
@@ -496,11 +486,42 @@ struct TagLibraryView: View {
                 .frame(width: 135, alignment: .leading)
             }
             .padding(5)
-            .foregroundColor(intervalTagInProgress && intervalTag?.id == tag.id ? Color.red : Color(hex: tag.color).isDark ? .white : .black)
+            .foregroundColor(activeIntervalTags.contains(where: { $0.tag.id == tag.id }) ? Color.red : Color(hex: tag.color).isDark ? .white : .black)
+            .background(
+                Group {
+                    if activeIntervalTags.contains(where: { $0.tag.id == tag.id }) {
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.clear, Color.white.opacity(0.3), Color.clear]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .mask(
+                                Rectangle()
+                                    .stroke(lineWidth: 1)
+                                    .background(
+                                        HStack(spacing: 2) {
+                                            ForEach(0..<10) { _ in
+                                                Rectangle()
+                                                    .frame(width: 2)
+                                                Rectangle()
+                                                    .frame(width: 2)
+                                                    .opacity(0.5)
+                                            }
+                                        }
+                                    )
+                            )
+                    } else {
+                        Color.clear
+                    }
+                }
+            )
         }
         .background(
             Group {
-                if intervalTagInProgress && intervalTag?.id == tag.id {
+                if activeIntervalTags.contains(where: { $0.tag.id == tag.id }) {
                     Color.blue.opacity(0.25)
                 } else {
                     Color(hex: tag.color)
@@ -522,7 +543,6 @@ struct TagLibraryView: View {
                 hoveredTagID = nil
             }
         }
-        .disabled(intervalTagInProgress && intervalTag?.id != tag.id)
     }
     
     private func addTagToTimeline(tag: Tag, selectedLabels: [String]) {
@@ -597,49 +617,77 @@ struct TagLibraryView: View {
         if markupMode == .tagBased {
             if let tag = selectedTag {
                 let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
-
+                
                 if hasLabels {
                     LabelSelectionSheet(
                         stampName: tag.name,
                         initialLabels: [],
                         tag: tag,
-                        tagLibrary: TagLibraryManager.shared
-                    ) { selectedLabels in
-                        if tag.isInterval == true, intervalTagInProgress == false {
-                            addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
-                        } else if tag.isInterval == true, intervalTagInProgress == false {
-                            addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
-                        } else if tag.isInterval == true, intervalTagInProgress == true {
-                            let start = intervalTagStartTime - tag.defaultTimeBefore
-                            let end = videoManager.currentTime + tag.defaultTimeAfter
-                            let timeStart = min(start, end)
-                            let timeFinish = max(start, end)
-                            let timeStartString = secondsToTimeString(timeStart)
-                            let timeFinishString = secondsToTimeString(timeFinish)
-                            intervalTagInProgress = false
-                            intervalTag = nil
-                            addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: selectedLabels)
-                        } else {
-                            addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            showLabelSheet = false
-                        }
-                    }
-                } else {
-                    VStack {
-                        Text(^String.Titles.tagLibraryAddingTag)
-                            .onAppear {
-                                if tag.isInterval == true, intervalTagInProgress == true {
-                                    let start = intervalTagStartTime - tag.defaultTimeBefore
+                        tagLibrary: TagLibraryManager.shared,
+                        onDone: { selectedLabels in
+                            if tag.isInterval == true {
+                                // Handle all active interval tags for this tag
+                                let activeTags = activeIntervalTags.filter { $0.tag.id == tag.id }
+                                for activeTag in activeTags {
+                                    let start = activeTag.startTime - tag.defaultTimeBefore
                                     let end = videoManager.currentTime + tag.defaultTimeAfter
                                     let timeStart = min(start, end)
                                     let timeFinish = max(start, end)
                                     let timeStartString = secondsToTimeString(timeStart)
                                     let timeFinishString = secondsToTimeString(timeFinish)
-                                    intervalTagInProgress = false
-                                    intervalTag = nil
-                                    addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
+                                    if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == activeTag.id }) {
+                                        activeIntervalTags.remove(at: index)
+                                    }
+                                    addTagToTimelineInterval(
+                                        tag: tag,
+                                        timeStartString: timeStartString,
+                                        timeFinishString: timeFinishString,
+                                        selectedLabels: selectedLabels
+                                    )
+                                }
+                                // Remove all active interval tags for this tag
+                                activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                            } else {
+                                addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                showLabelSheet = false
+                            }
+                        },
+                        onCancel: {
+                            self.videoManager.player?.play()
+                            // Remove all active interval tags for this tag when canceled
+                            if let tag = selectedTag, tag.isInterval == true {
+                                activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                            }
+                        }
+                    )
+                } else {
+                    VStack {
+                        Text(^String.Titles.tagLibraryAddingTag)
+                            .onAppear {
+                                if tag.isInterval == true {
+                                    // Handle all active interval tags for this tag
+                                    let activeTags = activeIntervalTags.filter { $0.tag.id == tag.id }
+                                    for activeTag in activeTags {
+                                        let start = activeTag.startTime - tag.defaultTimeBefore
+                                        let end = videoManager.currentTime + tag.defaultTimeAfter
+                                        let timeStart = min(start, end)
+                                        let timeFinish = max(start, end)
+                                        let timeStartString = secondsToTimeString(timeStart)
+                                        let timeFinishString = secondsToTimeString(timeFinish)
+                                        if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == activeTag.id }) {
+                                            activeIntervalTags.remove(at: index)
+                                        }
+                                        addTagToTimelineInterval(
+                                            tag: tag,
+                                            timeStartString: timeStartString,
+                                            timeFinishString: timeFinishString,
+                                            selectedLabels: []
+                                        )
+                                    }
+                                    // Remove all active interval tags for this tag
+                                    activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                 } else {
                                     addTagToTimeline(tag: tag, selectedLabels: [])
                                 }
@@ -655,45 +703,77 @@ struct TagLibraryView: View {
                timelineData.lines.contains(where: { $0.id == selectedLineID }),
                let tag = selectedTag {
                 let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
-
+                
                 if hasLabels {
                     LabelSelectionSheet(
                         stampName: tag.name,
                         initialLabels: [],
                         tag: tag,
-                        tagLibrary: TagLibraryManager.shared
-                    ) { selectedLabels in
-                        if tag.isInterval == true, intervalTagInProgress == true {
-                            let start = intervalTagStartTime - tag.defaultTimeBefore
-                            let end = videoManager.currentTime + tag.defaultTimeAfter
-                            let timeStart = min(start, end)
-                            let timeFinish = max(start, end)
-                            let timeStartString = secondsToTimeString(timeStart)
-                            let timeFinishString = secondsToTimeString(timeFinish)
-                            intervalTagInProgress = false
-                            intervalTag = nil
-                            addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: selectedLabels)
-                        } else {
-                            addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            showLabelSheet = false
-                        }
-                    }
-                } else {
-                    VStack {
-                        Text(^String.Titles.tagLibraryAddingTag)
-                            .onAppear {
-                                if tag.isInterval == true, intervalTagInProgress == true {
-                                    let start = intervalTagStartTime - tag.defaultTimeBefore
+                        tagLibrary: TagLibraryManager.shared,
+                        onDone: { selectedLabels in
+                            if tag.isInterval == true {
+                                // Handle all active interval tags for this tag
+                                let activeTags = activeIntervalTags.filter { $0.tag.id == tag.id }
+                                for activeTag in activeTags {
+                                    let start = activeTag.startTime - tag.defaultTimeBefore
                                     let end = videoManager.currentTime + tag.defaultTimeAfter
                                     let timeStart = min(start, end)
                                     let timeFinish = max(start, end)
                                     let timeStartString = secondsToTimeString(timeStart)
                                     let timeFinishString = secondsToTimeString(timeFinish)
-                                    intervalTagInProgress = false
-                                    intervalTag = nil
-                                    addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
+                                    if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == activeTag.id }) {
+                                        activeIntervalTags.remove(at: index)
+                                    }
+                                    addTagToTimelineInterval(
+                                        tag: tag,
+                                        timeStartString: timeStartString,
+                                        timeFinishString: timeFinishString,
+                                        selectedLabels: selectedLabels
+                                    )
+                                }
+                                // Remove all active interval tags for this tag
+                                activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                            } else {
+                                addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                showLabelSheet = false
+                            }
+                        },
+                        onCancel: {
+                            self.videoManager.player?.play()
+                            // Remove all active interval tags for this tag when canceled
+                            if let tag = selectedTag, tag.isInterval == true {
+                                activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                            }
+                        }
+                    )
+                } else {
+                    VStack {
+                        Text(^String.Titles.tagLibraryAddingTag)
+                            .onAppear {
+                                if tag.isInterval == true {
+                                    // Handle all active interval tags for this tag
+                                    let activeTags = activeIntervalTags.filter { $0.tag.id == tag.id }
+                                    for activeTag in activeTags {
+                                        let start = activeTag.startTime - tag.defaultTimeBefore
+                                        let end = videoManager.currentTime + tag.defaultTimeAfter
+                                        let timeStart = min(start, end)
+                                        let timeFinish = max(start, end)
+                                        let timeStartString = secondsToTimeString(timeStart)
+                                        let timeFinishString = secondsToTimeString(timeFinish)
+                                        if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == activeTag.id }) {
+                                            activeIntervalTags.remove(at: index)
+                                        }
+                                        addTagToTimelineInterval(
+                                            tag: tag,
+                                            timeStartString: timeStartString,
+                                            timeFinishString: timeFinishString,
+                                            selectedLabels: []
+                                        )
+                                    }
+                                    // Remove all active interval tags for this tag
+                                    activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                 } else {
                                     addTagToTimeline(tag: tag, selectedLabels: [])
                                 }
@@ -705,8 +785,8 @@ struct TagLibraryView: View {
                 }
             } else {
                 Text(^String.Titles.tagLibraryNoTimeline)
-                .padding()
-                .multilineTextAlignment(.center)
+                    .padding()
+                    .multilineTextAlignment(.center)
             }
         }
     }
@@ -746,13 +826,39 @@ struct TagLibraryView: View {
         }
         NotificationCenter.default.addObserver(forName: .showLabelSheet, object: nil, queue: .main) { notification in
             if let tag = notification.object as? Tag {
-                self.selectedTag = tag
-                let hasValidTimeline = timelineData.selectedLineID != nil &&
-                timelineData.lines.contains(where: { $0.id == timelineData.selectedLineID })
-                if hasValidTimeline {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        self.showLabelSheet = true
+                if tag.isInterval ?? false {
+                    if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
+                        let activeTag = activeIntervalTags[index]
+                        let start = activeTag.startTime - tag.defaultTimeBefore
+                        let end = videoManager.currentTime + tag.defaultTimeAfter
+                        let timeStart = min(start, end)
+                        let timeFinish = max(start, end)
+                        let timeStartString = secondsToTimeString(timeStart)
+                        let timeFinishString = secondsToTimeString(timeFinish)
+                        
+                        selectedTag = tag
+                        showLabelSheet = false
+                        
+                        DispatchQueue.main.async {
+                            videoManager.player?.pause()
+                            let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
+                            if hasLabels {
+                                showLabelSheet = true
+                            } else {
+                                activeIntervalTags.remove(at: index)
+                                addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
+                            }
+                        }
+                    } else {
+                        activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
                     }
+                    return
+                }
+                
+                selectedTag = tag
+                videoManager.player?.pause()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    showLabelSheet = true
                 }
             }
         }
@@ -807,43 +913,42 @@ struct TagLibraryView: View {
     }
     
     private func handleTagButtonTap(tag: Tag) {
-        if tag.isInterval == true {
-            if !intervalTagInProgress {
-                intervalTagInProgress = true
-                intervalTag = tag
-                intervalTagStartTime = videoManager.currentTime
-            } else if intervalTag?.id == tag.id {
-                let start = intervalTagStartTime - tag.defaultTimeBefore
+        if tag.isInterval ?? false {
+            if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
+                let activeTag = activeIntervalTags[index]
+                let start = activeTag.startTime - tag.defaultTimeBefore
                 let end = videoManager.currentTime + tag.defaultTimeAfter
                 let timeStart = min(start, end)
                 let timeFinish = max(start, end)
                 let timeStartString = secondsToTimeString(timeStart)
                 let timeFinishString = secondsToTimeString(timeFinish)
-                intervalTag = nil
+                
                 selectedTag = tag
                 showLabelSheet = false
+                
                 DispatchQueue.main.async {
                     videoManager.player?.pause()
                     let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
                     if hasLabels {
                         showLabelSheet = true
                     } else {
-                        intervalTagInProgress = false
+                        activeIntervalTags.remove(at: index)
                         addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
                     }
                 }
+            } else {
+                activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
             }
             return
         }
+        
         videoManager.player?.pause()
         selectedTag = tag
-        let hasValidTimeline = timelineData.selectedLineID != nil &&
-            timelineData.lines.contains(where: { $0.id == timelineData.selectedLineID })
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             showLabelSheet = true
         }
     }
-
+    
     private func addTagToTimelineInterval(tag: Tag, timeStartString: String, timeFinishString: String, selectedLabels: [String]) {
         if tag.mapEnabled == true {
             let collectionManager = CustomCollectionManager()
@@ -857,13 +962,13 @@ struct TagLibraryView: View {
         }
         proceedWithTagAdditionInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, coordinates: nil, selectedLabels: selectedLabels)
     }
-
+    
     private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartString: String, timeFinishString: String, selectedLabels: [String]) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
             proceedWithTagAdditionInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, coordinates: coordinates, selectedLabels: selectedLabels)
         }
     }
-
+    
     private func proceedWithTagAdditionInterval(tag: Tag, timeStartString: String, timeFinishString: String, coordinates: CGPoint?, selectedLabels: [String]) {
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {

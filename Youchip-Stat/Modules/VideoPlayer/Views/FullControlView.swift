@@ -550,59 +550,6 @@ struct FullControlView: View {
                                     .id("timeline-\(line.id)")
                                 }
                             }
-                            if duration > 0 {
-                                let position = (videoManager.currentTime / duration) * gridWidth
-                                VStack {
-                                    
-                                    ZStack {
-                                        Rectangle()
-                                            .fill(Color.red)
-                                            .frame(width: 15, height: 15)
-                                            .rotationEffect(.degrees(45))
-                                        
-                                        Rectangle()
-                                            .fill(Color.clear)
-                                            .frame(width: 30, height: 30)
-                                            .contentShape(Rectangle())
-                                            .gesture(
-                                                DragGesture(minimumDistance: 1, coordinateSpace: .local)
-                                                    .onChanged { value in
-                                                        if videoManager.player?.timeControlStatus == .playing {
-                                                            videoManager.player?.pause()
-                                                        }
-                                                        let newPosition = max(0, min(value.location.x, gridWidth))
-                                                        let newTime = (newPosition / gridWidth) * duration
-                                                        videoManager.currentTime = newTime
-                                                    }
-                                                    .onEnded { value in
-                                                        let newPosition = max(0, min(value.location.x, gridWidth))
-                                                        let newTime = (newPosition / gridWidth) * duration
-                                                        videoManager.currentTime = newTime
-                                                        videoManager.seek(to: newTime)
-                                                        if videoManager.playbackSpeed > 0 {
-                                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                                                videoManager.player?.play()
-                                                            }
-                                                        }
-                                                    }
-                                            )
-                                            .onHover { isHovering in
-                                                if isHovering {
-                                                    NSCursor.pointingHand.push()
-                                                } else {
-                                                    NSCursor.pop()
-                                                }
-                                            }
-                                    }
-                                    .position(x: position, y: 23)
-                                    Rectangle()
-                                        .fill(Color.red)
-                                        .frame(width: 2)
-                                        .position(x: position, y: 15 * CGFloat(timelineData.lines.count + 1) - 10)
-                                        .frame(height: 30 * CGFloat(timelineData.lines.count) + 3)
-                                        .allowsHitTesting(false)
-                                }
-                            }
                         }
                         .frame(width: gridWidth)
                     }
@@ -916,38 +863,7 @@ struct FullControlView: View {
             }
         }
         .sheet(isPresented: $showLabelEditSheet) {
-            
-            if let lineIDString = UserDefaults.standard.string(forKey: "editingStampLineID"),
-               let stampIDString = UserDefaults.standard.string(forKey: "editingStampID"),
-               let lineID = UUID(uuidString: lineIDString),
-               let stampID = UUID(uuidString: stampIDString) {
-                
-                if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
-                   let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) {
-                    
-                    let currentLabels = timelineData.lines[lineIndex].stamps[stampIndex].labels
-                    let stampName = timelineData.lines[lineIndex].stamps[stampIndex].label
-                    let tagId = timelineData.lines[lineIndex].stamps[stampIndex].idTag
-                    
-                    if let tag = TagLibraryManager.shared.findTagById(tagId) {
-                        LabelSelectionSheet(
-                            stampName: stampName,
-                            initialLabels: currentLabels,
-                            tag: tag,
-                            tagLibrary: TagLibraryManager.shared,
-                            isDop: true
-                        ) { newLabels in
-                            timelineData.updateStampLabels(lineID: lineID,
-                                                           stampID: stampID,
-                                                           newLabels: newLabels)
-                        }
-                    }
-                } else {
-                    Text(^String.Titles.fullControlExportErrorStampNotFound)
-                }
-            } else {
-                Text(^String.Titles.fullControlExportErrorStampNotFound)
-            }
+            LabelEditSheet(showLabelEditSheet: $showLabelEditSheet)
         }
         .sheet(isPresented: $showExportModeSheet) {
             ExportModeSelectionSheet { mode in
@@ -974,6 +890,49 @@ struct FullControlView: View {
                 showExportModeSheet = true
             }
             .frame(height: maxSheetHeight)
+        }
+    }
+    
+    struct LabelEditSheet: View {
+        @ObservedObject var timelineData = TimelineDataManager.shared
+        @Binding var showLabelEditSheet: Bool
+        
+        var body: some View {
+            if let lineIDString = UserDefaults.standard.string(forKey: "editingStampLineID"),
+               let stampIDString = UserDefaults.standard.string(forKey: "editingStampID"),
+               let lineID = UUID(uuidString: lineIDString),
+               let stampID = UUID(uuidString: stampIDString) {
+                
+                if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
+                   let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) {
+                    
+                    let currentLabels = timelineData.lines[lineIndex].stamps[stampIndex].labels
+                    let stampName = timelineData.lines[lineIndex].stamps[stampIndex].label
+                    let tagId = timelineData.lines[lineIndex].stamps[stampIndex].idTag
+                    
+                    if let tag = TagLibraryManager.shared.findTagById(tagId) {
+                        LabelSelectionSheet(
+                            stampName: stampName,
+                            initialLabels: currentLabels,
+                            tag: tag,
+                            tagLibrary: TagLibraryManager.shared,
+                            isDop: true,
+                            onDone: { newLabels in
+                                timelineData.updateStampLabels(lineID: lineID,
+                                                               stampID: stampID,
+                                                               newLabels: newLabels)
+                                showLabelEditSheet = false
+                            }, onCancel: { return }
+                        )
+                    } else {
+                        Text(^String.Titles.fullControlExportErrorStampNotFound)
+                    }
+                } else {
+                    Text(^String.Titles.fullControlExportErrorStampNotFound)
+                }
+            } else {
+                Text(^String.Titles.fullControlExportErrorStampNotFound)
+            }
         }
     }
     

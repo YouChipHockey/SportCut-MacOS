@@ -437,7 +437,8 @@ struct CreateCustomCollectionsView: View {
                             labelGroupIDs: tag.lablesGroup,
                             hotkey: tag.hotkey,
                             labelHotkeys: tag.labelHotkeys ?? [:],
-                            isInterval: tag.isInterval ?? false
+                            isInterval: tag.isInterval ?? false,
+                            mapEnabled: tag.mapEnabled ?? false
                         )
                         
                         if let updatedTag = collectionManager.tags.first(where: { $0.name == editingName }) {
@@ -1027,10 +1028,7 @@ struct CreateCustomCollectionsView: View {
                         .frame(width: 60, alignment: .trailing)
                 }
                 
-                Toggle(^String.Titles.collectionsTagUseWithMap, isOn: Binding(
-                    get: { tag.mapEnabled ?? false },
-                    set: { collectionManager.updateTagMapEnabled(id: tag.id, mapEnabled: $0) }
-                ))
+                Toggle(^String.Titles.collectionsTagUseWithMap, isOn: $tagFormData.mapEnabled)
                 .padding(.vertical, 4)
                 .help(^String.Titles.collectionsTagMapHelp)
                 .disabled(collectionManager.playField == nil)
@@ -1189,7 +1187,8 @@ struct CreateCustomCollectionsView: View {
                     labelGroupIDs: tagFormData.selectedLabelGroups,
                     hotkey: tagFormData.hotkey,
                     labelHotkeys: tagFormData.labelHotkeys,
-                    isInterval: tagFormData.isInterval
+                    isInterval: tagFormData.isInterval,
+                    mapEnabled: tagFormData.mapEnabled
                 )
                 
                 if success, let updatedTag = collectionManager.tags.first(where: { $0.name == tagFormData.name }) {
@@ -1450,7 +1449,8 @@ struct CreateCustomCollectionsView: View {
                                 labelGroupIDs: tagFormData.selectedLabelGroups,
                                 hotkey: newTag.hotkey,
                                 labelHotkeys: tagFormData.labelHotkeys,
-                                isInterval: newTag.isInterval ?? false
+                                isInterval: newTag.isInterval ?? false,
+                                mapEnabled: newTag.mapEnabled ?? false
                             )
                         }
                         tagFormData = TagFormData()

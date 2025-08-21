@@ -336,6 +336,9 @@ class CustomCollectionManager: ObservableObject {
             
             UserDefaults.standard.saveCollectionBookmark(collectionBookmark)
             originalName = collectionName
+            if !isEditingExisting {
+                isEditingExisting = true
+            }
             NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
             
             for change in changedTagIDs {
@@ -819,7 +822,7 @@ class CustomCollectionManager: ObservableObject {
     
     func updateTag(id: String, primaryID: String?, name: String, description: String, color: String,
                    defaultTimeBefore: Double, defaultTimeAfter: Double,
-                   labelGroupIDs: [String], hotkey: String?, labelHotkeys: [String: String], isInterval: Bool) -> Bool {
+                   labelGroupIDs: [String], hotkey: String?, labelHotkeys: [String: String], isInterval: Bool, mapEnabled: Bool) -> Bool {
         if let hotkey = hotkey, !hotkey.isEmpty,
            isHotkeyAssigned(hotkey, excludingTagID: id) {
             return false
@@ -846,6 +849,7 @@ class CustomCollectionManager: ObservableObject {
                 lablesGroup: labelGroupIDs,
                 hotkey: hotkey,
                 labelHotkeys: labelHotkeys,
+                mapEnabled: mapEnabled,
                 isInterval: isInterval
             )
             

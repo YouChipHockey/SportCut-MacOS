@@ -19,6 +19,7 @@ struct LabelSelectionSheet: View {
     let tagLibrary: TagLibraryManager
     var isDop: Bool = false
     let onDone: ([String]) -> Void
+    let onCancel: () -> Void
     
     @State private var selectedLabels: Set<String> = []
     @Environment(\.presentationMode) private var presentationMode
@@ -179,6 +180,7 @@ struct LabelSelectionSheet: View {
     }
     
     private func dismissSheet() {
+        onCancel()
         presentationMode.wrappedValue.dismiss()
     }
     
