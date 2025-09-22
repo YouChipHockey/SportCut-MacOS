@@ -1,0 +1,16 @@
+{
+  "events": [
+      {
+          "id": "2899bfb3-043a40-4afa-a430-d97bf3143f34",
+          "name": "1st half"
+      },
+      {
+          "id": "0d05f06e-716dassdb-43ad-bdd6-724e6b25e199",
+          "name": "2nd half"
+      },
+      {
+          "id": "57750b32131231-45b7-47f5-8706-fd41be2857a3",
+          "name": "Overtime"
+      }
+  ]
+}

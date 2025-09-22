@@ -15,41 +15,66 @@ struct VideosView: View {
     @State private var team2Name: String = ""
     @State private var score: String = ""
     @State private var selectedDate: Date = Date()
+    @State private var searchText: String = ""
+    @State private var selectedFilter: VideoFilter = .all
+    
+    enum VideoFilter: String, CaseIterable {
+        case all = "all"
+        case recent = "recent"
+        case favorites = "favorites"
+        
+        var localizedTitle: String {
+            switch self {
+            case .all:
+                return ^String.Titles.all
+            case .recent:
+                return ^String.Titles.recent
+            case .favorites:
+                return ^String.Titles.favorites
+            }
+        }
+    }
+    
+    var filteredFiles: [FilesFile] {
+        var files = viewModel.state.files
+        
+        // Фильтрация по тексту поиска
+        if !searchText.isEmpty {
+            files = files.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        }
+        
+        // Фильтрация по типу
+        switch selectedFilter {
+        case .all:
+            break
+        case .recent:
+            files = files.sorted { $0.dateOpened > $1.dateOpened }
+        case .favorites:
+            files = files.filter { viewModel.filesManager.isFavorite($0) }
+        }
+        
+        return files
+    }
     
     var body: some View {
-        ScrollView {
-            LazyVGrid(
-                columns: [
-                    GridItem(.adaptive(minimum: 150), spacing: 20, alignment: .top)
-                ],
-                spacing: 20
-            ) {
-                ForEach(viewModel.state.files, id: \.videoData.bookmark) { file in
-                    VideoThumbnailView(file: file, id: file.videoData.id, viewModel: viewModel)
-                }
+        VStack(spacing: 0) {
+            // Современный header с поиском и фильтрами
+            headerView
+            
+            // Основной контент
+            if filteredFiles.isEmpty {
+                emptyStateView
+            } else {
+                videosGridView
             }
-            .padding()
         }
-        .frame(minWidth: 650, minHeight: 600)
-        .background(Color.appSystemGray)
+        .frame(minWidth: 800, minHeight: 600)
+        .background(Color(NSColor.controlBackgroundColor))
         .navigationTitle(^String.Titles.video)
         .overlay(loadingOverlay)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Text(viewModel.state.limitInfoText)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                ViewsFactory.whiteBarButton(title: ^String.Titles.videosViewButtonGuides) {
-                    viewModel.action.send(.openGuide)
-                }
-                ViewsFactory.whiteBarButton(title: ^String.Titles.addVideoTitle) {
-                    viewModel.action.send(.openFiles)
-                }
-                
-                ViewsFactory.whiteBarButton(title: viewModel.authManager.isAuthValid ? ^String.Titles.renewLicense : ^String.Titles.buyLicense) {
-                    viewModel.action.send(.showAuthSheet)
-                }
+                modernToolbarContent
             }
         }
         .infoAlert(
@@ -85,6 +110,240 @@ struct VideosView: View {
         }
     }
     
+    // MARK: - Header View
+    private var headerView: some View {
+        VStack(spacing: 16) {
+            // Поисковая строка
+            HStack {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 16))
+                    
+                    TextField(^String.Titles.searchVideos, text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .font(.system(size: 14))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                )
+                
+                // Кнопка добавления видео
+                Button(action: {
+                    viewModel.action.send(.openFiles)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(^String.Titles.addVideoTitle)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(8)
+                    .shadow(color: .blue.opacity(0.3), radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            
+            // Фильтры
+            HStack {
+                ForEach(VideoFilter.allCases, id: \.self) { filter in
+                    Button(action: {
+                        selectedFilter = filter
+                    }) {
+                        Text(filter.localizedTitle)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(selectedFilter == filter ? .white : .primary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(
+                                selectedFilter == filter 
+                                    ? Color.blue 
+                                    : Color(NSColor.controlBackgroundColor)
+                            )
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(
+                                        selectedFilter == filter 
+                                            ? Color.clear 
+                                            : Color(NSColor.separatorColor), 
+                                        lineWidth: 1
+                                    )
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+                
+                Spacer()
+                
+                // Информация о лимитах
+                HStack(spacing: 4) {
+                    Image(systemName: viewModel.authManager.isAuthValid ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundColor(viewModel.authManager.isAuthValid ? .green : .orange)
+                        .font(.system(size: 12))
+                    
+                    Text(viewModel.state.limitInfoText)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+        }
+        .background(Color(NSColor.windowBackgroundColor))
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color(NSColor.separatorColor)),
+            alignment: .bottom
+        )
+    }
+    
+    // MARK: - Videos Grid View
+    private var videosGridView: some View {
+        ScrollView {
+            LazyVGrid(
+                columns: [
+                    GridItem(.adaptive(minimum: 200), spacing: 20, alignment: .top)
+                ],
+                spacing: 20
+            ) {
+                ForEach(filteredFiles, id: \.videoData.bookmark) { file in
+                    VideoThumbnailView(file: file, id: file.videoData.id, viewModel: viewModel)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
+        }
+    }
+    
+    // MARK: - Empty State View
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "video.slash")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 8) {
+                Text(^String.Titles.noVideos)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                Text(searchText.isEmpty ? ^String.Titles.addFirstVideo : ^String.Titles.nothingFound)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            if searchText.isEmpty {
+                Button(action: {
+                    viewModel.action.send(.openFiles)
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus")
+                        Text(^String.Titles.addVideoTitle)
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(10)
+                    .shadow(color: .blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+    
+    // MARK: - Modern Toolbar Content
+    private var modernToolbarContent: some View {
+        HStack(spacing: 12) {
+            // Кнопка руководства
+            Button(action: {
+                viewModel.action.send(.openGuide)
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "book")
+                        .font(.system(size: 14))
+                    Text(^String.Titles.videosViewButtonGuides)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            // Кнопка лицензии
+            Button(action: {
+                viewModel.action.send(.showAuthSheet)
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: viewModel.authManager.isAuthValid ? "checkmark.shield" : "exclamationmark.shield")
+                        .font(.system(size: 14))
+                    Text(viewModel.authManager.isAuthValid ? ^String.Titles.renewLicense : ^String.Titles.buyLicense)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(viewModel.authManager.isAuthValid ? .green : .orange)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    viewModel.authManager.isAuthValid 
+                        ? Color.green.opacity(0.1) 
+                        : Color.orange.opacity(0.1)
+                )
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(
+                            viewModel.authManager.isAuthValid 
+                                ? Color.green.opacity(0.3) 
+                                : Color.orange.opacity(0.3), 
+                            lineWidth: 1
+                        )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+    
     private var loadingOverlay: some View {
         Group {
             if viewModel.state.showHUD {
@@ -95,37 +354,100 @@ struct VideosView: View {
     }
     
     private var videoMetadataSheet: some View {
-        VStack(spacing: 20) {
-            Text(^String.Titles.videosViewTitleMatchInfo)
-                .font(.headline)
-                .padding(.top)
-            
-            Form {
-                TextField(^String.Titles.videosViewFieldTeam1, text: $team1Name)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-                
-                TextField(^String.Titles.videosViewFieldTeam2, text: $team2Name)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-                
-                TextField(^String.Titles.videosViewFieldScore, text: $score)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-                
-                DatePicker(^String.Titles.videosViewFieldDateTime,
-                           selection: $selectedDate,
-                           displayedComponents: [.date, .hourAndMinute]
-                )
-                .padding(.horizontal)
-            }
-            
-            HStack {
-                Button(^String.Titles.collectionsButtonCancel) {
-                    viewModel.state.showMetadataSheet = false
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.blue)
+                        .font(.system(size: 20))
+                    
+                    Text(^String.Titles.videosViewTitleMatchInfo)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
                 }
                 
-                Button(^String.Titles.saveButtonTitle) {
+                Text(^String.Titles.fillMatchInfo)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
+            
+            // Form
+            VStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(^String.Titles.videosViewFieldTeam1)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                    
+                    TextField(^String.Titles.enterTeam1Name, text: $team1Name)
+                        .textFieldStyle(ModernTextFieldStyle())
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(^String.Titles.videosViewFieldTeam2)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                    
+                    TextField(^String.Titles.enterTeam2Name, text: $team2Name)
+                        .textFieldStyle(ModernTextFieldStyle())
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(^String.Titles.videosViewFieldScore)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                    
+                    TextField(^String.Titles.enterScore, text: $score)
+                        .textFieldStyle(ModernTextFieldStyle())
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(^String.Titles.videosViewFieldDateTime)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                    
+                    DatePicker("",
+                               selection: $selectedDate,
+                               displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .datePickerStyle(CompactDatePickerStyle())
+                    .labelsHidden()
+                }
+            }
+            .padding(.horizontal, 24)
+            
+            Spacer()
+            
+            // Footer with buttons
+            HStack(spacing: 12) {
+                Button(action: {
+                    viewModel.state.showMetadataSheet = false
+                }) {
+                    Text(^String.Titles.collectionsButtonCancel)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Spacer()
+                
+                Button(action: {
                     if let url = viewModel.state.videoMetadata.url {
                         viewModel.action.send(.saveVideoMetadata(
                             url: url,
@@ -135,12 +457,35 @@ struct VideosView: View {
                             dateTime: selectedDate
                         ))
                     }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(^String.Titles.saveButtonTitle)
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(8)
+                    .shadow(color: .blue.opacity(0.3), radius: 2, x: 0, y: 1)
                 }
+                .buttonStyle(PlainButtonStyle())
                 .disabled(team1Name.isEmpty || team2Name.isEmpty)
+                .opacity(team1Name.isEmpty || team2Name.isEmpty ? 0.6 : 1.0)
             }
-            .padding()
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
         }
-        .frame(width: 400, height: 350)
+        .frame(width: 450, height: 420)
+        .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             team1Name = viewModel.state.videoMetadata.team1
             team2Name = viewModel.state.videoMetadata.team2
@@ -150,34 +495,117 @@ struct VideosView: View {
     }
     
     private var videoRenameSheet: some View {
-        VStack(spacing: 20) {
-            Text(^String.Titles.videosViewDialogRenameVideo)
-                .font(.headline)
-                .padding(.top)
-            
-            Form {
-                TextField(^String.Titles.videosViewFieldFileName, text: $viewModel.state.newFileName)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-            }
-            
-            HStack {
-                Button(^String.Titles.collectionsButtonCancel) {
-                    viewModel.state.showRenameSheet = false
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "pencil.circle.fill")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 20))
+                    
+                    Text(^String.Titles.videosViewDialogRenameVideo)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
                 }
                 
-                Button(^String.Titles.saveButtonTitle) {
+                Text(^String.Titles.enterNewVideoName)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
+            
+            // Form
+            VStack(alignment: .leading, spacing: 8) {
+                Text(^String.Titles.videosViewFieldFileName)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                
+                TextField(^String.Titles.enterNewName, text: $viewModel.state.newFileName)
+                    .textFieldStyle(ModernTextFieldStyle())
+            }
+            .padding(.horizontal, 24)
+            
+            Spacer()
+            
+            // Footer with buttons
+            HStack(spacing: 12) {
+                Button(action: {
+                    viewModel.state.showRenameSheet = false
+                }) {
+                    Text(^String.Titles.collectionsButtonCancel)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Spacer()
+                
+                Button(action: {
                     if let file = viewModel.state.fileToRename {
                         viewModel.action.send(.renameSimpleVideo(
                             file: file,
                             newName: viewModel.state.newFileName
                         ))
                     }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(^String.Titles.saveButtonTitle)
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.orange, Color.orange.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(8)
+                    .shadow(color: .orange.opacity(0.3), radius: 2, x: 0, y: 1)
                 }
+                .buttonStyle(PlainButtonStyle())
                 .disabled(viewModel.state.newFileName.isEmpty)
+                .opacity(viewModel.state.newFileName.isEmpty ? 0.6 : 1.0)
             }
-            .padding()
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
         }
-        .frame(width: 400, height: 200)
+        .frame(width: 400, height: 220)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+// MARK: - Modern TextField Style
+struct ModernTextFieldStyle: TextFieldStyle {
+    func _body(configuration: TextField<Self._Label>) -> some View {
+        configuration
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            )
+            .font(.system(size: 14))
     }
 }

@@ -71,6 +71,13 @@ struct FullControlView: View {
     @State private var showEventSelectionSheet: Bool = false
     @State private var showAiReportSheet: Bool = false
     
+    @State private var showLabelSelectionSheet: Bool = false
+    @State private var showMultiLabelSelectionSheet: Bool = false
+    @State private var showMultiTagSelectionSheet: Bool = false
+    @State private var selectedLabelForMultiSelection: Label?
+    @State private var selectedTagForMultiSelection: Tag?
+
+    
     func getSegmentsForExport(type: CutsExportType) -> [ExportSegment] {
         var result: [ExportSegment] = []
         let tagLibrary = TagLibraryManager.shared
@@ -149,6 +156,71 @@ struct FullControlView: View {
                     }
                 }
             }
+        case .label(let selectedLabel):
+            print("Экспорт по лейблу: \(selectedLabel.name), ID: \(selectedLabel.id)")
+            for line in timelineData.lines {
+                print("Проверяем линию: \(line.name)")
+                for stamp in line.stamps {
+                    print("  Штамп: \(stamp.label), лейблы штампа: \(stamp.labels)")
+                    if stamp.labels.contains(selectedLabel.id) {
+                        print("    ✓ Найден подходящий штамп!")
+                        let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
+                        let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                        let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
+                        
+                        result.append(
+                            ExportSegment(
+                                timeRange: CMTimeRange(start: start, duration: duration),
+                                lineName: line.name,
+                                tagName: stamp.label,
+                                groupName: possibleGroup?.name
+                            )
+                        )
+                    }
+                }
+            }
+            
+        case .tagWithLabels(let selectedTag, let selectedLabels):
+            let labelIDs = Set(selectedLabels.map { $0.id })
+            for line in timelineData.lines {
+                for stamp in line.stamps {
+                    if stamp.idTag == selectedTag.id && !Set(stamp.labels).isDisjoint(with: labelIDs) {
+                        let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
+                        let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                        let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
+                        
+                        result.append(
+                            ExportSegment(
+                                timeRange: CMTimeRange(start: start, duration: duration),
+                                lineName: line.name,
+                                tagName: stamp.label,
+                                groupName: possibleGroup?.name
+                            )
+                        )
+                    }
+                }
+            }
+            
+        case .labelWithTags(let selectedLabel, let selectedTags):
+            let tagIDs = Set(selectedTags.map { $0.id })
+            for line in timelineData.lines {
+                for stamp in line.stamps {
+                    if stamp.labels.contains(selectedLabel.id) && tagIDs.contains(stamp.idTag) {
+                        let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
+                        let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                        let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
+                        
+                        result.append(
+                            ExportSegment(
+                                timeRange: CMTimeRange(start: start, duration: duration),
+                                lineName: line.name,
+                                tagName: stamp.label,
+                                groupName: possibleGroup?.name
+                            )
+                        )
+                    }
+                }
+            }
         }
         
         result.sort { $0.timeRange.start.seconds < $1.timeRange.start.seconds }
@@ -202,6 +274,16 @@ struct FullControlView: View {
             fileName = "\(^String.Titles.fullControlFileEventFile)_\(selectedEvent.name)\(^String.Titles.fullControlFileTimelineFile)"
         case .allTimelines:
             fileName = ^String.Titles.fullControlFileAllTimelinesFile
+        case .label(let selectedLabel):
+            fileName = "\(selectedLabel.name)\(^String.Titles.fullControlFileTimelineFile)"
+            
+        case .tagWithLabels(let selectedTag, let selectedLabels):
+            let labelsString = selectedLabels.map { $0.name }.joined(separator: "_")
+            fileName = "\(selectedTag.name)_\(labelsString)\(^String.Titles.fullControlFileTimelineFile)"
+            
+        case .labelWithTags(let selectedLabel, let selectedTags):
+            let tagsString = selectedTags.map { $0.name }.joined(separator: "_")
+            fileName = "\(selectedLabel.name)_\(tagsString)\(^String.Titles.fullControlFileTimelineFile)"
         }
         
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -282,6 +364,16 @@ struct FullControlView: View {
                 
             case .timeEvent(let selectedEvent):
                 fileName = "\(^String.Titles.fullControlFileEventFile)_\(selectedEvent.name)_\(index + 1).mp4"
+            case .label(let selectedLabel):
+                fileName = "\(selectedLabel.name)_\(index + 1).mp4"
+                
+            case .tagWithLabels(let selectedTag, let selectedLabels):
+                let labelsString = selectedLabels.map { $0.name }.joined(separator: "_")
+                fileName = "\(selectedTag.name)_\(labelsString)_\(index + 1).mp4"
+                
+            case .labelWithTags(let selectedLabel, let selectedTags):
+                let tagsString = selectedTags.map { $0.name }.joined(separator: "_")
+                fileName = "\(selectedLabel.name)_\(tagsString)_\(index + 1).mp4"
             }
             
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -309,6 +401,10 @@ struct FullControlView: View {
             }
         }
     }
+    
+    @State private var isLoading = false
+    @State private var availableTags: [Tag] = []
+    @State private var availableLabels: [Label] = []
     
     func compressFiles(urls: [URL], completion: @escaping (Result<URL, Error>) -> Void) {
         let zipURL = FileManager.default.temporaryDirectory.appendingPathComponent("export_playlist.zip")
@@ -411,31 +507,63 @@ struct FullControlView: View {
         }
     }
     
+    @State private var multiTagSelectionItem: MultiSelectionItem?
+    @State private var multiLabelSelectionItem: MultiSelectionItem?
+    
+    struct MultiSelectionItem: Identifiable {
+        let id = UUID()
+        let tag: Tag?
+        let label: Label?
+        
+        init(tag: Tag? = nil, label: Label? = nil) {
+            self.tag = tag
+            self.label = label
+        }
+    }
+    
     @ViewBuilder
     private func scrollBlock() -> some View {
-        ScrollView(.vertical) {
-            ScrollViewReader { scrollProxy in
-                timelineContent(proxy: scrollProxy)
+        VStack(spacing: 0) {
+            // Modern timeline container with rounded corners and shadow
+            ScrollView(.vertical) {
+                ScrollViewReader { scrollProxy in
+                    timelineContent(proxy: scrollProxy)
+                }
             }
-        }
-        .gesture(
-            MagnificationGesture()
-                .updating($magnifyScale) { currentState, gestureState, _ in
-                    gestureState = max(1.0, currentState)
-                }
-                .onEnded { value in
-                    let newScale = timelineScale * value
-                    let duration = max(1.0, videoManager.videoDuration)
-                    let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
-                    if potentialInterval >= 0.5 {
-                        timelineScale = max(1.0, newScale)
-                    } else {
-                        let baseInterval = 5.0
-                        let maxScale = baseInterval / 0.5
-                        timelineScale = maxScale
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.1))
+                    .shadow(
+                        color: Color.black.opacity(0.1),
+                        radius: 8,
+                        x: 0,
+                        y: 2
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
+            .gesture(
+                MagnificationGesture()
+                    .updating($magnifyScale) { currentState, gestureState, _ in
+                        gestureState = max(1.0, currentState)
                     }
-                }
-        )
+                    .onEnded { value in
+                        let newScale = timelineScale * value
+                        let duration = max(1.0, videoManager.videoDuration)
+                        let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
+                        if potentialInterval >= 0.5 {
+                            timelineScale = max(1.0, newScale)
+                        } else {
+                            let baseInterval = 5.0
+                            let maxScale = baseInterval / 0.5
+                            timelineScale = maxScale
+                        }
+                    }
+            )
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
@@ -450,34 +578,98 @@ struct FullControlView: View {
     private func timelineContent(proxy: ScrollViewProxy) -> some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("")
-                    .frame(width: 75, height: 30, alignment: .leading)
-                    .background(Color.gray.opacity(0.05))
-                    .id("header-row")
+                // Modern header with gradient matching button blocks
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.gray.opacity(0.05),
+                        Color.gray.opacity(0.02)
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: 195, height: 30, alignment: .leading)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 0)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                )
+                .id("header-row")
                 
                 ForEach(timelineData.lines) { line in
                     if markupMode == .standard {
-                        HStack {
-                            Text(line.name)
-                                .font(.headline)
-                                .padding(4)
-                                .background((line.id == timelineData.selectedLineID) ? Color.blue.opacity(0.2) : Color.clear)
-                                .cornerRadius(4)
-                                .lineLimit(1)
-                                .onTapGesture { timelineData.selectLine(line.id) }
-                            
-                            Button(action: {
-                                showEditNameSheet = true
-                            }) {
-                                Image(systemName: "pencil")
-                                    .font(.caption)
+                        HStack(spacing: 8) {
+                            // Timeline name on the left
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(line.name)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .minimumScaleFactor(0.6)
+                                    .foregroundColor(.primary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill((line.id == timelineData.selectedLineID) ? 
+                                                  Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke((line.id == timelineData.selectedLineID) ? 
+                                                   Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
+                                    )
+                                    .onTapGesture { 
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            timelineData.selectLine(line.id)
+                                        }
+                                    }
                             }
-                            .buttonStyle(BorderlessButtonStyle())
-                            .help(^String.Titles.editTimelineName)
+                            
+                            Spacer()
+                            
+                            // Buttons row on the right
+                            HStack(spacing: 4) {
+                                Button(action: {
+                                    timelineData.selectLine(line.id)
+                                    showEditNameSheet = true
+                                }) {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(.blue)
+                                        .padding(3)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.blue.opacity(0.1))
+                                        )
+                                }
+                                .buttonStyle(BorderlessButtonStyle())
+                                .help(^String.Titles.editTimelineName)
+                                
+                                Button(action: {
+                                    let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
+                                    TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
+                                    if isSelectedLine {
+                                        TimelineDataManager.shared.selectedLineID = nil
+                                    }
+                                    TimelineDataManager.shared.updateTimelines()
+                                }) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(.red)
+                                        .padding(3)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.red.opacity(0.1))
+                                        )
+                                }
+                                .buttonStyle(BorderlessButtonStyle())
+                                .help(^String.Titles.timelineButtonDeleteTimeline)
+                            }
                         }
-                        .frame(width: 75, height: 30, alignment: .leading)
+                        .padding(.leading, 5)
+                        .frame(width: 195, height: 30, alignment: .leading)
                         .contextMenu {
                             Button(^String.Titles.editName) {
+                                timelineData.selectLine(line.id)
                                 showEditNameSheet = true
                             }
                             Button(^String.Titles.timelineButtonDeleteTimeline) {
@@ -489,20 +681,98 @@ struct FullControlView: View {
                                 TimelineDataManager.shared.updateTimelines()
                             }
                         }
+                        .onDrag {
+                            return NSItemProvider(object: line.id.uuidString as NSString)
+                        }
+                        .onDrop(of: [.text], delegate: TimelineDropDelegate(
+                            currentLine: line,
+                            timelineData: timelineData
+                        ))
                         .id("name-\(line.id)")
                     } else {
-                        Text(line.name)
-                            .font(.headline)
-                            .padding(4)
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-                            .frame(width: 75, height: 30, alignment: .leading)
-                            .id("name-\(line.id)")
+                        HStack(spacing: 8) {
+                            // Timeline name on the left
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(line.name)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .minimumScaleFactor(0.6)
+                                    .foregroundColor(.primary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill((line.id == timelineData.selectedLineID) ? 
+                                                  Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke((line.id == timelineData.selectedLineID) ? 
+                                                   Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
+                                    )
+                                    .onTapGesture { 
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            timelineData.selectLine(line.id)
+                                        }
+                                    }
+                            }
+                            
+                            Spacer()
+                            
+                            // Buttons row on the right
+                            HStack(spacing: 4) {
+                                Button(action: {
+                                    let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
+                                    TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
+                                    if isSelectedLine {
+                                        TimelineDataManager.shared.selectedLineID = nil
+                                    }
+                                    TimelineDataManager.shared.updateTimelines()
+                                }) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(.red)
+                                        .padding(3)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.red.opacity(0.1))
+                                        )
+                                }
+                                .buttonStyle(BorderlessButtonStyle())
+                                .help(^String.Titles.timelineButtonDeleteTimeline)
+                            }
+                        }
+                        .padding(.leading, 5)
+                        .frame(width: 195, height: 30, alignment: .leading)
+                        .contextMenu {
+                            Button(^String.Titles.timelineButtonDeleteTimeline) {
+                                let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
+                                TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
+                                if isSelectedLine {
+                                    TimelineDataManager.shared.selectedLineID = nil
+                                }
+                                TimelineDataManager.shared.updateTimelines()
+                            }
+                        }
+                        .onDrag {
+                            return NSItemProvider(object: line.id.uuidString as NSString)
+                        }
+                        .onDrop(of: [.text], delegate: TimelineDropDelegate(
+                            currentLine: line,
+                            timelineData: timelineData
+                        ))
+                        .id("name-\(line.id)")
                     }
                 }
             }
-            .frame(width: 75)
+            .frame(width: 195)
             .padding(.trailing, 5)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.05))
+            )
             
             GeometryReader { geo in
                 let effectiveScale = timelineScale * magnifyScale
@@ -554,6 +824,7 @@ struct FullControlView: View {
                         .frame(width: gridWidth)
                     }
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .sheet(isPresented: $showAiReportSheet) {
                     AiReportSheet(onSubmit: { teamName, opponentName, venue, matchDate in
                         generateAndDownloadAiReport(teamName: teamName,
@@ -663,21 +934,58 @@ struct FullControlView: View {
         }
     }
     
-    var body: some View {
-        GeometryReader { geo in
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
+    // MARK: - Compact Control Panel
+    @ViewBuilder
+    private var compactControlPanel: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Block 1: Video Controls
+            VStack(alignment: .leading, spacing: 8) {
+                Text(^String.Titles.video)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+                
+                HStack(spacing: 8) {
                     Button(action: { videoManager.seek(by: -10) }) {
-                        Image(systemName: "gobackward.10")
-                        Text("10s")
+                        HStack(spacing: 4) {
+                            Image(systemName: "gobackward.10")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("10s")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(6)
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    
                     Button(action: { videoManager.togglePlayPause() }) {
                         Image(systemName: "playpause")
+                            .font(.system(size: 14, weight: .medium))
+                            .padding(6)
+                            .background(Color.green.opacity(0.1))
+                            .foregroundColor(.green)
+                            .cornerRadius(6)
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    
                     Button(action: { videoManager.seek(by: 10) }) {
-                        Text("10s")
-                        Image(systemName: "goforward.10")
+                        HStack(spacing: 4) {
+                            Text("10s")
+                                .font(.system(size: 10, weight: .medium))
+                            Image(systemName: "goforward.10")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(6)
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Speed Control
                     Menu {
                         ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0], id: \.self) { speed in
                             Button(String(format: "%.2fx", speed)) {
@@ -685,84 +993,156 @@ struct FullControlView: View {
                             }
                         }
                     } label: {
-                        Text("Speed x\(String(format: "%.2f", videoManager.playbackSpeed))")
+                        HStack(spacing: 4) {
+                            Image(systemName: "speedometer")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("x\(String(format: "%.2f", videoManager.playbackSpeed))")
+                                .font(.system(size: 10, weight: .medium))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.orange.opacity(0.1))
+                        .foregroundColor(.orange)
+                        .cornerRadius(6)
                     }
-                    Spacer()
+                    .buttonStyle(PlainButtonStyle())
                 }
-                HStack {
-                    Text(^String.Titles.timelines)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.gray.opacity(0.05))
+            .cornerRadius(8)
+            
+            // Block 2: Timeline Management
+            VStack(alignment: .leading, spacing: 8) {
+                Text(^String.Titles.timelines)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+                
+                // First row: Add button, Mode selector, and Zoom controls
+                HStack(spacing: 8) {
                     if markupMode == .standard {
                         Button {
                             showAddLineSheet = true
                         } label: {
-                            Image(systemName: "plus.circle")
-                                .font(.title2)
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.green)
                         }
+                        .buttonStyle(PlainButtonStyle())
                         .help(^String.Titles.fullControlButtonAddTimeline)
                     }
-                    Menu {
+                    
+                    // Mode Selector
+                    HStack(spacing: 2) {
                         Button(action: {
                             WindowsManager.shared.setMarkupMode(.standard)
                         }) {
-                            HStack {
-                                Text(^String.Titles.fullControlModeStandard)
-                                if markupMode == .standard {
-                                    Image(systemName: "checkmark")
-                                }
+                            HStack(spacing: 2) {
+                                Image(systemName: "list.bullet")
+                                    .font(.system(size: 10))
+                                Text("Standard")
+                                    .font(.system(size: 10, weight: .medium))
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(markupMode == .standard ? Color.blue : Color.gray.opacity(0.1))
+                            .foregroundColor(markupMode == .standard ? .white : .primary)
+                            .cornerRadius(6)
                         }
+                        .buttonStyle(PlainButtonStyle())
                         
                         Button(action: {
                             WindowsManager.shared.setMarkupMode(.tagBased)
                         }) {
-                            HStack {
-                                Text(^String.Titles.fullControlModeTagBased)
-                                if markupMode == .tagBased {
-                                    Image(systemName: "checkmark")
-                                }
+                            HStack(spacing: 2) {
+                                Image(systemName: "tag")
+                                    .font(.system(size: 10))
+                                Text("Tags")
+                                    .font(.system(size: 10, weight: .medium))
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(markupMode == .tagBased ? Color.blue : Color.gray.opacity(0.1))
+                            .foregroundColor(markupMode == .tagBased ? .white : .primary)
+                            .cornerRadius(6)
                         }
-                    } label: {
-                        if markupMode == .standard {
-                            Text(^String.Titles.fullControlModeStandard)
-                        } else {
-                            Text(^String.Titles.fullControlModeTagBased)
-                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                     .help(^String.Titles.fullControlModeHelp)
-                    Button(^String.Titles.fullControlButtonJSONSimple) {
-                        let encoder = JSONEncoder()
-                        encoder.outputFormatting = .prettyPrinted
-                        do {
-                            let data = try encoder.encode(timelineData.lines)
-                            let panel = NSSavePanel()
-                            panel.allowedFileTypes = ["json"]
-                            panel.nameFieldStringValue = "timelines_simple.json"
-                            if panel.runModal() == .OK, let url = panel.url {
-                                try data.write(to: url)
-                            }
-                        } catch {
-                            print("Ошибка сохранения JSON: \(error)")
+                    
+                    // Timeline Zoom Controls (moved to first row)
+                    HStack(spacing: 4) {
+                        Text("Zoom")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                        
+                        Button {
+                            timelineScale = max(1.0, timelineScale - 0.5)
+                        } label: {
+                            Image(systemName: "minus.magnifyingglass")
+                                .font(.system(size: 12, weight: .medium))
                         }
-                    }
-                    Button(^String.Titles.fullControlButtonJSONFull) {
-                        let encoder = JSONEncoder()
-                        encoder.outputFormatting = .prettyPrinted
-                        let fullLines = transformToFullTimelineLines()
-                        do {
-                            let wrapper = ["data": fullLines]
-                            let data = try encoder.encode(wrapper)
-                            let panel = NSSavePanel()
-                            panel.allowedFileTypes = ["json"]
-                            panel.nameFieldStringValue = "timelines_full.json"
-                            if panel.runModal() == .OK, let url = panel.url {
-                                try data.write(to: url)
-                            }
-                        } catch {
-                            print("Ошибка сохранения полного JSON: \(error)")
+                        .buttonStyle(CompactButtonStyle(icon: "minus.magnifyingglass", color: .gray))
+                        .help(^String.Titles.fullControlButtonTimelineZoomOut)
+                        
+                        Text(String(format: "%.1fx", timelineScale))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 4)
+                        
+                        Button {
+                            timelineScale += 0.5
+                        } label: {
+                            Image(systemName: "plus.magnifyingglass")
+                                .font(.system(size: 12, weight: .medium))
                         }
+                        .buttonStyle(CompactButtonStyle(icon: "plus.magnifyingglass", color: .gray))
+                        .help(^String.Titles.fullControlButtonTimelineZoomIn)
                     }
-                    Menu(^String.Titles.fullControlMenuExport) {
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.gray.opacity(0.05))
+            .cornerRadius(8)
+            
+            // Block 3: Export & Reports
+            VStack(alignment: .leading, spacing: 8) {
+                Text(^String.Titles.exportReports)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+                
+                HStack(spacing: 8) {
+                    // JSON Export Menu
+                    Menu {
+                        Button(^String.Titles.fullControlButtonJSONSimple) {
+                            exportSimpleJSON()
+                        }
+                        Button(^String.Titles.fullControlButtonJSONFull) {
+                            exportFullJSON()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.text")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("JSON")
+                                .font(.system(size: 10, weight: .medium))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.purple.opacity(0.1))
+                        .foregroundColor(.purple)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Video Export Menu
+                    Menu {
                         Button(^String.Titles.fullControlButtonExportTimeline) {
                             selectedExportType = .currentTimeline
                             showExportModeSheet = true
@@ -774,48 +1154,132 @@ struct FullControlView: View {
                         Button(^String.Titles.fullControlButtonExportTags) {
                             showTagSelectionSheet = true
                         }
+                        Button(^String.Titles.fullControlButtonExportLabels) {
+                            showLabelSelectionSheet = true
+                        }
                         Button(^String.Titles.fullControlButtonExportEvents) {
                             showEventSelectionSheet = true
                         }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "video")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("Export")
+                                .font(.system(size: 10, weight: .medium))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.red.opacity(0.1))
+                        .foregroundColor(.red)
+                        .cornerRadius(6)
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // AI Reports
                     Button(^String.Titles.aIReports) {
                         showAiReportSheet = true
                     }
+                    .buttonStyle(CompactButtonStyle(icon: "brain", color: .indigo, showText: true))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.gray.opacity(0.05))
+            .cornerRadius(8)
+            
+            Spacer()
+            
+            // Block 4: Screenshots & Map (Right aligned)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(^String.Titles.tools)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+                
+                HStack(spacing: 8) {
+                    // Screenshots
                     Button(^String.Titles.fullControlButtonScreenshots) {
                         WindowsManager.shared.showScreenshots()
                     }
-                    Button(^String.Titles.fullControlButtonMap) {
-                        WindowsManager.shared.showFieldMapVisualizationPicker()
-                    }
-                    Button(^String.Titles.configureVisualization) {
-                        WindowsManager.shared.showFieldMapConfigurationWindow()
-                    }
-                    Spacer()
-                }
-                
-                HStack {
-                    Button {
-                        timelineScale = max(1.0, timelineScale - 0.5)
-                    } label: {
-                        Image(systemName: "minus.magnifyingglass")
-                    }
-                    .help(^String.Titles.fullControlButtonTimelineZoomOut)
+                    .buttonStyle(CompactButtonStyle(icon: "camera", color: .teal, showText: true, text: ^String.Titles.screenshots))
                     
-                    Button {
-                        timelineScale += 0.5
+                    // Map Menu
+                    Menu {
+                        Button(^String.Titles.configureVisualization) {
+                            WindowsManager.shared.showFieldMapConfigurationWindow()
+                        }
+                        Button(^String.Titles.fullControlButtonMap) {
+                            WindowsManager.shared.showFieldMapVisualizationPicker()
+                        }
                     } label: {
-                        Image(systemName: "plus.magnifyingglass")
+                        HStack(spacing: 4) {
+                            Image(systemName: "map")
+                                .font(.system(size: 12, weight: .medium))
+                            Text(^String.Titles.map)
+                                .font(.system(size: 10, weight: .medium))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.brown.opacity(0.1))
+                        .foregroundColor(.brown)
+                        .cornerRadius(6)
                     }
-                    .help(^String.Titles.fullControlButtonTimelineZoomIn)
-                    
-                    Text(String(format: "%.1fx", timelineScale))
-                        .padding(.leading, 8)
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .frame(maxHeight: 20)
-                .padding(.horizontal)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.gray.opacity(0.05))
+            .cornerRadius(8)
+        }
+    }
+    
+    // MARK: - Helper Methods
+    private func exportSimpleJSON() {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        do {
+            let data = try encoder.encode(timelineData.lines)
+            let panel = NSSavePanel()
+            panel.allowedFileTypes = ["json"]
+            panel.nameFieldStringValue = "timelines_simple.json"
+            if panel.runModal() == .OK, let url = panel.url {
+                try data.write(to: url)
+            }
+        } catch {
+            print("Ошибка сохранения JSON: \(error)")
+        }
+    }
+    
+    private func exportFullJSON() {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        let fullLines = transformToFullTimelineLines()
+        do {
+            let wrapper = ["data": fullLines]
+            let data = try encoder.encode(wrapper)
+            let panel = NSSavePanel()
+            panel.allowedFileTypes = ["json"]
+            panel.nameFieldStringValue = "timelines_full.json"
+            if panel.runModal() == .OK, let url = panel.url {
+                try data.write(to: url)
+            }
+        } catch {
+            print("Ошибка сохранения полного JSON: \(error)")
+        }
+    }
+    
+    var body: some View {
+        GeometryReader { geo in
+            VStack(alignment: .leading, spacing: 12) {
+                compactControlPanel
                 scrollBlock()
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.top, 12)
             .frame(minWidth: 800, minHeight: 300)
             .overlay(
                 Group {
@@ -871,25 +1335,107 @@ struct FullControlView: View {
                 showExportModeSheet = false
             }
         }
+        
+        
+
+        .sheet(isPresented: $showLabelSelectionSheet) {
+            LabelSelectionSheetView(
+                uniqueLabels: uniqueLabelsFromTimelines(),
+                onLabelSelected: { selectedLabel in
+                    print("Выбран лейбл: \(selectedLabel.name), ID: \(selectedLabel.id)")
+                    
+                    let availableTags = tagsForLabel(selectedLabel)
+                    print("Доступные теги для лейбла: \(availableTags.map { $0.name })")
+                    
+                    if !availableTags.isEmpty {
+                        showLabelSelectionSheet = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            showMultiTagSelection(for: selectedLabel)
+                        }
+                    } else {
+                        selectedExportType = .label(selectedLabel: selectedLabel)
+                        showLabelSelectionSheet = false
+                        showExportModeSheet = true
+                    }
+                },
+                onSkip: {
+                    showLabelSelectionSheet = false
+                },
+                showMultiSelection: true
+            )
+            .frame(width: 300, height: 300)
+        }
+
+
+        
+        .sheet(item: $multiTagSelectionItem) { item in
+                    if let label = item.label {
+                        let availableTags = tagsForLabel(label)
+                        
+                        MultiTagSelectionSheetView(
+                            availableTags: availableTags,
+                            onDone: { selectedTags in
+                                selectedExportType = .labelWithTags(selectedLabel: label, selectedTags: selectedTags)
+                                multiTagSelectionItem = nil
+                                showExportModeSheet = true
+                            },
+                            onSkip: {
+                                selectedExportType = .label(selectedLabel: label)
+                                multiTagSelectionItem = nil
+                                showExportModeSheet = true
+                            }
+                        )
+                        .frame(width: 400, height: 300)
+                    }
+                }
+                
+                // Заменяем sheet для мультивыбора лейблов
+                .sheet(item: $multiLabelSelectionItem) { item in
+                    if let tag = item.tag {
+                        let availableLabels = labelsForTag(tag)
+                        
+                        MultiLabelSelectionSheetView(
+                            availableLabels: availableLabels,
+                            onDone: { selectedLabels in
+                                selectedExportType = .tagWithLabels(selectedTag: tag, selectedLabels: selectedLabels)
+                                multiLabelSelectionItem = nil
+                                showExportModeSheet = true
+                            },
+                            onSkip: {
+                                selectedExportType = .tag(selectedTag: tag)
+                                multiLabelSelectionItem = nil
+                                showExportModeSheet = true
+                            }
+                        )
+                        .frame(width: 400, height: 300)
+                    }
+                }
+
         .sheet(isPresented: $showEventSelectionSheet) {
-            let maxSheetHeight = parentWindowHeight * 0.8
-            
             EventSelectionSheetView(timeEvents: uniqueEventsFromTimelines()) { selectedEvent in
                 selectedExportType = .timeEvent(selectedEvent: selectedEvent)
                 showEventSelectionSheet = false
                 showExportModeSheet = true
             }
-            .frame(height: maxSheetHeight)
+            .frame(width: 300, height: 300) // Фиксированный размер вместо динамического
         }
+
         .sheet(isPresented: $showTagSelectionSheet) {
-            let maxSheetHeight = parentWindowHeight * 0.8
-            
-            TagSelectionSheetView(uniqueTags: uniqueTagsFromTimelines()) { selectedTag in
-                selectedExportType = .tag(selectedTag: selectedTag)
-                showTagSelectionSheet = false
-                showExportModeSheet = true
-            }
-            .frame(height: maxSheetHeight)
+            TagSelectionSheetView(
+                uniqueTags: uniqueTagsFromTimelines(),
+                onSelect: { selectedTag in
+                    selectedExportType = .tag(selectedTag: selectedTag)
+                    showTagSelectionSheet = false
+                    showExportModeSheet = true
+                },
+                onSelectWithLabels: { selectedTag in
+                    showTagSelectionSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        showMultiLabelSelection(for: selectedTag)
+                    }
+                }
+            )
+            .frame(width: 300, height: 300) // Фиксированный размер вместо динамического
         }
     }
     
@@ -935,6 +1481,15 @@ struct FullControlView: View {
             }
         }
     }
+    
+    func showMultiTagSelection(for label: Label) {
+            multiTagSelectionItem = MultiSelectionItem(label: label)
+        }
+        
+        // В функции где показываем мультивыбор лейблов (замена showMultiLabelSelectionSheet = true)
+        func showMultiLabelSelection(for tag: Tag) {
+            multiLabelSelectionItem = MultiSelectionItem(tag: tag)
+        }
     
     func uniqueEventsFromTimelines() -> [TimeEvent] {
         let eventIDs = Set(timelineData.lines.flatMap { line in
@@ -1016,6 +1571,52 @@ struct FullControlView: View {
         }
     }
     
+    func uniqueLabelsFromTimelines() -> [Label] {
+        let labelIDs = timelineData.lines.flatMap { line in
+            line.stamps.flatMap { stamp in
+                stamp.labels
+            }
+        }
+        
+        let uniqueLabelIDs = Array(Set(labelIDs))
+        
+        let labels = TagLibraryManager.shared.allLabels.filter { label in
+            return uniqueLabelIDs.contains(label.id)
+        }
+        
+        return labels
+    }
+
+    func labelsForTag(_ tag: Tag) -> [Label] {
+        let labelIDs = timelineData.lines.flatMap { line in
+            line.stamps.filter { $0.idTag == tag.id }
+                .flatMap { $0.labels }
+        }
+        
+        let uniqueLabelIDs = Array(Set(labelIDs))
+        print("Для тега \(tag.name) найдены лейблы с ID: \(uniqueLabelIDs)")
+        
+        let labels = TagLibraryManager.shared.allLabels.filter { uniqueLabelIDs.contains($0.id) }
+        print("Найдены лейблы: \(labels.map { $0.name })")
+        
+        return labels
+    }
+
+    func tagsForLabel(_ label: Label) -> [Tag] {
+        let tagIDs = timelineData.lines.flatMap { line in
+            line.stamps.filter { $0.labels.contains(label.id) }
+                .map { $0.idTag }
+        }
+        
+        let uniqueTagIDs = Array(Set(tagIDs))
+        print("Для лейбла \(label.name) найдены теги с ID: \(uniqueTagIDs)")
+        
+        let tags = TagLibraryManager.shared.allTags.filter { uniqueTagIDs.contains($0.id) }
+        print("Найдены теги: \(tags.map { $0.name })")
+        
+        return tags
+    }
+    
     func uniqueTagsFromTimelines() -> [Tag] {
         let tagIDs = timelineData.lines.flatMap { line in
             line.stamps.flatMap { stamp in
@@ -1033,3 +1634,286 @@ struct FullControlView: View {
     }
     
 }
+
+// Sheet для выбора лейблов
+// Модифицируйте LabelSelectionSheetView
+struct LabelSelectionSheetView: View {
+    let uniqueLabels: [Label]
+    let onLabelSelected: (Label) -> Void
+    let onSkip: () -> Void
+    let showMultiSelection: Bool
+    
+    var body: some View {
+        VStack {
+            Text(^String.Titles.selectLabelForExport)
+                .font(.headline)
+                .padding()
+            
+            List(uniqueLabels, id: \.id) { label in
+                if showMultiSelection {
+                    Button(action: {
+                        onLabelSelected(label)
+                    }) {
+                        HStack {
+                            Text(label.name)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }
+                    }
+                } else {
+                    Button(action: {
+                        onLabelSelected(label)
+                    }) {
+                        Text(label.name)
+                    }
+                }
+            }
+            
+            Button(^String.Titles.skip) {
+                onSkip()
+            }
+            .padding()
+        }
+        .frame(width: 300, height: 300)
+    }
+}
+
+struct MultiTagSelectionSheetView: View {
+    let availableTags: [Tag]
+    @State private var selectedTags: Set<String> = []
+    let onDone: ([Tag]) -> Void
+    let onSkip: () -> Void
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        VStack(spacing: 10) {
+            Text(^String.Titles.selectTagsForExport)
+                .font(.headline)
+                .padding()
+            
+            if availableTags.isEmpty {
+                Text(^String.Titles.noAvailableTags)
+                    .foregroundColor(.secondary)
+                    .padding()
+            } else {
+                List(availableTags, id: \.id) { tag in
+                    HStack {
+                        Image(systemName: selectedTags.contains(tag.id) ? "checkmark.square.fill" : "square")
+                            .foregroundColor(selectedTags.contains(tag.id) ? .blue : .secondary)
+                        Text(tag.name)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if selectedTags.contains(tag.id) {
+                            selectedTags.remove(tag.id)
+                        } else {
+                            selectedTags.insert(tag.id)
+                        }
+                    }
+                }
+            }
+            
+            HStack {
+                Button(^String.Titles.skip) {
+                    onSkip()
+                }
+                
+                Spacer()
+                
+                Button(^String.Titles.done) {
+                    let selected = availableTags.filter { selectedTags.contains($0.id) }
+                    onDone(selected)
+                }
+                .disabled(selectedTags.isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 400, height: 300)
+        .onAppear {
+            print("MultiTagSelectionSheetView появился")
+            print("Доступные теги: \(availableTags.map { $0.name })")
+        }
+    }
+}
+
+// Обновите MultiLabelSelectionSheetView аналогичным образом
+struct MultiLabelSelectionSheetView: View {
+    let availableLabels: [Label]
+    @State private var selectedLabels: Set<String> = []
+    let onDone: ([Label]) -> Void
+    let onSkip: () -> Void
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        VStack(spacing: 10) {
+            Text(^String.Titles.selectLabelsForExport)
+                .font(.headline)
+                .padding()
+            
+            if availableLabels.isEmpty {
+                Text(^String.Titles.noAvailableLabels)
+                    .foregroundColor(.secondary)
+                    .padding()
+            } else {
+                List(availableLabels, id: \.id) { label in
+                    HStack {
+                        Image(systemName: selectedLabels.contains(label.id) ? "checkmark.square.fill" : "square")
+                            .foregroundColor(selectedLabels.contains(label.id) ? .blue : .secondary)
+                        Text(label.name)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if selectedLabels.contains(label.id) {
+                            selectedLabels.remove(label.id)
+                        } else {
+                            selectedLabels.insert(label.id)
+                        }
+                    }
+                }
+            }
+            
+            HStack {
+                Button(^String.Titles.skip) {
+                    onSkip()
+                }
+                
+                Spacer()
+                
+                Button(^String.Titles.done) {
+                    let selected = availableLabels.filter { selectedLabels.contains($0.id) }
+                    onDone(selected)
+                }
+                .disabled(selectedLabels.isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 400, height: 300)
+        .onAppear {
+            print("MultiLabelSelectionSheetView появился")
+            print("Доступные лейблы: \(availableLabels.map { $0.name })")
+        }
+    }
+}
+
+// MARK: - TimelineDropDelegate
+struct TimelineDropDelegate: DropDelegate {
+    let currentLine: TimelineLine
+    let timelineData: TimelineDataManager
+    
+    func performDrop(info: DropInfo) -> Bool {
+        guard let itemProvider = info.itemProviders(for: [.text]).first else {
+            return false
+        }
+        
+        itemProvider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { (item, error) in
+            if let data = item as? Data,
+               let draggedLineIDString = String(data: data, encoding: .utf8),
+               let draggedLineID = UUID(uuidString: draggedLineIDString),
+               draggedLineID != currentLine.id {
+                
+                DispatchQueue.main.async {
+                    reorderTimelines(draggedID: draggedLineID, targetID: currentLine.id)
+                }
+            }
+        }
+        
+        return true
+    }
+    
+    func dropEntered(info: DropInfo) {
+        // Можно добавить визуальную обратную связь при наведении
+    }
+    
+    func dropExited(info: DropInfo) {
+        // Можно добавить визуальную обратную связь при выходе
+    }
+    
+    private func reorderTimelines(draggedID: UUID, targetID: UUID) {
+        guard let draggedIndex = timelineData.lines.firstIndex(where: { $0.id == draggedID }),
+              let targetIndex = timelineData.lines.firstIndex(where: { $0.id == targetID }) else {
+            return
+        }
+        
+        let draggedLine = timelineData.lines.remove(at: draggedIndex)
+        let newTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex
+        timelineData.lines.insert(draggedLine, at: newTargetIndex)
+        timelineData.updateTimelines()
+    }
+}
+
+// MARK: - Custom Button Styles
+struct CompactButtonStyle: ButtonStyle {
+    let icon: String
+    let color: Color
+    let showText: Bool
+    let text: String
+    
+    init(icon: String, color: Color, showText: Bool = false, text: String = ^String.Titles.report) {
+        self.icon = icon
+        self.color = color
+        self.showText = showText
+        self.text = text
+    }
+    
+    func makeBody(configuration: Configuration) -> some View {
+        if showText {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                Text(text)
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.1))
+            .foregroundColor(color)
+            .cornerRadius(6)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .padding(6)
+                .background(color.opacity(0.1))
+                .foregroundColor(color)
+                .cornerRadius(6)
+                .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+        }
+    }
+}
+
+struct ExportButtonStyle: ButtonStyle {
+    let icon: String
+    let color: Color
+    
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+            configuration.label
+                .font(.system(size: 12, weight: .medium))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.1))
+        .foregroundColor(color)
+        .cornerRadius(8)
+        .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+struct ZoomButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Image(systemName: "minus.magnifyingglass")
+            .font(.system(size: 14, weight: .medium))
+            .padding(8)
+            .background(Color.gray.opacity(0.1))
+            .foregroundColor(.primary)
+            .cornerRadius(8)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+

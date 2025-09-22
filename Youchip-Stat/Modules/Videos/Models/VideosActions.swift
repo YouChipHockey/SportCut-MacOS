@@ -28,5 +28,6 @@ enum VideosActions {
     case renameSimpleVideo(file: FilesFile, newName: String)
     case showAuthSheet
     case updateLimitInfo
+    case toggleFavorite(file: FilesFile)
     
 }

@@ -65,18 +65,53 @@ class TagLibraryManager: ObservableObject {
         allTimeEvents = timeEvents
         loadAllUserCollections()
     }
+        
+    private func getSystemLanguage() -> String {
+        let preferredLanguage = Locale.preferredLanguages.first ?? "en"
+        if preferredLanguage.hasPrefix("ru") {
+            return "ru"
+        } else if preferredLanguage.hasPrefix("en") {
+            return "en"
+        } else if preferredLanguage.hasPrefix("uz") {
+            return "ru"
+        } else {
+            return "en"
+        }
+    }
+    
+    private func getCollectionFileURL(for resourceName: String, collectionName: String) -> URL? {
+        let fullResourceName = "\(resourceName)(\(collectionName))"
+        return Bundle.main.url(forResource: fullResourceName, withExtension: "json")
+    }
     
     private func loadBaseCollections() {
         guard let namesUrl = Bundle.main.url(forResource: "names", withExtension: "json") else { return }
-        let names: [String] = if let loadedTags: NamesData = loadJSON(url: namesUrl) {
-            loadedTags.names
-        } else { [] }
+        
+        // Загружаем новую структуру с языковыми коллекциями
+        guard let languageCollectionsData: LanguageCollectionsData = loadJSON(url: namesUrl) else { return }
+        
+        // Получаем текущий язык системы
+        let currentLanguage = getSystemLanguage()
+        
+        // Находим коллекции для текущего языка
+        guard let currentLanguageCollection = languageCollectionsData.collections.first(where: { $0.language == currentLanguage }) else {
+            // Если коллекции для текущего языка не найдены, используем английский как fallback
+            guard let fallbackCollection = languageCollectionsData.collections.first(where: { $0.language == "en" }) else { return }
+            loadCollectionsForNames(fallbackCollection.names)
+            return
+        }
+        
+        // Загружаем коллекции для текущего языка
+        loadCollectionsForNames(currentLanguageCollection.names)
+    }
+    
+    private func loadCollectionsForNames(_ names: [String]) {
         for name in names {
-            let tagsURL = Bundle.main.url(forResource: "tags(\(name))", withExtension: "json")
-            let tagsGroupsURL = Bundle.main.url(forResource: "tagsGroups(\(name))", withExtension: "json")
-            let labelsGroupsURL = Bundle.main.url(forResource: "labelsGroups(\(name))", withExtension: "json")
-            let labelsURL = Bundle.main.url(forResource: "labels(\(name))", withExtension: "json")
-            let timeEventsURL = Bundle.main.url(forResource: "timeEvents(\(name))", withExtension: "json")
+            let tagsURL = getCollectionFileURL(for: "tags", collectionName: name)
+            let tagsGroupsURL = getCollectionFileURL(for: "tagsGroups", collectionName: name)
+            let labelsGroupsURL = getCollectionFileURL(for: "labelsGroups", collectionName: name)
+            let labelsURL = getCollectionFileURL(for: "labels", collectionName: name)
+            let timeEventsURL = getCollectionFileURL(for: "timeEvents", collectionName: name)
             
             var tags: [Tag] = []
             var tagGroups: [TagGroup] = []
@@ -114,8 +149,10 @@ class TagLibraryManager: ObservableObject {
                 }
             }
             
+            // Для отображения используем оригинальное имя без языкового суффикса
+            let displayName = name
             let collection = StandardCollection(
-                name: name,
+                name: displayName,
                 tags: tags,
                 tagGroups: tagGroups,
                 labelGroups: labelGroups,

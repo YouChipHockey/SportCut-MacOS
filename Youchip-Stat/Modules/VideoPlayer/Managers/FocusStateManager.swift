@@ -17,7 +17,10 @@ class FocusStateManager: ObservableObject {
     @Published var isAnyTextFieldFocused = false
     
     func setFocused(_ focused: Bool) {
-        isAnyTextFieldFocused = false
+        if isAnyTextFieldFocused != focused {
+            isAnyTextFieldFocused = focused
+            print("FocusStateManager: Text field focused = \(focused)")
+        }
     }
     
 }

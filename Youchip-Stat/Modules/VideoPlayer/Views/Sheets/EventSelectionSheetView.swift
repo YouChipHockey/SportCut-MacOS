@@ -32,7 +32,6 @@ struct EventSelectionSheetView: View {
                     }
                 }
             }
-            .frame(width: 300)
             
             Button(^String.Titles.collectionsButtonCancel) {
                 presentationMode.wrappedValue.dismiss()

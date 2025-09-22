@@ -20,30 +20,30 @@ struct AiReportSheet: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("Генерация ИИ отчета")
+            Text(^String.Titles.generateAIReport)
                 .font(.headline)
             
             Form {
-                TextField("Название команды", text: $teamName)
+                TextField(^String.Titles.teamName, text: $teamName)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                 
-                TextField("Название команды соперника", text: $opponentName)
+                TextField(^String.Titles.opponentTeamName, text: $opponentName)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                 
-                TextField("Место проведения", text: $venue)
+                TextField(^String.Titles.venue, text: $venue)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                 
-                TextField("Дата матча", text: $matchDate)
+                TextField(^String.Titles.matchDate, text: $matchDate)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
             }
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.cancel) {
                     NotificationCenter.default.post(name: NSNotification.Name("SheetDismissed"), object: nil)
                     presentationMode.wrappedValue.dismiss()
                 }
                 
-                Button("Сгенерировать") {
+                Button(^String.Titles.generate) {
                     NotificationCenter.default.post(name: NSNotification.Name("SheetDismissed"), object: nil)
                     onSubmit(teamName, opponentName, venue, matchDate)
                     presentationMode.wrappedValue.dismiss()

@@ -185,7 +185,7 @@ class WindowsManager: NSObject {
         
         if let screen = NSScreen.main {
             let screenFrame = screen.frame
-            let bottomHeight = screenFrame.height / 3
+            let bottomHeight = screenFrame.height * 0.4
             let topHeight = screenFrame.height - bottomHeight - 40
             
             let timelineRect = NSRect(
@@ -238,4 +238,56 @@ class WindowsManager: NSObject {
         fieldMapWindow = nil
     }
 
+}
+
+class ActiveWindowManager {
+    static let shared = ActiveWindowManager()
+    
+    private var allowedWindowControllers: [NSWindowController] = []
+    private var currentActiveWindow: NSWindow?
+    
+    private init() {
+        setupObservers()
+    }
+    
+    func registerAllowedWindow(_ windowController: NSWindowController) {
+        allowedWindowControllers.append(windowController)
+    }
+    
+    func unregisterAllowedWindow(_ windowController: NSWindowController) {
+        allowedWindowControllers.removeAll { $0 === windowController }
+    }
+    
+    private func setupObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidBecomeKey(_:)),
+            name: NSWindow.didBecomeKeyNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidResignKey(_:)),
+            name: NSWindow.didResignKeyNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func windowDidBecomeKey(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        currentActiveWindow = window
+    }
+    
+    @objc private func windowDidResignKey(_ notification: Notification) {
+        currentActiveWindow = nil
+    }
+    
+    func isAllowedWindowActive() -> Bool {
+        guard let activeWindow = currentActiveWindow else { return false }
+        
+        return allowedWindowControllers.contains { windowController in
+            windowController.window == activeWindow
+        }
+    }
 }

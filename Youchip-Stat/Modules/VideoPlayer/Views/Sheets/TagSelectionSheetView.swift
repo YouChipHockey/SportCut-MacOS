@@ -20,6 +20,7 @@ struct TagSelectionSheetView: View {
     
     let uniqueTags: [Tag]
     let onSelect: (Tag) -> Void
+    let onSelectWithLabels: (Tag) -> Void // Новый обработчик для выбора с лейблами
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @Environment(\.presentationMode) var presentationMode
     
@@ -32,21 +33,55 @@ struct TagSelectionSheetView: View {
                 ForEach(tagGroupsWithTags(), id: \.name) { groupInfo in
                     Section(header: Text(groupInfo.name).font(.subheadline).bold()) {
                         ForEach(groupInfo.tags) { tag in
-                            Button(tag.name) {
+                            HStack {
+                                Text(tag.name)
+                                Spacer()
+                                
+                                // Кнопка для перехода к выбору лейблов
+                                if hasLabelsForTag(tag) {
+                                    Button(action: {
+                                        onSelectWithLabels(tag)
+                                    }) {
+                                        Image(systemName: "ellipsis.circle")
+                                            .foregroundColor(.blue)
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
+                                    .help(^String.Titles.selectLabelsForThisTag)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
                                 onSelect(tag)
                             }
                         }
                     }
                 }
             }
-            .frame(width: 300)
             
-            Button(^String.Titles.collectionsButtonCancel) {
-                presentationMode.wrappedValue.dismiss()
+            HStack {
+                Button(^String.Titles.collectionsButtonCancel) {
+                    presentationMode.wrappedValue.dismiss()
+                }
+                
+                Spacer()
+                
+                Text(^String.Titles.clickTagToExport)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             .padding(.top, 10)
         }
         .padding()
+    }
+    
+    private func hasLabelsForTag(_ tag: Tag) -> Bool {
+        // Проверяем, есть ли у этого тега какие-либо лейблы в таймлайнах
+        let timelineData = TimelineDataManager.shared
+        return timelineData.lines.contains { line in
+            line.stamps.contains { stamp in
+                stamp.idTag == tag.id && !stamp.labels.isEmpty
+            }
+        }
     }
     
     private func tagGroupsWithTags() -> [TagGroupWithTags] {
@@ -77,5 +112,4 @@ struct TagSelectionSheetView: View {
             .map { TagGroupWithTags(name: $0.name, tags: $0.tags) }
             .sorted { $0.name < $1.name }
     }
-    
 }

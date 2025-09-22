@@ -21,11 +21,13 @@ class TagLibraryWindowController: NSWindowController, NSWindowDelegate {
         w.styleMask.insert(.closable)
         w.delegate = self
         w.makeKeyAndOrderFront(nil)
+        ActiveWindowManager.shared.registerAllowedWindow(self)
     }
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     func windowWillClose(_ notification: Notification) {
+        ActiveWindowManager.shared.unregisterAllowedWindow(self)
         WindowsManager.shared.closeAll()
     }
 }

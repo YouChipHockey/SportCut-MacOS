@@ -15,6 +15,7 @@ extension String {
     
     enum Titles: String {
         case cancelButtonTitle
+        case fullControlButtonExportLabels
         case saveButtonTitle
         case closeButtonTitle
         case previousButtonTitle
@@ -219,7 +220,6 @@ extension String {
         case fieldMapVisualizationSettings
         case editScreenshot
         case createScreenshotAndOpenEditor
-        case video
         case failedToLoadFieldMap
         case timelines
         case loadingScreenshots
@@ -361,6 +361,106 @@ extension String {
         case standardCollections
         case collectionsTagIsInterval
         case collectionsTagIsIntervalHelp
+        
+        case video
+        case exportReports
+        case tools
+        case screenshots
+        case map
+        case selectLabelForExport
+        case skip
+        case selectTagsForExport
+        case noAvailableTags
+        case done
+        case selectLabelsForExport
+        case noAvailableLabels
+        case report
+        case searchTagsAndEvents
+        case showFavorites
+        case noTagsToDisplay
+        case tryChangingSearchQuery
+        case all
+        case tags
+        case groups
+        case search
+        case selectElementFromLeftList
+        case replace
+        case failedToLoadFieldMapImage
+        case fieldDimensions
+        case useOnMap
+        case basicInformation
+        case name
+        case description
+        case color
+        case timeSettings
+        case additionalSettings
+        case hotkeys
+        case noRelatedTags
+        case eventName
+        case timeEventsDescription
+        case information
+        case labelsDescription
+        case timeEventsDescription2
+        case recent
+        case favorites
+        case searchVideos
+        case noVideos
+        case addFirstVideo
+        case nothingFound
+        case fillMatchInfo
+        case enterTeam1Name
+        case enterTeam2Name
+        case enterScore
+        case enterNewVideoName
+        case enterNewName
+        case removeFromFavorites
+        case addToFavorites
+        case screenshotsCount
+        case deleteSelected
+        case cancelSelection
+        case deleteScreenshots
+        case confirmDeleteScreenshots
+        case addObject
+        case clearAll
+        case export
+        case close
+        case objects
+        case templateCustomization
+        case edgeColor
+        case vertexColor
+        case fillColor
+        case lineType
+        case showMisalignedVertices
+        case warningColor
+        case discrepancyThreshold
+        case hide
+        case show
+        case selectFormation
+        case noAvailableFormations
+        case players
+        case glowColor
+        case radius
+        case lineColor
+        case exportImage
+        case selectObjectType
+        case configuration
+        case save
+        case generateAIReport
+        case teamName
+        case opponentTeamName
+        case venue
+        case matchDate
+        case generate
+        case hEX
+        case clickTagToExport
+        case selectLabelsForThisTag
+        case discardChanges
+        case changes
+        
+        case workingCopy
+        case workingCopyDescription
+        case applyChanges
+        case unsaved
     }
     
 }

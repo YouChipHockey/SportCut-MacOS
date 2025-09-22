@@ -35,6 +35,7 @@ enum AppImage: String {
     case sfXmark = "xmark"
     
     case trialLogo
+    case placeImage
     
     var image: Image {
         return Image(rawValue)

@@ -47,6 +47,15 @@ struct NamesData: Codable {
     var names: [String]
 }
 
+struct LanguageCollection: Codable {
+    let language: String
+    let names: [String]
+}
+
+struct LanguageCollectionsData: Codable {
+    let collections: [LanguageCollection]
+}
+
 struct TagsData: Codable {
     let tags: [Tag]
 }
@@ -91,6 +100,9 @@ enum CutsExportType {
     case allTimelines
     case tag(selectedTag: Tag)
     case timeEvent(selectedEvent: TimeEvent)
+    case label(selectedLabel: Label) // Новый тип для экспорта по лейблу
+    case tagWithLabels(selectedTag: Tag, selectedLabels: [Label]) // Тег с выбранными лейблами
+    case labelWithTags(selectedLabel: Label, selectedTags: [Tag]) // Лейбл с выбранными тегами
 }
 
 struct ExportSegment {
@@ -100,11 +112,18 @@ struct ExportSegment {
     let groupName: String?
 }
 
-struct TimelineLine: Identifiable, Codable {
+struct TimelineLine: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
     var stamps: [TimelineStamp] = []
     var tagIdForMode: String = ""
+    
+    static func == (lhs: TimelineLine, rhs: TimelineLine) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.name == rhs.name &&
+               lhs.stamps == rhs.stamps &&
+               lhs.tagIdForMode == rhs.tagIdForMode
+    }
 }
 
 struct FullLabelWithGroup: Codable {

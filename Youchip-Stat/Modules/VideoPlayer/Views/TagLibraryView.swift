@@ -38,7 +38,20 @@ struct TagLibraryView: View {
     @State private var currentSelectedLabels: [String] = []
     @State private var fieldMapBookmark: Data? = nil
     
+    // UI state
+    @State private var expandedGroups: Set<String> = []
+    
     @State var activeIntervalTags: [ActiveIntervalTag] = []
+    
+    // Performance optimization: Cache tag counts to avoid expensive calculations
+    @State private var tagCounts: [String: Int] = [:]
+    
+    // Debounce timer to prevent excessive updates
+    @State private var updateTimer: Timer?
+    
+    // Force UI refresh when collection changes
+    @State private var refreshID = UUID()
+    @State private var windowWidth: CGFloat = 0
     
     struct ActiveIntervalTag: Identifiable {
         let id: String
@@ -52,30 +65,67 @@ struct TagLibraryView: View {
     
     func backupDefaultData() {}
     
+    func forceWindowRefresh() {
+        // Get the current window
+        if let window = NSApplication.shared.windows.first(where: { $0.isKeyWindow && $0.title == ^String.Titles.tagLibrary }) {
+            let currentFrame = window.frame
+            let newWidth = currentFrame.width + 1
+            
+            // Temporarily increase window width by 1 pixel
+            window.setFrame(NSRect(x: currentFrame.origin.x, y: currentFrame.origin.y, width: newWidth, height: currentFrame.height), display: true)
+            
+            // After 0.3 seconds, restore original width
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                window.setFrame(currentFrame, display: true)
+            }
+        }
+    }
+    
     func restoreDefaultData() {
-        tagLibrary.restoreDefaultData()
+        // Use the currently selected standard collection or first one if none selected
+        if let selectedName = tagLibrary.selectedStandardCollectionName {
+            tagLibrary.applyStandardCollection(named: selectedName)
+        } else {
+            tagLibrary.restoreDefaultData()
+        }
         hotkeyManager.registerHotkeys(from: tagLibrary.tags, for: .standard)
+        expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
+        forceWindowRefresh()
     }
     
     var body: some View {
-        VStack(alignment: .leading) {
-            if #available(macOS 14.0, *) {
-                modernHeaderView
-            } else {
-                legacyHeaderView
-            }
+        VStack(spacing: 0) {
+            // Modern header with search
+            modernHeaderView
+            
+            // Content
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    timeEventsSection
-                    tagGroupsSection
+                LazyVStack(spacing: 8) {
+                    if !tagLibrary.timeEvents.isEmpty {
+                        timeEventsSection
+                    }
+                    
+                    if !tagLibrary.tagGroups.isEmpty {
+                        tagGroupsSection
+                    }
+                    
+                    if tagLibrary.timeEvents.isEmpty && tagLibrary.tagGroups.isEmpty {
+                        emptyStateView
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
+            .background(Color(.controlBackgroundColor))
+            
             if !showUserCollectionsMenu, showCollectionsList {
                 legacyCollectionsListView
                     .background(Color(.windowBackgroundColor))
                     .frame(height: 300)
             }
         }
+        .background(Color(.controlBackgroundColor))
+        .id(refreshID)
         .sheet(isPresented: $showLabelSheet) {
             stampLabelSheet
         }
@@ -84,15 +134,57 @@ struct TagLibraryView: View {
         .alert(isPresented: $showDeleteAlert) {
             deleteCollectionAlert
         }
+        .onChange(of: tagLibrary.timeEvents.count) { _ in
+            refreshID = UUID()
+            forceWindowRefresh()
+        }
+        .onChange(of: tagLibrary.tagGroups.count) { _ in
+            refreshID = UUID()
+            forceWindowRefresh()
+        }
+        .onChange(of: tagLibrary.selectedStandardCollectionName) { _ in
+            refreshID = UUID()
+            forceWindowRefresh()
+        }
+        .onChange(of: isUserCollectionActive) { _ in
+            refreshID = UUID()
+            forceWindowRefresh()
+        }
+        .onReceive(timelineData.$lines) { _ in
+            // Update tag counts when stamps are added/removed
+            updateTagCounts()
+        }
     }
     
     private var modernHeaderView: some View {
-        HStack {
-            collectionTitleView
-            Spacer()
-            collectionsMenuButton
+        VStack(spacing: 0) {
+            HStack {
+                collectionTitleView
+                Spacer()
+                collectionsMenuButton
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(.windowBackgroundColor))
+            
+            Divider()
+                .background(Color(.separatorColor))
         }
-        .padding(.horizontal)
+    }
+    
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "tag")
+                .font(.system(size: 48, weight: .light))
+                .foregroundColor(.secondary)
+            
+            Text(^String.Titles.noTagsToDisplay)
+                .font(.headline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
     
     private var collectionTitleView: some View {
@@ -101,6 +193,8 @@ struct TagLibraryView: View {
                  "\(^String.Titles.customCollection) \(selectedUserCollection?.name ?? "")" :
                     ^String.Titles.tagGroups)
             .font(.headline)
+            .minimumScaleFactor(0.5)
+            .lineLimit(1)
             
             if isUserCollectionActive && selectedUserCollection != nil {
                 collectionActionButtons
@@ -158,6 +252,12 @@ struct TagLibraryView: View {
                     isUserCollectionActive = false
                     selectedUserCollection = nil
                     tagLibrary.applyStandardCollection(named: collection.name)
+                    // Force immediate UI refresh
+                    DispatchQueue.main.async {
+                        self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+                        self.refreshID = UUID()
+                        self.forceWindowRefresh()
+                    }
                 }) {
                     HStack {
                         Text(collection.name)
@@ -187,8 +287,19 @@ struct TagLibraryView: View {
     private var standardCollectionButton: some View {
         Button(action: {
             isUserCollectionActive = false
-            restoreDefaultData()
             selectedUserCollection = nil
+            // Use the currently selected standard collection or first one if none selected
+            if let selectedName = tagLibrary.selectedStandardCollectionName {
+                tagLibrary.applyStandardCollection(named: selectedName)
+            } else if let firstCollection = tagLibrary.standardCollections.first {
+                tagLibrary.applyStandardCollection(named: firstCollection.name)
+            }
+            // Force immediate UI refresh
+            DispatchQueue.main.async {
+                self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+                self.refreshID = UUID()
+                self.forceWindowRefresh()
+            }
         }) {
             HStack {
                 Text(^String.Titles.standardCollection)
@@ -309,8 +420,19 @@ struct TagLibraryView: View {
             
             Button(action: {
                 isUserCollectionActive = false
-                restoreDefaultData()
                 selectedUserCollection = nil
+                // Use the currently selected standard collection or first one if none selected
+                if let selectedName = tagLibrary.selectedStandardCollectionName {
+                    tagLibrary.applyStandardCollection(named: selectedName)
+                } else if let firstCollection = tagLibrary.standardCollections.first {
+                    tagLibrary.applyStandardCollection(named: firstCollection.name)
+                }
+                // Force immediate UI refresh
+                DispatchQueue.main.async {
+                    self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+                    self.refreshID = UUID()
+                    self.forceWindowRefresh()
+                }
                 showCollectionsList = false
             }) {
                 HStack {
@@ -392,44 +514,43 @@ struct TagLibraryView: View {
     
     @ViewBuilder
     private var timeEventsSection: some View {
-        if !tagLibrary.timeEvents.isEmpty {
-            DisclosureGroup(isExpanded: .constant(true)) {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
-                    ForEach(tagLibrary.timeEvents) { event in
-                        timeEventButton(for: event)
-                    }
-                }
-                .padding(.horizontal)
-            } label: {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "clock")
+                    .foregroundColor(.accentColor)
+                    .font(.system(size: 16, weight: .medium))
+                
                 Text(^String.Titles.commonEvents)
-                    .font(.headline)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                Text("\(tagLibrary.timeEvents.count)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color(.controlBackgroundColor))
+                    .cornerRadius(10)
             }
-            .padding(.horizontal)
+            
+            FlexibleTimeEventGrid(events: tagLibrary.timeEvents, tagLibrary: tagLibrary, onEventTap: { event in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    tagLibrary.toggleTimeEvent(id: event.id)
+                }
+            })
         }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.windowBackgroundColor))
+                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+        )
     }
     
-    private func timeEventButton(for event: TimeEvent) -> some View {
-        Button {
-            tagLibrary.toggleTimeEvent(id: event.id)
-        } label: {
-            HStack {
-                Image(systemName: tagLibrary.selectedTimeEvents.contains(event.id) ?
-                      "checkmark.square.fill" : "square")
-                .foregroundColor(tagLibrary.selectedTimeEvents.contains(event.id) ?
-                    .blue : .gray)
-                
-                Text(event.name)
-                    .lineLimit(nil)
-                    .multilineTextAlignment(.leading)
-            }
-            .frame(width: 135, alignment: .leading)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(4)
-        }
-        .buttonStyle(BorderlessButtonStyle())
-    }
     
     private var tagGroupsSection: some View {
         ForEach(tagLibrary.tagGroups) { group in
@@ -438,112 +559,69 @@ struct TagLibraryView: View {
     }
     
     private func tagGroupView(for group: TagGroup) -> some View {
-        DisclosureGroup(isExpanded: .constant(true)) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
-                ForEach(group.tags, id: \.self) { tagID in
-                    if let tag = tagLibrary.tags.first(where: { $0.id == tagID }) {
-                        tagButton(for: tag)
+        VStack(alignment: .leading, spacing: 4) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    if expandedGroups.contains(group.id) {
+                        expandedGroups.remove(group.id)
+                    } else {
+                        expandedGroups.insert(group.id)
                     }
                 }
+            }) {
+                HStack {
+                    Image(systemName: "tag")
+                        .foregroundColor(.accentColor)
+                        .font(.system(size: 16, weight: .medium))
+                    
+                    Text(group.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    
+                    Spacer()
+                    
+                    Text("\(group.tags.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color(.controlBackgroundColor))
+                        .cornerRadius(10)
+                    
+                    Image(systemName: expandedGroups.contains(group.id) ? "chevron.down" : "chevron.right")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 12, weight: .medium))
+                        .rotationEffect(.degrees(expandedGroups.contains(group.id) ? 0 : 0))
+                }
             }
-            .padding(.horizontal)
-        } label: {
-            Text(group.name)
-                .font(.headline)
+            .buttonStyle(.plain)
+            
+            if expandedGroups.contains(group.id) {
+                FlexibleTagGrid(tags: group.tags, tagLibrary: tagLibrary, activeIntervalTags: activeIntervalTags, hoveredTagID: hoveredTagID, tagCounts: $tagCounts, onTagTap: handleTagButtonTap, onTagHover: { hovering, tagID in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if hovering {
+                            hoveredTagID = tagID
+                        } else if hoveredTagID == tagID {
+                            hoveredTagID = nil
+                        }
+                    }
+                })
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                    removal: .opacity.combined(with: .scale(scale: 0.95))
+                ))
+            }
         }
-        .padding(.horizontal)
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.windowBackgroundColor))
+                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+        )
     }
     
-    private func tagButton(for tag: Tag) -> some View {
-        Button {
-            handleTagButtonTap(tag: tag)
-        } label: {
-            VStack(alignment: .center, spacing: 2) {
-                HStack(alignment: .center, spacing: 4) {
-                    if #available(macOS 13.0, *) {
-                        Text(tag.name)
-                            .lineLimit(nil)
-                            .bold(activeIntervalTags.contains(where: { $0.tag.id == tag.id }))
-                            .multilineTextAlignment(.leading)
-                    } else {
-                        Text(tag.name)
-                            .lineLimit(nil)
-                            .multilineTextAlignment(.leading)
-                    }
-                    if let hotkey = tag.hotkey, !hotkey.isEmpty {
-                        HStack(spacing: 2) {
-                            Image(systemName: "button.roundedtop.horizontal.fill")
-                                .font(.system(size: 9))
-                            Text(hotkey)
-                                .font(.system(size: 9, weight: .light))
-                        }
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.black.opacity(0.15))
-                        .cornerRadius(3)
-                    }
-                }
-                .frame(width: 135, alignment: .leading)
-            }
-            .padding(5)
-            .foregroundColor(activeIntervalTags.contains(where: { $0.tag.id == tag.id }) ? Color.red : Color(hex: tag.color).isDark ? .white : .black)
-            .background(
-                Group {
-                    if activeIntervalTags.contains(where: { $0.tag.id == tag.id }) {
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.clear, Color.white.opacity(0.3), Color.clear]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .mask(
-                                Rectangle()
-                                    .stroke(lineWidth: 1)
-                                    .background(
-                                        HStack(spacing: 2) {
-                                            ForEach(0..<10) { _ in
-                                                Rectangle()
-                                                    .frame(width: 2)
-                                                Rectangle()
-                                                    .frame(width: 2)
-                                                    .opacity(0.5)
-                                            }
-                                        }
-                                    )
-                            )
-                    } else {
-                        Color.clear
-                    }
-                }
-            )
-        }
-        .background(
-            Group {
-                if activeIntervalTags.contains(where: { $0.tag.id == tag.id }) {
-                    Color.blue.opacity(0.25)
-                } else {
-                    Color(hex: tag.color)
-                }
-            }
-        )
-        .cornerRadius(4)
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(
-                    (hoveredTagID == tag.id ? Color.blue : Color.clear),
-                    lineWidth: 2
-                )
-        )
-        .onHover { hovering in
-            if hovering {
-                hoveredTagID = tag.id
-            } else if hoveredTagID == tag.id {
-                hoveredTagID = nil
-            }
-        }
-    }
     
     private func addTagToTimeline(tag: Tag, selectedLabels: [String]) {
         if tag.mapEnabled == true {
@@ -564,6 +642,12 @@ struct TagLibraryView: View {
     private func showFieldMapSelection(tag: Tag, imageBookmark: Data, selectedLabels: [String]) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
             proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: coordinates)
+            // Resume video after map selection is complete
+            if videoManager.playbackSpeed > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    videoManager.player?.play()
+                }
+            }
         }
     }
     
@@ -605,9 +689,12 @@ struct TagLibraryView: View {
             position: fieldPosition
         )
         
-        if videoManager.playbackSpeed > 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                videoManager.player?.play()
+        // Resume video only if no map selection is needed
+        if tag.mapEnabled != true {
+            if videoManager.playbackSpeed > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    videoManager.player?.play()
+                }
             }
         }
     }
@@ -809,6 +896,11 @@ struct TagLibraryView: View {
         backupDefaultData()
         restoreDefaultData()
         markupMode = MarkupMode.current
+        
+        // Initialize expanded groups
+        updateTagCounts()
+        expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
+        
         NotificationCenter.default.addObserver(forName: .markupModeChanged, object: nil, queue: .main) { notification in
             if let newMode = notification.object as? MarkupMode {
                 self.markupMode = newMode
@@ -864,9 +956,13 @@ struct TagLibraryView: View {
         }
     }
     
+    
     private func onDisappearCleanup() {
+        updateTimer?.invalidate()
+        updateTimer = nil
         NotificationCenter.default.removeObserver(self, name: .collectionDataChanged, object: nil)
         NotificationCenter.default.removeObserver(self, name: .showLabelSheet, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .markupModeChanged, object: nil)
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {
@@ -888,7 +984,16 @@ struct TagLibraryView: View {
             tagLibrary.labels = []
             tagLibrary.timeEvents = []
             tagLibrary.selectedTimeEvents.removeAll()
+            tagLibrary.currentCollectionType = .standard
             HotKeyManager.shared.clearHotkeys()
+        }
+        
+        // Force immediate update of filtered data and expanded groups
+        DispatchQueue.main.async {
+            self.updateTagCounts()
+            self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+            self.refreshID = UUID()
+            self.forceWindowRefresh()
         }
     }
     
@@ -966,6 +1071,12 @@ struct TagLibraryView: View {
     private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartString: String, timeFinishString: String, selectedLabels: [String]) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
             proceedWithTagAdditionInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, coordinates: coordinates, selectedLabels: selectedLabels)
+            // Resume video after map selection is complete
+            if videoManager.playbackSpeed > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    videoManager.player?.play()
+                }
+            }
         }
     }
     
@@ -993,10 +1104,504 @@ struct TagLibraryView: View {
             labels: selectedLabels,
             position: fieldPosition
         )
-        if videoManager.playbackSpeed > 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                videoManager.player?.play()
+        
+        // Resume video only if no map selection is needed
+        if tag.mapEnabled != true {
+            if videoManager.playbackSpeed > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    videoManager.player?.play()
+                }
             }
         }
     }
+    
+    private func updateTagCounts() {
+        var counts: [String: Int] = [:]
+        
+        for line in timelineData.lines {
+            for stamp in line.stamps {
+                counts[stamp.idTag, default: 0] += 1
+            }
+        }
+        
+        tagCounts = counts
+    }
+    
+    private func countTagsInTimeline(tagId: String) -> Int {
+        return tagCounts[tagId] ?? 0
+    }
 }
+
+// MARK: - TagButtonView (Performance Optimized)
+struct TagButtonView: View, Equatable {
+    let tag: Tag
+    let isActive: Bool
+    let isHovered: Bool
+    let tagCount: Int
+    let onTap: () -> Void
+    let onHover: (Bool) -> Void
+    
+    static func == (lhs: TagButtonView, rhs: TagButtonView) -> Bool {
+        return lhs.tag.id == rhs.tag.id &&
+               lhs.isActive == rhs.isActive &&
+               lhs.isHovered == rhs.isHovered &&
+               lhs.tagCount == rhs.tagCount
+    }
+    
+    var body: some View {
+        let hasHotkey = tag.hotkey != nil && !tag.hotkey!.isEmpty
+        let isInterval = tag.isInterval ?? false
+        
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 1) {
+                // Main content area with tag name and count
+                HStack(alignment: .center, spacing: 8) {
+                    Text(tag.name)
+                        .font(.system(size: 14, weight: isActive ? .bold : .medium))
+                        .foregroundColor(isActive ? .white : Color(hex: tag.color).isDark ? .white : .black)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .minimumScaleFactor(0.5)
+                    
+                    if tagCount > 0 {
+                        Text("\(tagCount)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(isActive ? .white : Color(hex: tag.color).isDark ? .white : .black)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(isActive ? Color.white.opacity(0.3) : Color(hex: tag.color).isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.1))
+                            )
+                    }
+                }
+            .frame(height: 22)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+                
+                // Bottom row with indicators aligned to the right
+                HStack {
+                    Spacer()
+                    HStack(spacing: 4) {
+                        if isInterval {
+                            Image(systemName: "timer")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(isActive ? .white : Color(hex: tag.color).isDark ? .white : .black)
+                        }
+                        
+                        if tag.mapEnabled == true {
+                            Image(systemName: "map")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(isActive ? .white : Color(hex: tag.color).isDark ? .white : .black)
+                        }
+                        
+                        if hasHotkey {
+                            HStack(spacing: 2) {
+                                Image(systemName: "keyboard")
+                                    .font(.system(size: 10, weight: .medium))
+                                Text(tag.hotkey!)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(isActive ? Color.white.opacity(0.2) : Color(hex: tag.color).isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.1))
+                            )
+                        }
+                        
+                        if isActive {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding(.trailing, 4)
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+                
+                // Interval indicator bar (only when active)
+                if isActive && isInterval {
+                    HStack(spacing: 2) {
+                        ForEach(0..<6) { _ in
+                            Rectangle()
+                                .frame(width: 2, height: 4)
+                                .opacity(0.6)
+                        }
+                    }
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 4)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(
+                        isActive ? 
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.accentColor, Color.accentColor.opacity(0.8)]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ) :
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color(hex: tag.color), Color(hex: tag.color).opacity(0.9)]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .shadow(
+                        color: isActive ? Color.accentColor.opacity(0.3) : Color(hex: tag.color).opacity(0.2),
+                        radius: isHovered ? 8 : 4,
+                        x: 0,
+                        y: isHovered ? 4 : 2
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                        isHovered ? Color.accentColor.opacity(0.5) : Color.clear,
+                        lineWidth: 2
+                    )
+            )
+            .scaleEffect(isHovered ? 1.05 : (isActive ? 1.02 : 1.0))
+        }
+        .buttonStyle(.plain)
+        .onHover(perform: onHover)
+    }
+}
+
+// MARK: - FlexibleTagGrid
+struct FlexibleTagGrid: View {
+    let tags: [String]
+    let tagLibrary: TagLibraryManager
+    let activeIntervalTags: [TagLibraryView.ActiveIntervalTag]
+    let hoveredTagID: String?
+    @Binding var tagCounts: [String: Int]
+    let onTagTap: (Tag) -> Void
+    let onTagHover: (Bool, String) -> Void
+    
+    @State private var availableWidth: CGFloat = 0
+    @State private var tagRows: [[String]] = []
+    
+    var body: some View {
+        GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(tagRows.enumerated()), id: \.offset) { rowIndex, rowTags in
+                    HStack(alignment: .top, spacing: 6) {
+                        ForEach(rowTags, id: \.self) { tagID in
+                            if let tag = tagLibrary.tags.first(where: { $0.id == tagID }) {
+                                TagButtonView(
+                                    tag: tag,
+                                    isActive: activeIntervalTags.contains(where: { $0.tag.id == tag.id }),
+                                    isHovered: hoveredTagID == tag.id,
+                                    tagCount: tagCounts[tag.id] ?? 0,
+                                    onTap: { onTagTap(tag) },
+                                    onHover: { hovering in
+                                        onTagHover(hovering, tag.id)
+                                    }
+                                )
+                                .frame(height: calculateMaxHeightInGroup())
+                                .fixedSize(horizontal: true, vertical: false)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .onAppear {
+                availableWidth = geometry.size.width
+                calculateTagRows()
+            }
+            .onChange(of: geometry.size.width) { newWidth in
+                availableWidth = newWidth
+                calculateTagRows()
+            }
+            .onChange(of: tags.count) { _ in
+                calculateTagRows()
+            }
+            .onChange(of: tagCounts) { _ in
+                calculateTagRows()
+            }
+        }
+        .frame(height: calculateTotalHeight())
+    }
+    
+    private func calculateTagRows() {
+        guard availableWidth > 0 else { return }
+        
+        var rows: [[String]] = []
+        var currentRow: [String] = []
+        var currentRowWidth: CGFloat = 0
+        
+        let spacing: CGFloat = 6
+        let maxButtonWidth: CGFloat = 200
+        
+        for tagID in tags {
+            guard let tag = tagLibrary.tags.first(where: { $0.id == tagID }) else { continue }
+            
+            // Calculate button width based on all elements
+            let buttonWidth = min(calculateButtonWidth(for: tag), maxButtonWidth)
+            
+            // Check if this tag fits in current row
+            if currentRowWidth + buttonWidth + (currentRow.isEmpty ? 0 : spacing) <= availableWidth {
+                currentRow.append(tagID)
+                currentRowWidth += buttonWidth + (currentRow.count > 1 ? spacing : 0)
+            } else {
+                // Start new row
+                if !currentRow.isEmpty {
+                    rows.append(currentRow)
+                }
+                currentRow = [tagID]
+                currentRowWidth = buttonWidth
+            }
+        }
+        
+        // Add the last row if it's not empty
+        if !currentRow.isEmpty {
+            rows.append(currentRow)
+        }
+        
+        tagRows = rows
+    }
+    
+    private func calculateButtonWidth(for tag: Tag) -> CGFloat {
+        let textFont = NSFont.systemFont(ofSize: 14, weight: .medium)
+        let textAttributes = [NSAttributedString.Key.font: textFont]
+        let textWidth = tag.name.size(withAttributes: textAttributes).width
+        
+        var totalWidth = textWidth
+        
+        // Add padding for text area
+        totalWidth += 16 // horizontal padding
+        
+        // Add space for count badge if present
+        if let tagCount = tagCounts[tag.id], tagCount > 0 {
+            let countText = "\(tagCount)"
+            let countFont = NSFont.systemFont(ofSize: 12, weight: .semibold)
+            let countAttributes = [NSAttributedString.Key.font: countFont]
+            let countWidth = countText.size(withAttributes: countAttributes).width
+            totalWidth += countWidth + 12 // count width + padding
+        }
+        
+        // Add extra padding for visual balance
+        totalWidth += 8
+        
+        return totalWidth
+    }
+    
+    private func calculateTagButtonHeight(for tag: Tag) -> CGFloat {
+        var height: CGFloat = 22 // Base height for main content area
+        
+        // Add height for bottom indicators row
+        let hasIndicators = (tag.isInterval == true) || 
+                           (tag.mapEnabled == true) || 
+                           (tag.hotkey != nil && !tag.hotkey!.isEmpty) ||
+                           activeIntervalTags.contains(where: { $0.tag.id == tag.id })
+        
+        if hasIndicators {
+            height += 16 // Height for indicators row
+        }
+        
+        // Add height for interval indicator bar if active and interval
+        if activeIntervalTags.contains(where: { $0.tag.id == tag.id }) && (tag.isInterval == true) {
+            height += 8 // Height for interval indicator bar
+        }
+        
+        // Add padding
+        height += 8 // Top and bottom padding
+        
+        return height
+    }
+    
+    private func calculateTotalHeight() -> CGFloat {
+        let maxHeightInGroup = calculateMaxHeightInGroup()
+        let spacing: CGFloat = 8
+        let totalHeight = CGFloat(tagRows.count) * (maxHeightInGroup + spacing)
+        
+        return totalHeight
+    }
+    
+    private func calculateMaxHeightInRow(_ rowTags: [String]) -> CGFloat {
+        var maxHeight: CGFloat = 0
+        
+        for tagID in rowTags {
+            if let tag = tagLibrary.tags.first(where: { $0.id == tagID }) {
+                let buttonHeight = calculateTagButtonHeight(for: tag)
+                maxHeight = max(maxHeight, buttonHeight)
+            }
+        }
+        
+        return maxHeight
+    }
+    
+    private func calculateMaxHeightInGroup() -> CGFloat {
+        var maxHeight: CGFloat = 0
+        
+        for row in tagRows {
+            for tagID in row {
+                if let tag = tagLibrary.tags.first(where: { $0.id == tagID }) {
+                    let buttonHeight = calculateTagButtonHeight(for: tag)
+                    maxHeight = max(maxHeight, buttonHeight)
+                }
+            }
+        }
+        
+        return maxHeight
+    }
+    
+    private func calculateTextWidth(for text: String) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        let attributes = [NSAttributedString.Key.font: font]
+        let size = text.size(withAttributes: attributes)
+        return size.width
+    }
+}
+
+// MARK: - FlexibleTimeEventGrid
+struct FlexibleTimeEventGrid: View {
+    let events: [TimeEvent]
+    let tagLibrary: TagLibraryManager
+    let onEventTap: (TimeEvent) -> Void
+    
+    @State private var availableWidth: CGFloat = 0
+    @State private var eventRows: [[TimeEvent]] = []
+    
+    var body: some View {
+        GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(eventRows.enumerated()), id: \.offset) { rowIndex, rowEvents in
+                    HStack(spacing: 6) {
+                        ForEach(rowEvents) { event in
+                            timeEventButton(for: event)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .onAppear {
+                availableWidth = geometry.size.width
+                calculateEventRows()
+            }
+            .onChange(of: geometry.size.width) { newWidth in
+                availableWidth = newWidth
+                calculateEventRows()
+            }
+            .onChange(of: events.count) { _ in
+                calculateEventRows()
+            }
+        }
+        .frame(height: CGFloat(eventRows.count) * (25 + 8)) // 25 is button height, 8 is spacing
+    }
+    
+    private func timeEventButton(for event: TimeEvent) -> some View {
+        Button {
+            onEventTap(event)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: tagLibrary.selectedTimeEvents.contains(event.id) ?
+                      "checkmark.circle.fill" : "circle")
+                .foregroundColor(tagLibrary.selectedTimeEvents.contains(event.id) ?
+                    .accentColor : .secondary)
+                .font(.system(size: 20, weight: .medium))
+                
+                Text(event.name)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .minimumScaleFactor(0.5)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 7)
+            .frame(minHeight: 25, maxHeight: 25)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(tagLibrary.selectedTimeEvents.contains(event.id) ? 
+                          Color.accentColor.opacity(0.1) : Color(.controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(tagLibrary.selectedTimeEvents.contains(event.id) ? 
+                                   Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(tagLibrary.selectedTimeEvents.contains(event.id) ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: tagLibrary.selectedTimeEvents.contains(event.id))
+    }
+    
+    private func calculateEventRows() {
+        guard availableWidth > 0 else { return }
+        
+        var rows: [[TimeEvent]] = []
+        var currentRow: [TimeEvent] = []
+        var currentRowWidth: CGFloat = 0
+        
+        let spacing: CGFloat = 6
+        let maxButtonWidth: CGFloat = 200
+        
+        for event in events {
+            // Calculate button width based on all elements
+            let buttonWidth = min(calculateEventButtonWidth(for: event), maxButtonWidth)
+            
+            // Check if this event fits in current row
+            if currentRowWidth + buttonWidth + (currentRow.isEmpty ? 0 : spacing) <= availableWidth {
+                currentRow.append(event)
+                currentRowWidth += buttonWidth + (currentRow.count > 1 ? spacing : 0)
+            } else {
+                // Start new row
+                if !currentRow.isEmpty {
+                    rows.append(currentRow)
+                }
+                currentRow = [event]
+                currentRowWidth = buttonWidth
+            }
+        }
+        
+        // Add the last row if it's not empty
+        if !currentRow.isEmpty {
+            rows.append(currentRow)
+        }
+        
+        eventRows = rows
+    }
+    
+    private func calculateEventButtonWidth(for event: TimeEvent) -> CGFloat {
+        let textFont = NSFont.systemFont(ofSize: 14, weight: .medium)
+        let textAttributes = [NSAttributedString.Key.font: textFont]
+        let textWidth = event.name.size(withAttributes: textAttributes).width
+        
+        var totalWidth = textWidth
+        
+        // Add padding for text area
+        totalWidth += 32 // horizontal padding (16 on each side)
+        
+        // Add space for checkmark icon
+        let checkmarkSize: CGFloat = 20
+        let checkmarkSpacing: CGFloat = 10
+        totalWidth += checkmarkSize + checkmarkSpacing
+        
+        // Add extra padding for visual balance
+        totalWidth += 8
+        
+        return totalWidth
+    }
+    
+    private func calculateTextWidth(for text: String) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        let attributes = [NSAttributedString.Key.font: font]
+        let size = text.size(withAttributes: attributes)
+        return size.width
+    }
+}
+

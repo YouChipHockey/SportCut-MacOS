@@ -80,8 +80,8 @@ struct ColorPickerView: View {
             }
             
             HStack {
-                Text("HEX:")
-                TextField("HEX:", text: $hexString)
+                Text(^String.Titles.hEX)
+                TextField(^String.Titles.hEX, text: $hexString)
                     .frame(width: 80)
                     .disabled(true)
             }

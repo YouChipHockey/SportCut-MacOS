@@ -16,8 +16,8 @@ class HotKeyManager: ObservableObject {
     
     private var localMonitorForKeyEvents: Any?
     private var globalMonitorForKeyEvents: Any?
-    private var registeredHotkeys: [String: Tag] = [:]
-    private var registeredLabelHotkeys: [String: (labelId: String, tagId: String)] = [:]
+    var registeredHotkeys: [String: Tag] = [:]
+    var registeredLabelHotkeys: [String: (labelId: String, tagId: String)] = [:]
     
     @Published var isEnabled = true
     @Published var hotKeySelectedTag: Tag? = nil
@@ -115,6 +115,9 @@ class HotKeyManager: ObservableObject {
                   self.isEnabled,
                   !self.blockedSheetActive,
                   !FocusStateManager.shared.isAnyTextFieldFocused else {
+                if FocusStateManager.shared.isAnyTextFieldFocused {
+                    print("HotKey blocked: Text field is focused")
+                }
                 return event
             }
             return self.handleHotkey(event) ? nil : event
@@ -129,6 +132,11 @@ class HotKeyManager: ObservableObject {
     }
     
     private func handleHotkey(_ event: NSEvent) -> Bool {
+        guard ActiveWindowManager.shared.isAllowedWindowActive() else {
+            return false
+        }
+        
+        
         let hotkeyString = hotkeyStringFromEvent(event)
         
         if isLabelHotkeyMode {
@@ -174,7 +182,7 @@ class HotKeyManager: ObservableObject {
         registeredLabelHotkeys.removeAll()
     }
     
-    private func hotkeyStringFromEvent(_ event: NSEvent) -> String {
+    func hotkeyStringFromEvent(_ event: NSEvent) -> String {
         var components: [String] = []
         if event.modifierFlags.contains(.control) { components.append("ctrl") }
         if event.modifierFlags.contains(.option) { components.append("alt") }
@@ -253,4 +261,5 @@ class HotKeyManager: ObservableObject {
         hotKeySelectedLabelId = nil
         print("Switched back to tag hotkey mode")
     }
+    
 }

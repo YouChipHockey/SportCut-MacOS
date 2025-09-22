@@ -35,7 +35,7 @@ struct ExportModeSelectionSheet: View {
             }
         }
         .padding()
-        .frame(width: 300)
+        .frame(width: 300, height: 300)
     }
     
 }

@@ -58,6 +58,34 @@
 		DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */; };
 		DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */; };
 		DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */; };
+		DD408C6F2E6C736F00E615E5 /* DashedLinesShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C4E2E6C736F00E615E5 /* DashedLinesShape.swift */; };
+		DD408C702E6C736F00E615E5 /* PolygonShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C4F2E6C736F00E615E5 /* PolygonShape.swift */; };
+		DD408C712E6C736F00E615E5 /* DrawableObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C512E6C736F00E615E5 /* DrawableObject.swift */; };
+		DD408C722E6C736F00E615E5 /* ExportPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C522E6C736F00E615E5 /* ExportPayload.swift */; };
+		DD408C732E6C736F00E615E5 /* FootballFormation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C532E6C736F00E615E5 /* FootballFormation.swift */; };
+		DD408C742E6C736F00E615E5 /* ImageDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C542E6C736F00E615E5 /* ImageDocument.swift */; };
+		DD408C752E6C736F00E615E5 /* LineStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C552E6C736F00E615E5 /* LineStyle.swift */; };
+		DD408C762E6C736F00E615E5 /* ObjectCustomization.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C562E6C736F00E615E5 /* ObjectCustomization.swift */; };
+		DD408C772E6C736F00E615E5 /* ObjectType.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C572E6C736F00E615E5 /* ObjectType.swift */; };
+		DD408C782E6C736F00E615E5 /* TemplateObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C582E6C736F00E615E5 /* TemplateObject.swift */; };
+		DD408C792E6C736F00E615E5 /* PolygonEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C5A2E6C736F00E615E5 /* PolygonEditorViewModel.swift */; };
+		DD408C7A2E6C736F00E615E5 /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C5C2E6C736F00E615E5 /* ExportSheet.swift */; };
+		DD408C7B2E6C736F00E615E5 /* FormationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C5D2E6C736F00E615E5 /* FormationCard.swift */; };
+		DD408C7C2E6C736F00E615E5 /* FormationSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C5E2E6C736F00E615E5 /* FormationSelectionSheet.swift */; };
+		DD408C7D2E6C736F00E615E5 /* LineBetweenObjectsCustomization.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C5F2E6C736F00E615E5 /* LineBetweenObjectsCustomization.swift */; };
+		DD408C7E2E6C736F00E615E5 /* LineBetweenObjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C602E6C736F00E615E5 /* LineBetweenObjectsView.swift */; };
+		DD408C7F2E6C736F00E615E5 /* ObjectHighlightCustomization.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C612E6C736F00E615E5 /* ObjectHighlightCustomization.swift */; };
+		DD408C802E6C736F00E615E5 /* ObjectHighlightView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C622E6C736F00E615E5 /* ObjectHighlightView.swift */; };
+		DD408C812E6C736F00E615E5 /* ObjectListItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C632E6C736F00E615E5 /* ObjectListItem.swift */; };
+		DD408C822E6C736F00E615E5 /* ObjectTypeSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C642E6C736F00E615E5 /* ObjectTypeSelectionSheet.swift */; };
+		DD408C832E6C736F00E615E5 /* ObjectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C652E6C736F00E615E5 /* ObjectView.swift */; };
+		DD408C842E6C736F00E615E5 /* PolygonEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C662E6C736F00E615E5 /* PolygonEditorView.swift */; };
+		DD408C852E6C736F00E615E5 /* SimpleZoneCustomization.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C672E6C736F00E615E5 /* SimpleZoneCustomization.swift */; };
+		DD408C862E6C736F00E615E5 /* SimpleZoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C682E6C736F00E615E5 /* SimpleZoneView.swift */; };
+		DD408C872E6C736F00E615E5 /* TemplateCustomizationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C692E6C736F00E615E5 /* TemplateCustomizationSheet.swift */; };
+		DD408C882E6C736F00E615E5 /* TemplateListItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C6A2E6C736F00E615E5 /* TemplateListItem.swift */; };
+		DD408C892E6C736F00E615E5 /* TemplateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C6B2E6C736F00E615E5 /* TemplateView.swift */; };
+		DD408C8A2E6C736F00E615E5 /* ZoneBetweenObjectsCustomization.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C6C2E6C736F00E615E5 /* ZoneBetweenObjectsCustomization.swift */; };
 		DD494BF02DC0146B003F8BE6 /* VideoPlayerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD494BEF2DC0145F003F8BE6 /* VideoPlayerModels.swift */; };
 		DD5CF9B52E046265009CD51A /* MapTapHandlerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9B42E046265009CD51A /* MapTapHandlerView.swift */; };
 		DD5CF9B72E04627F009CD51A /* TapLocationPreferenceKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9B62E04627E009CD51A /* TapLocationPreferenceKey.swift */; };
@@ -198,6 +226,38 @@
 		DD32C29B2D74A1C80052B5C6 /* UInt64+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt64+Convenience.swift"; sourceTree = "<group>"; };
 		DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Alerts.swift"; sourceTree = "<group>"; };
 		DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+CloudFiles.swift"; sourceTree = "<group>"; };
+		DD408C4E2E6C736F00E615E5 /* DashedLinesShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashedLinesShape.swift; sourceTree = "<group>"; };
+		DD408C4F2E6C736F00E615E5 /* PolygonShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolygonShape.swift; sourceTree = "<group>"; };
+		DD408C512E6C736F00E615E5 /* DrawableObject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawableObject.swift; sourceTree = "<group>"; };
+		DD408C522E6C736F00E615E5 /* ExportPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportPayload.swift; sourceTree = "<group>"; };
+		DD408C532E6C736F00E615E5 /* FootballFormation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballFormation.swift; sourceTree = "<group>"; };
+		DD408C542E6C736F00E615E5 /* ImageDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageDocument.swift; sourceTree = "<group>"; };
+		DD408C552E6C736F00E615E5 /* LineStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineStyle.swift; sourceTree = "<group>"; };
+		DD408C562E6C736F00E615E5 /* ObjectCustomization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectCustomization.swift; sourceTree = "<group>"; };
+		DD408C572E6C736F00E615E5 /* ObjectType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectType.swift; sourceTree = "<group>"; };
+		DD408C582E6C736F00E615E5 /* TemplateObject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateObject.swift; sourceTree = "<group>"; };
+		DD408C5A2E6C736F00E615E5 /* PolygonEditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolygonEditorViewModel.swift; sourceTree = "<group>"; };
+		DD408C5C2E6C736F00E615E5 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
+		DD408C5D2E6C736F00E615E5 /* FormationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormationCard.swift; sourceTree = "<group>"; };
+		DD408C5E2E6C736F00E615E5 /* FormationSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormationSelectionSheet.swift; sourceTree = "<group>"; };
+		DD408C5F2E6C736F00E615E5 /* LineBetweenObjectsCustomization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineBetweenObjectsCustomization.swift; sourceTree = "<group>"; };
+		DD408C602E6C736F00E615E5 /* LineBetweenObjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineBetweenObjectsView.swift; sourceTree = "<group>"; };
+		DD408C612E6C736F00E615E5 /* ObjectHighlightCustomization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectHighlightCustomization.swift; sourceTree = "<group>"; };
+		DD408C622E6C736F00E615E5 /* ObjectHighlightView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectHighlightView.swift; sourceTree = "<group>"; };
+		DD408C632E6C736F00E615E5 /* ObjectListItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectListItem.swift; sourceTree = "<group>"; };
+		DD408C642E6C736F00E615E5 /* ObjectTypeSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTypeSelectionSheet.swift; sourceTree = "<group>"; };
+		DD408C652E6C736F00E615E5 /* ObjectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectView.swift; sourceTree = "<group>"; };
+		DD408C662E6C736F00E615E5 /* PolygonEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolygonEditorView.swift; sourceTree = "<group>"; };
+		DD408C672E6C736F00E615E5 /* SimpleZoneCustomization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleZoneCustomization.swift; sourceTree = "<group>"; };
+		DD408C682E6C736F00E615E5 /* SimpleZoneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleZoneView.swift; sourceTree = "<group>"; };
+		DD408C692E6C736F00E615E5 /* TemplateCustomizationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateCustomizationSheet.swift; sourceTree = "<group>"; };
+		DD408C6A2E6C736F00E615E5 /* TemplateListItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateListItem.swift; sourceTree = "<group>"; };
+		DD408C6B2E6C736F00E615E5 /* TemplateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateView.swift; sourceTree = "<group>"; };
+		DD408C6C2E6C736F00E615E5 /* ZoneBetweenObjectsCustomization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneBetweenObjectsCustomization.swift; sourceTree = "<group>"; };
+		DD408D1F2E6DF19900E615E5 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
+		DD408D202E6DF1AC00E615E5 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
+		DD408D212E6DF1C900E615E5 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		DD408D222E6DF1E000E615E5 /* uz */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = uz; path = uz.lproj/Localizable.strings; sourceTree = "<group>"; };
 		DD494BEF2DC0145F003F8BE6 /* VideoPlayerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerModels.swift; sourceTree = "<group>"; };
 		DD5CF9B42E046265009CD51A /* MapTapHandlerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTapHandlerView.swift; sourceTree = "<group>"; };
 		DD5CF9B62E04627E009CD51A /* TapLocationPreferenceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapLocationPreferenceKey.swift; sourceTree = "<group>"; };
@@ -456,6 +516,7 @@
 				DDC938EA2DD2452000B7AB12 /* License */,
 				DD2A707D2D74E41400287BA8 /* VideoPlayer */,
 				DD2A704C2D74C2CC00287BA8 /* Videos */,
+				DD408C6E2E6C736F00E615E5 /* Telestration */,
 			);
 			path = Modules;
 			sourceTree = "<group>";
@@ -520,6 +581,73 @@
 				DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */,
 			);
 			path = Extensions;
+			sourceTree = "<group>";
+		};
+		DD408C502E6C736F00E615E5 /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				DD408C4E2E6C736F00E615E5 /* DashedLinesShape.swift */,
+				DD408C4F2E6C736F00E615E5 /* PolygonShape.swift */,
+			);
+			path = Helpers;
+			sourceTree = "<group>";
+		};
+		DD408C592E6C736F00E615E5 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				DD408C512E6C736F00E615E5 /* DrawableObject.swift */,
+				DD408C522E6C736F00E615E5 /* ExportPayload.swift */,
+				DD408C532E6C736F00E615E5 /* FootballFormation.swift */,
+				DD408C542E6C736F00E615E5 /* ImageDocument.swift */,
+				DD408C552E6C736F00E615E5 /* LineStyle.swift */,
+				DD408C562E6C736F00E615E5 /* ObjectCustomization.swift */,
+				DD408C572E6C736F00E615E5 /* ObjectType.swift */,
+				DD408C582E6C736F00E615E5 /* TemplateObject.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		DD408C5B2E6C736F00E615E5 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				DD408C5A2E6C736F00E615E5 /* PolygonEditorViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		DD408C6D2E6C736F00E615E5 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				DD408C5C2E6C736F00E615E5 /* ExportSheet.swift */,
+				DD408C5D2E6C736F00E615E5 /* FormationCard.swift */,
+				DD408C5E2E6C736F00E615E5 /* FormationSelectionSheet.swift */,
+				DD408C5F2E6C736F00E615E5 /* LineBetweenObjectsCustomization.swift */,
+				DD408C602E6C736F00E615E5 /* LineBetweenObjectsView.swift */,
+				DD408C612E6C736F00E615E5 /* ObjectHighlightCustomization.swift */,
+				DD408C622E6C736F00E615E5 /* ObjectHighlightView.swift */,
+				DD408C632E6C736F00E615E5 /* ObjectListItem.swift */,
+				DD408C642E6C736F00E615E5 /* ObjectTypeSelectionSheet.swift */,
+				DD408C652E6C736F00E615E5 /* ObjectView.swift */,
+				DD408C662E6C736F00E615E5 /* PolygonEditorView.swift */,
+				DD408C672E6C736F00E615E5 /* SimpleZoneCustomization.swift */,
+				DD408C682E6C736F00E615E5 /* SimpleZoneView.swift */,
+				DD408C692E6C736F00E615E5 /* TemplateCustomizationSheet.swift */,
+				DD408C6A2E6C736F00E615E5 /* TemplateListItem.swift */,
+				DD408C6B2E6C736F00E615E5 /* TemplateView.swift */,
+				DD408C6C2E6C736F00E615E5 /* ZoneBetweenObjectsCustomization.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		DD408C6E2E6C736F00E615E5 /* Telestration */ = {
+			isa = PBXGroup;
+			children = (
+				DD408C502E6C736F00E615E5 /* Helpers */,
+				DD408C592E6C736F00E615E5 /* Models */,
+				DD408C5B2E6C736F00E615E5 /* ViewModels */,
+				DD408C6D2E6C736F00E615E5 /* Views */,
+			);
+			path = Telestration;
 			sourceTree = "<group>";
 		};
 		DD5CF9E22E0467BD009CD51A /* Sheets */ = {
@@ -724,6 +852,7 @@
 				DDB4018D2D749E0F004A12C2 /* Sources */,
 				DDB4018E2D749E0F004A12C2 /* Frameworks */,
 				DDB4018F2D749E0F004A12C2 /* Resources */,
+				DD8CD1B12DC28FA00087A7E4 /* Copy OpenCV Libraries */,
 				DD8CD1B12DC28FA00087A7E3 /* Firebase Crashlytics */,
 				58EF2125F838AA35E7959A89 /* [CP] Embed Pods Frameworks */,
 			);
@@ -762,6 +891,10 @@
 				en,
 				Base,
 				ru,
+				fr,
+				es,
+				"zh-Hans",
+				uz,
 			);
 			mainGroup = DDB401882D749E0F004A12C2;
 			minimizedProjectReferenceProxies = 1;
@@ -835,9 +968,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -861,6 +998,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/FirebaseCrashlytics/run\"\n";
+		};
+		DD8CD1B12DC28FA00087A7E4 /* Copy OpenCV Libraries */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy OpenCV Libraries";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Copy OpenCV libraries to app bundle\nmkdir -p \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Frameworks\"\nmkdir -p \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/MacOS\"\n\n# Copy all OpenCV dylib files to both locations\ncp \"${PROJECT_DIR}/OpenCv/\"*.dylib \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Frameworks/\"\ncp \"${PROJECT_DIR}/OpenCv/\"*.dylib \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/MacOS/\"\n\n# Create a list of all OpenCV libraries for dependency resolution\nOPENCV_LIBS=(\n    \"libopencv_core.413.dylib\"\n    \"libopencv_imgproc.413.dylib\"\n    \"libopencv_imgcodecs.413.dylib\"\n    \"libopencv_videoio.413.dylib\"\n    \"libopencv_highgui.413.dylib\"\n    \"libopencv_features2d.413.dylib\"\n    \"libopencv_calib3d.413.dylib\"\n    \"libopencv_objdetect.413.dylib\"\n    \"libopencv_ml.413.dylib\"\n    \"libopencv_flann.413.dylib\"\n    \"libopencv_photo.413.dylib\"\n    \"libopencv_video.413.dylib\"\n    \"libopencv_stitching.413.dylib\"\n    \"libopencv_gapi.413.dylib\"\n    \"libopencv_dnn.413.dylib\"\n)\n\n# Fix library paths and code signing for Frameworks\nfor lib_name in \"${OPENCV_LIBS[@]}\"; do\n    lib_path=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Frameworks/$lib_name\"\n    if [ -f \"$lib_path\" ]; then\n        echo \"Processing Frameworks/$lib_name...\"\n        \n        # Remove code signature to avoid Team ID conflicts\n        codesign --remove-signature \"$lib_path\" 2>/dev/null || true\n        \n        # Set new ID using @rpath\n        install_name_tool -id \"@rpath/$lib_name\" \"$lib_path\"\n        \n        # Update dependencies to use @rpath for all OpenCV libraries\n        for dep_name in \"${OPENCV_LIBS[@]}\"; do\n            if [ \"$lib_name\" != \"$dep_name\" ]; then\n                install_name_tool -change \"$dep_name\" \"@rpath/$dep_name\" \"$lib_path\" 2>/dev/null || true\n            fi\n        done\n        \n        # Re-sign with ad-hoc signature\n        codesign --force --sign - \"$lib_path\"\n    fi\ndone\n\n# Fix library paths and code signing for MacOS\nfor lib_name in \"${OPENCV_LIBS[@]}\"; do\n    lib_path=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/MacOS/$lib_name\"\n    if [ -f \"$lib_path\" ]; then\n        echo \"Processing MacOS/$lib_name...\"\n        \n        # Remove code signature to avoid Team ID conflicts\n        codesign --remove-signature \"$lib_path\" 2>/dev/null || true\n        \n        # Set new ID using @rpath\n        install_name_tool -id \"@rpath/$lib_name\" \"$lib_path\"\n        \n        # Update dependencies to use @rpath for all OpenCV libraries\n        for dep_name in \"${OPENCV_LIBS[@]}\"; do\n            if [ \"$lib_name\" != \"$dep_name\" ]; then\n                install_name_tool -change \"$dep_name\" \"@rpath/$dep_name\" \"$lib_path\" 2>/dev/null || true\n            fi\n        done\n        \n        # Re-sign with ad-hoc signature\n        codesign --force --sign - \"$lib_path\"\n    fi\ndone\n\necho \"OpenCV libraries copied and configured successfully\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -909,6 +1064,34 @@
 				DD2A705A2D74C37D00287BA8 /* FilesFileFormat.swift in Sources */,
 				DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */,
 				DD5CFA052E04694A009CD51A /* FieldMapSelectionWindowController.swift in Sources */,
+				DD408C6F2E6C736F00E615E5 /* DashedLinesShape.swift in Sources */,
+				DD408C702E6C736F00E615E5 /* PolygonShape.swift in Sources */,
+				DD408C712E6C736F00E615E5 /* DrawableObject.swift in Sources */,
+				DD408C722E6C736F00E615E5 /* ExportPayload.swift in Sources */,
+				DD408C732E6C736F00E615E5 /* FootballFormation.swift in Sources */,
+				DD408C742E6C736F00E615E5 /* ImageDocument.swift in Sources */,
+				DD408C752E6C736F00E615E5 /* LineStyle.swift in Sources */,
+				DD408C762E6C736F00E615E5 /* ObjectCustomization.swift in Sources */,
+				DD408C772E6C736F00E615E5 /* ObjectType.swift in Sources */,
+				DD408C782E6C736F00E615E5 /* TemplateObject.swift in Sources */,
+				DD408C792E6C736F00E615E5 /* PolygonEditorViewModel.swift in Sources */,
+				DD408C7A2E6C736F00E615E5 /* ExportSheet.swift in Sources */,
+				DD408C7B2E6C736F00E615E5 /* FormationCard.swift in Sources */,
+				DD408C7C2E6C736F00E615E5 /* FormationSelectionSheet.swift in Sources */,
+				DD408C7D2E6C736F00E615E5 /* LineBetweenObjectsCustomization.swift in Sources */,
+				DD408C7E2E6C736F00E615E5 /* LineBetweenObjectsView.swift in Sources */,
+				DD408C7F2E6C736F00E615E5 /* ObjectHighlightCustomization.swift in Sources */,
+				DD408C802E6C736F00E615E5 /* ObjectHighlightView.swift in Sources */,
+				DD408C812E6C736F00E615E5 /* ObjectListItem.swift in Sources */,
+				DD408C822E6C736F00E615E5 /* ObjectTypeSelectionSheet.swift in Sources */,
+				DD408C832E6C736F00E615E5 /* ObjectView.swift in Sources */,
+				DD408C842E6C736F00E615E5 /* PolygonEditorView.swift in Sources */,
+				DD408C852E6C736F00E615E5 /* SimpleZoneCustomization.swift in Sources */,
+				DD408C862E6C736F00E615E5 /* SimpleZoneView.swift in Sources */,
+				DD408C872E6C736F00E615E5 /* TemplateCustomizationSheet.swift in Sources */,
+				DD408C882E6C736F00E615E5 /* TemplateListItem.swift in Sources */,
+				DD408C892E6C736F00E615E5 /* TemplateView.swift in Sources */,
+				DD408C8A2E6C736F00E615E5 /* ZoneBetweenObjectsCustomization.swift in Sources */,
 				DDCA6B542DCA657B0025EF9E /* CollectionWindowDelegate.swift in Sources */,
 				DDFB1A542DE5131F00175D97 /* SheetToolbarView.swift in Sources */,
 				DD2A705E2D74C66700287BA8 /* VideosActions.swift in Sources */,
@@ -994,6 +1177,10 @@
 			children = (
 				DD32C26A2D74A0420052B5C6 /* Localizable.strings */,
 				DDD1236D2E0CB0F400116F7D /* ru */,
+				DD408D1F2E6DF19900E615E5 /* fr */,
+				DD408D202E6DF1AC00E615E5 /* es */,
+				DD408D212E6DF1C900E615E5 /* zh-Hans */,
+				DD408D222E6DF1E000E615E5 /* uz */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
@@ -1138,15 +1325,26 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+					/usr/local/include,
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Youchip-Stat/Resourses/Info.plist";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+					"@executable_path",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					/usr/local/lib,
+					"$(PROJECT_DIR)/OpenCv",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.YouChip.YouChipSportCut;
 				PRODUCT_NAME = SportCut;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1172,15 +1370,26 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+					/usr/local/include,
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Youchip-Stat/Resourses/Info.plist";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+					"@executable_path",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					/usr/local/lib,
+					"$(PROJECT_DIR)/OpenCv",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.YouChip.YouChipSportCut;
 				PRODUCT_NAME = SportCut;
 				PROVISIONING_PROFILE_SPECIFIER = "";

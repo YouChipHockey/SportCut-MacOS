@@ -19,7 +19,7 @@ class VideosViewModel: ObservableObject {
     let action = PassthroughSubject<VideosActions, Never>()
     private var observables: [AnyCancellable] = []
     
-    private let filesManager = VideoFilesManager.shared
+    let filesManager = VideoFilesManager.shared
     let filesPreviewManager = VideosPreviewManager.shared
     private let filePicker = FilesDocumentPickerHelper()
     private let fileOpenHelper = FileOpenHelper.shared
@@ -228,6 +228,8 @@ class VideosViewModel: ObservableObject {
             state.showAuthSheet = true
         case .updateLimitInfo:
             updateLimitInfo()
+        case .toggleFavorite(let file):
+            filesManager.toggleFavorite(for: file)
         }
     }
 }

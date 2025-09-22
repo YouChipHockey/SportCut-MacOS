@@ -21,7 +21,6 @@ struct FocusAwareTextField: View {
     
     var body: some View {
         TextField(placeholder, text: $text)
-            .textFieldStyle(RoundedBorderTextFieldStyle())
             .background(FocusTrackingView(isFocused: $isFocused, focusManager: focusManager))
             .onAppear {
                 DispatchQueue.main.async {
@@ -33,7 +32,12 @@ struct FocusAwareTextField: View {
                     NotificationCenter.default.removeObserver(observer)
                     self.observer = nil
                 }
-                focusManager.setFocused(false)
+                if isFocused {
+                    focusManager.setFocused(false)
+                }
+            }
+            .onChange(of: isFocused) { focused in
+                focusManager.setFocused(focused)
             }
     }
     

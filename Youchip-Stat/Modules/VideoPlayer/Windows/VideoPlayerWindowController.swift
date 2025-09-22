@@ -22,6 +22,7 @@ class VideoPlayerWindowController: NSWindowController, NSWindowDelegate {
         window.styleMask.insert(.closable)
         window.delegate = self
         window.makeKeyAndOrderFront(nil)
+        ActiveWindowManager.shared.registerAllowedWindow(self)
     }
     
     required init?(coder: NSCoder) {
@@ -29,6 +30,7 @@ class VideoPlayerWindowController: NSWindowController, NSWindowDelegate {
     }
     
     func windowWillClose(_ notification: Notification) {
+        ActiveWindowManager.shared.unregisterAllowedWindow(self)
         WindowsManager.shared.closeAll()
     }
     

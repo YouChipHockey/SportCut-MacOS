@@ -186,7 +186,7 @@ struct LabelSelectionSheet: View {
     
     private func completeSelection() {
         onDone(Array(selectedLabels))
-        dismissSheet()
+        presentationMode.wrappedValue.dismiss()
     }
     
 }

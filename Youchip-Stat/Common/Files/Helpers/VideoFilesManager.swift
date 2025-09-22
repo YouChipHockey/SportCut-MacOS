@@ -7,13 +7,29 @@
 
 import Foundation
 
-struct VideosData: Codable {
+struct VideosData: Codable, Equatable {
     
     var bookmark: Data
     var id: String
     var timelines: [TimelineLine]
     var customName: String?
+    var isFavorite: Bool?
     
+    init(bookmark: Data, id: String, timelines: [TimelineLine], customName: String? = nil, isFavorite: Bool? = nil) {
+        self.bookmark = bookmark
+        self.id = id
+        self.timelines = timelines
+        self.customName = customName
+        self.isFavorite = isFavorite ?? false
+    }
+    
+    static func == (lhs: VideosData, rhs: VideosData) -> Bool {
+        return lhs.bookmark == rhs.bookmark &&
+               lhs.id == rhs.id &&
+               lhs.timelines == rhs.timelines &&
+               lhs.customName == rhs.customName &&
+               lhs.isFavorite == rhs.isFavorite
+    }
 }
 
 class VideoFilesManager {
@@ -172,11 +188,47 @@ class VideoFilesManager {
         if let data = UserDefaults.standard.data(forKey: "videosData") {
             do {
                 let videosData = try JSONDecoder().decode([VideosData].self, from: data)
-                self.videosData = videosData
+                // Миграция: устанавливаем isFavorite = false для старых записей
+                let migratedVideosData = videosData.map { videoData in
+                    var migratedData = videoData
+                    if migratedData.isFavorite == nil {
+                        migratedData.isFavorite = false
+                    }
+                    return migratedData
+                }
+                self.videosData = migratedVideosData
+                
+                // Сохраняем мигрированные данные
+                if migratedVideosData != videosData {
+                    saveBookmarks()
+                }
             } catch {
                 print("\(^String.Titles.fileManagerErrorDecoding) \(error)")
             }
         }
+    }
+    
+    // MARK: - Favorites Management
+    
+    func toggleFavorite(for file: FilesFile) {
+        if let index = files.firstIndex(where: { $0.id == file.id }) {
+            let currentFavorite = isFavorite(file)
+            files[index].videoData.isFavorite = !currentFavorite
+            print("Toggling favorite for file \(file.name): \(currentFavorite) -> \(!currentFavorite)")
+            updateVideosData()
+            saveBookmarks()
+            updateFiles?(files)
+        } else {
+            print("File not found for toggling favorite: \(file.name)")
+        }
+    }
+    
+    func isFavorite(_ file: FilesFile) -> Bool {
+        return file.videoData.isFavorite ?? false
+    }
+    
+    private func updateVideosData() {
+        videosData = files.map { $0.videoData }
     }
     
 }

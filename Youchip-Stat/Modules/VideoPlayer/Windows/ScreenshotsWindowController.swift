@@ -40,6 +40,9 @@ struct ScreenshotsGalleryView: View {
     @State private var screenshots: [ScreenshotItem] = []
     @State private var isLoading: Bool = true
     @State private var gridColumns = 3
+    @State private var selectedScreenshots: Set<UUID> = []
+    @State private var showDeleteConfirmation = false
+    @State private var screenshotsToDelete: [ScreenshotItem] = []
     
     struct ScreenshotItem: Identifiable {
         let id = UUID()
@@ -55,7 +58,53 @@ struct ScreenshotsGalleryView: View {
     }
     
     var body: some View {
-        VStack {
+        VStack(spacing: 0) {
+            // Toolbar
+            if !screenshots.isEmpty {
+                HStack {
+                    Text("\(screenshots.count) \(^String.Titles.screenshotsCount)")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    if !selectedScreenshots.isEmpty {
+                        Button(action: {
+                            screenshotsToDelete = screenshots.filter { selectedScreenshots.contains($0.id) }
+                            showDeleteConfirmation = true
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("\(^String.Titles.deleteSelected) (\(selectedScreenshots.count))")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Button(^String.Titles.cancelSelection) {
+                            selectedScreenshots.removeAll()
+                        }
+                        .font(.system(size: 12))
+                        .foregroundColor(.blue)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.gray.opacity(0.05))
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Color.gray.opacity(0.2)),
+                    alignment: .bottom
+                )
+            }
+            
             if isLoading {
                 ProgressView(^String.Titles.loadingScreenshots)
             } else if screenshots.isEmpty {
@@ -78,8 +127,18 @@ struct ScreenshotsGalleryView: View {
                             spacing: 16
                         ) {
                             ForEach(screenshots) { item in
-                                ScreenshotItemView(item: item)
-                                    .frame(height: 200)
+                                ScreenshotItemView(
+                                    item: item,
+                                    isSelected: selectedScreenshots.contains(item.id),
+                                    onSelectionChanged: { isSelected in
+                                        if isSelected {
+                                            selectedScreenshots.insert(item.id)
+                                        } else {
+                                            selectedScreenshots.remove(item.id)
+                                        }
+                                    }
+                                )
+                                .frame(height: 200)
                             }
                         }
                         .padding()
@@ -96,6 +155,14 @@ struct ScreenshotsGalleryView: View {
         .frame(minWidth: 600, minHeight: 400)
         .onAppear {
             loadScreenshots()
+        }
+        .alert(^String.Titles.deleteScreenshots, isPresented: $showDeleteConfirmation) {
+            Button(^String.Titles.cancel, role: .cancel) { }
+            Button(^String.Titles.delete, role: .destructive) {
+                deleteSelectedScreenshots()
+            }
+        } message: {
+            Text(^String.Titles.confirmDeleteScreenshots)
         }
     }
     
@@ -135,27 +202,81 @@ struct ScreenshotsGalleryView: View {
             }
         }
     }
+    
+    private func deleteSelectedScreenshots() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            var deletedCount = 0
+            var errors: [String] = []
+            
+            for screenshot in self.screenshotsToDelete {
+                do {
+                    try FileManager.default.removeItem(at: screenshot.url)
+                    deletedCount += 1
+                } catch {
+                    errors.append("Ошибка удаления \(screenshot.name): \(error.localizedDescription)")
+                }
+            }
+            
+            DispatchQueue.main.async {
+                // Remove deleted screenshots from the array
+                self.screenshots.removeAll { screenshot in
+                    self.screenshotsToDelete.contains { $0.id == screenshot.id }
+                }
+                
+                // Clear selection
+                self.selectedScreenshots.removeAll()
+                self.screenshotsToDelete.removeAll()
+                
+                // Show result
+                if !errors.isEmpty {
+                    print("Ошибки при удалении: \(errors.joined(separator: ", "))")
+                }
+                
+                print("Удалено скриншотов: \(deletedCount)")
+            }
+        }
+    }
 }
 
 struct ScreenshotItemView: View {
     let item: ScreenshotsGalleryView.ScreenshotItem
+    let isSelected: Bool
+    let onSelectionChanged: (Bool) -> Void
     @State private var isHovered = false
     
     var body: some View {
         VStack {
-            if let image = item.image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxHeight: 160)
-                    .padding(.top, 8)
-            } else {
-                Image(systemName: "photo")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxHeight: 160)
-                    .padding(.top, 8)
-                    .foregroundColor(.gray)
+            ZStack(alignment: .topTrailing) {
+                if let image = item.image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 160)
+                        .padding(.top, 8)
+                } else {
+                    Image(systemName: "photo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 160)
+                        .padding(.top, 8)
+                        .foregroundColor(.gray)
+                }
+                
+                // Selection checkbox
+                Button(action: {
+                    onSelectionChanged(!isSelected)
+                }) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(isSelected ? .blue : .gray)
+                        .background(
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 24, height: 24)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(8)
             }
             
             Text(item.name)
@@ -165,11 +286,11 @@ struct ScreenshotItemView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+                .fill(isSelected ? Color.blue.opacity(0.2) : (isHovered ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1)))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isHovered ? Color.blue : Color.gray.opacity(0.3), lineWidth: 1)
+                .stroke(isSelected ? Color.blue : (isHovered ? Color.blue : Color.gray.opacity(0.3)), lineWidth: isSelected ? 2 : 1)
         )
         .onHover { hovering in
             withAnimation {
@@ -183,7 +304,9 @@ struct ScreenshotItemView: View {
             }
         }
         .onTapGesture {
-            openInEditor()
+            if !isSelected {
+                openInEditor()
+            }
         }
     }
     

@@ -1,7 +1,19 @@
 {
-  "names": [
-      "Хоккей",
-      "Футбол"
-  ]
+    "collections": [
+        {
+            "language": "ru",
+            "names": [
+                "Хоккей",
+                "Футбол"
+            ]
+        },
+        {
+            "language": "en",
+            "names": [
+                "Hockey",
+                "Football"
+            ]
+        }
+    ]
 }
 

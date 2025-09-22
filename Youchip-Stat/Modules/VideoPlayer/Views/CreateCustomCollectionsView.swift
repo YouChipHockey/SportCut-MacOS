@@ -41,6 +41,11 @@ struct CreateCustomCollectionsView: View {
     @State private var tempImageBookmark: Data? = nil
     @State private var isCapturingLabelHotkeys: [String: Bool] = [:]
     
+    // Search states
+    @State private var searchText = ""
+    @State private var isSearching = false
+    @State private var searchScope: SearchScope = .all
+    
     init() {
         _collectionManager = StateObject(wrappedValue: CustomCollectionManager())
     }
@@ -55,16 +60,47 @@ struct CreateCustomCollectionsView: View {
         case fieldMap
     }
     
+    enum SearchScope: String, CaseIterable {
+        case all = "all"
+        case tags = "tags"
+        case labels = "labels"
+        case groups = "groups"
+        
+        var localizedTitle: String {
+            switch self {
+            case .all:
+                return ^String.Titles.all
+            case .tags:
+                return ^String.Titles.tags
+            case .labels:
+                return ^String.Titles.labels
+            case .groups:
+                return ^String.Titles.groups
+            }
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             customToolbarView
-                .padding()
-                .background(Color(NSColor.windowBackgroundColor))
-                .border(Color.gray.opacity(0.2), width: 0.5)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 0)
+                        .fill(Color(NSColor.windowBackgroundColor))
+                        .shadow(color: .black.opacity(0.05), radius: 1, y: 1)
+                )
             
-            NavigationView {
+            HStack(spacing: 0) {
                 sidebarView
+                    .frame(minWidth: 280, maxWidth: 350)
+                    .background(Color(NSColor.controlBackgroundColor))
+                
+                Divider()
+                    .frame(width: 1)
+                
                 detailView
+                    .background(Color(NSColor.windowBackgroundColor))
             }
         }
         .onDisappear {
@@ -85,7 +121,7 @@ struct CreateCustomCollectionsView: View {
             case .fieldChange:
                 return Alert(
                     title: Text(^String.Titles.fieldMapChange),
-                    message: Text(String(format: ^String.Titles.fieldMapChangeWarning, activeTagsOnTimelines)),
+                    message: Text(String(format: ^String.Titles.fieldMapChangeWarning, String(activeTagsOnTimelines))),
                     primaryButton: .default(Text(^String.Titles.resetPositions)) {
                         resetTagPositionsOnTimelines()
                         selectNewFieldImage()
@@ -97,7 +133,7 @@ struct CreateCustomCollectionsView: View {
             case .fieldDelete:
                 return Alert(
                     title: Text(^String.Titles.deleteFieldMap),
-                    message: Text(String(format: ^String.Titles.fieldMapChangeWarning, activeTagsOnTimelines)),
+                    message: Text(String(format: ^String.Titles.fieldMapChangeWarning, String(activeTagsOnTimelines))),
                     primaryButton: .destructive(Text(^String.Titles.deleteMap)) {
                         collectionManager.deleteFieldImage()
                         resetTagPositionsOnTimelines()
@@ -109,12 +145,22 @@ struct CreateCustomCollectionsView: View {
         .sheet(isPresented: $showAddTagGroupSheet) {
             addGroupSheet(title: ^String.Titles.addTagGroup) {
                 let _ = collectionManager.createTagGroup(name: newGroupName)
+                
+                // Автоматически сохраняем коллекцию в файлы
+                _ = collectionManager.saveCollectionToFiles()
+                NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                
                 newGroupName = ""
             }
         }
         .sheet(isPresented: $showAddLabelGroupSheet) {
-            addGroupSheet(title: "Добавить группу лейблов") {
+            addGroupSheet(title: ^String.Titles.addLabelGroup) {
                 let _ = collectionManager.createLabelGroup(name: newGroupName)
+                
+                // Автоматически сохраняем коллекцию в файлы
+                _ = collectionManager.saveCollectionToFiles()
+                NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                
                 newGroupName = ""
             }
         }
@@ -145,74 +191,170 @@ struct CreateCustomCollectionsView: View {
     }
     
     var customToolbarView: some View {
-        HStack {
-            if collectionManager.isEditingExisting {
-                Text(collectionManager.collectionName)
-                    .frame(width: 200, alignment: .leading)
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 5)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(5)
-            } else {
-                FocusAwareTextField(text: $collectionManager.collectionName, placeholder: ^String.Titles.collectionName)
-                    .frame(width: 200)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+        HStack(spacing: 20) {
+            // Collection name section
+            VStack(alignment: .leading, spacing: 4) {
+                Text(^String.Titles.collection)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if collectionManager.isEditingExisting {
+                    HStack {
+                        Image(systemName: "folder.fill")
+                            .foregroundColor(.blue)
+                        Text(collectionManager.collectionName)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.blue.opacity(0.1))
+                    )
+                } else {
+                    FocusAwareTextField(text: $collectionManager.collectionName, placeholder: ^String.Titles.collectionName)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                }
             }
+            .frame(width: 250)
             
+            // Save button
             Button(action: {
-                if collectionManager.saveCollectionToFiles() {
-                    showSaveSuccess = true
-                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        showSaveSuccess = false
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if collectionManager.saveCollectionToFiles() {
+                        showSaveSuccess = true
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showSaveSuccess = false
+                            }
+                        }
                     }
                 }
             }) {
-                Text(collectionManager.isEditingExisting ? ^String.Titles.updateCollection : ^String.Titles.saveCollection)
+                HStack(spacing: 8) {
+                    Image(systemName: showSaveSuccess ? "checkmark.circle.fill" : "square.and.arrow.down")
+                        .foregroundColor(showSaveSuccess ? .green : .white)
+                    Text(collectionManager.isEditingExisting ? ^String.Titles.updateCollection : ^String.Titles.saveCollection)
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(showSaveSuccess ? Color.green : Color.blue)
+                )
             }
-            .buttonStyle(CompatibilityButtonStyle())
-            
-            if showSaveSuccess {
-                Text(^String.Titles.saved)
-                    .foregroundColor(.green)
-            }
+            .buttonStyle(PlainButtonStyle())
+            .scaleEffect(showSaveSuccess ? 1.05 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: showSaveSuccess)
             
             Spacer()
             
+            // View mode picker
             Picker("", selection: $viewMode) {
-                Text(^String.Titles.tagGroups).tag(ViewMode.tagGroups)
-                Text(^String.Titles.labelGroups).tag(ViewMode.labelGroups)
-                Text(^String.Titles.commonEvents).tag(ViewMode.timeEvents)
-                Text(^String.Titles.fieldMap).tag(ViewMode.fieldMap)
+                Text(^String.Titles.tagGroups)
+                    .tag(ViewMode.tagGroups)
+                Text(^String.Titles.labelGroups)
+                    .tag(ViewMode.labelGroups)
+                Text(^String.Titles.commonEvents)
+                    .tag(ViewMode.timeEvents)
+                Text(^String.Titles.fieldMap)
+                    .tag(ViewMode.fieldMap)
             }
             .pickerStyle(.segmented)
-            .frame(width: 700)
+            .frame(width: 600)
         }
-        .padding(.horizontal)
     }
     
     var sidebarView: some View {
-        List {
-            if viewMode == .tagGroups {
-                tagGroupsListSection
-                
-                if let groupID = selectedTagGroupID {
-                    tagsInGroupSection(groupID: groupID)
+        VStack(spacing: 0) {
+            // Search bar
+            searchBarView
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(NSColor.controlBackgroundColor))
+            
+            Divider()
+            
+            // Content
+            List {
+                if viewMode == .tagGroups {
+                    tagGroupsListSection
+                    
+                    if let groupID = selectedTagGroupID {
+                        tagsInGroupSection(groupID: groupID)
+                    }
+                } else if viewMode == .labelGroups {
+                    labelGroupsListSection
+                    
+                    if let groupID = selectedLabelGroupID {
+                        labelsInGroupSection(groupID: groupID)
+                    }
+                } else if viewMode == .timeEvents {
+                    timeEventsListSection
+                } else if viewMode == .fieldMap {
+                    fieldMapSection
                 }
-            } else if viewMode == .labelGroups {
-                labelGroupsListSection
+            }
+            .listStyle(PlainListStyle())
+        }
+    }
+    
+    var searchBarView: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
                 
-                if let groupID = selectedLabelGroupID {
-                    labelsInGroupSection(groupID: groupID)
+                TextField(^String.Titles.search, text: $searchText)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .onTapGesture {
+                        isSearching = true
+                    }
+                
+                if !searchText.isEmpty {
+                    Button(action: {
+                        searchText = ""
+                        isSearching = false
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-            } else if viewMode == .timeEvents {
-                timeEventsListSection
-            } else if viewMode == .fieldMap {
-                fieldMapSection
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(NSColor.windowBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isSearching ? Color.blue : Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+            )
+            
+            if !searchText.isEmpty {
+                Picker(searchScope.localizedTitle, selection: $searchScope) {
+                    ForEach(SearchScope.allCases, id: \.self) { scope in
+                        Text(scope.localizedTitle).tag(scope)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
         }
-        .listStyle(SidebarListStyle())
-        .frame(minWidth: 250)
     }
     
     var fieldMapSection: some View {
@@ -228,38 +370,90 @@ struct CreateCustomCollectionsView: View {
     
     var tagGroupsListSection: some View {
         Section {
-            ForEach(collectionManager.tagGroups) { group in
+            ForEach(filteredTagGroups) { group in
                 tagGroupRowView(group: group)
             }
             
             addTagGroupButton
         } header: {
-            Text(^String.Titles.tagGroups)
+            HStack {
+                Image(systemName: "tag.fill")
+                    .foregroundColor(.blue)
+                Text(^String.Titles.tagGroups)
+                    .font(.headline)
+                Spacer()
+                Text("\(collectionManager.tagGroups.count)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(10)
+            }
+            .padding(.vertical, 4)
         }
     }
     
     var timeEventsListSection: some View {
         Section {
-            ForEach(collectionManager.timeEvents) { event in
+            ForEach(filteredTimeEvents) { event in
                 timeEventRowView(event: event)
             }
             
             addTimeEventButton
         } header: {
-            Text(^String.Titles.commonEvents)
+            HStack {
+                Image(systemName: "clock.fill")
+                    .foregroundColor(.orange)
+                Text(^String.Titles.commonEvents)
+                    .font(.headline)
+                Spacer()
+                Text("\(collectionManager.timeEvents.count)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(10)
+            }
+            .padding(.vertical, 4)
         }
     }
     
     func timeEventRowView(event: TimeEvent) -> some View {
-        Text(event.name)
-            .padding(.vertical, 2)
-            .onTapGesture {
+        HStack {
+            Image(systemName: "clock")
+                .foregroundColor(.orange)
+                .frame(width: 16)
+            
+            Text(event.name)
+                .font(.body)
+            
+            Spacer()
+            
+            if selectedTimeEventID == event.id {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.blue)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(selectedTimeEventID == event.id ? Color.blue.opacity(0.1) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(selectedTimeEventID == event.id ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
                 selectedTimeEventID = event.id
                 selectedTagID = nil
                 selectedLabelID = nil
                 newTimeEventName = event.name
             }
-            .background(selectedTimeEventID == event.id ? Color.blue.opacity(0.2) : Color.clear)
+        }
     }
     
     var addTimeEventButton: some View {
@@ -268,18 +462,45 @@ struct CreateCustomCollectionsView: View {
             showAddTimeEventSheet = true
         }) {
             HStack {
-                Image(systemName: "plus.circle")
+                Image(systemName: "plus.circle.fill")
+                    .foregroundColor(.orange)
                 Text(^String.Titles.addEvent)
+                    .foregroundColor(.orange)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.orange.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+            )
         }
+        .buttonStyle(PlainButtonStyle())
     }
     
     func tagGroupRowView(group: TagGroup) -> some View {
         HStack {
+            Image(systemName: "folder.fill")
+                .foregroundColor(.blue)
+                .frame(width: 16)
+            
             if selectedTagGroupID == group.id && isEditingGroupName {
                 FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(PlainTextFieldStyle())
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.blue.opacity(0.5), lineWidth: 1)
+                            )
+                    )
                     .onAppear {
                         newGroupName = group.name
                     }
@@ -288,48 +509,73 @@ struct CreateCustomCollectionsView: View {
                         isEditingGroupName = false
                     }
             } else {
-                Text(group.name)
-                    .font(.headline)
-                    .padding(.vertical, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Text("\(getTagsForGroup(groupID: group.id).count) \(^String.Titles.tagsInGroup)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             
             Spacer()
             
             if selectedTagGroupID == group.id && !isEditingGroupName {
-                Button(action: {
-                    newGroupName = group.name
-                    isEditingGroupName = true
-                }) {
-                    Image(systemName: "pencil")
-                        .foregroundColor(.blue)
+                HStack(spacing: 8) {
+                    Button(action: {
+                        newGroupName = group.name
+                        isEditingGroupName = true
+                    }) {
+                        Image(systemName: "pencil")
+                            .foregroundColor(.blue)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(^String.Titles.renameGroup)
+                    
+                    Button(action: {
+                        collectionManager.deleteTagGroup(id: group.id)
+                        if selectedTagGroupID == group.id {
+                            selectedTagGroupID = nil
+                            selectedTagID = nil
+                        }
+                        
+                        // Автоматически сохраняем коллекцию в файлы
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(BorderlessButtonStyle())
-                .help(^String.Titles.renameGroup)
             }
-            
-            Button(action: {
-                collectionManager.deleteTagGroup(id: group.id)
-                if selectedTagGroupID == group.id {
-                    selectedTagGroupID = nil
-                    selectedTagID = nil
-                }
-            }) {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
-            }
-            .buttonStyle(BorderlessButtonStyle())
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(selectedTagGroupID == group.id ? Color.blue.opacity(0.1) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(selectedTagGroupID == group.id ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             if !isEditingGroupName {
-                selectedTagGroupID = group.id
-                selectedLabelGroupID = nil
-                selectedTagID = nil
-                selectedLabelID = nil
-                isEditingGroupName = false
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTagGroupID = group.id
+                    selectedLabelGroupID = nil
+                    selectedTagID = nil
+                    selectedLabelID = nil
+                    isEditingGroupName = false
+                }
             }
         }
-        .background(selectedTagGroupID == group.id ? Color.blue.opacity(0.2) : Color.clear)
     }
     
     var addTagGroupButton: some View {
@@ -338,25 +584,53 @@ struct CreateCustomCollectionsView: View {
             showAddTagGroupSheet = true
         }) {
             HStack {
-                Image(systemName: "plus.circle")
+                Image(systemName: "plus.circle.fill")
+                    .foregroundColor(.blue)
                 Text(^String.Titles.addGroup)
+                    .foregroundColor(.blue)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.blue.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+            )
         }
+        .buttonStyle(PlainButtonStyle())
     }
     
     func tagsInGroupSection(groupID: String) -> some View {
         Group {
             if let group = collectionManager.tagGroups.first(where: { $0.id == groupID }) {
+                let groupTags = getTagsForGroup(groupID: groupID)
+                let filteredTags = filteredTagsInGroup(groupTags: groupTags)
+                
                 Section {
-                    let groupTags = getTagsForGroup(groupID: groupID)
-                    
-                    ForEach(groupTags) { tag in
+                    ForEach(filteredTags) { tag in
                         tagRowView(tag: tag)
                     }
                     
                     addTagButton
                 } header: {
-                    Text("\(^String.Titles.tagsInGroup) \"\(group.name)\"")
+                    HStack {
+                        Image(systemName: "tag")
+                            .foregroundColor(.blue)
+                        Text("\(^String.Titles.tagsInGroup) \"\(group.name)\"")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(filteredTags.count)/\(groupTags.count)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    .padding(.vertical, 2)
                 }
             }
         }
@@ -396,10 +670,23 @@ struct CreateCustomCollectionsView: View {
             showAddTagSheet = true
         }) {
             HStack {
-                Image(systemName: "plus.circle")
+                Image(systemName: "plus.circle.fill")
+                    .foregroundColor(.blue)
                 Text(^String.Titles.addTag)
+                    .foregroundColor(.blue)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.blue.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+            )
         }
+        .buttonStyle(PlainButtonStyle())
     }
     
     func getTagsForGroup(groupID: String) -> [Tag] {
@@ -413,20 +700,30 @@ struct CreateCustomCollectionsView: View {
     
     func tagRowView(tag: Tag) -> some View {
         HStack {
-            Rectangle()
+            Circle()
                 .fill(Color(hex: tag.color))
-                .frame(width: 16, height: 16)
+                .frame(width: 12, height: 12)
             
             if selectedTagID == tag.id && isEditingName {
                 FocusAwareTextField(text: $editingName, placeholder: ^String.Titles.tagName)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(PlainTextFieldStyle())
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.blue.opacity(0.5), lineWidth: 1)
+                            )
+                    )
                     .onAppear {
                         editingName = tag.name
                     }
                     .onSubmit {
                         tagFormData.name = editingName
-                        collectionManager.updateTag(
+                        let success = collectionManager.updateTag(
                             id: tag.id,
                             primaryID: tag.primaryID,
                             name: editingName,
@@ -441,82 +738,143 @@ struct CreateCustomCollectionsView: View {
                             mapEnabled: tag.mapEnabled ?? false
                         )
                         
-                        if let updatedTag = collectionManager.tags.first(where: { $0.name == editingName }) {
+                        if success, let updatedTag = collectionManager.tags.first(where: { $0.name == editingName }) {
                             selectedTagID = updatedTag.id
                             tagFormData = TagFormData(from: updatedTag)
+                            
+                            // Автоматически сохраняем коллекцию в файлы
+                            _ = collectionManager.saveCollectionToFiles()
+                            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                         }
                         
                         isEditingName = false
                     }
             } else {
-                Text(tag.name)
-                    .padding(.vertical, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tag.name)
+                        .font(.body)
+                        .foregroundColor(.primary)
+                    
+                    if !tag.description.isEmpty {
+                        Text(tag.description)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
             }
             
             Spacer()
             
             if let hotkey = tag.hotkey, !hotkey.isEmpty {
                 Text("⌨️ \(hotkey)")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.gray.opacity(0.2))
+                    .background(Color.blue.opacity(0.1))
                     .cornerRadius(4)
             }
             
             if selectedTagID == tag.id && !isEditingName {
-                Button(action: {
-                    editingName = tag.name
-                    isEditingName = true
-                }) {
-                    Image(systemName: "pencil")
-                        .foregroundColor(.blue)
+                HStack(spacing: 8) {
+                    Button(action: {
+                        editingName = tag.name
+                        isEditingName = true
+                    }) {
+                        Image(systemName: "pencil")
+                            .foregroundColor(.blue)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(^String.Titles.renameTag)
+                    
+                    Button(action: {
+                        collectionManager.deleteTag(id: tag.id)
+                        if selectedTagID == tag.id {
+                            selectedTagID = nil
+                        }
+                        
+                        // Автоматически сохраняем коллекцию в файлы
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(BorderlessButtonStyle())
-                .help(^String.Titles.renameTag)
             }
-            
-            Button(action: {
-                collectionManager.deleteTag(id: tag.id)
-                if selectedTagID == tag.id {
-                    selectedTagID = nil
-                }
-            }) {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
-            }
-            .buttonStyle(BorderlessButtonStyle())
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(selectedTagID == tag.id ? Color.blue.opacity(0.1) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(selectedTagID == tag.id ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             if !isEditingName {
-                selectedTagID = tag.id
-                selectedLabelID = nil
-                tagFormData = TagFormData(from: tag)
-                isEditingName = false
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTagID = tag.id
+                    selectedLabelID = nil
+                    tagFormData = TagFormData(from: tag)
+                    isEditingName = false
+                }
             }
         }
-        .background(selectedTagID == tag.id ? Color.blue.opacity(0.2) : Color.clear)
     }
     
     var labelGroupsListSection: some View {
         Section {
-            ForEach(collectionManager.labelGroups) { group in
+            ForEach(filteredLabelGroups) { group in
                 labelGroupRowView(group: group)
             }
             
             addLabelGroupButton
         } header: {
-            Text(^String.Titles.labelGroups)
+            HStack {
+                Image(systemName: "label.fill")
+                    .foregroundColor(.green)
+                Text(^String.Titles.labelGroups)
+                    .font(.headline)
+                Spacer()
+                Text("\(collectionManager.labelGroups.count)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(10)
+            }
+            .padding(.vertical, 4)
         }
     }
     
     func labelGroupRowView(group: LabelGroupData) -> some View {
         HStack {
+            Image(systemName: "folder.fill")
+                .foregroundColor(.green)
+                .frame(width: 16)
+            
             if selectedLabelGroupID == group.id && isEditingGroupName {
                 FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(PlainTextFieldStyle())
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.green.opacity(0.5), lineWidth: 1)
+                            )
+                    )
                     .onAppear {
                         newGroupName = group.name
                     }
@@ -525,48 +883,73 @@ struct CreateCustomCollectionsView: View {
                         isEditingGroupName = false
                     }
             } else {
-                Text(group.name)
-                    .font(.headline)
-                    .padding(.vertical, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Text("\(getLabelsForGroup(groupID: group.id).count) лейблов")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             
             Spacer()
             
             if selectedLabelGroupID == group.id && !isEditingGroupName {
-                Button(action: {
-                    newGroupName = group.name
-                    isEditingGroupName = true
-                }) {
-                    Image(systemName: "pencil")
-                        .foregroundColor(.blue)
+                HStack(spacing: 8) {
+                    Button(action: {
+                        newGroupName = group.name
+                        isEditingGroupName = true
+                    }) {
+                        Image(systemName: "pencil")
+                            .foregroundColor(.green)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(^String.Titles.renameGroup)
+                    
+                    Button(action: {
+                        collectionManager.deleteLabelGroup(id: group.id)
+                        if selectedLabelGroupID == group.id {
+                            selectedLabelGroupID = nil
+                            selectedLabelID = nil
+                        }
+                        
+                        // Автоматически сохраняем коллекцию в файлы
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(BorderlessButtonStyle())
-                .help(^String.Titles.renameGroup)
             }
-            
-            Button(action: {
-                collectionManager.deleteLabelGroup(id: group.id)
-                if selectedLabelGroupID == group.id {
-                    selectedLabelGroupID = nil
-                    selectedLabelID = nil
-                }
-            }) {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
-            }
-            .buttonStyle(BorderlessButtonStyle())
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(selectedLabelGroupID == group.id ? Color.green.opacity(0.1) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(selectedLabelGroupID == group.id ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             if !isEditingGroupName {
-                selectedLabelGroupID = group.id
-                selectedTagGroupID = nil
-                selectedTagID = nil
-                selectedLabelID = nil
-                isEditingGroupName = false
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedLabelGroupID = group.id
+                    selectedTagGroupID = nil
+                    selectedTagID = nil
+                    selectedLabelID = nil
+                    isEditingGroupName = false
+                }
             }
         }
-        .background(selectedLabelGroupID == group.id ? Color.blue.opacity(0.2) : Color.clear)
     }
     
     var addLabelGroupButton: some View {
@@ -575,25 +958,53 @@ struct CreateCustomCollectionsView: View {
             showAddLabelGroupSheet = true
         }) {
             HStack {
-                Image(systemName: "plus.circle")
+                Image(systemName: "plus.circle.fill")
+                    .foregroundColor(.green)
                 Text(^String.Titles.addGroup)
+                    .foregroundColor(.green)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.green.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.green.opacity(0.3), lineWidth: 1)
+            )
         }
+        .buttonStyle(PlainButtonStyle())
     }
     
     func labelsInGroupSection(groupID: String) -> some View {
         Group {
             if let group = collectionManager.labelGroups.first(where: { $0.id == groupID }) {
+                let groupLabels = getLabelsForGroup(groupID: groupID)
+                let filteredLabels = filteredLabelsInGroup(groupLabels: groupLabels)
+                
                 Section {
-                    let groupLabels = getLabelsForGroup(groupID: groupID)
-                    
-                    ForEach(groupLabels) { label in
+                    ForEach(filteredLabels) { label in
                         labelRowView(label: label)
                     }
                     
                     addLabelButton
                 } header: {
-                    Text(String(format: ^String.Titles.collectionsLabelGroupName, group.name))
+                    HStack {
+                        Image(systemName: "label")
+                            .foregroundColor(.green)
+                        Text(String(format: ^String.Titles.collectionsLabelGroupName, group.name))
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(filteredLabels.count)/\(groupLabels.count)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    .padding(.vertical, 2)
                 }
             }
         }
@@ -606,10 +1017,23 @@ struct CreateCustomCollectionsView: View {
             showAddLabelSheet = true
         }) {
             HStack {
-                Image(systemName: "plus.circle")
+                Image(systemName: "plus.circle.fill")
+                    .foregroundColor(.green)
                 Text(^String.Titles.collectionsButtonAddLabel)
+                    .foregroundColor(.green)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.green.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.green.opacity(0.3), lineWidth: 1)
+            )
         }
+        .buttonStyle(PlainButtonStyle())
     }
     
     func getLabelsForGroup(groupID: String) -> [Label] {
@@ -623,10 +1047,24 @@ struct CreateCustomCollectionsView: View {
     
     func labelRowView(label: Label) -> some View {
         HStack {
+            Image(systemName: "label")
+                .foregroundColor(.green)
+                .frame(width: 16)
+            
             if selectedLabelID == label.id && isEditingName {
                 FocusAwareTextField(text: $editingName, placeholder: ^String.Titles.renameLabelPlaceholder)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(PlainTextFieldStyle())
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.green.opacity(0.5), lineWidth: 1)
+                            )
+                    )
                     .onAppear {
                         editingName = label.name
                     }
@@ -637,54 +1075,88 @@ struct CreateCustomCollectionsView: View {
                             description: label.description
                         )
                         newLabelName = editingName
+                        
+                        // Автоматически сохраняем коллекцию в файлы
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                        
                         isEditingName = false
                     }
             } else {
-                Text(label.name)
-                    .padding(.vertical, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label.name)
+                        .font(.body)
+                        .foregroundColor(.primary)
+                    
+                    if !label.description.isEmpty {
+                        Text(label.description)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
             }
             
             Spacer()
             
             if selectedLabelID == label.id && !isEditingName {
-                Button(action: {
-                    editingName = label.name
-                    isEditingName = true
-                }) {
-                    Image(systemName: "pencil")
-                        .foregroundColor(.blue)
+                HStack(spacing: 8) {
+                    Button(action: {
+                        editingName = label.name
+                        isEditingName = true
+                    }) {
+                        Image(systemName: "pencil")
+                            .foregroundColor(.green)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(^String.Titles.helpRenameLabel)
+                    
+                    Button(action: {
+                        collectionManager.deleteLabel(id: label.id)
+                        if selectedLabelID == label.id {
+                            selectedLabelID = nil
+                        }
+                        
+                        // Автоматически сохраняем коллекцию в файлы
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(BorderlessButtonStyle())
-                .help(^String.Titles.helpRenameLabel)
             }
-            
-            Button(action: {
-                collectionManager.deleteLabel(id: label.id)
-                if selectedLabelID == label.id {
-                    selectedLabelID = nil
-                }
-            }) {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
-            }
-            .buttonStyle(BorderlessButtonStyle())
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(selectedLabelID == label.id ? Color.green.opacity(0.1) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(selectedLabelID == label.id ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             if !isEditingName {
-                selectedLabelID = label.id
-                selectedTagID = nil
-                newLabelName = label.name
-                newLabelDescription = label.description
-                isEditingName = false
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedLabelID = label.id
+                    selectedTagID = nil
+                    newLabelName = label.name
+                    newLabelDescription = label.description
+                    isEditingName = false
+                }
             }
         }
-        .background(selectedLabelID == label.id ? Color.blue.opacity(0.2) : Color.clear)
     }
     
     var detailView: some View {
         ScrollView {
-            VStack {
+            VStack(spacing: 0) {
                 if viewMode == .fieldMap {
                     fieldMapDetailView
                 } else if let tagID = selectedTagID,
@@ -703,34 +1175,84 @@ struct CreateCustomCollectionsView: View {
                     timeEventDetailView(event: event)
                 }
                 else if selectedTagGroupID != nil || selectedLabelGroupID != nil {
-                    if viewMode == .tagGroups {
-                        Text(^String.Titles.collectionsTagEmpty)
-                            .font(.headline)
-                    } else if viewMode == .labelGroups {
-                        Text(^String.Titles.collectionsLabelEmpty)
-                            .font(.headline)
-                    }
+                    emptyStateView
                 }
                 else {
-                    if viewMode == .tagGroups {
-                        Text(^String.Titles.collectionsGroupEmpty)
-                            .font(.headline)
-                    } else if viewMode == .labelGroups {
-                        Text(^String.Titles.CollectionsLabelGroupEmpty)
-                            .font(.headline)
-                    } else if viewMode == .timeEvents {
-                        if collectionManager.timeEvents.isEmpty {
-                            Text(^String.Titles.collectionsEventEmpty)
-                                .font(.headline)
-                        } else {
-                            Text(^String.Titles.selectTimeEventForEditing)
-                                .font(.headline)
-                        }
-                    }
+                    welcomeView
                 }
             }
-            .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+    
+    var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: viewMode == .tagGroups ? "tag" : "label")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+            
+            Text(viewMode == .tagGroups ? ^String.Titles.collectionsTagEmpty : ^String.Titles.collectionsLabelEmpty)
+                .font(.title2)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+            
+            Text(^String.Titles.selectElementFromLeftList)
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
+    }
+    
+    var welcomeView: some View {
+        VStack(spacing: 24) {
+            Image(systemName: getWelcomeIcon())
+                .font(.system(size: 80))
+                .foregroundColor(getWelcomeColor())
+            
+            VStack(spacing: 8) {
+                Text(getWelcomeTitle())
+                    .font(.title)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+            }
+            
+            if viewMode == .timeEvents && !collectionManager.timeEvents.isEmpty {
+                Text(^String.Titles.selectTimeEventForEditing)
+                    .font(.headline)
+                    .foregroundColor(.blue)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
+    }
+    
+    private func getWelcomeIcon() -> String {
+        switch viewMode {
+        case .tagGroups: return "tag.fill"
+        case .labelGroups: return "label.fill"
+        case .timeEvents: return "clock.fill"
+        case .fieldMap: return "map.fill"
+        }
+    }
+    
+    private func getWelcomeColor() -> Color {
+        switch viewMode {
+        case .tagGroups: return .blue
+        case .labelGroups: return .green
+        case .timeEvents: return .orange
+        case .fieldMap: return .purple
+        }
+    }
+    
+    private func getWelcomeTitle() -> String {
+        switch viewMode {
+        case .tagGroups: return ^String.Titles.collectionsGroupEmpty
+        case .labelGroups: return ^String.Titles.CollectionsLabelGroupEmpty
+        case .timeEvents: return collectionManager.timeEvents.isEmpty ? ^String.Titles.collectionsEventEmpty : ^String.Titles.selectTimeEventForEditing
+        case .fieldMap: return ^String.Titles.fieldMapSettings
         }
     }
     
@@ -751,140 +1273,294 @@ struct CreateCustomCollectionsView: View {
     }
     
     var fieldMapDetailView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(^String.Titles.fieldMapSettings)
-                .font(.title2)
-                .bold()
-                .padding(.bottom, 8)
-            
-            if let playField = collectionManager.playField {
-                VStack(alignment: .leading, spacing: 12) {
-                    Button(action: {
-                        activeTagsOnTimelines = countActiveMapTagsOnTimelines()
-                        if activeTagsOnTimelines > 0 {
-                            activeAlert = .fieldDelete
-                        } else {
-                            collectionManager.deleteFieldImage()
-                        }
-                    }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(BorderlessButtonStyle())
-                    .help("Удалить карту поля")
-                    
-                    if let imageBookmark = collectionManager.playField?.imageBookmark,
-                        let imageURL = createImageUrl(imageBookmark),
-                        let nsImage = NSImage(contentsOf: imageURL) {
-                        Image(nsImage: nsImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxHeight: 300)
-                            .cornerRadius(8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
-                    } else {
-                        Text(^String.Titles.failedToLoadImage)
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(8)
-                    }
-                    
-                    HStack(spacing: 20) {
-                        VStack(alignment: .leading) {
-                            Text(^String.Titles.collectionsFieldHeight)
-                            HStack {
-                                TextField("", value: Binding(
-                                    get: { playField.width },
-                                    set: { collectionManager.updateFieldDimensions(width: $0, height: playField.height) }
-                                ), formatter: NumberFormatter())
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .frame(width: 100)
-                                
-                                Stepper("", value: Binding(
-                                    get: { playField.width },
-                                    set: { collectionManager.updateFieldDimensions(width: $0, height: playField.height) }
-                                ), in: 1...1000, step: 1)
-                                .labelsHidden()
-                            }
-                        }
+        ScrollView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "map.fill")
+                            .foregroundColor(.purple)
+                            .font(.title2)
                         
-                        VStack(alignment: .leading) {
-                            Text(^String.Titles.collectionsFieldWidth)
-                            HStack {
-                                TextField("", value: Binding(
-                                    get: { playField.height },
-                                    set: { collectionManager.updateFieldDimensions(width: playField.width, height: $0) }
-                                ), formatter: NumberFormatter())
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .frame(width: 100)
-                                
-                                Stepper("", value: Binding(
-                                    get: { playField.height },
-                                    set: { collectionManager.updateFieldDimensions(width: playField.width, height: $0) }
-                                ), in: 1...1000, step: 1)
-                                .labelsHidden()
-                            }
-                        }
+                        Text(^String.Titles.fieldMapSettings)
+                            .font(.title2)
+                            .fontWeight(.semibold)
                         
                         Spacer()
                     }
                     
-                    Button(action: {
-                        activeTagsOnTimelines = countActiveMapTagsOnTimelines()
-                        if activeTagsOnTimelines > 0 {
-                            activeAlert = .fieldChange
-                        } else {
-                            selectNewFieldImage()
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                            Text(^String.Titles.replaceImage)
-                        }
-                    }
-                    .buttonStyle(CompatibilityButtonStyle())
+                    Divider()
                 }
                 
-            } else {
-                VStack(spacing: 20) {
-                    Text(^String.Titles.fieldMapNotSet)
-                        .font(.headline)
-                    
-                    Image(systemName: "map")
-                        .font(.system(size: 60))
-                        .foregroundColor(.gray)
-                    
-                    Text(^String.Titles.uploadFieldMapHint)
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(.gray)
-                    
-                    Button(action: {
-                        selectNewFieldImage()
-                    }) {
+                if let playField = collectionManager.playField {
+                    // Field Map Image Section
+                    VStack(alignment: .leading, spacing: 16) {
                         HStack {
-                            Image(systemName: "photo")
-                            Text(^String.Titles.uploadFieldMap)
+                            Text(^String.Titles.fieldMap)
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            Spacer()
+                            
+                            // Action Buttons
+                            HStack(spacing: 12) {
+                                Button(action: {
+                                    activeTagsOnTimelines = countActiveMapTagsOnTimelines()
+                                    if activeTagsOnTimelines > 0 {
+                                        activeAlert = .fieldChange
+                                    } else {
+                                        selectNewFieldImage()
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                        Text(^String.Titles.replace)
+                                    }
+                                    .font(.subheadline)
+                                }
+                                .buttonStyle(ModernSecondaryButtonStyle())
+                                
+                                Button(action: {
+                                    activeTagsOnTimelines = countActiveMapTagsOnTimelines()
+                                    if activeTagsOnTimelines > 0 {
+                                        activeAlert = .fieldDelete
+                                    } else {
+                                        collectionManager.deleteFieldImage()
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "trash")
+                                        Text(^String.Titles.delete)
+                                    }
+                                    .font(.subheadline)
+                                }
+                                .buttonStyle(ModernDestructiveButtonStyle())
+                            }
+                        }
+                        
+                        // Image Display
+                        VStack(spacing: 16) {
+                            if let imageBookmark = collectionManager.playField?.imageBookmark,
+                               let imageURL = createImageUrl(imageBookmark),
+                               let nsImage = NSImage(contentsOf: imageURL) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                        )
+                                    
+                                    Image(nsImage: nsImage)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(maxHeight: 400)
+                                        .cornerRadius(16)
+                                }
+                                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+                            } else {
+                                VStack(spacing: 16) {
+                                    Image(systemName: "photo.badge.exclamationmark")
+                                        .font(.system(size: 48))
+                                        .foregroundColor(.orange)
+                                    
+                                    Text(^String.Titles.failedToLoadImage)
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                    
+                                    Text(^String.Titles.failedToLoadFieldMapImage)
+                                        .font(.body)
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(40)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
+                            }
+                        }
+                        
+                        // Dimensions Settings
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(^String.Titles.fieldDimensions)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 24) {
+                                // Width Setting
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Image(systemName: "arrow.left.and.right")
+                                            .foregroundColor(.blue)
+                                        Text(^String.Titles.collectionsFieldWidth)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                    }
+                                    
+                                    HStack(spacing: 8) {
+                                        TextField("", value: Binding(
+                                            get: { playField.width },
+                                            set: { collectionManager.updateFieldDimensions(width: $0, height: playField.height) }
+                                        ), formatter: NumberFormatter())
+                                        .textFieldStyle(ModernNewTextFieldStyle())
+                                        .frame(width: 80)
+                                        
+                                        Stepper("", value: Binding(
+                                            get: { playField.width },
+                                            set: { collectionManager.updateFieldDimensions(width: $0, height: playField.height) }
+                                        ), in: 1...1000, step: 1)
+                                        .labelsHidden()
+                                    }
+                                }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(NSColor.windowBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                                
+                                // Height Setting
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Image(systemName: "arrow.up.and.down")
+                                            .foregroundColor(.green)
+                                        Text(^String.Titles.collectionsFieldHeight)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                    }
+                                    
+                                    HStack(spacing: 8) {
+                                        TextField("", value: Binding(
+                                            get: { playField.height },
+                                            set: { collectionManager.updateFieldDimensions(width: playField.width, height: $0) }
+                                        ), formatter: NumberFormatter())
+                                        .textFieldStyle(ModernNewTextFieldStyle())
+                                        .frame(width: 80)
+                                        
+                                        Stepper("", value: Binding(
+                                            get: { playField.height },
+                                            set: { collectionManager.updateFieldDimensions(width: playField.width, height: $0) }
+                                        ), in: 1...1000, step: 1)
+                                        .labelsHidden()
+                                    }
+                                }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(NSColor.windowBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                                
+                                Spacer()
+                            }
                         }
                     }
-                    .buttonStyle(CompatibilityButtonStyle())
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                    
+                } else {
+                    // Empty State
+                    VStack(spacing: 24) {
+                        VStack(spacing: 16) {
+                            Image(systemName: "map")
+                                .font(.system(size: 80))
+                                .foregroundColor(.purple.opacity(0.6))
+                            
+                            VStack(spacing: 8) {
+                                Text(^String.Titles.fieldMapNotSet)
+                                    .font(.title2)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                
+                                Text(^String.Titles.uploadFieldMapHint)
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(nil)
+                            }
+                        }
+                        
+                        Button(action: {
+                            selectNewFieldImage()
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "photo.badge.plus")
+                                Text(^String.Titles.uploadFieldMap)
+                            }
+                            .font(.headline)
+                        }
+                        .buttonStyle(ModernPrimaryButtonStyle())
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(60)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.purple.opacity(0.2), lineWidth: 2)
+                            )
+                    )
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
+                
+                // Tags for Map Section
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "tag.fill")
+                            .foregroundColor(.blue)
+                        
+                        Text(^String.Titles.collectionsTagsForMap)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        Text("\(enabledTagsForMap.count) из \(allTagsForMap.count)")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.blue.opacity(0.1))
+                            )
+                    }
+                    
+                    tagsForFieldMapList
+                }
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(NSColor.windowBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                        )
+                )
             }
-            
-            Divider()
-                .padding(.vertical, 16)
-            
-            Text(^String.Titles.collectionsTagsForMap)
-                .font(.headline)
-            
-            tagsForFieldMapList
+            .padding(24)
         }
-        .padding()
     }
     
     func createImageUrl(_ bookmark: Data) -> URL? {
@@ -898,6 +1574,15 @@ struct CreateCustomCollectionsView: View {
         }
     }
     
+    // Computed properties for tag counts
+    private var allTagsForMap: [Tag] {
+        collectionManager.tags
+    }
+    
+    private var enabledTagsForMap: [Tag] {
+        collectionManager.tags.filter { $0.mapEnabled ?? false }
+    }
+    
     var tagsForFieldMapList: some View {
         let groupsWithTags = collectionManager.tagGroups.map { group -> (TagGroup, [Tag]) in
             let groupTags = collectionManager.tags.filter { tag in
@@ -907,32 +1592,124 @@ struct CreateCustomCollectionsView: View {
         }
         
         return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 16) {
                 ForEach(groupsWithTags, id: \.0.id) { groupInfo in
                     let group = groupInfo.0
                     let groupTags = groupInfo.1
                     
                     if !groupTags.isEmpty {
-                        Section(header: Text(group.name)
-                            .font(.headline)
-                            .padding(.top, 8)) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Group Header
+                            HStack {
+                                Image(systemName: "folder.fill")
+                                    .foregroundColor(.blue)
+                                
+                                Text(group.name)
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                
+                                Spacer()
+                                
+                                let enabledInGroup = groupTags.filter { $0.mapEnabled ?? false }.count
+                                Text("\(enabledInGroup)/\(groupTags.count)")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.blue.opacity(0.1))
+                                    )
+                            }
                             
-                            ForEach(groupTags) { tag in
-                                tagMapToggleRow(tag: tag)
+                            // Tags in Group
+                            LazyVGrid(columns: [
+                                GridItem(.flexible(), spacing: 8),
+                                GridItem(.flexible(), spacing: 8)
+                            ], spacing: 8) {
+                                ForEach(groupTags) { tag in
+                                    tagMapToggleCard(tag: tag)
+                                }
                             }
                         }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                )
+                        )
                     }
                 }
             }
             .padding(.vertical, 4)
         }
-        .frame(height: 300)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-        )
+        .frame(height: 400)
     }
 
+    private func tagMapToggleCard(tag: Tag) -> some View {
+        VStack(spacing: 12) {
+            // Tag Color and Name
+            HStack {
+                Circle()
+                    .fill(Color(hex: tag.color))
+                    .frame(width: 20, height: 20)
+                
+                Text(tag.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                
+                Spacer()
+            }
+            
+            // Description (if available)
+            if !tag.description.isEmpty {
+                Text(tag.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            
+            // Toggle
+            HStack {
+                Text(^String.Titles.useOnMap)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                Toggle("", isOn: Binding(
+                    get: { tag.mapEnabled ?? false },
+                    set: { collectionManager.updateTagMapEnabled(id: tag.id, mapEnabled: $0) }
+                ))
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                .labelsHidden()
+                .disabled(collectionManager.playField == nil)
+                .opacity(collectionManager.playField == nil ? 0.6 : 1)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(
+                            (tag.mapEnabled ?? false) ? Color.blue.opacity(0.3) : Color.gray.opacity(0.2),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .scaleEffect((tag.mapEnabled ?? false) ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: tag.mapEnabled)
+    }
+    
     private func tagMapToggleRow(tag: Tag) -> some View {
         HStack {
             Rectangle()
@@ -1000,207 +1777,485 @@ struct CreateCustomCollectionsView: View {
     }
     
     func tagDetailView(tag: Tag) -> some View {
-        Form {
-            Section(header: Text(^String.Titles.tagInfo)) {
-                FocusAwareTextField(text: $tagFormData.name, placeholder: ^String.Titles.title)
-                
-                TextEditor(text: $tagFormData.description)
-                    .frame(height: 100)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                    .padding(.vertical, 4)
-                
-                ColorPickerView(selectedColor: $tagFormData.color, hexString: $tagFormData.hexColor)
-                
-                HStack {
-                    Text(^String.Titles.collectionsTagTimeBefore)
-                    Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
-                    Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
-                        .frame(width: 60, alignment: .trailing)
-                }
-                
-                HStack {
-                    Text(^String.Titles.collectionsTagTimeAfter)
-                    Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
-                    Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
-                        .frame(width: 60, alignment: .trailing)
-                }
-                
-                Toggle(^String.Titles.collectionsTagUseWithMap, isOn: $tagFormData.mapEnabled)
-                .padding(.vertical, 4)
-                .help(^String.Titles.collectionsTagMapHelp)
-                .disabled(collectionManager.playField == nil)
-                .opacity(collectionManager.playField == nil ? 0.6 : 1)
-                
-                Toggle(^String.Titles.collectionsTagIsInterval, isOn: $tagFormData.isInterval)
-                    .padding(.vertical, 4)
-                    .help(^String.Titles.collectionsTagIsIntervalHelp)
-                
-                HStack {
-                    Text(^String.Titles.collectionsTagHotkey)
+        ScrollView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 12) {
+                    HStack {
+                        Circle()
+                            .fill(Color(hex: tag.color))
+                            .frame(width: 24, height: 24)
+                        
+                        Text(^String.Titles.tagInfo)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        Spacer()
+                    }
                     
-                    ZStack {
-                        Button(action: {
-                            isCapturingTagHotkey = true
-                        }) {
+                    Divider()
+                }
+                
+                // Basic Information Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.basicInformation)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(spacing: 16) {
+                        // Name Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.name)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            FocusAwareTextField(text: $tagFormData.name, placeholder: ^String.Titles.title)
+                                .textFieldStyle(ModernNewTextFieldStyle())
+                        }
+                        
+                        // Description Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.description)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            TextEditor(text: $tagFormData.description)
+                                .frame(minHeight: 80)
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        
+                        // Color Picker
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.color)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            ColorPickerView(selectedColor: $tagFormData.color, hexString: $tagFormData.hexColor)
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                }
+                
+                // Time Settings Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.timeSettings)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(spacing: 20) {
+                        // Time Before
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text(tagFormData.hotkey ?? ^String.Titles.collectionsTagNoHotkey)
-                                    .foregroundColor(isCapturingTagHotkey ? .blue : .primary)
+                                Text(^String.Titles.collectionsTagTimeBefore)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
                                 Spacer()
                                 
-                                if tagFormData.hotkey != nil {
-                                    Button(action: {
-                                        tagFormData.hotkey = nil
-                                    }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.gray)
-                                    }
-                                    .buttonStyle(BorderlessButtonStyle())
-                                }
-                            }
-                            .frame(width: 200)
-                            .padding(6)
-                            .background(Color.gray.opacity(0.2))
-                            .cornerRadius(5)
-                        }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .disabled(isCapturingTagHotkey)
-                        if isCapturingTagHotkey {
-                            KeyCaptureView(keyString: $tagFormData.hotkey, isCapturing: $isCapturingTagHotkey)
-                                .allowsHitTesting(false)
-                        }
-                    }
-                    
-                    if let hotkey = tagFormData.hotkey,
-                       collectionManager.isHotkeyAssigned(hotkey, excludingTagID: tag.id) {
-                        Text(^String.Titles.collectionsLabelHotkeyUsed)
-                            .foregroundColor(.red)
-                            .font(.caption)
-                    }
-                }
-            }
-            
-            Section(header: Text(^String.Titles.collectionsLabelLabelGroups)) {
-                VStack(spacing: 12) {
-                    ForEach(collectionManager.labelGroups) { group in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(group.name)
-                                    .font(.headline)
-                                Spacer()
-                                Toggle("", isOn: Binding(
-                                    get: { tagFormData.selectedLabelGroups.contains(group.id) },
-                                    set: { isSelected in
-                                        if isSelected {
-                                            tagFormData.selectedLabelGroups.append(group.id)
-                                        } else {
-                                            tagFormData.selectedLabelGroups.removeAll { $0 == group.id }
-                                        }
-                                    }
-                                ))
-                                .labelsHidden()
+                                Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.blue)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.blue.opacity(0.1))
+                                    )
                             }
                             
-                            if tagFormData.selectedLabelGroups.contains(group.id) {
-                                ForEach(getLabelsForGroup(groupID: group.id)) { label in
-                                    HStack {
-                                        Text("• \(label.name)")
-                                            .padding(.leading, 10)
-                                        Spacer()
-                                        ZStack {
-                                            Button(action: {
-                                                isCapturingTagHotkey = false
-                                                for (key, _) in isCapturingLabelHotkeys {
-                                                    isCapturingLabelHotkeys[key] = false
-                                                }
-                                                isCapturingLabelHotkeys[label.id] = true
-                                            }) {
-                                                HStack {
-                                                    Text(tagFormData.labelHotkeys[label.id] ?? ^String.Titles.assign)
-                                                        .foregroundColor(isCapturingLabelHotkeys[label.id] == true ? .blue : .primary)
-                                                        .lineLimit(1)
-                                                    
-                                                    if tagFormData.labelHotkeys[label.id] != nil {
-                                                        Button(action: {
-                                                            tagFormData.labelHotkeys.removeValue(forKey: label.id)
-                                                        }) {
-                                                            Image(systemName: "xmark.circle.fill")
-                                                                .foregroundColor(.gray)
-                                                        }
-                                                        .buttonStyle(BorderlessButtonStyle())
-                                                        .padding(.leading, 4)
-                                                    }
-                                                }
-                                                .frame(width: 120)
-                                                .padding(4)
-                                                .background(Color.gray.opacity(0.2))
-                                                .cornerRadius(4)
-                                            }
-                                            .buttonStyle(BorderlessButtonStyle())
-                                            .disabled(isCapturingLabelHotkeys[label.id] == true)
-                                            
-                                            if isCapturingLabelHotkeys[label.id] == true {
-                                                KeyCaptureView(
-                                                    keyString: Binding(
-                                                        get: { tagFormData.labelHotkeys[label.id] },
-                                                        set: { tagFormData.labelHotkeys[label.id] = $0 }
-                                                    ),
-                                                    isCapturing: Binding(
-                                                        get: { isCapturingLabelHotkeys[label.id] == true },
-                                                        set: { isCapturingLabelHotkeys[label.id] = $0 }
-                                                    )
-                                                )
-                                                .allowsHitTesting(false)
-                                            }
+                            Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
+                                .accentColor(.blue)
+                        }
+                        
+                        // Time After
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(^String.Titles.collectionsTagTimeAfter)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.blue)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.blue.opacity(0.1))
+                                    )
+                            }
+                            
+                            Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
+                                .accentColor(.blue)
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                }
+                
+                // Settings Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.additionalSettings)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(spacing: 16) {
+                        // Map Toggle
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(^String.Titles.collectionsTagUseWithMap)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                Text(^String.Titles.collectionsTagMapHelp)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Toggle("", isOn: $tagFormData.mapEnabled)
+                                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                                .disabled(collectionManager.playField == nil)
+                                .opacity(collectionManager.playField == nil ? 0.6 : 1)
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                        
+                        // Interval Toggle
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(^String.Titles.collectionsTagIsInterval)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                Text(^String.Titles.collectionsTagIsIntervalHelp)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Toggle("", isOn: $tagFormData.isInterval)
+                                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                }
+                
+                // Hotkey Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.hotkeys)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(^String.Titles.collectionsTagHotkey)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                        
+                        ZStack {
+                            Button(action: {
+                                isCapturingTagHotkey = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "keyboard")
+                                        .foregroundColor(.blue)
+                                    
+                                    Text(tagFormData.hotkey ?? ^String.Titles.collectionsTagNoHotkey)
+                                        .foregroundColor(isCapturingTagHotkey ? .blue : .primary)
+                                    
+                                    Spacer()
+                                    
+                                    if tagFormData.hotkey != nil {
+                                        Button(action: {
+                                            tagFormData.hotkey = nil
+                                        }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(.gray)
                                         }
-                                        
-                                        if let hotkey = tagFormData.labelHotkeys[label.id],
-                                           tagFormData.isLabelHotkeyUsed(hotkey, exceptLabel: label.id) {
-                                            Image(systemName: "exclamationmark.triangle.fill")
-                                                .foregroundColor(.orange)
-                                                .help(^String.Titles.hotkeyAlreadyUsed)
-                                        }
+                                        .buttonStyle(BorderlessButtonStyle())
                                     }
-                                    .padding(.vertical, 2)
                                 }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(isCapturingTagHotkey ? Color.blue : Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                            .disabled(isCapturingTagHotkey)
+                            
+                            if isCapturingTagHotkey {
+                                KeyCaptureView(keyString: $tagFormData.hotkey, isCapturing: $isCapturingTagHotkey)
+                                    .allowsHitTesting(false)
                             }
                         }
-                        .padding(8)
-                        .background(Color.gray.opacity(0.05))
-                        .cornerRadius(8)
+                        
+                        if let hotkey = tagFormData.hotkey,
+                           collectionManager.isHotkeyAssigned(hotkey, excludingTagID: tag.id) {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                Text(^String.Titles.collectionsLabelHotkeyUsed)
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.orange.opacity(0.1))
+                            )
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                }
+                
+                // Label Groups Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.collectionsLabelLabelGroups)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(spacing: 12) {
+                        ForEach(collectionManager.labelGroups) { group in
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Image(systemName: "folder.fill")
+                                        .foregroundColor(.green)
+                                    
+                                    Text(group.name)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                    
+                                    Spacer()
+                                    
+                                    Toggle("", isOn: Binding(
+                                        get: { tagFormData.selectedLabelGroups.contains(group.id) },
+                                        set: { isSelected in
+                                            if isSelected {
+                                                tagFormData.selectedLabelGroups.append(group.id)
+                                            } else {
+                                                tagFormData.selectedLabelGroups.removeAll { $0 == group.id }
+                                            }
+                                        }
+                                    ))
+                                    .toggleStyle(SwitchToggleStyle(tint: .green))
+                                }
+                                
+                                if tagFormData.selectedLabelGroups.contains(group.id) {
+                                    VStack(spacing: 8) {
+                                        ForEach(getLabelsForGroup(groupID: group.id)) { label in
+                                            HStack {
+                                                Image(systemName: "label")
+                                                    .foregroundColor(.green)
+                                                
+                                                Text(label.name)
+                                                    .font(.body)
+                                                
+                                                Spacer()
+                                                
+                                                ZStack {
+                                                    Button(action: {
+                                                        isCapturingTagHotkey = false
+                                                        for (key, _) in isCapturingLabelHotkeys {
+                                                            isCapturingLabelHotkeys[key] = false
+                                                        }
+                                                        isCapturingLabelHotkeys[label.id] = true
+                                                    }) {
+                                                        HStack {
+                                                            Image(systemName: "keyboard")
+                                                                .foregroundColor(.blue)
+                                                            
+                                                            Text(tagFormData.labelHotkeys[label.id] ?? ^String.Titles.assign)
+                                                                .foregroundColor(isCapturingLabelHotkeys[label.id] == true ? .blue : .primary)
+                                                                .lineLimit(1)
+                                                            
+                                                            if tagFormData.labelHotkeys[label.id] != nil {
+                                                                Button(action: {
+                                                                    tagFormData.labelHotkeys.removeValue(forKey: label.id)
+                                                                }) {
+                                                                    Image(systemName: "xmark.circle.fill")
+                                                                        .foregroundColor(.gray)
+                                                                }
+                                                                .buttonStyle(BorderlessButtonStyle())
+                                                            }
+                                                        }
+                                                        .padding(8)
+                                                        .background(
+                                                            RoundedRectangle(cornerRadius: 8)
+                                                                .fill(Color(NSColor.controlBackgroundColor))
+                                                                .overlay(
+                                                                    RoundedRectangle(cornerRadius: 8)
+                                                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                                                )
+                                                        )
+                                                    }
+                                                    .buttonStyle(BorderlessButtonStyle())
+                                                    .disabled(isCapturingLabelHotkeys[label.id] == true)
+                                                    
+                                                    if isCapturingLabelHotkeys[label.id] == true {
+                                                        KeyCaptureView(
+                                                            keyString: Binding(
+                                                                get: { tagFormData.labelHotkeys[label.id] },
+                                                                set: { tagFormData.labelHotkeys[label.id] = $0 }
+                                                            ),
+                                                            isCapturing: Binding(
+                                                                get: { isCapturingLabelHotkeys[label.id] == true },
+                                                                set: { isCapturingLabelHotkeys[label.id] = $0 }
+                                                            )
+                                                        )
+                                                        .allowsHitTesting(false)
+                                                    }
+                                                }
+                                                
+                                                if let hotkey = tagFormData.labelHotkeys[label.id],
+                                                   tagFormData.isLabelHotkeyUsed(hotkey, exceptLabel: label.id) {
+                                                    Image(systemName: "exclamationmark.triangle.fill")
+                                                        .foregroundColor(.orange)
+                                                        .help(^String.Titles.hotkeyAlreadyUsed)
+                                                }
+                                            }
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                        }
+                                    }
+                                    .padding(.leading, 20)
+                                }
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(NSColor.controlBackgroundColor))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                    )
+                            )
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                }
+                
+                // Save Button
+                Button(^String.Titles.collectionsButtonSaveChanges) {
+                    let success = collectionManager.updateTag(
+                        id: tag.id,
+                        primaryID: tag.primaryID,
+                        name: tagFormData.name,
+                        description: tagFormData.description,
+                        color: tagFormData.hexColor,
+                        defaultTimeBefore: tagFormData.defaultTimeBefore,
+                        defaultTimeAfter: tagFormData.defaultTimeAfter,
+                        labelGroupIDs: tagFormData.selectedLabelGroups,
+                        hotkey: tagFormData.hotkey,
+                        labelHotkeys: tagFormData.labelHotkeys,
+                        isInterval: tagFormData.isInterval,
+                        mapEnabled: tagFormData.mapEnabled
+                    )
+                    
+                    if success, let updatedTag = collectionManager.tags.first(where: { $0.name == tagFormData.name }) {
+                        selectedTagID = updatedTag.id
+                        tagFormData = TagFormData(from: updatedTag)
+                        
+                        // Автоматически сохраняем коллекцию в файлы
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     }
                 }
-                .padding(.vertical, 4)
+                .buttonStyle(ModernPrimaryButtonStyle())
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
             }
-            
-            Button(^String.Titles.collectionsButtonSaveChanges) {
-                let success = collectionManager.updateTag(
-                    id: tag.id,
-                    primaryID: tag.primaryID,
-                    name: tagFormData.name,
-                    description: tagFormData.description,
-                    color: tagFormData.hexColor,
-                    defaultTimeBefore: tagFormData.defaultTimeBefore,
-                    defaultTimeAfter: tagFormData.defaultTimeAfter,
-                    labelGroupIDs: tagFormData.selectedLabelGroups,
-                    hotkey: tagFormData.hotkey,
-                    labelHotkeys: tagFormData.labelHotkeys,
-                    isInterval: tagFormData.isInterval,
-                    mapEnabled: tagFormData.mapEnabled
-                )
-                
-                if success, let updatedTag = collectionManager.tags.first(where: { $0.name == tagFormData.name }) {
-                    selectedTagID = updatedTag.id
-                    tagFormData = TagFormData(from: updatedTag)
-                }
-            }
-            .buttonStyle(CompatibilityButtonStyle())
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top)
+            .padding(24)
         }
-        .padding()
         .onAppear {
             isCapturingLabelHotkeys = [:]
             for groupID in tagFormData.selectedLabelGroups {
@@ -1212,258 +2267,695 @@ struct CreateCustomCollectionsView: View {
     }
     
     func labelDetailView(label: Label) -> some View {
-        Form {
-            Section(header: Text(^String.Titles.labelInfo)) {
-                FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title)
+        ScrollView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "label.fill")
+                            .foregroundColor(.green)
+                            .font(.title2)
+                        
+                        Text(^String.Titles.labelInfo)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        Spacer()
+                    }
+                    
+                    Divider()
+                }
                 
-                TextEditor(text: $newLabelDescription)
-                    .frame(height: 100)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                // Basic Information Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.basicInformation)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(spacing: 16) {
+                        // Name Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.name)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title)
+                                .textFieldStyle(ModernNewTextFieldStyle())
+                        }
+                        
+                        // Description Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.description)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            TextEditor(text: $newLabelDescription)
+                                .frame(minHeight: 80)
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
                     )
-                    .padding(.vertical, 4)
-            }
-            
-            Section(header: Text(^String.Titles.relatedTags)) {
-                List {
-                    ForEach(collectionManager.tags.filter { tag in
+                }
+                
+                // Related Tags Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.relatedTags)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    let relatedTags = collectionManager.tags.filter { tag in
                         tag.lablesGroup.contains { groupID in
                             if let group = collectionManager.labelGroups.first(where: { $0.id == groupID }) {
                                 return group.lables.contains(label.id)
                             }
                             return false
                         }
-                    }) { tag in
-                        HStack {
-                            Rectangle()
-                                .fill(Color(hex: tag.color))
-                                .frame(width: 16, height: 16)
+                    }
+                    
+                    if relatedTags.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "tag.slash")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray)
                             
-                            Text(tag.name)
+                            Text(^String.Titles.noRelatedTags)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            Text(^String.Titles.collectionsLabelTagAssociations)
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(40)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                    } else {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 8),
+                            GridItem(.flexible(), spacing: 8)
+                        ], spacing: 12) {
+                            ForEach(relatedTags) { tag in
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(Color(hex: tag.color))
+                                        .frame(width: 12, height: 12)
+                                    
+                                    Text(tag.name)
+                                        .font(.body)
+                                        .lineLimit(1)
+                                    
+                                    Spacer()
+                                }
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                            }
+                        }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(NSColor.windowBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                )
+                        )
                     }
                 }
-                .frame(height: 150)
                 
-                Text(^String.Titles.collectionsLabelTagAssociations)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
-            
-            Button(^String.Titles.collectionsButtonSaveChanges) {
-                if let index = collectionManager.labels.firstIndex(where: { $0.id == label.id }) {
-                    collectionManager.labels[index] = Label(
-                        id: label.id,
-                        name: newLabelName,
-                        description: newLabelDescription
-                    )
+                // Save Button
+                Button(^String.Titles.collectionsButtonSaveChanges) {
+                    if let index = collectionManager.labels.firstIndex(where: { $0.id == label.id }) {
+                        collectionManager.labels[index] = Label(
+                            id: label.id,
+                            name: newLabelName,
+                            description: newLabelDescription
+                        )
+                        
+                        // Автоматически сохраняем коллекцию в файлы
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    }
                 }
+                .buttonStyle(ModernPrimaryButtonStyle())
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
             }
-            .buttonStyle(CompatibilityButtonStyle())
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top)
+            .padding(24)
         }
-        .padding()
     }
     
     func timeEventDetailView(event: TimeEvent) -> some View {
-        Form {
-            Section(header: Text(^String.Titles.eventInfo)) {
-                FocusAwareTextField(text: $newTimeEventName, placeholder: ^String.Titles.title)
-            }
-            
-            Button(^String.Titles.collectionsButtonSaveChanges) {
-                if let index = collectionManager.timeEvents.firstIndex(where: { $0.id == event.id }) {
-                    collectionManager.timeEvents[index] = TimeEvent(
-                        id: event.id,
-                        name: newTimeEventName
+        ScrollView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "clock.fill")
+                            .foregroundColor(.orange)
+                            .font(.title2)
+                        
+                        Text(^String.Titles.eventInfo)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        Spacer()
+                    }
+                    
+                    Divider()
+                }
+                
+                // Basic Information Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.basicInformation)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(spacing: 16) {
+                        // Name Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.eventName)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            FocusAwareTextField(text: $newTimeEventName, placeholder: ^String.Titles.title)
+                                .textFieldStyle(ModernNewTextFieldStyle())
+                        }
+                        
+                        // Event Description
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.description)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            Text("Общие события позволяют быстро добавлять повторяющиеся события на временную шкалу без необходимости каждый раз создавать новые теги.")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.orange.opacity(0.1))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
                     )
                 }
+                
+                // Action Buttons
+                VStack(spacing: 16) {
+                    // Save Button
+                    Button(^String.Titles.collectionsButtonSaveChanges) {
+                        if let index = collectionManager.timeEvents.firstIndex(where: { $0.id == event.id }) {
+                            collectionManager.timeEvents[index] = TimeEvent(
+                                id: event.id,
+                                name: newTimeEventName
+                            )
+                            
+                            // Автоматически сохраняем коллекцию в файлы
+                            _ = collectionManager.saveCollectionToFiles()
+                            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                        }
+                    }
+                    .buttonStyle(ModernPrimaryButtonStyle())
+                    .frame(maxWidth: .infinity)
+                    
+                    // Delete Button
+                    Button(^String.Titles.deleteEvent) {
+                        collectionManager.removeTimeEvent(id: event.id)
+                        selectedTimeEventID = nil
+                        
+                        // Автоматически сохраняем коллекцию в файлы
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    }
+                    .buttonStyle(ModernDestructiveButtonStyle())
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(.top, 8)
             }
-            .buttonStyle(CompatibilityButtonStyle())
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top)
-            
-            Button(^String.Titles.deleteEvent) {
-                collectionManager.removeTimeEvent(id: event.id)
-                selectedTimeEventID = nil
-            }
-            .foregroundColor(.red)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top)
+            .padding(24)
         }
-        .padding()
     }
     
     func addGroupSheet(title: String, onAdd: @escaping () -> Void) -> some View {
-        VStack(spacing: 16) {
-            Text(title)
-                .font(.headline)
-                .padding(.top)
+        VStack(spacing: 24) {
+            VStack(spacing: 8) {
+                Image(systemName: title.contains("лейблов") ? "label.fill" : "tag.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(title.contains("лейблов") ? .green : .blue)
+                
+                Text(title)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 20)
             
-            FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Название группы")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+            }
+            .padding(.horizontal, 24)
             
-            HStack {
+            HStack(spacing: 16) {
                 Button(^String.Titles.collectionsButtonCancel) {
-                    if title.contains(^String.Titles.fieldMapPickerTagsCount) {
-                        showAddTagGroupSheet = false
-                    } else {
-                        showAddLabelGroupSheet = false
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if title.contains(^String.Titles.fieldMapPickerTagsCount) {
+                            showAddTagGroupSheet = false
+                        } else {
+                            showAddLabelGroupSheet = false
+                        }
                     }
                 }
                 .keyboardShortcut(.escape)
+                .buttonStyle(SecondaryButtonStyle())
                 
                 Button(^String.Titles.collectionsButtonAdd) {
                     onAdd()
-                    if title.contains(^String.Titles.fieldMapPickerTagsCount) {
-                        showAddTagGroupSheet = false
-                    } else {
-                        showAddLabelGroupSheet = false
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if title.contains(^String.Titles.fieldMapPickerTagsCount) {
+                            showAddTagGroupSheet = false
+                        } else {
+                            showAddLabelGroupSheet = false
+                        }
                     }
                 }
                 .keyboardShortcut(.return)
                 .disabled(newGroupName.isEmpty)
-                .buttonStyle(CompatibilityButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
             }
-            .padding()
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
         }
-        .frame(width: 400)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: 450)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        )
     }
     
     func addTagSheet() -> some View {
-        VStack(spacing: 16) {
-            Text(^String.Titles.addNewTag)
-                .font(.headline)
-                .padding(.top)
-            
-            Form {
-                FocusAwareTextField(text: $tagFormData.name, placeholder: ^String.Titles.title)
-                
-                TextEditor(text: $tagFormData.description)
-                    .frame(height: 100)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                    .padding(.vertical, 4)
-                
-                ColorPickerView(selectedColor: $tagFormData.color, hexString: $tagFormData.hexColor)
-                
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 16) {
                 HStack {
-                    Text(^String.Titles.collectionsTagTimeBefore)
-                    Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
-                    Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
-                        .frame(width: 60, alignment: .trailing)
-                }
-                
-                HStack {
-                    Text(^String.Titles.collectionsTagTimeAfter)
-                    Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
-                    Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
-                        .frame(width: 60, alignment: .trailing)
-                }
-                
-                Toggle(^String.Titles.collectionsTagIsInterval, isOn: $tagFormData.isInterval)
-                    .padding(.vertical, 4)
-                    .help(^String.Titles.collectionsTagIsIntervalHelp)
-                
-                HStack {
-                    Text(^String.Titles.collectionsTagHotkey)
+                    Image(systemName: "tag.fill")
+                        .font(.title)
+                        .foregroundColor(.blue)
                     
-                    ZStack {
-                        Button(action: {
-                            isCapturingTagHotkey = true
-                        }) {
+                    Text(^String.Titles.addNewTag)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Spacer()
+                }
+                
+                Divider()
+            }
+            .padding(24)
+            .background(Color(NSColor.windowBackgroundColor))
+            
+            // Content
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Basic Information
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(^String.Titles.basicInformation)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        VStack(spacing: 16) {
+                            // Name Field
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(^String.Titles.name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                FocusAwareTextField(text: $tagFormData.name, placeholder: ^String.Titles.title)
+                                    .textFieldStyle(ModernNewTextFieldStyle())
+                            }
+                            
+                            // Description Field
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(^String.Titles.description)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                TextEditor(text: $tagFormData.description)
+                                    .frame(minHeight: 80)
+                                    .padding(12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(NSColor.controlBackgroundColor))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                            
+                            // Color Picker
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(^String.Titles.color)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                ColorPickerView(selectedColor: $tagFormData.color, hexString: $tagFormData.hexColor)
+                                    .padding(12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(NSColor.controlBackgroundColor))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                        }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(NSColor.windowBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                    }
+                    
+                    // Time Settings
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(^String.Titles.timeSettings)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        VStack(spacing: 20) {
+                            // Time Before
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(^String.Titles.collectionsTagTimeBefore)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.blue)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color.blue.opacity(0.1))
+                                        )
+                                }
+                                
+                                Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
+                                    .accentColor(.blue)
+                            }
+                            
+                            // Time After
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(^String.Titles.collectionsTagTimeAfter)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.blue)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color.blue.opacity(0.1))
+                                        )
+                                }
+                                
+                                Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
+                                    .accentColor(.blue)
+                            }
+                        }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(NSColor.windowBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                    }
+                    
+                    // Additional Settings
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(^String.Titles.additionalSettings)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        VStack(spacing: 16) {
+                            // Interval Toggle
                             HStack {
-                                Text(tagFormData.hotkey ?? ^String.Titles.collectionsTagNoHotkey)
-                                    .foregroundColor(isCapturingTagHotkey ? .blue : .primary)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(^String.Titles.collectionsTagIsInterval)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    
+                                    Text(^String.Titles.collectionsTagIsIntervalHelp)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
                                 Spacer()
                                 
-                                if tagFormData.hotkey != nil {
+                                Toggle("", isOn: $tagFormData.isInterval)
+                                    .toggleStyle(SwitchToggleStyle(tint: .blue))
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(NSColor.controlBackgroundColor))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                    )
+                            )
+                            
+                            // Hotkey
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(^String.Titles.collectionsTagHotkey)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                ZStack {
                                     Button(action: {
-                                        tagFormData.hotkey = nil
+                                        isCapturingTagHotkey = true
                                     }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.gray)
+                                        HStack {
+                                            Image(systemName: "keyboard")
+                                                .foregroundColor(.blue)
+                                            
+                                            Text(tagFormData.hotkey ?? ^String.Titles.collectionsTagNoHotkey)
+                                                .foregroundColor(isCapturingTagHotkey ? .blue : .primary)
+                                            
+                                            Spacer()
+                                            
+                                            if tagFormData.hotkey != nil {
+                                                Button(action: {
+                                                    tagFormData.hotkey = nil
+                                                }) {
+                                                    Image(systemName: "xmark.circle.fill")
+                                                        .foregroundColor(.gray)
+                                                }
+                                                .buttonStyle(BorderlessButtonStyle())
+                                            }
+                                        }
+                                        .padding(16)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(Color(NSColor.controlBackgroundColor))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .stroke(isCapturingTagHotkey ? Color.blue : Color.gray.opacity(0.3), lineWidth: 1)
+                                                )
+                                        )
                                     }
                                     .buttonStyle(BorderlessButtonStyle())
+                                    .disabled(isCapturingTagHotkey)
+                                    
+                                    if isCapturingTagHotkey {
+                                        KeyCaptureView(keyString: $tagFormData.hotkey, isCapturing: $isCapturingTagHotkey)
+                                            .allowsHitTesting(false)
+                                    }
+                                }
+                                
+                                if let hotkey = tagFormData.hotkey,
+                                   collectionManager.isHotkeyAssigned(hotkey) {
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                        Text(^String.Titles.collectionsLabelHotkeyUsed)
+                                            .font(.caption)
+                                            .foregroundColor(.orange)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.orange.opacity(0.1))
+                                    )
                                 }
                             }
-                            .frame(width: 200)
-                            .padding(6)
-                            .background(Color.gray.opacity(0.2))
-                            .cornerRadius(5)
                         }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .disabled(isCapturingTagHotkey)
-                        
-                        if isCapturingTagHotkey {
-                            KeyCaptureView(keyString: $tagFormData.hotkey, isCapturing: $isCapturingTagHotkey)
-                                .allowsHitTesting(false)
-                        }
-                    }
-                    
-                    if let hotkey = tagFormData.hotkey,
-                       collectionManager.isHotkeyAssigned(hotkey) {
-                        Text(^String.Titles.collectionsLabelHotkeyUsed)
-                            .foregroundColor(.red)
-                            .font(.caption)
-                    }
-                }
-            }
-            .padding()
-            
-            HStack {
-                Button(^String.Titles.collectionsButtonCancel) {
-                    showAddTagSheet = false
-                    tagFormData = TagFormData()
-                }
-                .keyboardShortcut(.escape)
-                
-                Button(^String.Titles.collectionsButtonAdd) {
-                    if let groupID = selectedTagGroupID {
-                        let newTag = collectionManager.createTag(
-                            name: tagFormData.name,
-                            description: tagFormData.description,
-                            color: tagFormData.hexColor,
-                            defaultTimeBefore: tagFormData.defaultTimeBefore,
-                            defaultTimeAfter: tagFormData.defaultTimeAfter,
-                            inGroup: groupID,
-                            hotkey: tagFormData.hotkey,
-                            isInterval: tagFormData.isInterval
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(NSColor.windowBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                )
                         )
-                        
-                        if !tagFormData.selectedLabelGroups.isEmpty {
-                            collectionManager.updateTag(
-                                id: newTag.id,
-                                primaryID: newTag.primaryID,
-                                name: newTag.name,
-                                description: newTag.description,
-                                color: newTag.color,
-                                defaultTimeBefore: newTag.defaultTimeBefore,
-                                defaultTimeAfter: newTag.defaultTimeAfter,
-                                labelGroupIDs: tagFormData.selectedLabelGroups,
-                                hotkey: newTag.hotkey,
-                                labelHotkeys: tagFormData.labelHotkeys,
-                                isInterval: newTag.isInterval ?? false,
-                                mapEnabled: newTag.mapEnabled ?? false
-                            )
-                        }
+                    }
+                }
+                .padding(24)
+            }
+            
+            // Footer
+            VStack(spacing: 0) {
+                Divider()
+                
+                HStack(spacing: 16) {
+                    Button(^String.Titles.collectionsButtonCancel) {
+                        showAddTagSheet = false
                         tagFormData = TagFormData()
                     }
-                    showAddTagSheet = false
+                    .keyboardShortcut(.escape)
+                    .buttonStyle(ModernSecondaryButtonStyle())
+                    
+                    Button(^String.Titles.collectionsButtonAdd) {
+                        if let groupID = selectedTagGroupID {
+                            let newTag = collectionManager.createTag(
+                                name: tagFormData.name,
+                                description: tagFormData.description,
+                                color: tagFormData.hexColor,
+                                defaultTimeBefore: tagFormData.defaultTimeBefore,
+                                defaultTimeAfter: tagFormData.defaultTimeAfter,
+                                inGroup: groupID,
+                                hotkey: tagFormData.hotkey,
+                                isInterval: tagFormData.isInterval
+                            )
+                            
+                            if !tagFormData.selectedLabelGroups.isEmpty {
+                                collectionManager.updateTag(
+                                    id: newTag.id,
+                                    primaryID: newTag.primaryID,
+                                    name: newTag.name,
+                                    description: newTag.description,
+                                    color: newTag.color,
+                                    defaultTimeBefore: newTag.defaultTimeBefore,
+                                    defaultTimeAfter: newTag.defaultTimeAfter,
+                                    labelGroupIDs: tagFormData.selectedLabelGroups,
+                                    hotkey: newTag.hotkey,
+                                    labelHotkeys: tagFormData.labelHotkeys,
+                                    isInterval: newTag.isInterval ?? false,
+                                    mapEnabled: newTag.mapEnabled ?? false
+                                )
+                            }
+                            
+                            // Автоматически сохраняем коллекцию в файлы
+                            _ = collectionManager.saveCollectionToFiles()
+                            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                            
+                            tagFormData = TagFormData()
+                        }
+                        showAddTagSheet = false
+                    }
+                    .keyboardShortcut(.return)
+                    .disabled(tagFormData.name.isEmpty || selectedTagGroupID == nil)
+                    .buttonStyle(ModernPrimaryButtonStyle())
                 }
-                .keyboardShortcut(.return)
-                .disabled(tagFormData.name.isEmpty || selectedTagGroupID == nil)
-                .buttonStyle(CompatibilityButtonStyle())
+                .padding(24)
             }
-            .padding()
+            .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 500)
+        .frame(width: 600, height: 700)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
+        )
         .onAppear {
             tagFormData = TagFormData()
             isCapturingTagHotkey = false
@@ -1472,82 +2964,455 @@ struct CreateCustomCollectionsView: View {
     }
     
     func addLabelSheet() -> some View {
-        VStack(spacing: 16) {
-            Text(^String.Titles.collectionsDialogAddLabel)
-                .font(.headline)
-                .padding(.top)
-            
-            Form {
-                FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title)
-                
-                TextEditor(text: $newLabelDescription)
-                    .frame(height: 100)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                    .padding(.vertical, 4)
-            }
-            .padding()
-            
-            HStack {
-                Button(^String.Titles.collectionsButtonCancel) {
-                    showAddLabelSheet = false
-                    newLabelName = ""
-                    newLabelDescription = ""
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "label.fill")
+                        .font(.title)
+                        .foregroundColor(.green)
+                    
+                    Text(^String.Titles.collectionsDialogAddLabel)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Spacer()
                 }
-                .keyboardShortcut(.escape)
                 
-                Button(^String.Titles.collectionsButtonAdd) {
-                    if let groupID = selectedLabelGroupID {
-                        collectionManager.createLabel(
-                            name: newLabelName,
-                            description: newLabelDescription,
-                            inGroup: groupID
-                        )
+                Divider()
+            }
+            .padding(24)
+            .background(Color(NSColor.windowBackgroundColor))
+            
+            // Content
+            VStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.basicInformation)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(spacing: 16) {
+                        // Name Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.name)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title)
+                                .textFieldStyle(ModernNewTextFieldStyle())
+                        }
+                        
+                        // Description Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.description)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            TextEditor(text: $newLabelDescription)
+                                .frame(minHeight: 80)
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        
+                        // Info
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Информация")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            Text("Лейблы используются для категоризации и дополнительной маркировки тегов. Они помогают организовать события по типам или важности.")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.green.opacity(0.1))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                }
+            }
+            .padding(24)
+            
+            // Footer
+            VStack(spacing: 0) {
+                Divider()
+                
+                HStack(spacing: 16) {
+                    Button(^String.Titles.collectionsButtonCancel) {
+                        showAddLabelSheet = false
                         newLabelName = ""
                         newLabelDescription = ""
                     }
-                    showAddLabelSheet = false
+                    .keyboardShortcut(.escape)
+                    .buttonStyle(ModernSecondaryButtonStyle())
+                    
+                    Button(^String.Titles.collectionsButtonAdd) {
+                        if let groupID = selectedLabelGroupID {
+                            collectionManager.createLabel(
+                                name: newLabelName,
+                                description: newLabelDescription,
+                                inGroup: groupID
+                            )
+                            
+                            // Автоматически сохраняем коллекцию в файлы
+                            _ = collectionManager.saveCollectionToFiles()
+                            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                            
+                            newLabelName = ""
+                            newLabelDescription = ""
+                        }
+                        showAddLabelSheet = false
+                    }
+                    .keyboardShortcut(.return)
+                    .disabled(newLabelName.isEmpty || selectedLabelGroupID == nil)
+                    .buttonStyle(ModernPrimaryButtonStyle())
                 }
-                .keyboardShortcut(.return)
-                .disabled(newLabelName.isEmpty || selectedLabelGroupID == nil)
-                .buttonStyle(CompatibilityButtonStyle())
+                .padding(24)
             }
-            .padding()
+            .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 500)
+        .frame(width: 500, height: 500)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
+        )
     }
     
     func addTimeEventSheet() -> some View {
-        VStack(spacing: 16) {
-            Text(^String.Titles.collectionsDialogAddTimeEvent)
-                .font(.headline)
-                .padding(.top)
-            
-            Form {
-                FocusAwareTextField(text: $newTimeEventName, placeholder: ^String.Titles.title)
-            }
-            .padding()
-            
-            HStack {
-                Button(^String.Titles.collectionsButtonCancel) {
-                    showAddTimeEventSheet = false
-                    newTimeEventName = ""
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "clock.fill")
+                        .font(.title)
+                        .foregroundColor(.orange)
+                    
+                    Text(^String.Titles.collectionsDialogAddTimeEvent)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Spacer()
                 }
-                .keyboardShortcut(.escape)
                 
-                Button(^String.Titles.collectionsButtonAdd) {
-                    collectionManager.createTimeEvent(name: newTimeEventName)
-                    newTimeEventName = ""
-                    showAddTimeEventSheet = false
-                }
-                .keyboardShortcut(.return)
-                .disabled(newTimeEventName.isEmpty)
-                .buttonStyle(CompatibilityButtonStyle())
+                Divider()
             }
-            .padding()
+            .padding(24)
+            .background(Color(NSColor.windowBackgroundColor))
+            
+            // Content
+            VStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(^String.Titles.basicInformation)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(spacing: 16) {
+                        // Name Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.eventName)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            FocusAwareTextField(text: $newTimeEventName, placeholder: ^String.Titles.title)
+                                .textFieldStyle(ModernNewTextFieldStyle())
+                        }
+                        
+                        // Info
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Информация")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            Text("Общие события позволяют быстро добавлять повторяющиеся события на временную шкалу без необходимости каждый раз создавать новые теги. Это удобно для часто используемых событий.")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.orange.opacity(0.1))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                }
+            }
+            .padding(24)
+            
+            // Footer
+            VStack(spacing: 0) {
+                Divider()
+                
+                HStack(spacing: 16) {
+                    Button(^String.Titles.collectionsButtonCancel) {
+                        showAddTimeEventSheet = false
+                        newTimeEventName = ""
+                    }
+                    .keyboardShortcut(.escape)
+                    .buttonStyle(ModernSecondaryButtonStyle())
+                    
+                    Button(^String.Titles.collectionsButtonAdd) {
+                        collectionManager.createTimeEvent(name: newTimeEventName)
+                        
+                        // Автоматически сохраняем коллекцию в файлы
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                        
+                        newTimeEventName = ""
+                        showAddTimeEventSheet = false
+                    }
+                    .keyboardShortcut(.return)
+                    .disabled(newTimeEventName.isEmpty)
+                    .buttonStyle(ModernPrimaryButtonStyle())
+                }
+                .padding(24)
+            }
+            .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 500)
+        .frame(width: 500, height: 400)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
+        )
+    }
+    
+    // MARK: - Search Functions
+    
+    var filteredTagGroups: [TagGroup] {
+        if searchText.isEmpty {
+            return collectionManager.tagGroups
+        }
+        
+        switch searchScope {
+        case .all, .groups:
+            return collectionManager.tagGroups.filter { group in
+                group.name.localizedCaseInsensitiveContains(searchText)
+            }
+        default:
+            return collectionManager.tagGroups
+        }
+    }
+    
+    var filteredTimeEvents: [TimeEvent] {
+        if searchText.isEmpty {
+            return collectionManager.timeEvents
+        }
+        
+        switch searchScope {
+        case .all, .groups:
+            return collectionManager.timeEvents.filter { event in
+                event.name.localizedCaseInsensitiveContains(searchText)
+            }
+        default:
+            return collectionManager.timeEvents
+        }
+    }
+    
+    func filteredTagsInGroup(groupTags: [Tag]) -> [Tag] {
+        if searchText.isEmpty {
+            return groupTags
+        }
+        
+        switch searchScope {
+        case .all, .tags:
+            return groupTags.filter { tag in
+                tag.name.localizedCaseInsensitiveContains(searchText) ||
+                tag.description.localizedCaseInsensitiveContains(searchText)
+            }
+        default:
+            return groupTags
+        }
+    }
+    
+    var filteredLabelGroups: [LabelGroupData] {
+        if searchText.isEmpty {
+            return collectionManager.labelGroups
+        }
+        
+        switch searchScope {
+        case .all, .groups:
+            return collectionManager.labelGroups.filter { group in
+                group.name.localizedCaseInsensitiveContains(searchText)
+            }
+        default:
+            return collectionManager.labelGroups
+        }
+    }
+    
+    func filteredLabelsInGroup(groupLabels: [Label]) -> [Label] {
+        if searchText.isEmpty {
+            return groupLabels
+        }
+        
+        switch searchScope {
+        case .all, .labels:
+            return groupLabels.filter { label in
+                label.name.localizedCaseInsensitiveContains(searchText) ||
+                label.description.localizedCaseInsensitiveContains(searchText)
+            }
+        default:
+            return groupLabels
+        }
+    }
+}
+
+// MARK: - Modern Button Styles
+
+struct ModernPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline)
+            .foregroundColor(.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: .blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                    .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            )
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+struct ModernSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline)
+            .foregroundColor(.primary)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+                    .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            )
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+struct ModernDestructiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline)
+            .foregroundColor(.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.red, Color.red.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: .red.opacity(0.3), radius: 4, x: 0, y: 2)
+                    .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            )
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Modern Text Field Style
+
+struct ModernNewTextFieldStyle: TextFieldStyle {
+    func _body(configuration: TextField<Self._Label>) -> some View {
+        configuration
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+            )
+            .font(.body)
+    }
+}
+
+// MARK: - Legacy Button Styles (for compatibility)
+
+struct PrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.blue)
+                    .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            )
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundColor(.primary)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+                    .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            )
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }

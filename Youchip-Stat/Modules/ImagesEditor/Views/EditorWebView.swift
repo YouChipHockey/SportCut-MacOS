@@ -44,9 +44,6 @@ struct EditorWebView: NSViewRepresentable {
         webView.configuration.userContentController.add(context.coordinator, name: "imageExport")
         let request = URLRequest(url: viewModel.url)
         webView.load(request)
-        if #available(macOS 13.3, *) {
-            webView.isInspectable = true
-        }
         return webView
     }
     

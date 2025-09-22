@@ -30,10 +30,63 @@ struct TimelineLineView: View {
     @State private var initialDragLocation: CGPoint = .zero
     @State private var initialStartTime: Double = 0
     @State private var initialEndTime: Double = 0
+    @State private var resizingStampID: UUID? = nil
+    @State private var tempStartTime: Double = 0
+    @State private var tempEndTime: Double = 0
     @Binding var scrollOffset: CGFloat
     
     enum ResizingSide {
         case left, right, none
+    }
+    
+    private func startResizing(stamp: TimelineStamp, side: ResizingSide, location: CGPoint) {
+        resizingStampID = stamp.id
+        resizingSide = side
+        initialDragLocation = location
+        initialStartTime = stamp.startSeconds
+        initialEndTime = stamp.finishSeconds
+        tempStartTime = stamp.startSeconds
+        tempEndTime = stamp.finishSeconds
+        isResizing = true
+    }
+    
+    private func updateResizing(location: CGPoint) {
+        guard resizingStampID != nil else { return }
+        
+        let totalDuration = max(1, videoManager.videoDuration)
+        let deltaX = location.x - initialDragLocation.x
+        let deltaTime = (deltaX / widthMax) * totalDuration
+        
+        switch resizingSide {
+        case .left:
+            tempStartTime = max(0, initialStartTime + deltaTime)
+            if tempStartTime >= tempEndTime {
+                tempStartTime = tempEndTime - 0.1 // Minimum 0.1 second duration
+            }
+        case .right:
+            tempEndTime = min(totalDuration, initialEndTime + deltaTime)
+            if tempEndTime <= tempStartTime {
+                tempEndTime = tempStartTime + 0.1 // Minimum 0.1 second duration
+            }
+        case .none:
+            return
+        }
+    }
+    
+    private func endResizing() {
+        guard let stampID = resizingStampID else { return }
+        
+        // Update the stamp in timeline data only at the end
+        timelineData.updateStampTimeRange(
+            lineID: line.id,
+            stampID: stampID,
+            newStartTime: tempStartTime,
+            newEndTime: tempEndTime
+        )
+        
+        isResizing = false
+        resizingSide = .none
+        resizingStampID = nil
     }
     
     private func getOverlapCount(stamp: TimelineStamp, stamps: [TimelineStamp], stampIndex: Int) -> Int {
@@ -65,32 +118,52 @@ struct TimelineLineView: View {
             
             HStack(spacing: 0) {
                 ZStack(alignment: .topLeading) {
-                    Rectangle()
-                        .fill(isDraggingOver ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
-                        .frame(width: widthMax, height: 30)
-                        .onDrop(
-                            of: [.init(UTType.plainText.identifier)],
-                            isTargeted: $isDraggingOver
-                        ) { providers, _ in
-                            if let provider = providers.first {
-                                provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) { (data, error) in
-                                    if let stampData = data as? Data,
-                                       let stampInfo = try? JSONDecoder().decode(StampDragInfo.self, from: stampData) {
-                                        DispatchQueue.main.async {
-                                            transferStamp(stampInfo, to: line.id)
-                                        }
+                    // Modern timeline background with gradient matching button blocks
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            isDraggingOver ? Color.blue.opacity(0.15) : Color.gray.opacity(0.05),
+                            isDraggingOver ? Color.blue.opacity(0.08) : Color.gray.opacity(0.02)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: widthMax, height: 30)
+                    .overlay(
+                        // Subtle border
+                        RoundedRectangle(cornerRadius: 0)
+                            .stroke(
+                                isDraggingOver ? Color.blue.opacity(0.3) : Color.gray.opacity(0.2),
+                                lineWidth: 0.5
+                            )
+                    )
+                    .onDrop(
+                        of: [.init(UTType.plainText.identifier)],
+                        isTargeted: $isDraggingOver
+                    ) { providers, _ in
+                        if let provider = providers.first {
+                            provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) { (data, error) in
+                                if let stampData = data as? Data,
+                                   let stampInfo = try? JSONDecoder().decode(StampDragInfo.self, from: stampData) {
+                                    DispatchQueue.main.async {
+                                        transferStamp(stampInfo, to: line.id)
                                     }
                                 }
-                                return true
                             }
-                            return false
+                            return true
                         }
-                        .onTapGesture {
-                            timelineData.selectStamp(stampID: nil)
-                        }
+                        return false
+                    }
+                    .onTapGesture {
+                        timelineData.selectStamp(stampID: nil)
+                    }
                     ForEach(Array(line.stamps.enumerated()), id: \.element.id) { index, stamp in
-                        let startRatio = stamp.startSeconds / totalDuration
-                        let durationRatio = stamp.duration / totalDuration
+                        // Use temporary values during resizing, otherwise use actual stamp values
+                        let currentStartTime = (isResizing && resizingStampID == stamp.id) ? tempStartTime : stamp.startSeconds
+                        let currentEndTime = (isResizing && resizingStampID == stamp.id) ? tempEndTime : stamp.finishSeconds
+                        let currentDuration = currentEndTime - currentStartTime
+                        
+                        let startRatio = currentStartTime / totalDuration
+                        let durationRatio = currentDuration / totalDuration
                         
                         let stampWidth = durationRatio * widthMax
                         let stampX = startRatio * widthMax
@@ -103,29 +176,102 @@ struct TimelineLineView: View {
                         (isSelected && hasOverlaps) ? Color.red :
                         (isSelected) ? Color.blue : Color.clear
                         let heightReduction = CGFloat(overlapCount * 6)
-                        let stampHeight: CGFloat = 30 - heightReduction
+                        let stampHeight: CGFloat = 25 - heightReduction
                         let verticalOffset = (30 - stampHeight) / 2
                         
                         ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(stamp.color)
-                                .frame(height: stampHeight)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 2)
-                                        .stroke(borderColor, lineWidth: isSelected ? 2 : 1)
+                            // Modern stamp design with shadow and gradient
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            stamp.color,
+                                            stamp.color.opacity(0.8)
+                                        ]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
                                 )
+                                .frame(height: stampHeight)
+                                .shadow(
+                                    color: stamp.color.opacity(0.3),
+                                    radius: isSelected ? 4 : 2,
+                                    x: 0,
+                                    y: isSelected ? 2 : 1
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(borderColor, lineWidth: isSelected ? 2.5 : 1.5)
+                                )
+                            
+                            // Improved labels overlay
                             StampLabelsOverlayView(
                                 stamp: stamp,
                                 maxWidth: stampWidth,
                                 isResizing: isResizing
                             )
                             .frame(height: stampHeight)
+                            .padding(.horizontal, 4)
+                            
+                            // Resize handles for selected stamps
+                            if isSelected {
+                                // Left resize handle
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(width: 8, height: stampHeight)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { }
+                                    .gesture(
+                                        DragGesture()
+                                            .onChanged { value in
+                                                if resizingSide == .none {
+                                                    startResizing(stamp: stamp, side: .left, location: value.startLocation)
+                                                }
+                                                updateResizing(location: value.location)
+                                            }
+                                            .onEnded { _ in
+                                                endResizing()
+                                            }
+                                    )
+                                    .overlay(
+                                        Rectangle()
+                                            .fill(Color.blue.opacity(0.6))
+                                            .frame(width: 2, height: stampHeight)
+                                    )
+                                
+                                // Right resize handle
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(width: 8, height: stampHeight)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { }
+                                    .gesture(
+                                        DragGesture()
+                                            .onChanged { value in
+                                                if resizingSide == .none {
+                                                    startResizing(stamp: stamp, side: .right, location: value.startLocation)
+                                                }
+                                                updateResizing(location: value.location)
+                                            }
+                                            .onEnded { _ in
+                                                endResizing()
+                                            }
+                                    )
+                                    .overlay(
+                                        Rectangle()
+                                            .fill(Color.blue.opacity(0.6))
+                                            .frame(width: 2, height: stampHeight)
+                                    )
+                                    .offset(x: stampWidth - 8)
+                            }
                         }
                         .frame(width: stampWidth, height: stampHeight)
                         .position(x: stampX + stampWidth / 2, y: 15)
                         .onTapGesture {
-                            videoManager.seek(to: stamp.startSeconds)
-                            timelineData.selectStamp(stampID: stamp.id)
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                videoManager.seek(to: stamp.startSeconds)
+                                timelineData.selectStamp(stampID: stamp.id)
+                            }
                         }
                         .onDrag {
                             let stampInfo = StampDragInfo(
@@ -143,7 +289,7 @@ struct TimelineLineView: View {
                     }
                 }
             }
-            .frame(width: widthMax, height: 30)
+            .frame(width: widthMax, height: 60)
             .simultaneousGesture(
                 DragGesture()
                     .onChanged { value in

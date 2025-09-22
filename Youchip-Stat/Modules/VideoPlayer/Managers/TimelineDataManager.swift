@@ -220,4 +220,17 @@ class TimelineDataManager: ObservableObject {
         }
     }
     
+    func updateStampTimeRange(lineID: UUID, stampID: UUID, newStartTime: Double, newEndTime: Double) {
+        guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }),
+              let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }
+        
+        let startTimeString = secondsToTimeString(newStartTime)
+        let endTimeString = secondsToTimeString(newEndTime)
+        
+        lines[lineIndex].stamps[stampIndex].timeStart = startTimeString
+        lines[lineIndex].stamps[stampIndex].timeFinish = endTimeString
+        
+        updateTimelines()
+    }
+    
 }
