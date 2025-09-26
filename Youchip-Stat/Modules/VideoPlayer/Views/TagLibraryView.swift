@@ -152,7 +152,15 @@ struct TagLibraryView: View {
         }
         .onReceive(timelineData.$lines) { _ in
             // Update tag counts when stamps are added/removed
-            updateTagCounts()
+            DispatchQueue.main.async {
+                self.updateTagCounts()
+            }
+        }
+        .onChange(of: timelineData.selectedLineID) { _ in
+            // Update tag counts when selected line changes
+            DispatchQueue.main.async {
+                self.updateTagCounts()
+            }
         }
     }
     
@@ -689,6 +697,11 @@ struct TagLibraryView: View {
             position: fieldPosition
         )
         
+        // Update tag counts immediately after adding stamp
+        DispatchQueue.main.async {
+            self.updateTagCounts()
+        }
+        
         // Resume video only if no map selection is needed
         if tag.mapEnabled != true {
             if videoManager.playbackSpeed > 0 {
@@ -954,6 +967,12 @@ struct TagLibraryView: View {
                 }
             }
         }
+        NotificationCenter.default.addObserver(forName: .stampCountsChanged, object: nil, queue: .main) { _ in
+            // Update tag counts when stamps are added/removed
+            DispatchQueue.main.async {
+                self.updateTagCounts()
+            }
+        }
     }
     
     
@@ -963,6 +982,7 @@ struct TagLibraryView: View {
         NotificationCenter.default.removeObserver(self, name: .collectionDataChanged, object: nil)
         NotificationCenter.default.removeObserver(self, name: .showLabelSheet, object: nil)
         NotificationCenter.default.removeObserver(self, name: .markupModeChanged, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .stampCountsChanged, object: nil)
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {
@@ -1104,6 +1124,11 @@ struct TagLibraryView: View {
             labels: selectedLabels,
             position: fieldPosition
         )
+        
+        // Update tag counts immediately after adding stamp
+        DispatchQueue.main.async {
+            self.updateTagCounts()
+        }
         
         // Resume video only if no map selection is needed
         if tag.mapEnabled != true {

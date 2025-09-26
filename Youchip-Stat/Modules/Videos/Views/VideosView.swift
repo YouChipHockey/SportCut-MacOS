@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct VideosView: View {
     
@@ -17,6 +18,8 @@ struct VideosView: View {
     @State private var selectedDate: Date = Date()
     @State private var searchText: String = ""
     @State private var selectedFilter: VideoFilter = .all
+    @State private var showImportCollectionSheet = false
+    @StateObject private var importManager = CollectionImportManager()
     
     enum VideoFilter: String, CaseIterable {
         case all = "all"
@@ -104,6 +107,9 @@ struct VideosView: View {
         }) {
             AuthKeyView()
                 .environmentObject(viewModel.authManager)
+        }
+        .sheet(isPresented: $showImportCollectionSheet) {
+            importCollectionSheet
         }
         .onReceive(viewModel.authManager.$isAuthValid) { isValid in
             viewModel.action.send(.updateLimitInfo)
@@ -289,6 +295,31 @@ struct VideosView: View {
     // MARK: - Modern Toolbar Content
     private var modernToolbarContent: some View {
         HStack(spacing: 12) {
+            // Кнопка импорта коллекции
+            Button(action: {
+                showImportCollectionSheet = true
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 14))
+                    Text("Импорт коллекции")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.purple, Color.purple.opacity(0.8)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .cornerRadius(6)
+                .shadow(color: .purple.opacity(0.3), radius: 2, x: 0, y: 1)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
             // Кнопка руководства
             Button(action: {
                 viewModel.action.send(.openGuide)
@@ -591,6 +622,148 @@ struct VideosView: View {
         }
         .frame(width: 400, height: 220)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+    
+    private var importCollectionSheet: some View {
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "square.and.arrow.down")
+                        .foregroundColor(.purple)
+                        .font(.title)
+                    
+                    Text("Импорт коллекции")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                }
+                
+                Text("Выберите файл коллекции (.sportcutCollection) для импорта")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
+            
+            // Content
+            VStack(spacing: 20) {
+                if importManager.isImporting {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        
+                        Text("Импорт коллекции...")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(40)
+                } else {
+                    VStack(spacing: 16) {
+                        Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 60))
+                            .foregroundColor(.purple.opacity(0.6))
+                        
+                        Text("Нажмите кнопку ниже для выбора файла коллекции")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                        
+                        if let error = importManager.importError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 20)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(40)
+                }
+            }
+            
+            Spacer()
+            
+            // Footer with buttons
+            HStack(spacing: 12) {
+                Button(action: {
+                    showImportCollectionSheet = false
+                    importManager.importError = nil
+                }) {
+                    Text(^String.Titles.collectionsButtonCancel)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(importManager.isImporting)
+                
+                Spacer()
+                
+                Button(action: {
+                    selectCollectionFile()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Выбрать файл")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.purple, Color.purple.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(8)
+                    .shadow(color: .purple.opacity(0.3), radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(importManager.isImporting)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
+        }
+        .frame(width: 500, height: 400)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+    
+    private func selectCollectionFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.json]
+        panel.title = "Выберите файл коллекции"
+        panel.message = "Выберите файл .sportcutCollection для импорта"
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            if let importedManager = importManager.importCollection(from: url) {
+                // Сохраняем импортированную коллекцию
+                _ = importedManager.saveCollectionToFiles()
+                NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                
+                showImportCollectionSheet = false
+                importManager.importError = nil
+            }
+        }
     }
 }
 

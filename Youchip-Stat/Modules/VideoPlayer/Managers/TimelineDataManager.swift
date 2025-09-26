@@ -45,6 +45,9 @@ class TimelineDataManager: ObservableObject {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
         lines[lineIndex].stamps.removeAll(where: { $0.id == stampID })
         updateTimelines()
+        
+        // Notify that stamp counts may have changed
+        NotificationCenter.default.post(name: .stampCountsChanged, object: nil)
     }
     
     func addLine(name: String) {
@@ -133,6 +136,9 @@ class TimelineDataManager: ObservableObject {
         }
         
         updateTimelines()
+        
+        // Notify that stamp counts may have changed
+        NotificationCenter.default.post(name: .stampCountsChanged, object: nil)
     }
     
     func updateStampLabels(lineID: UUID, stampID: UUID, newLabels: [String]) {

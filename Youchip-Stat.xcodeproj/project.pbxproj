@@ -10,6 +10,8 @@
 		4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */; };
 		DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */; };
 		DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67E2DBAFB8A00CB2AE0 /* VideosViewModel.swift */; };
+		DD1DAEE32E81E65E00850FAC /* ReportWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1DAEE22E81E65E00850FAC /* ReportWindow.swift */; };
+		DD1DAEE52E81E70500850FAC /* SimpleReportWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1DAEE42E81E70500850FAC /* SimpleReportWindow.swift */; };
 		DD2A70542D74C31B00287BA8 /* VideosState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70532D74C31600287BA8 /* VideosState.swift */; };
 		DD2A70562D74C33E00287BA8 /* FilesFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70552D74C33D00287BA8 /* FilesFile.swift */; };
 		DD2A70582D74C35F00287BA8 /* URL+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70572D74C35E00287BA8 /* URL+Convenience.swift */; };
@@ -58,6 +60,7 @@
 		DD32C2AC2D74A1C80052B5C6 /* View+CloudFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */; };
 		DD32C2AD2D74A1C80052B5C6 /* NSImage+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2972D74A1C80052B5C6 /* NSImage+Convenience.swift */; };
 		DD32C2AE2D74A1C80052B5C6 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD32C2952D74A1C80052B5C6 /* LocalizedStrings.swift */; };
+		DD3A137E2E81ED5200DA52AA /* CollectionExportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD3A137D2E81ED5200DA52AA /* CollectionExportModels.swift */; };
 		DD408C6F2E6C736F00E615E5 /* DashedLinesShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C4E2E6C736F00E615E5 /* DashedLinesShape.swift */; };
 		DD408C702E6C736F00E615E5 /* PolygonShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C4F2E6C736F00E615E5 /* PolygonShape.swift */; };
 		DD408C712E6C736F00E615E5 /* DrawableObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD408C512E6C736F00E615E5 /* DrawableObject.swift */; };
@@ -135,6 +138,8 @@
 		DD8937FE2DEF936B009B1BC2 /* CropImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */; };
 		DD8938182DEFBA42009B1BC2 /* FieldMapVisualizationPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */; };
 		DD89381A2DEFBA4D009B1BC2 /* FieldMapVisualizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */; };
+		DDA9C30C2E833EE700B5E3F3 /* ViewerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA9C30B2E833EE700B5E3F3 /* ViewerModels.swift */; };
+		DDA9C30E2E833F0000B5E3F3 /* ViewerWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA9C30D2E833F0000B5E3F3 /* ViewerWindowController.swift */; };
 		DDC938E72DD2338300B7AB12 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = DDC938E62DD2338300B7AB12 /* GoogleService-Info.plist */; };
 		DDC938E92DD2447A00B7AB12 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDC938E82DD2447900B7AB12 /* AuthManager.swift */; };
 		DDC938EC2DD2452900B7AB12 /* AuthKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDC938EB2DD2452800B7AB12 /* AuthKeyView.swift */; };
@@ -176,6 +181,8 @@
 		D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Youchip_Stat.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoMetadataModel.swift; sourceTree = "<group>"; };
 		DD1BF67E2DBAFB8A00CB2AE0 /* VideosViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideosViewModel.swift; sourceTree = "<group>"; };
+		DD1DAEE22E81E65E00850FAC /* ReportWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportWindow.swift; sourceTree = "<group>"; };
+		DD1DAEE42E81E70500850FAC /* SimpleReportWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleReportWindow.swift; sourceTree = "<group>"; };
 		DD2A70532D74C31600287BA8 /* VideosState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideosState.swift; sourceTree = "<group>"; };
 		DD2A70552D74C33D00287BA8 /* FilesFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesFile.swift; sourceTree = "<group>"; };
 		DD2A70572D74C35E00287BA8 /* URL+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URL+Convenience.swift"; sourceTree = "<group>"; };
@@ -226,6 +233,7 @@
 		DD32C29B2D74A1C80052B5C6 /* UInt64+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt64+Convenience.swift"; sourceTree = "<group>"; };
 		DD32C29D2D74A1C80052B5C6 /* View+Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Alerts.swift"; sourceTree = "<group>"; };
 		DD32C29E2D74A1C80052B5C6 /* View+CloudFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+CloudFiles.swift"; sourceTree = "<group>"; };
+		DD3A137D2E81ED5200DA52AA /* CollectionExportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionExportModels.swift; sourceTree = "<group>"; };
 		DD408C4E2E6C736F00E615E5 /* DashedLinesShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashedLinesShape.swift; sourceTree = "<group>"; };
 		DD408C4F2E6C736F00E615E5 /* PolygonShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolygonShape.swift; sourceTree = "<group>"; };
 		DD408C512E6C736F00E615E5 /* DrawableObject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawableObject.swift; sourceTree = "<group>"; };
@@ -307,6 +315,8 @@
 		DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropImageView.swift; sourceTree = "<group>"; };
 		DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationPicker.swift; sourceTree = "<group>"; };
 		DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationView.swift; sourceTree = "<group>"; };
+		DDA9C30B2E833EE700B5E3F3 /* ViewerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerModels.swift; sourceTree = "<group>"; };
+		DDA9C30D2E833F0000B5E3F3 /* ViewerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerWindowController.swift; sourceTree = "<group>"; };
 		DDB401912D749E0F004A12C2 /* SportCut.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SportCut.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DDC938E62DD2338300B7AB12 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		DDC938E82DD2447900B7AB12 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
@@ -350,9 +360,13 @@
 			path = BaseCollections;
 			sourceTree = "<group>";
 		};
-		DDFB1A352DE510CF00175D97 /* dist */ = {
+		DDA9C3062E833EDF00B5E3F3 /* Viewer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			name = dist;
+			path = Viewer;
+			sourceTree = "<group>";
+		};
+		DDFB1A352DE510CF00175D97 /* web/dist */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
 			path = web/dist;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -482,7 +496,7 @@
 		DD32C2622D74A00C0052B5C6 /* Youchip-Stat */ = {
 			isa = PBXGroup;
 			children = (
-				DDFB1A352DE510CF00175D97 /* dist */,
+				DDFB1A352DE510CF00175D97 /* web/dist */,
 				DD32C2612D74A00C0052B5C6 /* Youchip_StatApp.swift */,
 				DD32C28A2D74A1180052B5C6 /* AppDelegate.swift */,
 				DD32C2672D74A0110052B5C6 /* Common */,
@@ -709,6 +723,7 @@
 				DD5CFA062E046964009CD51A /* FieldMapSelectionView.swift */,
 				DD5CF9CE2E0465FB009CD51A /* FullControlWindowController.swift */,
 				DDFB1A552DE521D300175D97 /* ScreenshotsWindowController.swift */,
+				DDA9C30D2E833F0000B5E3F3 /* ViewerWindowController.swift */,
 			);
 			path = Windows;
 			sourceTree = "<group>";
@@ -716,6 +731,7 @@
 		DDCA6B4D2DCA64E00025EF9E /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				DD3A137D2E81ED5200DA52AA /* CollectionExportModels.swift */,
 				DDCA6B652DCA68F70025EF9E /* TagFormData.swift */,
 				DDCA6B562DCA65C20025EF9E /* AnalyticsModels.swift */,
 				DDCA6B502DCA65210025EF9E /* MarkupMode.swift */,
@@ -724,6 +740,7 @@
 				DDCA6B4E2DCA64E70025EF9E /* NSNotification + Convenience.swift */,
 				DD7E18142DFDCFA400342214 /* FieldMapFilters.swift */,
 				DD5CF9C62E0465A9009CD51A /* TimelineStamp.swift */,
+				DDA9C30B2E833EE700B5E3F3 /* ViewerModels.swift */,
 				DDCA6B692DCA69340025EF9E /* NSApplication + Convenience.swift */,
 				DD494BEF2DC0145F003F8BE6 /* VideoPlayerModels.swift */,
 			);
@@ -778,6 +795,7 @@
 				DD5CF9F12E046839009CD51A /* Chips */,
 				DD5CF9E22E0467BD009CD51A /* Sheets */,
 				DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */,
+				DDA9C3062E833EDF00B5E3F3 /* Viewer */,
 				DD5CF9B42E046265009CD51A /* MapTapHandlerView.swift */,
 				DDCA6B722DCA69E10025EF9E /* CreateCustomCollectionsView.swift */,
 				DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */,
@@ -799,8 +817,10 @@
 				DDCA6B5C2DCA66420025EF9E /* AnalyticsView.swift */,
 				DD5CF9FC2E0468C0009CD51A /* TimeGridView.swift */,
 				DDCA6B5A2DCA66330025EF9E /* TagStatisticsLegend.swift */,
+				DD1DAEE42E81E70500850FAC /* SimpleReportWindow.swift */,
 				DD5CF9FE2E0468D0009CD51A /* TimelineTimestampsHeaderView.swift */,
 				DDCA6B582DCA66210025EF9E /* PieChartView.swift */,
+				DD1DAEE22E81E65E00850FAC /* ReportWindow.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -862,7 +882,8 @@
 			);
 			fileSystemSynchronizedGroups = (
 				DD8971AA2E420A6A00DD2AB8 /* BaseCollections */,
-				DDFB1A352DE510CF00175D97 /* dist */,
+				DDA9C3062E833EDF00B5E3F3 /* Viewer */,
+				DDFB1A352DE510CF00175D97 /* web/dist */,
 			);
 			name = "Youchip-Stat";
 			productName = "Youchip-Stat";
@@ -898,8 +919,6 @@
 			);
 			mainGroup = DDB401882D749E0F004A12C2;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DDB401922D749E0F004A12C2 /* Products */;
 			projectDirPath = "";
@@ -1035,10 +1054,12 @@
 				DD5CF9E62E0467D6009CD51A /* LabelSelectionSheet.swift in Sources */,
 				DDFB1A482DE510E700175D97 /* EditorState.swift in Sources */,
 				DD5CF9CB2E0465D7009CD51A /* VideoPlayerManager.swift in Sources */,
+				DDA9C30C2E833EE700B5E3F3 /* ViewerModels.swift in Sources */,
 				DDFB1A492DE510E700175D97 /* EditorView.swift in Sources */,
 				DDFB1A4A2DE510E700175D97 /* EditorViewModel.swift in Sources */,
 				DDFB1A4B2DE510E700175D97 /* EditorWebView.swift in Sources */,
 				DDFB1A4C2DE510E700175D97 /* EditorActions.swift in Sources */,
+				DD1DAEE32E81E65E00850FAC /* ReportWindow.swift in Sources */,
 				DDD1236C2E0C8F2900116F7D /* MiniPlayerView.swift in Sources */,
 				DD5CF9D92E046760009CD51A /* Notification+Conveniece.swift in Sources */,
 				DD32C28F2D74A19A0052B5C6 /* AppSetupManager.swift in Sources */,
@@ -1111,6 +1132,7 @@
 				DD32C2A62D74A1C80052B5C6 /* Fonts.swift in Sources */,
 				DD32C2A72D74A1C80052B5C6 /* SKProduct+Convenience.swift in Sources */,
 				DDFB1A562DE521D300175D97 /* ScreenshotsWindowController.swift in Sources */,
+				DD3A137E2E81ED5200DA52AA /* CollectionExportModels.swift in Sources */,
 				DD5CF9B92E04628C009CD51A /* TagOnMap.swift in Sources */,
 				DD5CF9D52E046730009CD51A /* TimelineLineView.swift in Sources */,
 				DDCA6B662DCA68F80025EF9E /* TagFormData.swift in Sources */,
@@ -1120,6 +1142,7 @@
 				DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */,
 				DDC938EC2DD2452900B7AB12 /* AuthKeyView.swift in Sources */,
 				DDCA6B602DCA67560025EF9E /* AnalyticsWindowController.swift in Sources */,
+				DD1DAEE52E81E70500850FAC /* SimpleReportWindow.swift in Sources */,
 				DDCA6B682DCA69140025EF9E /* KeyCaptureView.swift in Sources */,
 				DD5CF9F72E04688A009CD51A /* FocusStateManager.swift in Sources */,
 				DD2A70742D74D63300287BA8 /* ViewsFactory.swift in Sources */,
@@ -1127,6 +1150,7 @@
 				DDFB1A522DE5130C00175D97 /* AppNavigationButtonsView.swift in Sources */,
 				DD5CF9EC2E04680E009CD51A /* StampLabelsOverlayView.swift in Sources */,
 				DD494BF02DC0146B003F8BE6 /* VideoPlayerModels.swift in Sources */,
+				DDA9C30E2E833F0000B5E3F3 /* ViewerWindowController.swift in Sources */,
 				DD2A70762D74D77C00287BA8 /* AppCloudFilesHelper.swift in Sources */,
 				DDCA6B6A2DCA69340025EF9E /* NSApplication + Convenience.swift in Sources */,
 				DD5CF9FD2E0468C1009CD51A /* TimeGridView.swift in Sources */,
@@ -1344,7 +1368,7 @@
 					"$(PROJECT_DIR)/OpenCv",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.YouChip.YouChipSportCut;
 				PRODUCT_NAME = SportCut;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1389,7 +1413,7 @@
 					"$(PROJECT_DIR)/OpenCv",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.YouChip.YouChipSportCut;
 				PRODUCT_NAME = SportCut;
 				PROVISIONING_PROFILE_SPECIFIER = "";

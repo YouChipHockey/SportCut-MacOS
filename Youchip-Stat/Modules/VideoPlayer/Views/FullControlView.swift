@@ -10,6 +10,7 @@ import AVKit
 import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
+import WebKit
 
 struct FullControlView: View {
     
@@ -76,19 +77,60 @@ struct FullControlView: View {
     @State private var showMultiTagSelectionSheet: Bool = false
     @State private var selectedLabelForMultiSelection: Label?
     @State private var selectedTagForMultiSelection: Tag?
+    
 
+    
+    // Вспомогательная функция для корректировки времени
+    private func correctTimeRange(startSeconds: Double, durationSeconds: Double, maxVideoDuration: Double) -> (start: Double, duration: Double)? {
+        var correctedStart = startSeconds
+        var correctedDuration = durationSeconds
+        
+        // Корректируем время: начало не может быть меньше 0
+        if correctedStart < 0 {
+            correctedStart = 0
+        }
+        
+        // Корректируем время: конец не может быть больше максимального времени видео
+        let endSeconds = correctedStart + correctedDuration
+        if endSeconds > maxVideoDuration {
+            let newDuration = maxVideoDuration - correctedStart
+            if newDuration > 0 {
+                correctedDuration = newDuration
+            } else {
+                return nil // Сегмент полностью за пределами видео
+            }
+        }
+        
+        // Проверяем, что после корректировки у нас есть валидная длительность
+        guard correctedDuration > 0 else {
+            return nil
+        }
+        
+        return (correctedStart, correctedDuration)
+    }
     
     func getSegmentsForExport(type: CutsExportType) -> [ExportSegment] {
         var result: [ExportSegment] = []
         let tagLibrary = TagLibraryManager.shared
+        
+        // Получаем максимальное время видео
+        let maxVideoDuration = max(1.0, videoManager.videoDuration)
         
         switch type {
         case .currentTimeline:
             if let lineID = timelineData.selectedLineID,
                let line = timelineData.lines.first(where: { $0.id == lineID }) {
                 for stamp in line.stamps {
-                    let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
-                    let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                    guard let correctedTime = correctTimeRange(
+                        startSeconds: stamp.startSeconds,
+                        durationSeconds: stamp.duration,
+                        maxVideoDuration: maxVideoDuration
+                    ) else {
+                        continue
+                    }
+                    
+                    let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
+                    let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
                     let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
                     
                     result.append(
@@ -104,15 +146,33 @@ struct FullControlView: View {
         case .allTimelines:
             for line in timelineData.lines {
                 for stamp in line.stamps {
-                    let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
-                    let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                    guard let correctedTime = correctTimeRange(
+                        startSeconds: stamp.startSeconds,
+                        durationSeconds: stamp.duration,
+                        maxVideoDuration: maxVideoDuration
+                    ) else {
+                        continue
+                    }
+                    
+                    let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
+                    let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
                     let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
+                    
+                    // Получаем лейблы для этого штампа
+                    let labels = stamp.labels.compactMap { labelID in
+                        tagLibrary.findLabelById(labelID)?.name
+                    }
+                    
+                    // Формируем название тега с лейблами в скобках
+                    let tagNameWithLabels = labels.isEmpty ? stamp.label : "\(stamp.label)(\(labels.joined(separator: "_")))"
+                    
+                    print("📝 Creating segment: \(line.name) - \(tagNameWithLabels) - \(start.seconds)s to \(start.seconds + duration.seconds)s")
                     
                     result.append(
                         ExportSegment(
                             timeRange: CMTimeRange(start: start, duration: duration),
                             lineName: line.name,
-                            tagName: stamp.label,
+                            tagName: tagNameWithLabels,
                             groupName: possibleGroup?.name
                         )
                     )
@@ -157,13 +217,9 @@ struct FullControlView: View {
                 }
             }
         case .label(let selectedLabel):
-            print("Экспорт по лейблу: \(selectedLabel.name), ID: \(selectedLabel.id)")
             for line in timelineData.lines {
-                print("Проверяем линию: \(line.name)")
                 for stamp in line.stamps {
-                    print("  Штамп: \(stamp.label), лейблы штампа: \(stamp.labels)")
                     if stamp.labels.contains(selectedLabel.id) {
-                        print("    ✓ Найден подходящий штамп!")
                         let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
                         let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
                         let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
@@ -271,9 +327,16 @@ struct FullControlView: View {
             let groupName = segments.first?.groupName ?? "group"
             fileName = "\(groupName)_\(selectedTag.name)\(^String.Titles.fullControlFileTimelineFile)"
         case .timeEvent(let selectedEvent):
-            fileName = "\(^String.Titles.fullControlFileEventFile)_\(selectedEvent.name)\(^String.Titles.fullControlFileTimelineFile)"
+            let tagName = segments.first?.tagName ?? "tag"
+            fileName = "\(selectedEvent.name)_\(tagName)\(^String.Titles.fullControlFileTimelineFile)"
         case .allTimelines:
-            fileName = ^String.Titles.fullControlFileAllTimelinesFile
+            if let firstSegment = segments.first {
+                let groupName = firstSegment.groupName ?? "group"
+                let tagName = firstSegment.tagName
+                fileName = "\(groupName)_\(tagName)\(^String.Titles.fullControlFileTimelineFile)"
+            } else {
+                fileName = ^String.Titles.fullControlFileAllTimelinesFile
+            }
         case .label(let selectedLabel):
             fileName = "\(selectedLabel.name)\(^String.Titles.fullControlFileTimelineFile)"
             
@@ -306,6 +369,17 @@ struct FullControlView: View {
                         type: CutsExportType,
                         completion: @escaping (Result<URL, Error>) -> Void)
     {
+        print("🎬 Starting playlist export with \(segments.count) segments")
+        
+        // Проверяем, что есть сегменты для экспорта
+        if segments.isEmpty {
+            print("❌ No segments to export")
+            completion(.failure(NSError(domain: "Export", code: -1, userInfo: [NSLocalizedDescriptionKey: "No segments to export"])))
+            return
+        }
+        
+        print("📊 Exporting \(segments.count) segments")
+        
         var exportedURLs: [URL] = []
         let group = DispatchGroup()
         var exportError: Error? = nil
@@ -319,10 +393,14 @@ struct FullControlView: View {
         for (index, segment) in segments.enumerated() {
             group.enter()
             
+            print("🎬 Processing segment \(index + 1)/\(segments.count): \(segment.lineName) - \(segment.tagName)")
+            print("   Time range: \(segment.timeRange.start.seconds)s to \(segment.timeRange.start.seconds + segment.timeRange.duration.seconds)s")
+            
             let composition = AVMutableComposition()
             guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video,
                                                                    preferredTrackID: kCMPersistentTrackID_Invalid)
             else {
+                print("❌ Failed to create video track for segment \(index + 1)")
                 exportError = NSError(domain: "Export", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])
                 group.leave()
                 continue
@@ -332,8 +410,11 @@ struct FullControlView: View {
                 compAudioTrack = composition.addMutableTrack(withMediaType: .audio,
                                                              preferredTrackID: kCMPersistentTrackID_Invalid)
                 do {
+                    print("   🎵 Inserting audio time range: \(segment.timeRange.start.seconds)s to \(segment.timeRange.start.seconds + segment.timeRange.duration.seconds)s")
                     try compAudioTrack?.insertTimeRange(segment.timeRange, of: aTrack, at: .zero)
+                    print("   ✅ Audio track inserted successfully")
                 } catch {
+                    print("   ❌ Failed to insert audio time range: \(error.localizedDescription)")
                     exportError = error
                     group.leave()
                     continue
@@ -341,8 +422,11 @@ struct FullControlView: View {
             }
             
             do {
+                print("   📹 Inserting video time range: \(segment.timeRange.start.seconds)s to \(segment.timeRange.start.seconds + segment.timeRange.duration.seconds)s")
                 try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: .zero)
+                print("   ✅ Video track inserted successfully")
             } catch {
+                print("   ❌ Failed to insert video time range: \(error.localizedDescription)")
                 exportError = error
                 group.leave()
                 continue
@@ -356,14 +440,16 @@ struct FullControlView: View {
                 
             case .allTimelines:
                 let lineName = segment.lineName ?? ^String.Titles.fullControlFileTimeline
-                fileName = "\(lineName)_\(segment.tagName)_\(index + 1).mp4"
+                let groupName = segment.groupName ?? "group"
+                let tagName = segment.tagName
+                fileName = "\(lineName)_\(groupName)_\(tagName)_\(index + 1).mp4"
                 
             case .tag(let selectedTag):
                 let groupName = segment.groupName ?? "group"
                 fileName = "\(groupName)_\(selectedTag.name)_\(index + 1).mp4"
                 
             case .timeEvent(let selectedEvent):
-                fileName = "\(^String.Titles.fullControlFileEventFile)_\(selectedEvent.name)_\(index + 1).mp4"
+                fileName = "\(selectedEvent.name)_\(segment.tagName)_\(index + 1).mp4"
             case .label(let selectedLabel):
                 fileName = "\(selectedLabel.name)_\(index + 1).mp4"
                 
@@ -385,8 +471,10 @@ struct FullControlView: View {
             
             exportSession?.exportAsynchronously {
                 if exportSession?.status == .completed {
+                    print("   ✅ Export completed for segment \(index + 1): \(fileName)")
                     exportedURLs.append(clipOutputURL)
                 } else {
+                    print("   ❌ Export failed for segment \(index + 1): \(exportSession?.error?.localizedDescription ?? "Unknown error")")
                     exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
                 group.leave()
@@ -394,9 +482,15 @@ struct FullControlView: View {
         }
         
         group.notify(queue: .main) {
+            print("🏁 All export tasks completed")
+            print("   Exported URLs count: \(exportedURLs.count)")
+            print("   Export error: \(exportError?.localizedDescription ?? "None")")
+            
             if let error = exportError {
+                print("❌ Export failed with error: \(error)")
                 completion(.failure(error))
             } else {
+                print("✅ All segments exported successfully, compressing files...")
                 compressFiles(urls: exportedURLs, completion: completion)
             }
         }
@@ -609,15 +703,15 @@ struct FullControlView: View {
                                     .padding(.vertical, 3)
                                     .background(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .fill((line.id == timelineData.selectedLineID) ? 
+                                            .fill((line.id == timelineData.selectedLineID) ?
                                                   Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
                                     )
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .stroke((line.id == timelineData.selectedLineID) ? 
+                                            .stroke((line.id == timelineData.selectedLineID) ?
                                                    Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
                                     )
-                                    .onTapGesture { 
+                                    .onTapGesture {
                                         withAnimation(.easeInOut(duration: 0.2)) {
                                             timelineData.selectLine(line.id)
                                         }
@@ -703,15 +797,15 @@ struct FullControlView: View {
                                     .padding(.vertical, 3)
                                     .background(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .fill((line.id == timelineData.selectedLineID) ? 
+                                            .fill((line.id == timelineData.selectedLineID) ?
                                                   Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
                                     )
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .stroke((line.id == timelineData.selectedLineID) ? 
+                                            .stroke((line.id == timelineData.selectedLineID) ?
                                                    Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
                                     )
-                                    .onTapGesture { 
+                                    .onTapGesture {
                                         withAnimation(.easeInOut(duration: 0.2)) {
                                             timelineData.selectLine(line.id)
                                         }
@@ -871,7 +965,7 @@ struct FullControlView: View {
             match_date: matchDate
         )
         
-        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-match-report") else {
+        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-interactive-report") else {
             print("Invalid URL")
             return
         }
@@ -902,7 +996,7 @@ struct FullControlView: View {
                     }
                     
                     if httpResponse.statusCode == 200 {
-                        self.saveReportFile(data: data, teamName: teamName, opponentName: opponentName)
+                        self.showHtmlReportInWebView(data: data, teamName: teamName, opponentName: opponentName)
                     } else {
                         print("Server error: \(httpResponse.statusCode)")
                         if let responseString = String(data: data, encoding: .utf8) {
@@ -919,6 +1013,20 @@ struct FullControlView: View {
         }
     }
     
+    func showHtmlReportInWebView(data: Data, teamName: String, opponentName: String) {
+        guard let htmlString = String(data: data, encoding: .utf8) else {
+            print("Failed to convert data to HTML string")
+            return
+        }
+        
+        // Показываем окно отчета через WindowsManager
+        WindowsManager.shared.showReportWindow(
+            htmlString: htmlString,
+            teamName: teamName,
+            opponentName: opponentName
+        )
+    }
+    
     func saveReportFile(data: Data, teamName: String, opponentName: String) {
         let panel = NSSavePanel()
         panel.allowedFileTypes = ["pdf"]
@@ -933,6 +1041,7 @@ struct FullControlView: View {
             }
         }
     }
+    
     
     // MARK: - Compact Control Panel
     @ViewBuilder
@@ -1141,7 +1250,6 @@ struct FullControlView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     
-                    // Video Export Menu
                     Menu {
                         Button(^String.Titles.fullControlButtonExportTimeline) {
                             selectedExportType = .currentTimeline
@@ -1182,6 +1290,12 @@ struct FullControlView: View {
                         showAiReportSheet = true
                     }
                     .buttonStyle(CompactButtonStyle(icon: "brain", color: .indigo, showText: true))
+                    
+                    // Viewer
+                    Button("Просмотр") {
+                        WindowsManager.shared.showViewerWindow()
+                    }
+                    .buttonStyle(CompactButtonStyle(icon: "eye", color: .purple, showText: true, text: "Просмотр"))
                 }
             }
             .padding(.horizontal, 12)
@@ -1837,7 +1951,7 @@ struct TimelineDropDelegate: DropDelegate {
         let draggedLine = timelineData.lines.remove(at: draggedIndex)
         let newTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex
         timelineData.lines.insert(draggedLine, at: newTargetIndex)
-        timelineData.updateTimelines()
+        // Don't call updateTimelines() for simple reordering - it doesn't change stamp counts
     }
 }
 

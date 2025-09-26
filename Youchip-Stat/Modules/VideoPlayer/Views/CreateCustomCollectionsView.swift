@@ -260,6 +260,27 @@ struct CreateCustomCollectionsView: View {
             .scaleEffect(showSaveSuccess ? 1.05 : 1.0)
             .animation(.easeInOut(duration: 0.2), value: showSaveSuccess)
             
+            // Export button
+            Button(action: {
+                if let exportedURL = collectionManager.exportCollection() {
+                    print("Collection exported to: \(exportedURL.path)")
+                }
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundColor(.white)
+                    Text("Экспорт")
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.purple)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            
             Spacer()
             
             // View mode picker

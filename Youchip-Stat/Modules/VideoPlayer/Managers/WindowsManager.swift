@@ -21,6 +21,7 @@ class WindowsManager: NSObject {
     var analyticsWindow: AnalyticsWindowController?
     var screenshotsWindow: ScreenshotsWindowController?
     var fieldMapConfigurationWindow: FieldMapConfigurationWindowController?
+    var viewerWindow: ViewerWindowController?
 
     private var fieldMapWindow: NSWindowController?
 
@@ -37,6 +38,7 @@ class WindowsManager: NSObject {
         analyticsWindow?.window?.delegate = nil
         screenshotsWindow?.window?.delegate = nil
         fieldMapConfigurationWindow = nil
+        viewerWindow?.close()
         
         fieldMapConfigurationWindow?.close()
         videoWindow?.close()
@@ -236,6 +238,35 @@ class WindowsManager: NSObject {
     func fieldMapWindowDidClose() {
         lockMainWindows(false)
         fieldMapWindow = nil
+    }
+    
+    func showReportWindow(htmlString: String, teamName: String, opponentName: String) {
+        let view = WebViewWrapper(htmlString: htmlString)
+        let hostingController = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: hostingController)
+        
+        window.title = "ИИ Отчет: \(teamName) vs \(opponentName)"
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            window.setFrame(screenFrame, display: true)
+        } else {
+            window.center()
+            window.setContentSize(NSSize(width: 1200, height: 800))
+        }
+        
+        window.makeKeyAndOrderFront(nil)
+    }
+    
+    func showViewerWindow() {
+        if viewerWindow != nil {
+            viewerWindow?.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        
+        viewerWindow = ViewerWindowController()
+        viewerWindow?.showWindow(nil)
     }
 
 }
