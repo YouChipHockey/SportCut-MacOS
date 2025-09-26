@@ -143,26 +143,10 @@ struct CreateCustomCollectionsView: View {
             }
         }
         .sheet(isPresented: $showAddTagGroupSheet) {
-            addGroupSheet(title: ^String.Titles.addTagGroup) {
-                let _ = collectionManager.createTagGroup(name: newGroupName)
-                
-                // Автоматически сохраняем коллекцию в файлы
-                _ = collectionManager.saveCollectionToFiles()
-                NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
-                
-                newGroupName = ""
-            }
+            addTagGroupSheet()
         }
         .sheet(isPresented: $showAddLabelGroupSheet) {
-            addGroupSheet(title: ^String.Titles.addLabelGroup) {
-                let _ = collectionManager.createLabelGroup(name: newGroupName)
-                
-                // Автоматически сохраняем коллекцию в файлы
-                _ = collectionManager.saveCollectionToFiles()
-                NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
-                
-                newGroupName = ""
-            }
+            addLabelGroupSheet()
         }
         .sheet(isPresented: $showAddTagSheet) {
             addTagSheet()
@@ -244,7 +228,7 @@ struct CreateCustomCollectionsView: View {
                 }
             }) {
                 HStack(spacing: 8) {
-                    Image(systemName: showSaveSuccess ? "checkmark.circle.fill" : "square.and.arrow.down")
+                    Image(systemName: showSaveSuccess ? "checkmark.circle.fill" : (collectionManager.isEditingExisting ? "arrow.clockwise" : "square.and.arrow.down"))
                         .foregroundColor(showSaveSuccess ? .green : .white)
                     Text(collectionManager.isEditingExisting ? ^String.Titles.updateCollection : ^String.Titles.saveCollection)
                         .foregroundColor(.white)
@@ -2564,6 +2548,148 @@ struct CreateCustomCollectionsView: View {
         }
     }
     
+    func addTagGroupSheet() -> some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 8) {
+                Image(systemName: "tag.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(.blue)
+                
+                Text(^String.Titles.addTagGroup)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 20)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Название группы")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+            }
+            .padding(.horizontal, 24)
+            
+            HStack(spacing: 16) {
+                Button(^String.Titles.collectionsButtonCancel) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAddTagGroupSheet = false
+                        newGroupName = ""
+                    }
+                }
+                .keyboardShortcut(.escape)
+                .buttonStyle(SecondaryButtonStyle())
+                
+                Button(^String.Titles.collectionsButtonAdd) {
+                    let _ = collectionManager.createTagGroup(name: newGroupName)
+                    
+                    // Автоматически сохраняем коллекцию в файлы
+                    _ = collectionManager.saveCollectionToFiles()
+                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    
+                    newGroupName = ""
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAddTagGroupSheet = false
+                    }
+                }
+                .keyboardShortcut(.return)
+                .disabled(newGroupName.isEmpty)
+                .buttonStyle(PrimaryButtonStyle())
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
+        }
+        .frame(width: 450)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        )
+    }
+    
+    func addLabelGroupSheet() -> some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 8) {
+                Image(systemName: "label.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(.green)
+                
+                Text(^String.Titles.addLabelGroup)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 20)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Название группы")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+            }
+            .padding(.horizontal, 24)
+            
+            HStack(spacing: 16) {
+                Button(^String.Titles.collectionsButtonCancel) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAddLabelGroupSheet = false
+                        newGroupName = ""
+                    }
+                }
+                .keyboardShortcut(.escape)
+                .buttonStyle(SecondaryButtonStyle())
+                
+                Button(^String.Titles.collectionsButtonAdd) {
+                    let _ = collectionManager.createLabelGroup(name: newGroupName)
+                    
+                    // Автоматически сохраняем коллекцию в файлы
+                    _ = collectionManager.saveCollectionToFiles()
+                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    
+                    newGroupName = ""
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAddLabelGroupSheet = false
+                    }
+                }
+                .keyboardShortcut(.return)
+                .disabled(newGroupName.isEmpty)
+                .buttonStyle(PrimaryButtonStyle())
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
+        }
+        .frame(width: 450)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        )
+    }
+    
     func addGroupSheet(title: String, onAdd: @escaping () -> Void) -> some View {
         VStack(spacing: 24) {
             VStack(spacing: 8) {
@@ -2601,10 +2727,10 @@ struct CreateCustomCollectionsView: View {
             HStack(spacing: 16) {
                 Button(^String.Titles.collectionsButtonCancel) {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        if title.contains(^String.Titles.fieldMapPickerTagsCount) {
-                            showAddTagGroupSheet = false
-                        } else {
+                        if title.contains("лейблов") {
                             showAddLabelGroupSheet = false
+                        } else {
+                            showAddTagGroupSheet = false
                         }
                     }
                 }
@@ -2614,10 +2740,10 @@ struct CreateCustomCollectionsView: View {
                 Button(^String.Titles.collectionsButtonAdd) {
                     onAdd()
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        if title.contains(^String.Titles.fieldMapPickerTagsCount) {
-                            showAddTagGroupSheet = false
-                        } else {
+                        if title.contains("лейблов") {
                             showAddLabelGroupSheet = false
+                        } else {
+                            showAddTagGroupSheet = false
                         }
                     }
                 }
@@ -3006,77 +3132,79 @@ struct CreateCustomCollectionsView: View {
             .background(Color(NSColor.windowBackgroundColor))
             
             // Content
-            VStack(spacing: 24) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(^String.Titles.basicInformation)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    VStack(spacing: 16) {
-                        // Name Field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(^String.Titles.name)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.secondary)
-                            
-                            FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title)
-                                .textFieldStyle(ModernNewTextFieldStyle())
-                        }
+            ScrollView {
+                VStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(^String.Titles.basicInformation)
+                            .font(.headline)
+                            .foregroundColor(.primary)
                         
-                        // Description Field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(^String.Titles.description)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.secondary)
+                        VStack(spacing: 16) {
+                            // Name Field
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(^String.Titles.name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title)
+                                    .textFieldStyle(ModernNewTextFieldStyle())
+                            }
                             
-                            TextEditor(text: $newLabelDescription)
-                                .frame(minHeight: 80)
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(NSColor.controlBackgroundColor))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                        )
-                                )
-                        }
-                        
-                        // Info
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Информация")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.secondary)
+                            // Description Field
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(^String.Titles.description)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                TextEditor(text: $newLabelDescription)
+                                    .frame(minHeight: 80)
+                                    .padding(12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(NSColor.controlBackgroundColor))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                            }
                             
-                            Text("Лейблы используются для категоризации и дополнительной маркировки тегов. Они помогают организовать события по типам или важности.")
-                                .font(.body)
-                                .foregroundColor(.secondary)
-                                .padding(16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.green.opacity(0.1))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color.green.opacity(0.2), lineWidth: 1)
-                                        )
-                                )
+                            // Info
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Информация")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                Text("Лейблы используются для категоризации и дополнительной маркировки тегов. Они помогают организовать события по типам или важности.")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .padding(16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.green.opacity(0.1))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                            }
                         }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(NSColor.windowBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                )
+                        )
                     }
-                    .padding(20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(NSColor.windowBackgroundColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                            )
-                    )
                 }
+                .padding(24)
             }
-            .padding(24)
             
             // Footer
             VStack(spacing: 0) {
@@ -3116,7 +3244,7 @@ struct CreateCustomCollectionsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 500, height: 500)
+        .frame(minWidth: 500, maxWidth: 500, minHeight: 500, maxHeight: 500)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color(NSColor.windowBackgroundColor))
@@ -3146,57 +3274,59 @@ struct CreateCustomCollectionsView: View {
             .background(Color(NSColor.windowBackgroundColor))
             
             // Content
-            VStack(spacing: 24) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(^String.Titles.basicInformation)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    VStack(spacing: 16) {
-                        // Name Field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(^String.Titles.eventName)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.secondary)
-                            
-                            FocusAwareTextField(text: $newTimeEventName, placeholder: ^String.Titles.title)
-                                .textFieldStyle(ModernNewTextFieldStyle())
-                        }
+            ScrollView {
+                VStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(^String.Titles.basicInformation)
+                            .font(.headline)
+                            .foregroundColor(.primary)
                         
-                        // Info
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Информация")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.secondary)
+                        VStack(spacing: 16) {
+                            // Name Field
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(^String.Titles.eventName)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                FocusAwareTextField(text: $newTimeEventName, placeholder: ^String.Titles.title)
+                                    .textFieldStyle(ModernNewTextFieldStyle())
+                            }
                             
-                            Text("Общие события позволяют быстро добавлять повторяющиеся события на временную шкалу без необходимости каждый раз создавать новые теги. Это удобно для часто используемых событий.")
-                                .font(.body)
-                                .foregroundColor(.secondary)
-                                .padding(16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.orange.opacity(0.1))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-                                        )
-                                )
+                            // Info
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Информация")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                Text("Общие события позволяют быстро добавлять повторяющиеся события на временную шкалу без необходимости каждый раз создавать новые теги. Это удобно для часто используемых событий.")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .padding(16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.orange.opacity(0.1))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                            }
                         }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(NSColor.windowBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                )
+                        )
                     }
-                    .padding(20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(NSColor.windowBackgroundColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                            )
-                    )
                 }
+                .padding(24)
             }
-            .padding(24)
             
             // Footer
             VStack(spacing: 0) {
@@ -3228,7 +3358,7 @@ struct CreateCustomCollectionsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 500, height: 400)
+        .frame(minWidth: 500, maxWidth: 500, minHeight: 500, maxHeight: 500)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color(NSColor.windowBackgroundColor))
