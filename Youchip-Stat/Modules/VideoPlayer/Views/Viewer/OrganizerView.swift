@@ -191,6 +191,10 @@ struct OrganizerView: View {
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onDrop(of: ["com.youchip.organizerTag"], isTargeted: nil) { providers in
+                    handleDrop(providers: providers)
+                    return true
+                }
             } else {
                 List {
                     ForEach(playlistManager.currentTags) { tag in
@@ -218,6 +222,10 @@ struct OrganizerView: View {
                     }
                 }
                 .listStyle(PlainListStyle())
+                .onDrop(of: ["com.youchip.organizerTag"], isTargeted: nil) { providers in
+                    handleDrop(providers: providers)
+                    return true
+                }
             }
         }
         .sheet(isPresented: $showSavePlaylistSheet) {
@@ -239,6 +247,29 @@ struct OrganizerView: View {
                 }
             }
         )
+    }
+    
+    private func handleDrop(providers: [NSItemProvider]) {
+        print("🎯 Drop detected! Providers count: \(providers.count)")
+        for provider in providers {
+            provider.loadDataRepresentation(forTypeIdentifier: "com.youchip.organizerTag") { data, error in
+                if let error = error {
+                    print("❌ Error loading data: \(error)")
+                    return
+                }
+                
+                if let data = data,
+                   let tag = try? JSONDecoder().decode(OrganizerTag.self, from: data) {
+                    print("✅ Successfully decoded tag: \(tag.tagName)")
+                    DispatchQueue.main.async {
+                        playlistManager.addTag(tag)
+                        print("✅ Tag added to playlist: \(tag.tagName)")
+                    }
+                } else {
+                    print("❌ Failed to decode tag data")
+                }
+            }
+        }
     }
     
     private func formatDuration(_ seconds: Double) -> String {
@@ -551,6 +582,7 @@ struct OrganizerView: View {
             completion(.failure(error))
         }
     }
+    
 }
 
 // MARK: - Save Playlist Sheet

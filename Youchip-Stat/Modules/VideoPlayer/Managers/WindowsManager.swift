@@ -38,7 +38,11 @@ class WindowsManager: NSObject {
         analyticsWindow?.window?.delegate = nil
         screenshotsWindow?.window?.delegate = nil
         fieldMapConfigurationWindow = nil
+        
+        // Останавливаем плеер в viewer window перед закрытием
+        NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
         viewerWindow?.close()
+        viewerWindow = nil
         
         fieldMapConfigurationWindow?.close()
         videoWindow?.close()
@@ -260,12 +264,10 @@ class WindowsManager: NSObject {
     }
     
     func showViewerWindow() {
-        if viewerWindow != nil {
-            viewerWindow?.window?.makeKeyAndOrderFront(nil)
-            return
-        }
+        viewerWindow = nil
+        viewerWindow?.close()
         
-        viewerWindow = ViewerWindowController()
+        viewerWindow = ViewerWindowController(videoID: currentVideoId)
         viewerWindow?.showWindow(nil)
     }
 

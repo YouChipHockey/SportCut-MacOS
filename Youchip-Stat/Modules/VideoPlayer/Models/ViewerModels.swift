@@ -7,6 +7,14 @@
 
 import Foundation
 import AVFoundation
+import UniformTypeIdentifiers
+import SwiftUI
+
+// MARK: - Notifications
+extension Notification.Name {
+    static let playSingleTag = Notification.Name("playSingleTag")
+    static let stopViewerPlayer = Notification.Name("stopViewerPlayer")
+}
 
 // MARK: - Playlist System
 class PlaylistManager: ObservableObject {
@@ -18,9 +26,13 @@ class PlaylistManager: ObservableObject {
     @Published var currentPlaylist: SavedPlaylist?
     @Published var currentTags: [OrganizerTag] = []
     
-    private let playlistsKey = "SavedPlaylists"
+    private let videoID: String
+    private var playlistsKey: String {
+        return "SavedPlaylists_\(videoID)"
+    }
     
-    init() {
+    init(videoID: String) {
+        self.videoID = videoID
         loadPlaylists()
     }
     
@@ -91,7 +103,7 @@ class PlaylistManager: ObservableObject {
         }
     }
     
-    private func loadPlaylists() {
+    func loadPlaylists() {
         guard let data = UserDefaults.standard.data(forKey: playlistsKey) else { return }
         
         do {
@@ -101,6 +113,7 @@ class PlaylistManager: ObservableObject {
             playlists = []
         }
     }
+
 }
 
 struct SavedPlaylist: Identifiable, Codable {
@@ -322,6 +335,9 @@ class VideoPlaylistManager: ObservableObject {
         currentPlaylist = [tag]
         currentIndex = 0
         isPlaying = true
-        // Логика воспроизведения одного тега будет реализована в VideoView
+        
+        // Отправляем уведомление для запуска воспроизведения
+        NotificationCenter.default.post(name: .playSingleTag, object: tag)
     }
 }
+

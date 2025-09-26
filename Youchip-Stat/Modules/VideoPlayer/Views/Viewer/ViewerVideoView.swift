@@ -17,6 +17,18 @@ struct ViewerVideoView: View {
     @State private var currentComposition: AVComposition?
     @State private var isPlayerReady = false
     @State private var timeObserver: Any?
+    @State private var videoSize: CGSize = .zero
+    
+    private var videoAspectRatio: CGFloat {
+        guard videoSize.width > 0 && videoSize.height > 0 else { return 16/9 }
+        return videoSize.width / videoSize.height
+    }
+    
+    private var videoRotation: Double {
+        guard videoSize.width > 0 && videoSize.height > 0 else { return 0 }
+        // Если высота больше ширины (портретная ориентация), поворачиваем на 90 градусов против часовой стрелки
+        return videoSize.height > videoSize.width ? 90 : 0
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -113,7 +125,8 @@ struct ViewerVideoView: View {
             ZStack {
                 if let player = player {
                     VideoPlayer(player: player)
-                        .aspectRatio(16/9, contentMode: .fit)
+                        .aspectRatio(videoAspectRatio, contentMode: .fit)
+                        .rotationEffect(.degrees(videoRotation))
                         .background(Color.black)
                         .overlay(
                             // Drawing overlay
@@ -148,9 +161,11 @@ struct ViewerVideoView: View {
         }
         .onAppear {
             setupPlayer()
+            setupNotifications()
         }
         .onDisappear {
             cleanupPlayer()
+            removeNotifications()
         }
         .onChange(of: playlistManager.currentPlaylist) { _ in
             // Когда плейлист изменился, нужно пересоздать композицию
@@ -236,9 +251,71 @@ struct ViewerVideoView: View {
         let playerItem = AVPlayerItem(asset: composition)
         player?.replaceCurrentItem(with: playerItem)
         
+        // Получаем размер видео
+        updateVideoSize(from: originalAsset)
+        
         // Воспроизводим
         player?.play()
         playlistManager.isPlaying = true
+    }
+    
+    private func updateVideoSize(from asset: AVAsset) {
+        let videoTracks = asset.tracks(withMediaType: .video)
+        guard let videoTrack = videoTracks.first else { return }
+        
+        let size = videoTrack.naturalSize
+        let transform = videoTrack.preferredTransform
+        
+        // Учитываем трансформацию для получения правильного размера
+        let actualSize: CGSize
+        if transform.a == 0 && transform.b == 1.0 && transform.c == -1.0 && transform.d == 0 {
+            // Поворот на 90 градусов
+            actualSize = CGSize(width: size.height, height: size.width)
+        } else if transform.a == 0 && transform.b == -1.0 && transform.c == 1.0 && transform.d == 0 {
+            // Поворот на -90 градусов
+            actualSize = CGSize(width: size.height, height: size.width)
+        } else if transform.a == -1.0 && transform.b == 0 && transform.c == 0 && transform.d == -1.0 {
+            // Поворот на 180 градусов
+            actualSize = size
+        } else {
+            // Без поворота
+            actualSize = size
+        }
+        
+        DispatchQueue.main.async {
+            self.videoSize = actualSize
+        }
+    }
+    
+    // MARK: - Notifications
+    private func setupNotifications() {
+        NotificationCenter.default.addObserver(
+            forName: .playSingleTag,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let tag = notification.object as? OrganizerTag {
+                self.playSingleTag(tag)
+            }
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: .stopViewerPlayer,
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.forceStopPlayer()
+        }
+    }
+    
+    private func removeNotifications() {
+        NotificationCenter.default.removeObserver(self, name: .playSingleTag, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .stopViewerPlayer, object: nil)
+    }
+    
+    // MARK: - Public Methods
+    func forceStopPlayer() {
+        cleanupPlayer()
     }
     
     // MARK: - Screenshot Functions

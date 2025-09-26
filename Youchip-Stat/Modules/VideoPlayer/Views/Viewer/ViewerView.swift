@@ -8,9 +8,15 @@
 import SwiftUI
 
 struct ViewerView: View {
-    @StateObject private var playlistManager = PlaylistManager()
+    let videoID: String
+    @StateObject private var playlistManager: PlaylistManager
     @StateObject private var videoPlaylistManager = VideoPlaylistManager()
     @StateObject private var viewerState = ViewerState()
+    
+    init(videoID: String) {
+        self.videoID = videoID
+        self._playlistManager = StateObject(wrappedValue: PlaylistManager(videoID: videoID))
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -63,6 +69,8 @@ struct ViewerView: View {
     
     private func setupViewer() {
         // Настройка начального состояния
+        playlistManager.loadPlaylists()
+        playlistManager.currentPlaylist = nil
         playlistManager.clear()
         videoPlaylistManager.stopPlayback()
     }
@@ -77,7 +85,7 @@ struct ViewerView: View {
 // MARK: - Preview
 struct ViewerView_Previews: PreviewProvider {
     static var previews: some View {
-        ViewerView()
+        ViewerView(videoID: "preview-video-id")
             .frame(width: 1200, height: 800)
     }
 }

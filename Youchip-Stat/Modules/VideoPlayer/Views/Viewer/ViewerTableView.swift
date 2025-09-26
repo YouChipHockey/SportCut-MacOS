@@ -150,6 +150,7 @@ struct TableRowView: View {
     let stampWithLine: TimelineStampWithLine
     @ObservedObject var organizer: PlaylistManager
     @ObservedObject var playlistManager: VideoPlaylistManager
+    @State private var isDragging = false
     
     private var tag: Tag? {
         TagLibraryManager.shared.findTagById(stampWithLine.stamp.idTag)
@@ -241,6 +242,21 @@ struct TableRowView: View {
             Rectangle()
                 .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
         )
+        .scaleEffect(isDragging ? 1.02 : 1.0)
+        .opacity(isDragging ? 0.8 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isDragging)
+        .onDrag {
+            let tag = createOrganizerTag()
+            print("🚀 Starting drag for tag from table: \(tag.tagName)")
+            let data = try? JSONEncoder().encode(tag)
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(forTypeIdentifier: "com.youchip.organizerTag", visibility: .all) { completion in
+                print("📦 Providing data for tag from table: \(tag.tagName)")
+                completion(data, nil)
+                return nil
+            }
+            return provider
+        }
         .contextMenu {
             Button("Добавить в органайзер") {
                 addToOrganizer()
@@ -255,9 +271,9 @@ struct TableRowView: View {
         }
     }
     
-    private func addToOrganizer() {
+    private func createOrganizerTag() -> OrganizerTag {
         let tag = TagLibraryManager.shared.findTagById(stampWithLine.stamp.idTag)
-        let organizerTag = OrganizerTag(
+        return OrganizerTag(
             stampID: stampWithLine.stamp.id,
             lineID: stampWithLine.line.id,
             tagName: stampWithLine.stamp.label,
@@ -266,22 +282,14 @@ struct TableRowView: View {
             duration: stampWithLine.stamp.duration,
             color: tag?.color ?? "FFFFFF"
         )
-        organizer.addTag(organizerTag)
+    }
+    
+    private func addToOrganizer() {
+        organizer.addTag(createOrganizerTag())
     }
     
     private func playStamp() {
-        let tag = TagLibraryManager.shared.findTagById(stampWithLine.stamp.idTag)
-        let organizerTag = OrganizerTag(
-            stampID: stampWithLine.stamp.id,
-            lineID: stampWithLine.line.id,
-            tagName: stampWithLine.stamp.label,
-            lineName: stampWithLine.line.name,
-            startTime: stampWithLine.stamp.startSeconds,
-            duration: stampWithLine.stamp.duration,
-            color: tag?.color ?? "FFFFFF"
-        )
-        
-        playlistManager.playSingleTag(organizerTag)
+        playlistManager.playSingleTag(createOrganizerTag())
     }
     
     private func formatTime(_ seconds: Double) -> String {

@@ -178,7 +178,7 @@ struct ViewerTimelineView: View {
                 )
                 .id("header-row")
                 
-                ForEach(timelineData.lines) { line in
+                ForEach(filteredLines) { line in
                     HStack(spacing: 8) {
                         // Timeline name
                         VStack(alignment: .leading, spacing: 2) {
@@ -217,7 +217,7 @@ struct ViewerTimelineView: View {
                                 duration: duration,
                                 interval: interval,
                                 width: gridWidth,
-                                height: 30 * CGFloat(timelineData.lines.count + 1)
+                                height: 30 * CGFloat(filteredLines.count + 1)
                             )
                             
                             VStack(spacing: 0) {
@@ -324,6 +324,7 @@ struct ViewerStampView: View {
     @ObservedObject var organizer: PlaylistManager
     @ObservedObject var playlistManager: VideoPlaylistManager
     @ObservedObject var filter: TimelineFilter
+    @State private var isDragging = false
     
     var body: some View {
         let tag = TagLibraryManager.shared.findTagById(stamp.idTag)
@@ -347,6 +348,21 @@ struct ViewerStampView: View {
                     .frame(width: max(width - 4, 0), height: 20)
                     .position(x: startX + width/2, y: 15)
             )
+            .scaleEffect(isDragging ? 1.1 : 1.0)
+            .opacity(isDragging ? 0.8 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: isDragging)
+            .onDrag {
+                let tag = createOrganizerTag()
+                print("🚀 Starting drag for tag: \(tag.tagName)")
+                let data = try? JSONEncoder().encode(tag)
+                let provider = NSItemProvider()
+                provider.registerDataRepresentation(forTypeIdentifier: "com.youchip.organizerTag", visibility: .all) { completion in
+                    print("📦 Providing data for tag: \(tag.tagName)")
+                    completion(data, nil)
+                    return nil
+                }
+                return provider
+            }
             .contextMenu {
                 Button("Добавить в органайзер") {
                     addToOrganizer()
@@ -361,9 +377,9 @@ struct ViewerStampView: View {
             }
     }
     
-    private func addToOrganizer() {
+    private func createOrganizerTag() -> OrganizerTag {
         let tag = TagLibraryManager.shared.findTagById(stamp.idTag)
-        let organizerTag = OrganizerTag(
+        return OrganizerTag(
             stampID: stamp.id,
             lineID: line.id,
             tagName: stamp.label,
@@ -372,23 +388,15 @@ struct ViewerStampView: View {
             duration: stamp.duration,
             color: tag?.color ?? "FFFFFF"
         )
-        organizer.addTag(organizerTag)
+    }
+    
+    private func addToOrganizer() {
+        organizer.addTag(createOrganizerTag())
     }
     
     private func playStamp() {
-        let tag = TagLibraryManager.shared.findTagById(stamp.idTag)
-        let organizerTag = OrganizerTag(
-            stampID: stamp.id,
-            lineID: line.id,
-            tagName: stamp.label,
-            lineName: line.name,
-            startTime: stamp.startSeconds,
-            duration: stamp.duration,
-            color: tag?.color ?? "FFFFFF"
-        )
-        
         // Воспроизводим один тег
-        playlistManager.playSingleTag(organizerTag)
+        playlistManager.playSingleTag(createOrganizerTag())
     }
 }
 
@@ -629,3 +637,4 @@ struct FilterEventView: View {
         .buttonStyle(PlainButtonStyle())
     }
 }
+

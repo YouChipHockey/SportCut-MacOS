@@ -412,110 +412,115 @@ struct VideosView: View {
             .padding(.bottom, 20)
             
             // Form
-            VStack(spacing: 20) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(^String.Titles.videosViewFieldTeam1)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.primary)
+            ScrollView {
+                VStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.videosViewFieldTeam1)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        TextField(^String.Titles.enterTeam1Name, text: $team1Name)
+                            .textFieldStyle(ModernTextFieldStyle())
+                    }
                     
-                    TextField(^String.Titles.enterTeam1Name, text: $team1Name)
-                        .textFieldStyle(ModernTextFieldStyle())
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(^String.Titles.videosViewFieldTeam2)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.primary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.videosViewFieldTeam2)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        TextField(^String.Titles.enterTeam2Name, text: $team2Name)
+                            .textFieldStyle(ModernTextFieldStyle())
+                    }
                     
-                    TextField(^String.Titles.enterTeam2Name, text: $team2Name)
-                        .textFieldStyle(ModernTextFieldStyle())
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(^String.Titles.videosViewFieldScore)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.primary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.videosViewFieldScore)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        TextField(^String.Titles.enterScore, text: $score)
+                            .textFieldStyle(ModernTextFieldStyle())
+                    }
                     
-                    TextField(^String.Titles.enterScore, text: $score)
-                        .textFieldStyle(ModernTextFieldStyle())
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.videosViewFieldDateTime)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        DatePicker("",
+                                   selection: $selectedDate,
+                                   displayedComponents: [.date, .hourAndMinute]
+                        )
+                        .datePickerStyle(CompactDatePickerStyle())
+                        .labelsHidden()
+                    }
                 }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(^String.Titles.videosViewFieldDateTime)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.primary)
-                    
-                    DatePicker("",
-                               selection: $selectedDate,
-                               displayedComponents: [.date, .hourAndMinute]
-                    )
-                    .datePickerStyle(CompactDatePickerStyle())
-                    .labelsHidden()
-                }
+                .padding(.horizontal, 24)
             }
-            .padding(.horizontal, 24)
-            
-            Spacer()
             
             // Footer with buttons
-            HStack(spacing: 12) {
-                Button(action: {
-                    viewModel.state.showMetadataSheet = false
-                }) {
-                    Text(^String.Titles.collectionsButtonCancel)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
+            VStack(spacing: 0) {
+                Divider()
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        viewModel.state.showMetadataSheet = false
+                    }) {
+                        Text(^String.Titles.collectionsButtonCancel)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        if let url = viewModel.state.videoMetadata.url {
+                            viewModel.action.send(.saveVideoMetadata(
+                                url: url,
+                                team1: team1Name,
+                                team2: team2Name,
+                                score: score,
+                                dateTime: selectedDate
+                            ))
+                        }
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .medium))
+                            Text(^String.Titles.saveButtonTitle)
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundColor(.white)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(Color(NSColor.controlBackgroundColor))
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                         .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                Spacer()
-                
-                Button(action: {
-                    if let url = viewModel.state.videoMetadata.url {
-                        viewModel.action.send(.saveVideoMetadata(
-                            url: url,
-                            team1: team1Name,
-                            team2: team2Name,
-                            score: score,
-                            dateTime: selectedDate
-                        ))
+                        .shadow(color: .blue.opacity(0.3), radius: 2, x: 0, y: 1)
                     }
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(^String.Titles.saveButtonTitle)
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(8)
-                    .shadow(color: .blue.opacity(0.3), radius: 2, x: 0, y: 1)
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(team1Name.isEmpty || team2Name.isEmpty)
+                    .opacity(team1Name.isEmpty || team2Name.isEmpty ? 0.6 : 1.0)
                 }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(team1Name.isEmpty || team2Name.isEmpty)
-                .opacity(team1Name.isEmpty || team2Name.isEmpty ? 0.6 : 1.0)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 450, height: 420)
+        .frame(minWidth: 450, maxWidth: 450, minHeight: 420, maxHeight: 600)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             team1Name = viewModel.state.videoMetadata.team1
@@ -553,74 +558,79 @@ struct VideosView: View {
             .padding(.bottom, 20)
             
             // Form
-            VStack(alignment: .leading, spacing: 8) {
-                Text(^String.Titles.videosViewFieldFileName)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.primary)
-                
-                TextField(^String.Titles.enterNewName, text: $viewModel.state.newFileName)
-                    .textFieldStyle(ModernTextFieldStyle())
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(^String.Titles.videosViewFieldFileName)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                    
+                    TextField(^String.Titles.enterNewName, text: $viewModel.state.newFileName)
+                        .textFieldStyle(ModernTextFieldStyle())
+                }
+                .padding(.horizontal, 24)
             }
-            .padding(.horizontal, 24)
-            
-            Spacer()
             
             // Footer with buttons
-            HStack(spacing: 12) {
-                Button(action: {
-                    viewModel.state.showRenameSheet = false
-                }) {
-                    Text(^String.Titles.collectionsButtonCancel)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
+            VStack(spacing: 0) {
+                Divider()
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        viewModel.state.showRenameSheet = false
+                    }) {
+                        Text(^String.Titles.collectionsButtonCancel)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        if let file = viewModel.state.fileToRename {
+                            viewModel.action.send(.renameSimpleVideo(
+                                file: file,
+                                newName: viewModel.state.newFileName
+                            ))
+                        }
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .medium))
+                            Text(^String.Titles.saveButtonTitle)
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundColor(.white)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(Color(NSColor.controlBackgroundColor))
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.orange, Color.orange.opacity(0.8)]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                         .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                Spacer()
-                
-                Button(action: {
-                    if let file = viewModel.state.fileToRename {
-                        viewModel.action.send(.renameSimpleVideo(
-                            file: file,
-                            newName: viewModel.state.newFileName
-                        ))
+                        .shadow(color: .orange.opacity(0.3), radius: 2, x: 0, y: 1)
                     }
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(^String.Titles.saveButtonTitle)
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.orange, Color.orange.opacity(0.8)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(8)
-                    .shadow(color: .orange.opacity(0.3), radius: 2, x: 0, y: 1)
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(viewModel.state.newFileName.isEmpty)
+                    .opacity(viewModel.state.newFileName.isEmpty ? 0.6 : 1.0)
                 }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(viewModel.state.newFileName.isEmpty)
-                .opacity(viewModel.state.newFileName.isEmpty ? 0.6 : 1.0)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 400, height: 220)
+        .frame(minWidth: 400, maxWidth: 400, minHeight: 220, maxHeight: 300)
         .background(Color(NSColor.windowBackgroundColor))
     }
     
@@ -652,96 +662,101 @@ struct VideosView: View {
             .padding(.bottom, 20)
             
             // Content
-            VStack(spacing: 20) {
-                if importManager.isImporting {
-                    VStack(spacing: 16) {
-                        ProgressView()
-                            .scaleEffect(1.2)
-                        
-                        Text("Импорт коллекции...")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(40)
-                } else {
-                    VStack(spacing: 16) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 60))
-                            .foregroundColor(.purple.opacity(0.6))
-                        
-                        Text("Нажмите кнопку ниже для выбора файла коллекции")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                        
-                        if let error = importManager.importError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundColor(.red)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 20)
+            ScrollView {
+                VStack(spacing: 20) {
+                    if importManager.isImporting {
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                            
+                            Text("Импорт коллекции...")
+                                .font(.headline)
+                                .foregroundColor(.primary)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(40)
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 60))
+                                .foregroundColor(.purple.opacity(0.6))
+                            
+                            Text("Нажмите кнопку ниже для выбора файла коллекции")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                            
+                            if let error = importManager.importError {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 20)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(40)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(40)
                 }
             }
-            
-            Spacer()
             
             // Footer with buttons
-            HStack(spacing: 12) {
-                Button(action: {
-                    showImportCollectionSheet = false
-                    importManager.importError = nil
-                }) {
-                    Text(^String.Titles.collectionsButtonCancel)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
+            VStack(spacing: 0) {
+                Divider()
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        showImportCollectionSheet = false
+                        importManager.importError = nil
+                    }) {
+                        Text(^String.Titles.collectionsButtonCancel)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(importManager.isImporting)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        selectCollectionFile()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "folder")
+                                .font(.system(size: 14, weight: .medium))
+                            Text("Выбрать файл")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundColor(.white)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(Color(NSColor.controlBackgroundColor))
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.purple, Color.purple.opacity(0.8)]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                         .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(importManager.isImporting)
-                
-                Spacer()
-                
-                Button(action: {
-                    selectCollectionFile()
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Выбрать файл")
-                            .font(.system(size: 16, weight: .medium))
+                        .shadow(color: .purple.opacity(0.3), radius: 2, x: 0, y: 1)
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.purple, Color.purple.opacity(0.8)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(8)
-                    .shadow(color: .purple.opacity(0.3), radius: 2, x: 0, y: 1)
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(importManager.isImporting)
                 }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(importManager.isImporting)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 500, height: 400)
+        .frame(minWidth: 500, maxWidth: 500, minHeight: 400, maxHeight: 500)
         .background(Color(NSColor.windowBackgroundColor))
     }
     

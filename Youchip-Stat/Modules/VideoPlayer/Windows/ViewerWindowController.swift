@@ -10,8 +10,11 @@ import SwiftUI
 
 class ViewerWindowController: NSWindowController {
     
-    init() {
-        let view = ViewerView()
+    private let videoID: String
+    
+    init(videoID: String) {
+        self.videoID = videoID
+        let view = ViewerView(videoID: videoID)
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
@@ -49,9 +52,8 @@ class ViewerWindowController: NSWindowController {
 extension ViewerWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         // Очистка ресурсов при закрытии окна
-        if let hostingController = window?.contentViewController as? NSHostingController<ViewerView> {
-            // Здесь можно добавить дополнительную очистку если нужно
-        }
+        // Отправляем уведомление для остановки плеера
+        NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
     }
     
     func windowDidBecomeKey(_ notification: Notification) {
