@@ -136,12 +136,14 @@ class VideoFilesManager {
     }
     
     func updateTimelines(for bookmark: Data, with timelines: [TimelineLine]) {
-        let fileIdentifier = "Unknown"
+        var fileIdentifier = "Unknown"
         do {
             var isStale = false
             let resolvedURL = try URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
             fileIdentifier = resolvedURL.lastPathComponent
-        } catch {}
+        } catch {
+            print(error)
+        }
         
         var videosDataUpdated = false
         var filesUpdated = false

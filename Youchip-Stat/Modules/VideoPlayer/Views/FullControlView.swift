@@ -2526,7 +2526,7 @@ struct MultiLabelSelectionSheetView: View {
         }
         .frame(width: 400, height: 300)
         .onAppear {
-            print("\(availableLabels.map { $0.name }))
+            print("\(availableLabels.map { $0.name })")
         }
     }
 }

@@ -2803,7 +2803,7 @@ struct CreateCustomCollectionsView: View {
             .background(Color(NSColor.windowBackgroundColor))
             
             ScrollView {
-                VStack(spacing: 24) {ё
+                VStack(spacing: 24) {
                     VStack(alignment: .leading, spacing: 16) {
                         Text(^String.Titles.basicInformation)
                             .font(.headline)
