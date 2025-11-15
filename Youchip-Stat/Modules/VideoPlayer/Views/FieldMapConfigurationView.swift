@@ -506,7 +506,6 @@ struct FieldMapConfigurationView: View {
                 fieldImage = nil
             }
         } catch {
-            print("Error loading field image: \(error)")
             fieldImage = nil
         }
     }

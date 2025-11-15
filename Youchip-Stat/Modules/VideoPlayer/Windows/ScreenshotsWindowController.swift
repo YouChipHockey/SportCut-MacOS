@@ -196,7 +196,6 @@ struct ScreenshotsGalleryView: View {
                 DispatchQueue.main.async {
                     self.screenshots = []
                     self.isLoading = false
-                    print("Error loading screenshots: \(error)")
                 }
             }
         }

@@ -94,7 +94,7 @@ struct MiniPlayerView: View {
                 
                 DispatchQueue.main.async {
                     if let error = exporter?.error {
-                        print("Error exporting clip: \(error.localizedDescription)")
+                        print(error)
                         self.isLoading = false
                         return
                     }

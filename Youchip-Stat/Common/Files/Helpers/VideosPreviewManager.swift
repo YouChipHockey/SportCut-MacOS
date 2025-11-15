@@ -39,7 +39,6 @@ class VideosPreviewManager {
         let generator = QLThumbnailGenerator.shared
         generator.generateBestRepresentation(for: request) { (thumbnail, error) in
             if let error = error {
-                print("Ошибка генерации миниатюры: \(error.localizedDescription)")
                 completion(nil)
                 return
             }
@@ -64,7 +63,7 @@ class VideosPreviewManager {
                 return nsImage
             }
         } catch {
-            print("Ошибка загрузки миниатюры: \(error.localizedDescription)")
+            print(error)
         }
         return nil
     }
@@ -79,7 +78,7 @@ class VideosPreviewManager {
         do {
             try pngData.write(to: imagePath)
         } catch {
-            print("Ошибка сохранения миниатюры: \(error.localizedDescription)")
+            print(error.localizedDescription)
         }
     }
 }

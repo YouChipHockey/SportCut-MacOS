@@ -26,7 +26,6 @@ class VideoThumbnailManager {
                     completion(image)
                 }
             } catch {
-                print("Ошибка генерации превью видео: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     completion(nil)
                 }

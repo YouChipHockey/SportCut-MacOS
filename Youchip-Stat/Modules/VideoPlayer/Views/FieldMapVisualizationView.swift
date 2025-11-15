@@ -1075,7 +1075,7 @@ struct FieldMapVisualizationView: View {
                 url.stopAccessingSecurityScopedResource()
             }
         } catch {
-            print("Error loading field image: \(error)")
+            print(error)
         }
     }
     

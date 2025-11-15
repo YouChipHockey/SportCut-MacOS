@@ -67,7 +67,6 @@ struct PlayFieldExport: Codable {
                     self.imageData = nil
                 }
             } catch {
-                print("Error accessing image from bookmark: \(error)")
                 self.imageData = nil
             }
         } else {
@@ -96,7 +95,6 @@ struct PlayFieldExport: Codable {
                    let pngData = bitmapRep.representation(using: .png, properties: [:]) {
                     try pngData.write(to: tempURL)
                 } else {
-                    print("Failed to create placeholder image")
                     return nil
                 }
             }
@@ -114,7 +112,6 @@ struct PlayFieldExport: Codable {
                 imageBookmark: bookmarkData
             )
         } catch {
-            print("Error creating PlayField from export: \(error)")
             return nil
         }
     }
@@ -135,21 +132,9 @@ class CollectionImportManager: ObservableObject {
         do {
             let data = try Data(contentsOf: url)
             
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print("JSON content preview: \(String(jsonString.prefix(200)))...")
-            }
-            
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             let exportData = try decoder.decode(SportcutCollectionExport.self, from: data)
-            
-            print("Successfully decoded collection: \(exportData.collectionName)")
-            print("Tag groups count: \(exportData.tagGroups.count)")
-            print("Tags count: \(exportData.tags.count)")
-            print("Label groups count: \(exportData.labelGroups.count)")
-            print("Labels count: \(exportData.labels.count)")
-            print("Time events count: \(exportData.timeEvents.count)")
-            print("Has play field: \(exportData.playField != nil)")
             
             let collectionManager = CustomCollectionManager()
             collectionManager.collectionName = exportData.collectionName
@@ -162,30 +147,24 @@ class CollectionImportManager: ObservableObject {
             if let playFieldExport = exportData.playField,
                let playField = playFieldExport.toPlayField() {
                 collectionManager.playField = playField
-                print("Successfully restored play field")
             }
             
             return collectionManager
             
         } catch DecodingError.keyNotFound(let key, let context) {
             importError = "Отсутствует обязательное поле: \(key.stringValue). Путь: \(context.codingPath)"
-            print("Decoding error - key not found: \(key), context: \(context)")
             return nil
         } catch DecodingError.typeMismatch(let type, let context) {
             importError = "Неверный тип данных для поля: \(context.codingPath). Ожидался: \(type)"
-            print("Decoding error - type mismatch: \(type), context: \(context)")
             return nil
         } catch DecodingError.valueNotFound(let type, let context) {
             importError = "Отсутствует значение для поля: \(context.codingPath). Тип: \(type)"
-            print("Decoding error - value not found: \(type), context: \(context)")
             return nil
         } catch DecodingError.dataCorrupted(let context) {
             importError = "Поврежденные данные в файле. Путь: \(context.codingPath)"
-            print("Decoding error - data corrupted: \(context)")
             return nil
         } catch {
             importError = "Ошибка импорта коллекции: \(error.localizedDescription)"
-            print("General import error: \(error)")
             return nil
         }
     }

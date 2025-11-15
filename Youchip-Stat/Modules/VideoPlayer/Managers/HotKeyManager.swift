@@ -79,12 +79,10 @@ class HotKeyManager: ObservableObject {
     
     @objc private func collectionEditorOpened() {
         isEnabled = false
-        print("HotKey manager disabled: Collection editor opened")
     }
     
     @objc private func collectionEditorClosed() {
         isEnabled = true
-        print("HotKey manager enabled: Collection editor closed")
     }
     
     deinit {
@@ -116,7 +114,6 @@ class HotKeyManager: ObservableObject {
                   !self.blockedSheetActive,
                   !FocusStateManager.shared.isAnyTextFieldFocused else {
                 if FocusStateManager.shared.isAnyTextFieldFocused {
-                    print("HotKey blocked: Text field is focused")
                 }
                 return event
             }
@@ -189,9 +186,6 @@ class HotKeyManager: ObservableObject {
                 }
             }
         }
-        
-        print("Registered tag hotkeys for \(collection): \(registeredHotkeys.keys.joined(separator: ", "))")
-        print("Registered label hotkeys for \(collection): \(registeredLabelHotkeys.keys.joined(separator: ", "))")
     }
     
     func clearHotkeys() {
@@ -264,19 +258,16 @@ class HotKeyManager: ObservableObject {
     }
     
     private func selectTag(_ tag: Tag) {
-        print("Hotkey activated for tag: \(tag.name)")
         NotificationCenter.default.post(name: .showLabelSheet, object: tag)
     }
     
     func enableLabelHotkeyMode() {
         isLabelHotkeyMode = true
-        print("Switched to label hotkey mode")
     }
     
     func disableLabelHotkeyMode() {
         isLabelHotkeyMode = false
         hotKeySelectedLabelId = nil
-        print("Switched back to tag hotkey mode")
     }
     
 }

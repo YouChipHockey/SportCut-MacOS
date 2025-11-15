@@ -85,7 +85,6 @@ class ProjectExportManager {
                 alert.runModal()
             }
         } catch {
-            print("Error saving project: \(error)")
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = ^String.Titles.exportError
@@ -122,7 +121,6 @@ class ProjectExportManager {
             let projectData = try decoder.decode(ProjectImportModel.self, from: data)
             completion(projectData)
         } catch {
-            print("Error loading project: \(error)")
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = ^String.Titles.importError

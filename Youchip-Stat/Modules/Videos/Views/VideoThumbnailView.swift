@@ -250,13 +250,11 @@ struct VideoThumbnailView: View {
         if let updatedFile = viewModel.state.files.first(where: { $0.id == file.id }) {
             let newFavoriteState = viewModel.filesManager.isFavorite(updatedFile)
             if isFavorite != newFavoriteState {
-                print("Updating favorite state for \(file.name): \(isFavorite) -> \(newFavoriteState)")
                 isFavorite = newFavoriteState
             }
         } else {
             let newFavoriteState = viewModel.filesManager.isFavorite(file)
             if isFavorite != newFavoriteState {
-                print("Updating favorite state for \(file.name) (fallback): \(isFavorite) -> \(newFavoriteState)")
                 isFavorite = newFavoriteState
             }
         }

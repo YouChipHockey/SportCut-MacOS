@@ -233,14 +233,12 @@ struct CreateCustomCollectionsView: View {
             }
             return nil
         } catch {
-            print("Error resolving bookmark: \(error)")
             return nil
         }
     }
     
     var customToolbarView: some View {
         HStack(spacing: 20) {
-            // Collection name section
             VStack(alignment: .leading, spacing: 4) {
                 Text(^String.Titles.collection)
                     .font(.caption)
@@ -1805,7 +1803,7 @@ struct CreateCustomCollectionsView: View {
                 
                 self.showCropSheet = true
             } catch {
-                print("Error preparing image for cropping: \(error)")
+                print(error)
             }
         }
     }
@@ -1818,7 +1816,7 @@ struct CreateCustomCollectionsView: View {
                 try pngData.write(to: tempUrl)
                 _ = collectionManager.setFieldImage(from: tempUrl)
             } catch {
-                print("Error saving cropped image: \(error)")
+                print(error)
             }
         }
         

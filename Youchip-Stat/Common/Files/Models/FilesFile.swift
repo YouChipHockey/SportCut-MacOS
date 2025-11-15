@@ -30,7 +30,7 @@ struct FilesFile {
                 do {
                     videoData.bookmark = try newUrl.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
                 } catch {
-                    print("Failed to create bookmark data: \(error)")
+                    print(erorr)
                 }
             }
         }

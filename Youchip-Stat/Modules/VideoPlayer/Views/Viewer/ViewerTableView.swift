@@ -302,18 +302,15 @@ struct TableRowView: View {
                 return provider
             } else {
                 let tag = createOrganizerTag()
-                print("🚀 Starting drag for tag from table: \(tag.tagName)")
                 let data = try? JSONEncoder().encode(tag)
                 let provider = NSItemProvider()
                 
                 provider.registerDataRepresentation(forTypeIdentifier: "public.data", visibility: .all) { completion in
-                    print("📦 Providing data for tag from table (public.data): \(tag.tagName)")
                     completion(data, nil)
                     return nil
                 }
                 
                 provider.registerDataRepresentation(forTypeIdentifier: "com.youchip.organizerTag", visibility: .all) { completion in
-                    print("📦 Providing data for tag from table (custom): \(tag.tagName)")
                     completion(data, nil)
                     return nil
                 }

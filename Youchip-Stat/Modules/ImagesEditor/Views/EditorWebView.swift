@@ -84,7 +84,6 @@ struct EditorWebView: NSViewRepresentable {
             let task = URLSession.shared.dataTask(with: imageUrl) { data, response, error in
                 guard let data = data, error == nil else {
                     self.onError?(error?.localizedDescription ?? "Unknown error")
-                    print("Error loading image data: \(error?.localizedDescription ?? "Unknown error")")
                     return
                 }
 
@@ -97,7 +96,6 @@ struct EditorWebView: NSViewRepresentable {
                     webView.evaluateJavaScript(javascript) { [weak self] (result, error) in
                         if let error = error {
                             self?.onError?(error.localizedDescription)
-                            print("JavaScript evaluation error: \(error.localizedDescription)")
                         }
                     }
                 }
@@ -165,10 +163,8 @@ extension EditorWebView.Coordinator: WKDownloadDelegate {
     }
     
     func downloadDidFinish(_ download: WKDownload) {
-        print("downloaded")
     }
     
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-        print("\(error.localizedDescription)")
     }
 }

@@ -51,10 +51,10 @@ extension ViewerWindowController: NSWindowDelegate {
     }
     
     func windowDidBecomeKey(_ notification: Notification) {
-        print("Viewer window became key")
+        
     }
     
     func windowDidResignKey(_ notification: Notification) {
-        print("Viewer window resigned key")
+        
     }
 }

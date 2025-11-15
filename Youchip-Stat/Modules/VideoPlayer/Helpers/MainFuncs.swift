@@ -13,7 +13,6 @@ import UniformTypeIdentifiers
 
 func loadJSON<T: Decodable>(filename: String) -> T? {
     guard let url = Bundle.main.url(forResource: filename, withExtension: nil) else {
-        print("\(^String.Titles.fileNotFound) \(filename)")
         return nil
     }
     do {
@@ -22,7 +21,6 @@ func loadJSON<T: Decodable>(filename: String) -> T? {
         let loaded = try decoder.decode(T.self, from: data)
         return loaded
     } catch {
-        print("\(^String.Titles.fileManagerErrorDecoding) \(filename): \(error)")
         return nil
     }
 }

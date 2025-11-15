@@ -353,7 +353,6 @@ class CustomCollectionManager: ObservableObject {
             
             return true
         } catch {
-            print("Error saving collection: \(error)")
             return false
         }
     }
@@ -377,7 +376,6 @@ class CustomCollectionManager: ObservableObject {
     func loadCollectionFromBookmarks(named collectionName: String) -> Bool {
         guard let bookmark = UserDefaults.standard.getCollectionBookmarks()
             .first(where: { $0.name == collectionName }) else {
-            print("Error: No bookmark found for collection named '\(collectionName)'")
             return false
         }
         
@@ -395,7 +393,6 @@ class CustomCollectionManager: ObservableObject {
                 let accessFlag = tagGroupsURL.startAccessingSecurityScopedResource()
                 accessFlags.append(accessFlag)
             } catch {
-                print("Error resolving tagGroups bookmark: \(error)")
                 return false
             }
             
@@ -409,7 +406,6 @@ class CustomCollectionManager: ObservableObject {
                 accessFlags.append(accessFlag)
             } catch {
                 stopAccessingResources(urls: urls)
-                print("Error resolving tags bookmark: \(error)")
                 return false
             }
             
@@ -423,7 +419,6 @@ class CustomCollectionManager: ObservableObject {
                 accessFlags.append(accessFlag)
             } catch {
                 stopAccessingResources(urls: urls)
-                print("Error resolving labelGroups bookmark: \(error)")
                 return false
             }
             
@@ -437,13 +432,11 @@ class CustomCollectionManager: ObservableObject {
                 accessFlags.append(accessFlag)
             } catch {
                 stopAccessingResources(urls: urls)
-                print("Error resolving labels bookmark: \(error)")
                 return false
             }
             
             do {
                 if bookmark.timeEventsBookmark.isEmpty {
-                    print("Note: No time events bookmark found in collection - this might be an older collection format")
                 } else {
                     let timeEventsURL = try URL(resolvingBookmarkData: bookmark.timeEventsBookmark,
                                                 options: .withSecurityScope,
@@ -455,7 +448,6 @@ class CustomCollectionManager: ObservableObject {
                 }
             } catch {
                 stopAccessingResources(urls: urls)
-                print("Error resolving timeEvents bookmark: \(error)")
             }
             
             var playFieldURL: URL? = nil
@@ -473,12 +465,10 @@ class CustomCollectionManager: ObservableObject {
                 }
             } catch {
                 stopAccessingResources(urls: urls)
-                print("Error resolving playField bookmark: \(error)")
             }
             
             if urls.count < 4 || accessFlags.contains(false) {
                 stopAccessingResources(urls: urls)
-                print("Error: Failed to access all required resources")
                 return false
             }
             
@@ -498,7 +488,6 @@ class CustomCollectionManager: ObservableObject {
                 let tagGroupsContainer = try decoder.decode(TagGroupsData.self, from: tagGroupsData)
                 self.tagGroups = tagGroupsContainer.tagGroups
             } catch {
-                print("Error loading tag groups data: \(error)")
                 return false
             }
             
@@ -507,7 +496,6 @@ class CustomCollectionManager: ObservableObject {
                 let tagsContainer = try decoder.decode(TagsData.self, from: tagsData)
                 self.tags = tagsContainer.tags
             } catch {
-                print("Error loading tags data: \(error)")
                 return false
             }
             
@@ -516,7 +504,6 @@ class CustomCollectionManager: ObservableObject {
                 let labelGroupsContainer = try decoder.decode(LabelGroupsData.self, from: labelGroupsData)
                 self.labelGroups = labelGroupsContainer.labelGroups
             } catch {
-                print("Error loading label groups data: \(error)")
                 return false
             }
             
@@ -525,7 +512,6 @@ class CustomCollectionManager: ObservableObject {
                 let labelsContainer = try decoder.decode(LabelsData.self, from: labelsData)
                 self.labels = labelsContainer.labels
             } catch {
-                print("Error loading labels data: \(error)")
                 return false
             }
             if urls.count > 4 {
@@ -535,7 +521,6 @@ class CustomCollectionManager: ObservableObject {
                     let timeEventsContainer = try decoder.decode(TimeEventsData.self, from: timeEventsData)
                     self.timeEvents = timeEventsContainer.events
                 } catch {
-                    print("Error loading time events data: \(error)")
                     self.timeEvents = []
                 }
             } else {
@@ -547,7 +532,6 @@ class CustomCollectionManager: ObservableObject {
                     let fieldData = try Data(contentsOf: fieldURL)
                     self.playField = try decoder.decode(PlayField.self, from: fieldData)
                 } catch {
-                    print("Error loading play field data: \(error)")
                     self.playField = nil
                 }
             } else {
@@ -561,7 +545,6 @@ class CustomCollectionManager: ObservableObject {
             
             return true
         } catch {
-            print("Unexpected error loading collection: \(error)")
             return false
         }
     }
@@ -618,7 +601,6 @@ class CustomCollectionManager: ObservableObject {
             
             return true
         } catch {
-            print("Error saving play field: \(error)")
             return false
         }
     }
@@ -704,7 +686,6 @@ class CustomCollectionManager: ObservableObject {
             
             return true
         } catch {
-            print("Error setting field image: \(error)")
             return false
         }
     }
@@ -791,9 +772,8 @@ class CustomCollectionManager: ObservableObject {
             )
             
             UserDefaults.standard.saveCollectionBookmark(refreshedBookmark)
-            print("Refreshed bookmark for collection: \(collection)")
         } catch {
-            print("Failed to refresh bookmark for collection: \(collection), error: \(error)")
+            print(error)
         }
     }
     

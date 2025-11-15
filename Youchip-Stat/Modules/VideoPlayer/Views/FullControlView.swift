@@ -2086,10 +2086,8 @@ struct FullControlView: View {
             LabelSelectionSheetView(
                 uniqueLabels: uniqueLabelsFromTimelines(),
                 onLabelSelected: { selectedLabel in
-                    print("Выбран лейбл: \(selectedLabel.name), ID: \(selectedLabel.id)")
                     
                     let availableTags = tagsForLabel(selectedLabel)
-                    print("Доступные теги для лейбла: \(availableTags.map { $0.name })")
                     
                     if !availableTags.isEmpty {
                         showLabelSelectionSheet = false
@@ -2528,8 +2526,7 @@ struct MultiLabelSelectionSheetView: View {
         }
         .frame(width: 400, height: 300)
         .onAppear {
-            print("MultiLabelSelectionSheetView появился")
-            print("Доступные лейблы: \(availableLabels.map { $0.name })")
+            print("\(availableLabels.map { $0.name }))
         }
     }
 }

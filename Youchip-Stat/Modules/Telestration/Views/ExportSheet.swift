@@ -46,9 +46,9 @@ struct ExportSheet: View {
         ) { result in
             switch result {
             case .success(let url):
-                print("Изображение сохранено: \(url)")
+                print(url)
             case .failure(let error):
-                print("Ошибка сохранения: \(error)")
+                print(error)
             }
             presentationMode.wrappedValue.dismiss()
         }

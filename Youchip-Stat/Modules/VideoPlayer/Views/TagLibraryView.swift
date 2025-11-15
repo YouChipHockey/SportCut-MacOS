@@ -809,10 +809,6 @@ struct TagLibraryView: View {
                 let fieldY = normalizedCoords.y * fieldHeight
                 
                 fieldPosition = CGPoint(x: fieldX, y: fieldY)
-                
-                print("Field position selected for tag '\(tag.name)': " +
-                      "normalized: x: \(normalizedCoords.x), y: \(normalizedCoords.y), " +
-                      "field position: x: \(fieldX), y: \(fieldY)")
             }
         }
         
@@ -863,7 +859,6 @@ struct TagLibraryView: View {
                                     let timeStartString = secondsToTimeString(timeStart)
                                     let timeFinishString = secondsToTimeString(timeFinish)
                                     
-                                    print("✅ Завершен интервальный тег (tagBased): \(tag.name), время: \(timeStartString) - \(timeFinishString)")
                                     
                                     activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                     
@@ -884,7 +879,6 @@ struct TagLibraryView: View {
                         onCancel: {
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
-                                print("❌ Отменен интервальный тег (tagBased): \(tag.name)")
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
                             }
                         }
@@ -903,7 +897,6 @@ struct TagLibraryView: View {
                                         let timeStartString = secondsToTimeString(timeStart)
                                         let timeFinishString = secondsToTimeString(timeFinish)
                                         
-                                        print("✅ Завершен интервальный тег без лейблов (tagBased): \(tag.name)")
                                         
                                         activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                         
@@ -947,7 +940,6 @@ struct TagLibraryView: View {
                                     let timeStartString = secondsToTimeString(timeStart)
                                     let timeFinishString = secondsToTimeString(timeFinish)
                                     
-                                    print("✅ Завершен интервальный тег (standard): \(tag.name), время: \(timeStartString) - \(timeFinishString)")
                                     
                                     activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                     
@@ -968,7 +960,6 @@ struct TagLibraryView: View {
                         onCancel: {
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
-                                print("❌ Отменен интервальный тег (standard): \(tag.name)")
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
                             }
                         }
@@ -987,7 +978,6 @@ struct TagLibraryView: View {
                                         let timeStartString = secondsToTimeString(timeStart)
                                         let timeFinishString = secondsToTimeString(timeFinish)
                                         
-                                        print("✅ Завершен интервальный тег без лейблов (standard): \(tag.name)")
                                         
                                         activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                         
@@ -1075,16 +1065,13 @@ struct TagLibraryView: View {
                                 showLabelSheet = true
                             } else {
                                 activeIntervalTags.remove(at: index)
-                                print("✅ Завершен интервальный тег через hotkey: \(tag.name)")
                                 addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
                             }
                         }
                     } else {
                         guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else {
-                            print("⚠️ Попытка добавить дубликат интервального тега через hotkey: \(tag.name)")
                             return
                         }
-                        print("▶️ Начат интервальный тег через hotkey: \(tag.name)")
                         activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
                     }
                     return
@@ -1192,10 +1179,8 @@ struct TagLibraryView: View {
                 }
             } else {
                 guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else {
-                    print("⚠️ Попытка добавить дубликат интервального тега: \(tag.name)")
                     return
                 }
-                print("▶️ Начат интервальный тег: \(tag.name)")
                 activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
             }
             return
@@ -1234,7 +1219,6 @@ struct TagLibraryView: View {
     }
     
     private func proceedWithTagAdditionInterval(tag: Tag, timeStartString: String, timeFinishString: String, coordinates: CGPoint?, selectedLabels: [String]) {
-        print("📍 Добавление интервального тега '\(tag.name)' на таймлайн: \(timeStartString) - \(timeFinishString)")
         
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {
@@ -1261,7 +1245,6 @@ struct TagLibraryView: View {
             position: fieldPosition
         )
         
-        print("✅ Интервальный тег '\(tag.name)' успешно добавлен на таймлайн")
         
         DispatchQueue.main.async {
             self.updateTagCounts()
