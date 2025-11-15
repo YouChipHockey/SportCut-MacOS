@@ -9,7 +9,6 @@ import SwiftUI
 import WebKit
 import Cocoa
 
-// MARK: - WebView Wrapper
 struct WebViewWrapper: NSViewRepresentable {
     let htmlString: String
     
@@ -25,6 +24,6 @@ struct WebViewWrapper: NSViewRepresentable {
     }
     
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        // Обновления не нужны
+        
     }
 }

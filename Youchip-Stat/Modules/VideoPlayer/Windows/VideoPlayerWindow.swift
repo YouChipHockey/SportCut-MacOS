@@ -322,6 +322,7 @@ struct VideoPlayerWindow: View {
         .background(Color.black)
     }
     
+    
     private func zoomOut() {
         let newScale = max(1.0, videoScale - 0.1)
         videoScale = newScale
@@ -335,8 +336,6 @@ struct VideoPlayerWindow: View {
     }
     
     private func updateVideoOffsetForScale(_ newScale: CGFloat) {
-        // This is a simplified version - in a real implementation,
-        // you'd need to pass geometry to calculate proper bounds
         if newScale == 1.0 {
             videoOffset = .zero
             lastDragValue = .zero
@@ -352,7 +351,6 @@ struct VideoPlayerWindow: View {
         
         var body: some View {
             VStack(spacing: 12) {
-                // Up button
                 Button(action: { onMove(.up) }) {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 16, weight: .semibold))
@@ -370,7 +368,6 @@ struct VideoPlayerWindow: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 
-                // Left and Right buttons
                 HStack(spacing: 12) {
                     Button(action: { onMove(.left) }) {
                         Image(systemName: "chevron.left")
@@ -409,7 +406,6 @@ struct VideoPlayerWindow: View {
                     .buttonStyle(PlainButtonStyle())
                 }
                 
-                // Down button
                 Button(action: { onMove(.down) }) {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 16, weight: .semibold))
@@ -470,7 +466,6 @@ struct VideoPlayerWindow: View {
                 let cgImage = try imageGenerator.copyCGImage(at: currentTime, actualTime: nil)
                 let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
                 
-                // Обработка масштабирования и смещения
                 var finalImage = nsImage
                 if videoScale > 1.0 {
                     let imgWidth = CGFloat(cgImage.width)
@@ -599,7 +594,6 @@ struct VideoPlayerWindow: View {
     
 }
 
-// MARK: - CustomVideoPlayer
 struct CustomVideoPlayer: NSViewRepresentable {
     let player: AVPlayer
     

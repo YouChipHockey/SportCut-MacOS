@@ -38,18 +38,14 @@ struct TagLibraryView: View {
     @State private var currentSelectedLabels: [String] = []
     @State private var fieldMapBookmark: Data? = nil
     
-    // UI state
     @State private var expandedGroups: Set<String> = []
     
     @State var activeIntervalTags: [ActiveIntervalTag] = []
     
-    // Performance optimization: Cache tag counts to avoid expensive calculations
     @State private var tagCounts: [String: Int] = [:]
     
-    // Debounce timer to prevent excessive updates
     @State private var updateTimer: Timer?
     
-    // Force UI refresh when collection changes
     @State private var refreshID = UUID()
     @State private var windowWidth: CGFloat = 0
     
@@ -66,15 +62,12 @@ struct TagLibraryView: View {
     func backupDefaultData() {}
     
     func forceWindowRefresh() {
-        // Get the current window
         if let window = NSApplication.shared.windows.first(where: { $0.isKeyWindow && $0.title == ^String.Titles.tagLibrary }) {
             let currentFrame = window.frame
             let newWidth = currentFrame.width + 1
             
-            // Temporarily increase window width by 1 pixel
             window.setFrame(NSRect(x: currentFrame.origin.x, y: currentFrame.origin.y, width: newWidth, height: currentFrame.height), display: true)
             
-            // After 0.3 seconds, restore original width
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 window.setFrame(currentFrame, display: true)
             }
@@ -82,7 +75,6 @@ struct TagLibraryView: View {
     }
     
     func restoreDefaultData() {
-        // Use the currently selected standard collection or first one if none selected
         if let selectedName = tagLibrary.selectedStandardCollectionName {
             tagLibrary.applyStandardCollection(named: selectedName)
         } else {
@@ -95,10 +87,8 @@ struct TagLibraryView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Modern header with search
             modernHeaderView
             
-            // Content
             ScrollView {
                 LazyVStack(spacing: 8) {
                     if !tagLibrary.timeEvents.isEmpty {
@@ -151,13 +141,11 @@ struct TagLibraryView: View {
             forceWindowRefresh()
         }
         .onReceive(timelineData.$lines) { _ in
-            // Update tag counts when stamps are added/removed
             DispatchQueue.main.async {
                 self.updateTagCounts()
             }
         }
         .onChange(of: timelineData.selectedLineID) { _ in
-            // Update tag counts when selected line changes
             DispatchQueue.main.async {
                 self.updateTagCounts()
             }
@@ -169,11 +157,29 @@ struct TagLibraryView: View {
             HStack {
                 collectionTitleView
                 Spacer()
-                collectionsMenuButton
+                if #available(macOS 26.0, *) {
+                    Button(action: {
+                        WindowsManager.shared.openCustomCollectionsWindow()
+                    }) {
+                        HStack {
+                            Image(systemName: "plus.circle")
+                            Text(^String.Titles.createCollection)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .help(^String.Titles.createCollection)
+                    .disabled(!activeIntervalTags.isEmpty)
+                } else {
+                    collectionsMenuButton
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(Color(.windowBackgroundColor))
+            
+            if #available(macOS 26.0, *) {
+                collectionsScrollView
+            }
             
             Divider()
                 .background(Color(.separatorColor))
@@ -234,6 +240,137 @@ struct TagLibraryView: View {
         }
     }
     
+    @available(macOS 26.0, *)
+    private var collectionsScrollView: some View {
+        VStack(spacing: 8) {
+            if !tagLibrary.standardCollections.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(^String.Titles.standardCollections)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 16)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(tagLibrary.standardCollections, id: \.name) { collection in
+                                standardCollectionChip(
+                                    collection: collection,
+                                    isSelected: tagLibrary.selectedStandardCollectionName == collection.name && !isUserCollectionActive
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
+            }
+            
+            if !userCollections.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(^String.Titles.customCollections)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 16)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(userCollections, id: \.name) { collection in
+                                customCollectionChip(collection: collection)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .background(Color(.controlBackgroundColor))
+    }
+    
+    @available(macOS 26.0, *)
+    private func standardCollectionChip(collection: StandardCollection, isSelected: Bool) -> some View {
+        Button(action: {
+            guard activeIntervalTags.isEmpty else { return }
+            isUserCollectionActive = false
+            selectedUserCollection = nil
+            tagLibrary.applyStandardCollection(named: collection.name)
+            DispatchQueue.main.async {
+                self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+                self.refreshID = UUID()
+                self.forceWindowRefresh()
+            }
+        }) {
+            HStack(spacing: 6) {
+                Text(collection.name)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(isSelected ? .white : .primary)
+                
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.accentColor : Color(.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor : Color(.separatorColor), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!activeIntervalTags.isEmpty)
+    }
+    
+    @available(macOS 26.0, *)
+    private func customCollectionChip(collection: CollectionBookmark) -> some View {
+        let isSelected = isUserCollectionActive && selectedUserCollection?.name == collection.name
+        
+        return Button(action: {
+            guard activeIntervalTags.isEmpty else { return }
+            selectedUserCollection = collection
+            isUserCollectionActive = true
+            loadUserCollection(collection)
+        }) {
+            HStack(spacing: 6) {
+                Text(collection.name)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(isSelected ? .white : .primary)
+                
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.accentColor : Color(.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor : Color(.separatorColor), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!activeIntervalTags.isEmpty)
+        .contextMenu {
+            Button(^String.Titles.editButtonTitle) {
+                WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: collection)
+            }
+            
+            Button(^String.Titles.delete) {
+                collectionToDelete = collection
+                showDeleteAlert = true
+            }
+        }
+    }
+    
     private var collectionsMenuButton: some View {
         Menu {
             createCollectionButton
@@ -260,7 +397,6 @@ struct TagLibraryView: View {
                     isUserCollectionActive = false
                     selectedUserCollection = nil
                     tagLibrary.applyStandardCollection(named: collection.name)
-                    // Force immediate UI refresh
                     DispatchQueue.main.async {
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
                         self.refreshID = UUID()
@@ -296,13 +432,11 @@ struct TagLibraryView: View {
         Button(action: {
             isUserCollectionActive = false
             selectedUserCollection = nil
-            // Use the currently selected standard collection or first one if none selected
             if let selectedName = tagLibrary.selectedStandardCollectionName {
                 tagLibrary.applyStandardCollection(named: selectedName)
             } else if let firstCollection = tagLibrary.standardCollections.first {
                 tagLibrary.applyStandardCollection(named: firstCollection.name)
             }
-            // Force immediate UI refresh
             DispatchQueue.main.async {
                 self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
                 self.refreshID = UUID()
@@ -375,8 +509,6 @@ struct TagLibraryView: View {
         }
     }
     
-    // MARK: - Legacy UI Components (macOS 13 and below)
-    
     private var legacyHeaderView: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -429,13 +561,11 @@ struct TagLibraryView: View {
             Button(action: {
                 isUserCollectionActive = false
                 selectedUserCollection = nil
-                // Use the currently selected standard collection or first one if none selected
                 if let selectedName = tagLibrary.selectedStandardCollectionName {
                     tagLibrary.applyStandardCollection(named: selectedName)
                 } else if let firstCollection = tagLibrary.standardCollections.first {
                     tagLibrary.applyStandardCollection(named: firstCollection.name)
                 }
-                // Force immediate UI refresh
                 DispatchQueue.main.async {
                     self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
                     self.refreshID = UUID()
@@ -650,7 +780,6 @@ struct TagLibraryView: View {
     private func showFieldMapSelection(tag: Tag, imageBookmark: Data, selectedLabels: [String]) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
             proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: coordinates)
-            // Resume video after map selection is complete
             if videoManager.playbackSpeed > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     videoManager.player?.play()
@@ -661,8 +790,9 @@ struct TagLibraryView: View {
     
     private func proceedWithTagAddition(tag: Tag, selectedLabels: [String], coordinates: CGPoint?) {
         let currentTime = videoManager.currentTime
+        let videoDuration = max(1.0, videoManager.videoDuration)
         let startTime = max(0, currentTime - tag.defaultTimeBefore)
-        let finishTime = startTime + tag.defaultTimeBefore + tag.defaultTimeAfter
+        let finishTime = min(videoDuration, startTime + tag.defaultTimeBefore + tag.defaultTimeAfter)
         let timeStartString = secondsToTimeString(startTime)
         let timeFinishString = secondsToTimeString(finishTime)
         
@@ -697,12 +827,10 @@ struct TagLibraryView: View {
             position: fieldPosition
         )
         
-        // Update tag counts immediately after adding stamp
         DispatchQueue.main.async {
             self.updateTagCounts()
         }
         
-        // Resume video only if no map selection is needed
         if tag.mapEnabled != true {
             if videoManager.playbackSpeed > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -726,18 +854,19 @@ struct TagLibraryView: View {
                         tagLibrary: TagLibraryManager.shared,
                         onDone: { selectedLabels in
                             if tag.isInterval == true {
-                                // Handle all active interval tags for this tag
-                                let activeTags = activeIntervalTags.filter { $0.tag.id == tag.id }
-                                for activeTag in activeTags {
-                                    let start = activeTag.startTime - tag.defaultTimeBefore
-                                    let end = videoManager.currentTime + tag.defaultTimeAfter
+                                if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
+                                    let videoDuration = max(1.0, videoManager.videoDuration)
+                                    let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
+                                    let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                     let timeStart = min(start, end)
                                     let timeFinish = max(start, end)
                                     let timeStartString = secondsToTimeString(timeStart)
                                     let timeFinishString = secondsToTimeString(timeFinish)
-                                    if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == activeTag.id }) {
-                                        activeIntervalTags.remove(at: index)
-                                    }
+                                    
+                                    print("✅ Завершен интервальный тег (tagBased): \(tag.name), время: \(timeStartString) - \(timeFinishString)")
+                                    
+                                    activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                                    
                                     addTagToTimelineInterval(
                                         tag: tag,
                                         timeStartString: timeStartString,
@@ -745,8 +874,6 @@ struct TagLibraryView: View {
                                         selectedLabels: selectedLabels
                                     )
                                 }
-                                // Remove all active interval tags for this tag
-                                activeIntervalTags.removeAll { $0.tag.id == tag.id }
                             } else {
                                 addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
                             }
@@ -756,8 +883,8 @@ struct TagLibraryView: View {
                         },
                         onCancel: {
                             self.videoManager.player?.play()
-                            // Remove all active interval tags for this tag when canceled
                             if let tag = selectedTag, tag.isInterval == true {
+                                print("❌ Отменен интервальный тег (tagBased): \(tag.name)")
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
                             }
                         }
@@ -767,18 +894,19 @@ struct TagLibraryView: View {
                         Text(^String.Titles.tagLibraryAddingTag)
                             .onAppear {
                                 if tag.isInterval == true {
-                                    // Handle all active interval tags for this tag
-                                    let activeTags = activeIntervalTags.filter { $0.tag.id == tag.id }
-                                    for activeTag in activeTags {
-                                        let start = activeTag.startTime - tag.defaultTimeBefore
-                                        let end = videoManager.currentTime + tag.defaultTimeAfter
+                                    if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
+                                        let videoDuration = max(1.0, videoManager.videoDuration)
+                                        let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
+                                        let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                         let timeStart = min(start, end)
                                         let timeFinish = max(start, end)
                                         let timeStartString = secondsToTimeString(timeStart)
                                         let timeFinishString = secondsToTimeString(timeFinish)
-                                        if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == activeTag.id }) {
-                                            activeIntervalTags.remove(at: index)
-                                        }
+                                        
+                                        print("✅ Завершен интервальный тег без лейблов (tagBased): \(tag.name)")
+                                        
+                                        activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                                        
                                         addTagToTimelineInterval(
                                             tag: tag,
                                             timeStartString: timeStartString,
@@ -786,8 +914,6 @@ struct TagLibraryView: View {
                                             selectedLabels: []
                                         )
                                     }
-                                    // Remove all active interval tags for this tag
-                                    activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                 } else {
                                     addTagToTimeline(tag: tag, selectedLabels: [])
                                 }
@@ -812,18 +938,19 @@ struct TagLibraryView: View {
                         tagLibrary: TagLibraryManager.shared,
                         onDone: { selectedLabels in
                             if tag.isInterval == true {
-                                // Handle all active interval tags for this tag
-                                let activeTags = activeIntervalTags.filter { $0.tag.id == tag.id }
-                                for activeTag in activeTags {
-                                    let start = activeTag.startTime - tag.defaultTimeBefore
-                                    let end = videoManager.currentTime + tag.defaultTimeAfter
+                                if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
+                                    let videoDuration = max(1.0, videoManager.videoDuration)
+                                    let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
+                                    let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                     let timeStart = min(start, end)
                                     let timeFinish = max(start, end)
                                     let timeStartString = secondsToTimeString(timeStart)
                                     let timeFinishString = secondsToTimeString(timeFinish)
-                                    if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == activeTag.id }) {
-                                        activeIntervalTags.remove(at: index)
-                                    }
+                                    
+                                    print("✅ Завершен интервальный тег (standard): \(tag.name), время: \(timeStartString) - \(timeFinishString)")
+                                    
+                                    activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                                    
                                     addTagToTimelineInterval(
                                         tag: tag,
                                         timeStartString: timeStartString,
@@ -831,8 +958,6 @@ struct TagLibraryView: View {
                                         selectedLabels: selectedLabels
                                     )
                                 }
-                                // Remove all active interval tags for this tag
-                                activeIntervalTags.removeAll { $0.tag.id == tag.id }
                             } else {
                                 addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
                             }
@@ -842,8 +967,8 @@ struct TagLibraryView: View {
                         },
                         onCancel: {
                             self.videoManager.player?.play()
-                            // Remove all active interval tags for this tag when canceled
                             if let tag = selectedTag, tag.isInterval == true {
+                                print("❌ Отменен интервальный тег (standard): \(tag.name)")
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
                             }
                         }
@@ -853,18 +978,19 @@ struct TagLibraryView: View {
                         Text(^String.Titles.tagLibraryAddingTag)
                             .onAppear {
                                 if tag.isInterval == true {
-                                    // Handle all active interval tags for this tag
-                                    let activeTags = activeIntervalTags.filter { $0.tag.id == tag.id }
-                                    for activeTag in activeTags {
-                                        let start = activeTag.startTime - tag.defaultTimeBefore
-                                        let end = videoManager.currentTime + tag.defaultTimeAfter
+                                    if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
+                                        let videoDuration = max(1.0, videoManager.videoDuration)
+                                        let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
+                                        let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                         let timeStart = min(start, end)
                                         let timeFinish = max(start, end)
                                         let timeStartString = secondsToTimeString(timeStart)
                                         let timeFinishString = secondsToTimeString(timeFinish)
-                                        if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == activeTag.id }) {
-                                            activeIntervalTags.remove(at: index)
-                                        }
+                                        
+                                        print("✅ Завершен интервальный тег без лейблов (standard): \(tag.name)")
+                                        
+                                        activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                                        
                                         addTagToTimelineInterval(
                                             tag: tag,
                                             timeStartString: timeStartString,
@@ -872,8 +998,6 @@ struct TagLibraryView: View {
                                             selectedLabels: []
                                         )
                                     }
-                                    // Remove all active interval tags for this tag
-                                    activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                 } else {
                                     addTagToTimeline(tag: tag, selectedLabels: [])
                                 }
@@ -910,7 +1034,6 @@ struct TagLibraryView: View {
         restoreDefaultData()
         markupMode = MarkupMode.current
         
-        // Initialize expanded groups
         updateTagCounts()
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
         
@@ -934,8 +1057,9 @@ struct TagLibraryView: View {
                 if tag.isInterval ?? false {
                     if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                         let activeTag = activeIntervalTags[index]
-                        let start = activeTag.startTime - tag.defaultTimeBefore
-                        let end = videoManager.currentTime + tag.defaultTimeAfter
+                        let videoDuration = max(1.0, videoManager.videoDuration)
+                        let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
+                        let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                         let timeStart = min(start, end)
                         let timeFinish = max(start, end)
                         let timeStartString = secondsToTimeString(timeStart)
@@ -951,10 +1075,16 @@ struct TagLibraryView: View {
                                 showLabelSheet = true
                             } else {
                                 activeIntervalTags.remove(at: index)
+                                print("✅ Завершен интервальный тег через hotkey: \(tag.name)")
                                 addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
                             }
                         }
                     } else {
+                        guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else {
+                            print("⚠️ Попытка добавить дубликат интервального тега через hotkey: \(tag.name)")
+                            return
+                        }
+                        print("▶️ Начат интервальный тег через hotkey: \(tag.name)")
                         activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
                     }
                     return
@@ -968,7 +1098,6 @@ struct TagLibraryView: View {
             }
         }
         NotificationCenter.default.addObserver(forName: .stampCountsChanged, object: nil, queue: .main) { _ in
-            // Update tag counts when stamps are added/removed
             DispatchQueue.main.async {
                 self.updateTagCounts()
             }
@@ -1008,7 +1137,6 @@ struct TagLibraryView: View {
             HotKeyManager.shared.clearHotkeys()
         }
         
-        // Force immediate update of filtered data and expanded groups
         DispatchQueue.main.async {
             self.updateTagCounts()
             self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
@@ -1041,8 +1169,9 @@ struct TagLibraryView: View {
         if tag.isInterval ?? false {
             if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                 let activeTag = activeIntervalTags[index]
-                let start = activeTag.startTime - tag.defaultTimeBefore
-                let end = videoManager.currentTime + tag.defaultTimeAfter
+                let videoDuration = max(1.0, videoManager.videoDuration)
+                let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
+                let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                 let timeStart = min(start, end)
                 let timeFinish = max(start, end)
                 let timeStartString = secondsToTimeString(timeStart)
@@ -1062,6 +1191,11 @@ struct TagLibraryView: View {
                     }
                 }
             } else {
+                guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else {
+                    print("⚠️ Попытка добавить дубликат интервального тега: \(tag.name)")
+                    return
+                }
+                print("▶️ Начат интервальный тег: \(tag.name)")
                 activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
             }
             return
@@ -1091,7 +1225,6 @@ struct TagLibraryView: View {
     private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartString: String, timeFinishString: String, selectedLabels: [String]) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
             proceedWithTagAdditionInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, coordinates: coordinates, selectedLabels: selectedLabels)
-            // Resume video after map selection is complete
             if videoManager.playbackSpeed > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     videoManager.player?.play()
@@ -1101,6 +1234,8 @@ struct TagLibraryView: View {
     }
     
     private func proceedWithTagAdditionInterval(tag: Tag, timeStartString: String, timeFinishString: String, coordinates: CGPoint?, selectedLabels: [String]) {
+        print("📍 Добавление интервального тега '\(tag.name)' на таймлайн: \(timeStartString) - \(timeFinishString)")
+        
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {
             let collectionManager = CustomCollectionManager()
@@ -1114,6 +1249,7 @@ struct TagLibraryView: View {
                 fieldPosition = CGPoint(x: fieldX, y: fieldY)
             }
         }
+        
         timelineData.addStampToSelectedLine(
             idTag: tag.id,
             primaryId: tag.primaryID,
@@ -1125,12 +1261,12 @@ struct TagLibraryView: View {
             position: fieldPosition
         )
         
-        // Update tag counts immediately after adding stamp
+        print("✅ Интервальный тег '\(tag.name)' успешно добавлен на таймлайн")
+        
         DispatchQueue.main.async {
             self.updateTagCounts()
         }
         
-        // Resume video only if no map selection is needed
         if tag.mapEnabled != true {
             if videoManager.playbackSpeed > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -1157,7 +1293,6 @@ struct TagLibraryView: View {
     }
 }
 
-// MARK: - TagButtonView (Performance Optimized)
 struct TagButtonView: View, Equatable {
     let tag: Tag
     let isActive: Bool
@@ -1179,7 +1314,6 @@ struct TagButtonView: View, Equatable {
         
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 1) {
-                // Main content area with tag name and count
                 HStack(alignment: .center, spacing: 8) {
                     Text(tag.name)
                         .font(.system(size: 14, weight: isActive ? .bold : .medium))
@@ -1206,7 +1340,6 @@ struct TagButtonView: View, Equatable {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
                 
-                // Bottom row with indicators aligned to the right
                 HStack {
                     Spacer()
                     HStack(spacing: 4) {
@@ -1249,7 +1382,6 @@ struct TagButtonView: View, Equatable {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 4)
                 
-                // Interval indicator bar (only when active)
                 if isActive && isInterval {
                     HStack(spacing: 2) {
                         ForEach(0..<6) { _ in
@@ -1300,7 +1432,6 @@ struct TagButtonView: View, Equatable {
     }
 }
 
-// MARK: - FlexibleTagGrid
 struct FlexibleTagGrid: View {
     let tags: [String]
     let tagLibrary: TagLibraryManager
@@ -1369,15 +1500,12 @@ struct FlexibleTagGrid: View {
         for tagID in tags {
             guard let tag = tagLibrary.tags.first(where: { $0.id == tagID }) else { continue }
             
-            // Calculate button width based on all elements
             let buttonWidth = min(calculateButtonWidth(for: tag), maxButtonWidth)
             
-            // Check if this tag fits in current row
             if currentRowWidth + buttonWidth + (currentRow.isEmpty ? 0 : spacing) <= availableWidth {
                 currentRow.append(tagID)
                 currentRowWidth += buttonWidth + (currentRow.count > 1 ? spacing : 0)
             } else {
-                // Start new row
                 if !currentRow.isEmpty {
                     rows.append(currentRow)
                 }
@@ -1386,7 +1514,6 @@ struct FlexibleTagGrid: View {
             }
         }
         
-        // Add the last row if it's not empty
         if !currentRow.isEmpty {
             rows.append(currentRow)
         }
@@ -1401,44 +1528,38 @@ struct FlexibleTagGrid: View {
         
         var totalWidth = textWidth
         
-        // Add padding for text area
-        totalWidth += 16 // horizontal padding
+        totalWidth += 16
         
-        // Add space for count badge if present
         if let tagCount = tagCounts[tag.id], tagCount > 0 {
             let countText = "\(tagCount)"
             let countFont = NSFont.systemFont(ofSize: 12, weight: .semibold)
             let countAttributes = [NSAttributedString.Key.font: countFont]
             let countWidth = countText.size(withAttributes: countAttributes).width
-            totalWidth += countWidth + 12 // count width + padding
+            totalWidth += countWidth + 12
         }
         
-        // Add extra padding for visual balance
         totalWidth += 8
         
         return totalWidth
     }
     
     private func calculateTagButtonHeight(for tag: Tag) -> CGFloat {
-        var height: CGFloat = 22 // Base height for main content area
+        var height: CGFloat = 22
         
-        // Add height for bottom indicators row
         let hasIndicators = (tag.isInterval == true) || 
                            (tag.mapEnabled == true) || 
                            (tag.hotkey != nil && !tag.hotkey!.isEmpty) ||
                            activeIntervalTags.contains(where: { $0.tag.id == tag.id })
         
         if hasIndicators {
-            height += 16 // Height for indicators row
+            height += 16
         }
         
-        // Add height for interval indicator bar if active and interval
         if activeIntervalTags.contains(where: { $0.tag.id == tag.id }) && (tag.isInterval == true) {
-            height += 8 // Height for interval indicator bar
+            height += 8
         }
         
-        // Add padding
-        height += 8 // Top and bottom padding
+        height += 8
         
         return height
     }
@@ -1487,7 +1608,6 @@ struct FlexibleTagGrid: View {
     }
 }
 
-// MARK: - FlexibleTimeEventGrid
 struct FlexibleTimeEventGrid: View {
     let events: [TimeEvent]
     let tagLibrary: TagLibraryManager
@@ -1521,7 +1641,7 @@ struct FlexibleTimeEventGrid: View {
                 calculateEventRows()
             }
         }
-        .frame(height: CGFloat(eventRows.count) * (25 + 8)) // 25 is button height, 8 is spacing
+        .frame(height: CGFloat(eventRows.count) * (25 + 8))
     }
     
     private func timeEventButton(for event: TimeEvent) -> some View {
@@ -1576,15 +1696,12 @@ struct FlexibleTimeEventGrid: View {
         let maxButtonWidth: CGFloat = 200
         
         for event in events {
-            // Calculate button width based on all elements
             let buttonWidth = min(calculateEventButtonWidth(for: event), maxButtonWidth)
             
-            // Check if this event fits in current row
             if currentRowWidth + buttonWidth + (currentRow.isEmpty ? 0 : spacing) <= availableWidth {
                 currentRow.append(event)
                 currentRowWidth += buttonWidth + (currentRow.count > 1 ? spacing : 0)
             } else {
-                // Start new row
                 if !currentRow.isEmpty {
                     rows.append(currentRow)
                 }
@@ -1593,7 +1710,6 @@ struct FlexibleTimeEventGrid: View {
             }
         }
         
-        // Add the last row if it's not empty
         if !currentRow.isEmpty {
             rows.append(currentRow)
         }
@@ -1608,15 +1724,12 @@ struct FlexibleTimeEventGrid: View {
         
         var totalWidth = textWidth
         
-        // Add padding for text area
-        totalWidth += 32 // horizontal padding (16 on each side)
+        totalWidth += 32
         
-        // Add space for checkmark icon
         let checkmarkSize: CGFloat = 20
         let checkmarkSpacing: CGFloat = 10
         totalWidth += checkmarkSize + checkmarkSpacing
         
-        // Add extra padding for visual balance
         totalWidth += 8
         
         return totalWidth

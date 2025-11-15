@@ -14,13 +14,13 @@ enum ObjectType: String, CaseIterable {
     var displayName: String {
         switch self {
         case .zoneBetweenObjects:
-            return "Зона между объектами"
+            return ^String.Titles.zoneBetweenObjects
         case .lineBetweenObjects:
-            return "Линия между объектами"
+            return ^String.Titles.lineBetweenObjects
         case .objectHighlight:
-            return "Выделение объекта"
+            return ^String.Titles.objectHighlight
         case .simpleZone:
-            return "Обычная зона"
+            return ^String.Titles.simpleZone
         }
     }
 }

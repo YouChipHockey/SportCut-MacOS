@@ -70,4 +70,29 @@ extension Color {
             let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
             return luminance < 0.5
         }
+    
+    func toHex() -> String? {
+        #if os(macOS)
+        let nativeColor = NSColor(self)
+        guard let convertedColor = nativeColor.usingColorSpace(.deviceRGB) else {
+            return nil
+        }
+        let red = Int(convertedColor.redComponent * 255)
+        let green = Int(convertedColor.greenComponent * 255)
+        let blue = Int(convertedColor.blueComponent * 255)
+        #else
+        let nativeColor = UIColor(self)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        nativeColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let redInt = Int(red * 255)
+        let greenInt = Int(green * 255)
+        let blueInt = Int(blue * 255)
+        return String(format: "%02X%02X%02X", redInt, greenInt, blueInt)
+        #endif
+        
+        return String(format: "%02X%02X%02X", red, green, blue)
+    }
 }

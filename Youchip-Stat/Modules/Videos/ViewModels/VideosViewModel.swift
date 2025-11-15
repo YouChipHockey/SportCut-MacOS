@@ -24,6 +24,7 @@ class VideosViewModel: ObservableObject {
     private let filePicker = FilesDocumentPickerHelper()
     private let fileOpenHelper = FileOpenHelper.shared
     private let cloudFilesHelper = AppCloudFilesHelper()
+    private let projectExportManager = ProjectExportManager.shared
     
     private let maxFreeVideos = 3
     private let addedVideosCountKey = "added_videos_count"
@@ -179,8 +180,14 @@ class VideosViewModel: ObservableObject {
         case .openImages(let image):
             break
         case .openVideo(let id):
-            logVideoOpenEvent(id: id)
-            WindowsManager.shared.openVideo(id: id)
+            guard let file = filesManager.files.first(where: { $0.videoData.id == id }) else { return }
+            if file.isBroken {
+                state.fileToRebind = file
+                state.showRebindAlert = true
+            } else {
+                logVideoOpenEvent(id: id)
+                WindowsManager.shared.openVideo(id: id)
+            }
         case .deleteFile(let file):
             filesManager.removeFile(file: file)
         case .openFileFromHelper:
@@ -230,6 +237,53 @@ class VideosViewModel: ObservableObject {
             updateLimitInfo()
         case .toggleFavorite(let file):
             filesManager.toggleFavorite(for: file)
+        case .showRebindAlert(let file):
+            state.fileToRebind = file
+            state.showRebindAlert = true
+        case .rebindVideo(let file, let newURL):
+            if filesManager.rebindVideo(file: file, newURL: newURL) {
+                state.showRebindAlert = false
+                state.fileToRebind = nil
+                logVideoOpenEvent(id: file.id)
+                WindowsManager.shared.openVideo(id: file.id)
+            } else {
+                self.action.send(.showError(error: "Не удалось перепривязать видео"))
+            }
+            
+        case .exportProject(let file):
+            projectExportManager.exportProject(file: file)
+            
+        case .importProject:
+            projectExportManager.importProject { [weak self] projectData in
+                DispatchQueue.main.async {
+                    if let projectData = projectData {
+                        self?.state.importedProjectData = projectData
+                        self?.state.showProjectImportSheet = true
+                    }
+                }
+            }
+            
+        case .showProjectImportSheet(let projectData):
+            state.importedProjectData = projectData
+            state.showProjectImportSheet = true
+            
+        case .bindVideoToProject(let projectData, let videoURL):
+            state.importedProjectData = projectData
+            state.showVideoBindingSheet = true
+            
+        case .createProjectFromImport(let projectData, let videoBookmark):
+            if let newFile = projectExportManager.createProjectFromImport(projectData: projectData, videoBookmark: videoBookmark) {
+                state.showProjectImportSheet = false
+                state.importedProjectData = nil
+                state.showVideoBindingSheet = false
+                
+                if videoBookmark != nil {
+                    logVideoOpenEvent(id: newFile.id)
+                    WindowsManager.shared.openVideo(id: newFile.id)
+                }
+            } else {
+                self.action.send(.showError(error: "Не удалось создать проект"))
+            }
         }
     }
 }

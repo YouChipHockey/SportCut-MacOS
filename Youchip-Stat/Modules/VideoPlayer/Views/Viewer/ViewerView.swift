@@ -21,9 +21,7 @@ struct ViewerView: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                // Top section: Organizer and Video
                 HStack(spacing: 0) {
-                    // Left: Organizer (1/3 of width)
                     OrganizerView(
                         playlistManager: playlistManager,
                         videoPlaylistManager: videoPlaylistManager
@@ -33,7 +31,6 @@ struct ViewerView: View {
                     Divider()
                         .frame(width: 1)
                     
-                    // Right: Video (2/3 of width)
                     ViewerVideoView(
                         playlistManager: videoPlaylistManager,
                         organizer: playlistManager
@@ -47,7 +44,6 @@ struct ViewerView: View {
                     .frame(height: 1)
                     .background(Color.gray.opacity(0.3))
                 
-                // Bottom section: Timelines (increased by 15%)
                 ViewerTimelineView(
                     organizer: playlistManager,
                     playlistManager: videoPlaylistManager
@@ -58,17 +54,14 @@ struct ViewerView: View {
         }
         .background(Color.gray.opacity(0.2))
         .onAppear {
-            // Инициализация при открытии окна
             setupViewer()
         }
         .onDisappear {
-            // Очистка при закрытии окна
             cleanupViewer()
         }
     }
     
     private func setupViewer() {
-        // Настройка начального состояния
         playlistManager.loadPlaylists()
         playlistManager.currentPlaylist = nil
         playlistManager.clear()
@@ -76,13 +69,11 @@ struct ViewerView: View {
     }
     
     private func cleanupViewer() {
-        // Очистка ресурсов
         videoPlaylistManager.stopPlayback()
         playlistManager.clear()
     }
 }
 
-// MARK: - Preview
 struct ViewerView_Previews: PreviewProvider {
     static var previews: some View {
         ViewerView(videoID: "preview-video-id")

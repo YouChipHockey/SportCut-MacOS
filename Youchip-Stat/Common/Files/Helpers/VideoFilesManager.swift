@@ -48,6 +48,17 @@ class VideoFilesManager {
         fileManager.createDirectoryIfNeeded(url: .previewsDirectory)
         readFiles()
         filterFiles()
+        
+        checkAndCleanDuplicatesOnce()
+    }
+    
+    private func checkAndCleanDuplicatesOnce() {
+        let cleanupKey = "videosDataDuplicationCleanupDone_v1"
+        if UserDefaults.standard.bool(forKey: cleanupKey) {
+            return
+        }
+        saveBookmarks()
+        UserDefaults.standard.set(true, forKey: cleanupKey)
     }
     
     func generate32CharacterCode() -> String {
@@ -81,20 +92,23 @@ class VideoFilesManager {
         return files
     }
     
+    func addFileWithData(_ file: FilesFile, videoData: VideosData) {
+        files.append(file)
+        videosData.append(videoData)
+        saveBookmarks()
+        updateFiles?(files)
+    }
+    
     @discardableResult
     func importFile(url: URL, newName: String) -> FilesFile? {
         if let file = importFile(url: url) {
-            // Update the custom name in videoData
             if let index = videosData.firstIndex(where: { $0.bookmark == file.videoData.bookmark }) {
                 videosData[index].customName = newName
                 saveBookmarks()
             }
-            
-            // Update the custom name in file
             var updatedFile = file
             updatedFile.videoData.customName = newName
             
-            // Update the file in the files array
             if let fileIndex = files.firstIndex(where: { $0.videoData.bookmark == file.videoData.bookmark }) {
                 files[fileIndex] = updatedFile
                 updateFiles?(files)
@@ -122,12 +136,27 @@ class VideoFilesManager {
     }
     
     func updateTimelines(for bookmark: Data, with timelines: [TimelineLine]) {
+        let fileIdentifier = "Unknown"
+        do {
+            var isStale = false
+            let resolvedURL = try URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
+            fileIdentifier = resolvedURL.lastPathComponent
+        } catch {}
+        
+        var videosDataUpdated = false
+        var filesUpdated = false
+        
         if let index = videosData.firstIndex(where: { $0.bookmark == bookmark }) {
+            let oldCount = videosData[index].timelines.count
             videosData[index].timelines = timelines
+            videosDataUpdated = true
             saveBookmarks()
         }
+        
         if let index = files.firstIndex(where: { $0.videoData.bookmark == bookmark }) {
+            let oldCount = files[index].videoData.timelines.count
             files[index].videoData.timelines = timelines
+            filesUpdated = true
             updateFiles?(files)
         }
     }
@@ -159,7 +188,36 @@ class VideoFilesManager {
         return resolvedURLs
     }
     
-    private func saveBookmarks() {
+    func saveBookmarks() {
+        var seenURLs = Set<String>()
+        var seenIDs = Set<String>()
+        let originalCount = videosData.count
+        
+        let deduplicatedData = videosData.filter { videoData in
+            guard !seenIDs.contains(videoData.id) else {
+                return false
+            }
+            seenIDs.insert(videoData.id)
+            
+            do {
+                var isStale = false
+                let resolvedURL = try URL(resolvingBookmarkData: videoData.bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
+                let urlString = resolvedURL.path
+                
+                if seenURLs.contains(urlString) {
+                    return false
+                }
+                seenURLs.insert(urlString)
+                return true
+            } catch {
+                return true
+            }
+        }
+        
+        if deduplicatedData.count != originalCount {
+            videosData = deduplicatedData
+        }
+        
         do {
             let encoded = try JSONEncoder().encode(videosData)
             UserDefaults.standard.set(encoded, forKey: "videosData")
@@ -170,6 +228,7 @@ class VideoFilesManager {
     
     private func filterFiles() {
         var seenURLs = Set<URL>()
+        var seenBrokenIDs = Set<String>()
         files = files.filter { file in
             if let url = file.url {
                 if seenURLs.contains(url) {
@@ -179,7 +238,12 @@ class VideoFilesManager {
                     return true
                 }
             } else {
-                return false
+                if seenBrokenIDs.contains(file.id) {
+                    return false
+                } else {
+                    seenBrokenIDs.insert(file.id)
+                    return true
+                }
             }
         }
     }
@@ -188,7 +252,6 @@ class VideoFilesManager {
         if let data = UserDefaults.standard.data(forKey: "videosData") {
             do {
                 let videosData = try JSONDecoder().decode([VideosData].self, from: data)
-                // Миграция: устанавливаем isFavorite = false для старых записей
                 let migratedVideosData = videosData.map { videoData in
                     var migratedData = videoData
                     if migratedData.isFavorite == nil {
@@ -196,10 +259,33 @@ class VideoFilesManager {
                     }
                     return migratedData
                 }
-                self.videosData = migratedVideosData
                 
-                // Сохраняем мигрированные данные
-                if migratedVideosData != videosData {
+                var seenURLs = Set<String>()
+                var seenIDs = Set<String>()
+                let deduplicatedData = migratedVideosData.filter { videoData in
+                    guard !seenIDs.contains(videoData.id) else {
+                        return false
+                    }
+                    seenIDs.insert(videoData.id)
+                    
+                    do {
+                        var isStale = false
+                        let resolvedURL = try URL(resolvingBookmarkData: videoData.bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
+                        let urlString = resolvedURL.path
+                        
+                        if seenURLs.contains(urlString) {
+                            return false
+                        }
+                        seenURLs.insert(urlString)
+                        return true
+                    } catch {
+                        return true
+                    }
+                }
+                
+                self.videosData = deduplicatedData
+                
+                if deduplicatedData.count != videosData.count || deduplicatedData != videosData {
                     saveBookmarks()
                 }
             } catch {
@@ -208,18 +294,13 @@ class VideoFilesManager {
         }
     }
     
-    // MARK: - Favorites Management
-    
     func toggleFavorite(for file: FilesFile) {
         if let index = files.firstIndex(where: { $0.id == file.id }) {
             let currentFavorite = isFavorite(file)
             files[index].videoData.isFavorite = !currentFavorite
-            print("Toggling favorite for file \(file.name): \(currentFavorite) -> \(!currentFavorite)")
             updateVideosData()
             saveBookmarks()
             updateFiles?(files)
-        } else {
-            print("File not found for toggling favorite: \(file.name)")
         }
     }
     
@@ -229,6 +310,25 @@ class VideoFilesManager {
     
     private func updateVideosData() {
         videosData = files.map { $0.videoData }
+    }
+    
+    func rebindVideo(file: FilesFile, newURL: URL) -> Bool {
+        guard let newBookmark = newURL.makeBookmark() else {
+            return false
+        }
+        
+        if let fileIndex = files.firstIndex(where: { $0.id == file.id }) {
+            files[fileIndex].videoData.bookmark = newBookmark
+            
+            if let dataIndex = videosData.firstIndex(where: { $0.id == file.id }) {
+                videosData[dataIndex].bookmark = newBookmark
+                saveBookmarks()
+                updateFiles?(files)
+                return true
+            }
+        }
+        
+        return false
     }
     
 }

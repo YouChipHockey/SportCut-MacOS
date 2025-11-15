@@ -28,7 +28,6 @@ class SimpleReportWindow: NSWindow {
     }
     
     private func setupTextView(with htmlString: String) {
-        // Создаем NSTextView для отображения HTML
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
@@ -41,7 +40,6 @@ class SimpleReportWindow: NSWindow {
         textView?.isHorizontallyResizable = true
         textView?.autoresizingMask = [.width, .height]
         
-        // Конвертируем HTML в NSAttributedString
         if let data = htmlString.data(using: .utf8) {
             do {
                 let attributedString = try NSAttributedString(
@@ -54,7 +52,6 @@ class SimpleReportWindow: NSWindow {
                 )
                 textView?.textStorage?.setAttributedString(attributedString)
             } catch {
-                // Если не удалось распарсить HTML, показываем как обычный текст
                 textView?.string = htmlString
             }
         } else {
@@ -66,52 +63,52 @@ class SimpleReportWindow: NSWindow {
     }
     
     private func setupWindow() {
-        // Показываем окно
         self.makeKeyAndOrderFront(nil)
         
-        // Устанавливаем размер окна на весь экран
         if let screen = NSScreen.main {
             self.setFrame(screen.visibleFrame, display: true)
         }
     }
     
     deinit {
-        print("🧹 SimpleReportWindow deinit - cleaning up resources")
         cleanupResources()
     }
     
     private func cleanupResources() {
-        // Очищаем textView
         textView?.string = ""
         textView = nil
         
-        // Очищаем contentView
         self.contentView = nil
     }
 }
 
-// MARK: - NSWindowDelegate
 extension SimpleReportWindow: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        print("🧹 SimpleReportWindow will close - cleaning up")
         cleanupResources()
         self.delegate = nil
     }
     
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        print("🧹 SimpleReportWindow should close - cleaning up")
         cleanupResources()
         return true
     }
 }
 
-// MARK: - Factory
 class SimpleReportWindowFactory {
     static func createReportWindow(htmlString: String, teamName: String, opponentName: String) -> SimpleReportWindow {
         let title = "ИИ Отчет: \(teamName) vs \(opponentName)"
         return SimpleReportWindow(htmlString: htmlString, title: title)
     }
 }
+
+
+
+
+
+
+
+
+
 
 
 

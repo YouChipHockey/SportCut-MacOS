@@ -5,7 +5,7 @@
 //  Created by Сергей Бекезин on 6/19/25.
 //
 
-import SwiftUICore
+import SwiftUI
 
 struct TapLocationPreferenceKey: PreferenceKey {
     static var defaultValue: CGPoint = .zero

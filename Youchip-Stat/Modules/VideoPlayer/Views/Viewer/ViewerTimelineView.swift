@@ -21,15 +21,31 @@ struct ViewerTimelineView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
-                Text("Таймлайны")
+                Text(^String.Titles.timelines)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                 
                 Spacer()
                 
-                // Display mode selector
+                Button(action: {
+                    addAllFilteredTagsToOrganizer()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.rectangle.on.folder")
+                            .font(.system(size: 12, weight: .medium))
+                        Text(^String.Titles.addAll)
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.2))
+                    .foregroundColor(.green)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Добавить все отображаемые теги в органайзер")
+                
                 HStack(spacing: 2) {
                     ForEach(TimelineDisplayMode.allCases, id: \.self) { mode in
                         Button(action: {
@@ -38,7 +54,7 @@ struct ViewerTimelineView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: mode.icon)
                                     .font(.system(size: 10))
-                                Text(mode.rawValue)
+                                Text(mode.localizedName)
                                     .font(.system(size: 10, weight: .medium))
                             }
                             .padding(.horizontal, 8)
@@ -52,14 +68,13 @@ struct ViewerTimelineView: View {
                     }
                 }
                 
-                // Filter button
                 Button(action: {
                     showFilterSheet = true
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: filter.hasActiveFilters() ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                             .font(.system(size: 12, weight: .medium))
-                        Text("Фильтр")
+                        Text(^String.Titles.filter)
                             .font(.system(size: 10, weight: .medium))
                     }
                     .padding(.horizontal, 8)
@@ -71,7 +86,6 @@ struct ViewerTimelineView: View {
                 .buttonStyle(PlainButtonStyle())
                 .help("Фильтровать таймстемпы")
                 
-                // Clear filter button
                 if filter.hasActiveFilters() {
                     Button(action: {
                         filter.clearFilters()
@@ -84,7 +98,6 @@ struct ViewerTimelineView: View {
                     .help("Очистить фильтры")
                 }
                 
-                // Zoom controls
                 HStack(spacing: 4) {
                     Button {
                         timelineScale = max(1.0, timelineScale - 0.5)
@@ -115,9 +128,7 @@ struct ViewerTimelineView: View {
             
             Divider()
             
-            // Content based on display mode
             if displayMode == .timeline {
-                // Timeline content
                 ScrollView(.vertical) {
                     ScrollViewReader { scrollProxy in
                         timelineContent(proxy: scrollProxy)
@@ -143,7 +154,6 @@ struct ViewerTimelineView: View {
                         }
                 )
             } else {
-                // Table content
                 ViewerTableView(
                     organizer: organizer,
                     playlistManager: playlistManager,
@@ -160,9 +170,7 @@ struct ViewerTimelineView: View {
     @ViewBuilder
     private func timelineContent(proxy: ScrollViewProxy) -> some View {
         HStack(spacing: 0) {
-            // Timeline names column
             VStack(alignment: .leading, spacing: 0) {
-                // Header
                 LinearGradient(
                     gradient: Gradient(colors: [
                         Color.gray.opacity(0.05),
@@ -180,7 +188,6 @@ struct ViewerTimelineView: View {
                 
                 ForEach(filteredLines) { line in
                     HStack(spacing: 8) {
-                        // Timeline name
                         VStack(alignment: .leading, spacing: 2) {
                             Text(line.name)
                                 .font(.system(size: 14, weight: .medium))
@@ -203,7 +210,6 @@ struct ViewerTimelineView: View {
             .padding(.trailing, 5)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             
-            // Timeline visualization
             GeometryReader { geo in
                 let effectiveScale = timelineScale * magnifyScale
                 let duration = max(1.0, videoManager.videoDuration)
@@ -259,22 +265,42 @@ struct ViewerTimelineView: View {
     }
     
     private var filteredLines: [TimelineLine] {
-        if !filter.hasActiveFilters() {
-            return timelineData.lines
-        }
-        
         return timelineData.lines.compactMap { line in
-            let filteredStamps = line.stamps.filter { stamp in
+            let hasMatchingStamps = line.stamps.contains { stamp in
                 filter.matches(stamp: stamp)
             }
             
-            if filteredStamps.isEmpty {
+            if !hasMatchingStamps {
                 return nil
             }
+            return line
+        }
+    }
+    
+    private func addAllFilteredTagsToOrganizer() {
+        var addedCount = 0
+        
+        for line in filteredLines {
+            let matchingStamps = line.stamps.filter { filter.matches(stamp: $0) }
             
-            var filteredLine = line
-            filteredLine.stamps = filteredStamps
-            return filteredLine
+            for stamp in matchingStamps {
+                let tag = TagLibraryManager.shared.findTagById(stamp.idTag)
+                let tagGroup = TagLibraryManager.shared.findTagGroupForTag(stamp.idTag)
+                let organizerTag = OrganizerTag(
+                    stampID: stamp.id,
+                    lineID: line.id,
+                    tagName: stamp.label,
+                    lineName: line.name,
+                    startTime: stamp.startSeconds,
+                    duration: stamp.duration,
+                    color: tag?.color ?? "FFFFFF",
+                    tagGroupName: tagGroup?.name,
+                    labelIDs: stamp.labels,
+                    eventIDs: stamp.timeEvents
+                )
+                organizer.addTag(organizerTag)
+                addedCount += 1
+            }
         }
     }
 }
@@ -291,13 +317,10 @@ struct ViewerTimelineLineView: View {
     
     var body: some View {
         ZStack(alignment: .leading) {
-            // Background
             Rectangle()
                 .fill(Color.clear)
                 .frame(width: widthMax, height: 30)
-            
-            // Stamps
-            ForEach(line.stamps) { stamp in
+            ForEach(line.stamps.filter { filter.matches(stamp: $0) }) { stamp in
                 let startX = (stamp.startSeconds / videoManager.videoDuration) * widthMax
                 let width = (stamp.duration / videoManager.videoDuration) * widthMax
                 
@@ -331,7 +354,7 @@ struct ViewerStampView: View {
         let color = Color(hex: tag?.color ?? "FFFFFF") ?? .gray
         
         Rectangle()
-            .fill(color.opacity(0.7))
+            .fill(color.opacity(isDragging ? 0.5 : 0.7))
             .overlay(
                 Rectangle()
                     .stroke(color, lineWidth: 1)
@@ -348,27 +371,34 @@ struct ViewerStampView: View {
                     .frame(width: max(width - 4, 0), height: 20)
                     .position(x: startX + width/2, y: 15)
             )
-            .scaleEffect(isDragging ? 1.1 : 1.0)
-            .opacity(isDragging ? 0.8 : 1.0)
+            .scaleEffect(isDragging ? 1.05 : 1.0)
             .animation(.easeInOut(duration: 0.2), value: isDragging)
             .onDrag {
-                let tag = createOrganizerTag()
-                print("🚀 Starting drag for tag: \(tag.tagName)")
-                let data = try? JSONEncoder().encode(tag)
+                isDragging = true
+                let organizerTag = createOrganizerTag()
+                let data = try? JSONEncoder().encode(organizerTag)
                 let provider = NSItemProvider()
-                provider.registerDataRepresentation(forTypeIdentifier: "com.youchip.organizerTag", visibility: .all) { completion in
-                    print("📦 Providing data for tag: \(tag.tagName)")
+                provider.registerDataRepresentation(forTypeIdentifier: "public.data", visibility: .all) { completion in
+                    DispatchQueue.main.async {
+                        isDragging = false
+                    }
                     completion(data, nil)
                     return nil
                 }
+                
+                provider.registerDataRepresentation(forTypeIdentifier: "com.youchip.organizerTag", visibility: .all) { completion in
+                    completion(data, nil)
+                    return nil
+                }
+                
                 return provider
             }
             .contextMenu {
-                Button("Добавить в органайзер") {
+                Button(^String.Titles.addToOrganizer) {
                     addToOrganizer()
                 }
                 
-                Button("Воспроизвести") {
+                Button(^String.Titles.play) {
                     playStamp()
                 }
             }
@@ -379,6 +409,7 @@ struct ViewerStampView: View {
     
     private func createOrganizerTag() -> OrganizerTag {
         let tag = TagLibraryManager.shared.findTagById(stamp.idTag)
+        let tagGroup = TagLibraryManager.shared.findTagGroupForTag(stamp.idTag)
         return OrganizerTag(
             stampID: stamp.id,
             lineID: line.id,
@@ -386,7 +417,10 @@ struct ViewerStampView: View {
             lineName: line.name,
             startTime: stamp.startSeconds,
             duration: stamp.duration,
-            color: tag?.color ?? "FFFFFF"
+            color: tag?.color ?? "FFFFFF",
+            tagGroupName: tagGroup?.name,
+            labelIDs: stamp.labels,
+            eventIDs: stamp.timeEvents
         )
     }
     
@@ -395,12 +429,10 @@ struct ViewerStampView: View {
     }
     
     private func playStamp() {
-        // Воспроизводим один тег
         playlistManager.playSingleTag(createOrganizerTag())
     }
 }
 
-// MARK: - Timeline Filter Sheet
 struct TimelineFilterSheet: View {
     @ObservedObject var filter: TimelineFilter
     @Environment(\.presentationMode) var presentationMode
@@ -431,15 +463,14 @@ struct TimelineFilterSheet: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Header
             HStack {
-                Text("Фильтр таймстемпов")
+                Text(^String.Titles.filterTimestampsTitle)
                     .font(.headline)
                     .foregroundColor(.primary)
                 
                 Spacer()
                 
-                Button("Очистить") {
+                Button(^String.Titles.clear) {
                     filter.clearFilters()
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -452,9 +483,8 @@ struct TimelineFilterSheet: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Tags filter
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Теги")
+                        Text(^String.Titles.tags)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                         
@@ -476,9 +506,8 @@ struct TimelineFilterSheet: View {
                         }
                     }
                     
-                    // Labels filter
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Лейблы")
+                        Text(^String.Titles.labels)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                         
@@ -500,9 +529,8 @@ struct TimelineFilterSheet: View {
                         }
                     }
                     
-                    // Events filter
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("События")
+                        Text(^String.Titles.events)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                         
@@ -529,16 +557,15 @@ struct TimelineFilterSheet: View {
             
             Spacer()
             
-            // Footer buttons
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.cancelButtonTitle) {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
-                Button("Применить") {
+                Button(^String.Titles.apply) {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -637,4 +664,3 @@ struct FilterEventView: View {
         .buttonStyle(PlainButtonStyle())
     }
 }
-

@@ -28,7 +28,6 @@ struct ObjectView: View {
                 SimpleZoneView(object: object, viewModel: viewModel, geometry: geometry)
             }
             
-            // Show object number if enabled
             if object.showNumber, let firstPosition = object.positions.first {
                 Text("\(object.number)")
                     .font(.system(size: 16, weight: .bold))

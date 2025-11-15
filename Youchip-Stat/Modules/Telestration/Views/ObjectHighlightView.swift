@@ -20,7 +20,6 @@ struct ObjectHighlightView: View {
             if let position = object.positions.first {
                 let viewPosition = viewModel.viewPoint(fromImagePoint: position, in: geometry.size)
                 
-                // Vertical glowing column (width = oval width, height = 2 × oval width)
                 Rectangle()
                     .fill(
                         LinearGradient(
@@ -38,7 +37,6 @@ struct ObjectHighlightView: View {
                     .position(CGPoint(x: viewPosition.x, y: viewPosition.y - object.radius))
                     .blur(radius: 2)
                 
-                // Flat oval on the surface
                 Ellipse()
                     .fill(
                         RadialGradient(

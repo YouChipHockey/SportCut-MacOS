@@ -15,42 +15,38 @@ struct StampLabelsOverlayView: View {
     
     let stamp: TimelineStamp
     let maxWidth: CGFloat
-    let isResizing: Bool
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     
     @State private var displayedLabels: [Label] = []
     @State private var displayedTimeEvents: [TimeEvent] = []
     @State private var fontSize: CGFloat = 12
     
-    init(stamp: TimelineStamp, maxWidth: CGFloat, isResizing: Bool = false) {
+    init(stamp: TimelineStamp, maxWidth: CGFloat) {
         self.stamp = stamp
         self.maxWidth = maxWidth
-        self.isResizing = isResizing
     }
     
     var body: some View {
         GeometryReader { proxy in
-            if !isResizing {
-                let finalWidth = proxy.size.width
-                let labelsWidth = finalWidth * 0.5
-                let eventsWidth = finalWidth * 0.5
-                
-                HStack(spacing: 2) {
-                    HStack(spacing: 4) {
-                        ForEach(displayedLabels, id: \.id) { label in
-                            LabelChip(label: label, baseColor: stamp.color, fontSize: fontSize)
-                        }
+            let finalWidth = proxy.size.width
+            let labelsWidth = finalWidth * 0.5
+            let eventsWidth = finalWidth * 0.5
+            
+            HStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    ForEach(displayedLabels, id: \.id) { label in
+                        LabelChip(label: label, baseColor: stamp.color, fontSize: fontSize)
                     }
-                    .frame(width: labelsWidth, alignment: .leading)
-                    HStack(spacing: 4) {
-                        ForEach(displayedTimeEvents, id: \.id) { event in
-                            TimeEventChip(event: event, fontSize: fontSize)
-                        }
-                    }
-                    .frame(width: eventsWidth, alignment: .trailing)
                 }
-                .frame(height: proxy.size.height, alignment: .center)
+                .frame(width: labelsWidth, alignment: .leading)
+                HStack(spacing: 4) {
+                    ForEach(displayedTimeEvents, id: \.id) { event in
+                        TimeEventChip(event: event, fontSize: fontSize)
+                    }
+                }
+                .frame(width: eventsWidth, alignment: .trailing)
             }
+            .frame(height: proxy.size.height, alignment: .center)
         }
         .onAppear {
             updateDisplayedItems(finalWidth: maxWidth)

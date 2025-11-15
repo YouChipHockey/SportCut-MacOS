@@ -71,6 +71,7 @@ struct FullControlView: View {
     @State private var showEditNameSheet = false
     @State private var showEventSelectionSheet: Bool = false
     @State private var showAiReportSheet: Bool = false
+    @State private var showSimpleReportSheet: Bool = false
     
     @State private var showLabelSelectionSheet: Bool = false
     @State private var showMultiLabelSelectionSheet: Bool = false
@@ -78,30 +79,28 @@ struct FullControlView: View {
     @State private var selectedLabelForMultiSelection: Label?
     @State private var selectedTagForMultiSelection: Tag?
     
+    @State private var showErrorAlert = false
+    @State private var errorMessage = ""
+    @State private var hoveredStampInfo: String? = nil
+    @State private var isHoveringOnPopup = false
+    @State private var popupHideWorkItem: DispatchWorkItem? = nil
 
-    
-    // Вспомогательная функция для корректировки времени
     private func correctTimeRange(startSeconds: Double, durationSeconds: Double, maxVideoDuration: Double) -> (start: Double, duration: Double)? {
         var correctedStart = startSeconds
         var correctedDuration = durationSeconds
-        
-        // Корректируем время: начало не может быть меньше 0
         if correctedStart < 0 {
             correctedStart = 0
         }
-        
-        // Корректируем время: конец не может быть больше максимального времени видео
         let endSeconds = correctedStart + correctedDuration
         if endSeconds > maxVideoDuration {
             let newDuration = maxVideoDuration - correctedStart
             if newDuration > 0 {
                 correctedDuration = newDuration
             } else {
-                return nil // Сегмент полностью за пределами видео
+                return nil
             }
         }
         
-        // Проверяем, что после корректировки у нас есть валидная длительность
         guard correctedDuration > 0 else {
             return nil
         }
@@ -113,7 +112,6 @@ struct FullControlView: View {
         var result: [ExportSegment] = []
         let tagLibrary = TagLibraryManager.shared
         
-        // Получаем максимальное время видео
         let maxVideoDuration = max(1.0, videoManager.videoDuration)
         
         switch type {
@@ -138,7 +136,10 @@ struct FullControlView: View {
                             timeRange: CMTimeRange(start: start, duration: duration),
                             lineName: line.name,
                             tagName: stamp.label,
-                            groupName: possibleGroup?.name
+                            groupName: possibleGroup?.name,
+                            labels: nil,
+                            labelGroupName: nil,
+                            selectedLabel: nil
                         )
                     )
                 }
@@ -157,23 +158,21 @@ struct FullControlView: View {
                     let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
                     let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
                     let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
-                    
-                    // Получаем лейблы для этого штампа
                     let labels = stamp.labels.compactMap { labelID in
                         tagLibrary.findLabelById(labelID)?.name
                     }
-                    
-                    // Формируем название тега с лейблами в скобках
                     let tagNameWithLabels = labels.isEmpty ? stamp.label : "\(stamp.label)(\(labels.joined(separator: "_")))"
                     
-                    print("📝 Creating segment: \(line.name) - \(tagNameWithLabels) - \(start.seconds)s to \(start.seconds + duration.seconds)s")
                     
                     result.append(
                         ExportSegment(
                             timeRange: CMTimeRange(start: start, duration: duration),
                             lineName: line.name,
                             tagName: tagNameWithLabels,
-                            groupName: possibleGroup?.name
+                            groupName: possibleGroup?.name,
+                            labels: nil,
+                            labelGroupName: nil,
+                            selectedLabel: nil
                         )
                     )
                 }
@@ -184,14 +183,25 @@ struct FullControlView: View {
             for line in timelineData.lines {
                 for stamp in line.stamps {
                     if stamp.idTag == selectedTag.id {
-                        let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
-                        let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                        guard let correctedTime = correctTimeRange(
+                            startSeconds: stamp.startSeconds,
+                            durationSeconds: stamp.duration,
+                            maxVideoDuration: maxVideoDuration
+                        ) else {
+                            continue
+                        }
+                        
+                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
+                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
                         result.append(
                             ExportSegment(
                                 timeRange: CMTimeRange(start: start, duration: duration),
                                 lineName: line.name,
                                 tagName: stamp.label,
-                                groupName: possibleGroup?.name
+                                groupName: possibleGroup?.name,
+                                labels: nil,
+                                labelGroupName: nil,
+                                selectedLabel: nil
                             )
                         )
                     }
@@ -201,8 +211,16 @@ struct FullControlView: View {
             for line in timelineData.lines {
                 for stamp in line.stamps {
                     if stamp.timeEvents.contains(selectedEvent.id) {
-                        let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
-                        let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                        guard let correctedTime = correctTimeRange(
+                            startSeconds: stamp.startSeconds,
+                            durationSeconds: stamp.duration,
+                            maxVideoDuration: maxVideoDuration
+                        ) else {
+                            continue
+                        }
+                        
+                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
+                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
                         let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
                         
                         result.append(
@@ -210,18 +228,37 @@ struct FullControlView: View {
                                 timeRange: CMTimeRange(start: start, duration: duration),
                                 lineName: line.name,
                                 tagName: stamp.label,
-                                groupName: possibleGroup?.name
+                                groupName: possibleGroup?.name,
+                                labels: nil,
+                                labelGroupName: nil,
+                                selectedLabel: nil
                             )
                         )
                     }
                 }
             }
         case .label(let selectedLabel):
+            var labelGroupName: String? = nil
+            for group in tagLibrary.allLabelGroups {
+                if group.lables.contains(selectedLabel.id) {
+                    labelGroupName = group.name
+                    break
+                }
+            }
+            
             for line in timelineData.lines {
                 for stamp in line.stamps {
                     if stamp.labels.contains(selectedLabel.id) {
-                        let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
-                        let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                        guard let correctedTime = correctTimeRange(
+                            startSeconds: stamp.startSeconds,
+                            durationSeconds: stamp.duration,
+                            maxVideoDuration: maxVideoDuration
+                        ) else {
+                            continue
+                        }
+                        
+                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
+                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
                         let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
                         
                         result.append(
@@ -229,7 +266,10 @@ struct FullControlView: View {
                                 timeRange: CMTimeRange(start: start, duration: duration),
                                 lineName: line.name,
                                 tagName: stamp.label,
-                                groupName: possibleGroup?.name
+                                groupName: possibleGroup?.name,
+                                labels: nil,
+                                labelGroupName: labelGroupName,
+                                selectedLabel: selectedLabel
                             )
                         )
                     }
@@ -241,16 +281,31 @@ struct FullControlView: View {
             for line in timelineData.lines {
                 for stamp in line.stamps {
                     if stamp.idTag == selectedTag.id && !Set(stamp.labels).isDisjoint(with: labelIDs) {
-                        let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
-                        let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                        guard let correctedTime = correctTimeRange(
+                            startSeconds: stamp.startSeconds,
+                            durationSeconds: stamp.duration,
+                            maxVideoDuration: maxVideoDuration
+                        ) else {
+                            continue
+                        }
+                        
+                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
+                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
                         let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
+                        
+                        let stampLabels = stamp.labels.compactMap { labelID in
+                            selectedLabels.first(where: { $0.id == labelID })
+                        }
                         
                         result.append(
                             ExportSegment(
                                 timeRange: CMTimeRange(start: start, duration: duration),
                                 lineName: line.name,
                                 tagName: stamp.label,
-                                groupName: possibleGroup?.name
+                                groupName: possibleGroup?.name,
+                                labels: stampLabels.isEmpty ? nil : stampLabels,
+                                labelGroupName: nil,
+                                selectedLabel: nil
                             )
                         )
                     }
@@ -258,12 +313,28 @@ struct FullControlView: View {
             }
             
         case .labelWithTags(let selectedLabel, let selectedTags):
+            var labelGroupName: String? = nil
+            for group in tagLibrary.allLabelGroups {
+                if group.lables.contains(selectedLabel.id) {
+                    labelGroupName = group.name
+                    break
+                }
+            }
+            
             let tagIDs = Set(selectedTags.map { $0.id })
             for line in timelineData.lines {
                 for stamp in line.stamps {
                     if stamp.labels.contains(selectedLabel.id) && tagIDs.contains(stamp.idTag) {
-                        let start = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
-                        let duration = CMTime(seconds: stamp.duration, preferredTimescale: 600)
+                        guard let correctedTime = correctTimeRange(
+                            startSeconds: stamp.startSeconds,
+                            durationSeconds: stamp.duration,
+                            maxVideoDuration: maxVideoDuration
+                        ) else {
+                            continue
+                        }
+                        
+                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
+                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
                         let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
                         
                         result.append(
@@ -271,7 +342,10 @@ struct FullControlView: View {
                                 timeRange: CMTimeRange(start: start, duration: duration),
                                 lineName: line.name,
                                 tagName: stamp.label,
-                                groupName: possibleGroup?.name
+                                groupName: possibleGroup?.name,
+                                labels: nil,
+                                labelGroupName: labelGroupName,
+                                selectedLabel: selectedLabel
                             )
                         )
                     }
@@ -369,16 +443,11 @@ struct FullControlView: View {
                         type: CutsExportType,
                         completion: @escaping (Result<URL, Error>) -> Void)
     {
-        print("🎬 Starting playlist export with \(segments.count) segments")
         
-        // Проверяем, что есть сегменты для экспорта
         if segments.isEmpty {
-            print("❌ No segments to export")
             completion(.failure(NSError(domain: "Export", code: -1, userInfo: [NSLocalizedDescriptionKey: "No segments to export"])))
             return
         }
-        
-        print("📊 Exporting \(segments.count) segments")
         
         var exportedURLs: [URL] = []
         let group = DispatchGroup()
@@ -393,14 +462,10 @@ struct FullControlView: View {
         for (index, segment) in segments.enumerated() {
             group.enter()
             
-            print("🎬 Processing segment \(index + 1)/\(segments.count): \(segment.lineName) - \(segment.tagName)")
-            print("   Time range: \(segment.timeRange.start.seconds)s to \(segment.timeRange.start.seconds + segment.timeRange.duration.seconds)s")
-            
             let composition = AVMutableComposition()
             guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video,
                                                                    preferredTrackID: kCMPersistentTrackID_Invalid)
             else {
-                print("❌ Failed to create video track for segment \(index + 1)")
                 exportError = NSError(domain: "Export", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])
                 group.leave()
                 continue
@@ -410,11 +475,8 @@ struct FullControlView: View {
                 compAudioTrack = composition.addMutableTrack(withMediaType: .audio,
                                                              preferredTrackID: kCMPersistentTrackID_Invalid)
                 do {
-                    print("   🎵 Inserting audio time range: \(segment.timeRange.start.seconds)s to \(segment.timeRange.start.seconds + segment.timeRange.duration.seconds)s")
                     try compAudioTrack?.insertTimeRange(segment.timeRange, of: aTrack, at: .zero)
-                    print("   ✅ Audio track inserted successfully")
                 } catch {
-                    print("   ❌ Failed to insert audio time range: \(error.localizedDescription)")
                     exportError = error
                     group.leave()
                     continue
@@ -422,11 +484,8 @@ struct FullControlView: View {
             }
             
             do {
-                print("   📹 Inserting video time range: \(segment.timeRange.start.seconds)s to \(segment.timeRange.start.seconds + segment.timeRange.duration.seconds)s")
                 try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: .zero)
-                print("   ✅ Video track inserted successfully")
             } catch {
-                print("   ❌ Failed to insert video time range: \(error.localizedDescription)")
                 exportError = error
                 group.leave()
                 continue
@@ -451,15 +510,21 @@ struct FullControlView: View {
             case .timeEvent(let selectedEvent):
                 fileName = "\(selectedEvent.name)_\(segment.tagName)_\(index + 1).mp4"
             case .label(let selectedLabel):
-                fileName = "\(selectedLabel.name)_\(index + 1).mp4"
+                let labelGroupName = segment.labelGroupName ?? "Labels"
+                fileName = "\(labelGroupName)_\(selectedLabel.name)_\(segment.tagName)_\(index + 1).mp4"
                 
             case .tagWithLabels(let selectedTag, let selectedLabels):
-                let labelsString = selectedLabels.map { $0.name }.joined(separator: "_")
-                fileName = "\(selectedTag.name)_\(labelsString)_\(index + 1).mp4"
+                let groupName = segment.groupName ?? "group"
+                if let stampLabels = segment.labels, !stampLabels.isEmpty {
+                    let labelsString = stampLabels.map { $0.name }.joined(separator: "_")
+                    fileName = "\(groupName)_\(selectedTag.name)_\(labelsString)_\(index + 1).mp4"
+                } else {
+                    fileName = "\(groupName)_\(selectedTag.name)_\(index + 1).mp4"
+                }
                 
             case .labelWithTags(let selectedLabel, let selectedTags):
-                let tagsString = selectedTags.map { $0.name }.joined(separator: "_")
-                fileName = "\(selectedLabel.name)_\(tagsString)_\(index + 1).mp4"
+                let labelGroupName = segment.labelGroupName ?? "Labels"
+                fileName = "\(labelGroupName)_\(selectedLabel.name)_\(segment.tagName)_\(index + 1).mp4"
             }
             
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -471,10 +536,8 @@ struct FullControlView: View {
             
             exportSession?.exportAsynchronously {
                 if exportSession?.status == .completed {
-                    print("   ✅ Export completed for segment \(index + 1): \(fileName)")
                     exportedURLs.append(clipOutputURL)
                 } else {
-                    print("   ❌ Export failed for segment \(index + 1): \(exportSession?.error?.localizedDescription ?? "Unknown error")")
                     exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
                 group.leave()
@@ -482,15 +545,9 @@ struct FullControlView: View {
         }
         
         group.notify(queue: .main) {
-            print("🏁 All export tasks completed")
-            print("   Exported URLs count: \(exportedURLs.count)")
-            print("   Export error: \(exportError?.localizedDescription ?? "None")")
-            
             if let error = exportError {
-                print("❌ Export failed with error: \(error)")
                 completion(.failure(error))
             } else {
-                print("✅ All segments exported successfully, compressing files...")
                 compressFiles(urls: exportedURLs, completion: completion)
             }
         }
@@ -524,7 +581,7 @@ struct FullControlView: View {
                 completion(.success(zipURL))
             } else {
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let errorMessage = String(data: data, encoding: .utf8) ?? "Неизвестная ошибка"
+                let errorMessage = String(data: data, encoding: .utf8) ?? ^String.Titles.unknownError
                 let error = NSError(domain: "ZIPError", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errorMessage])
                 completion(.failure(error))
             }
@@ -539,14 +596,16 @@ struct FullControlView: View {
     
     func performExport(mode: ExportMode) {
         guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
-            print("Asset not found")
+            errorMessage = "Asset not found"
+            showErrorAlert = true
             return
         }
         guard let selectedType = selectedExportType else { return }
         
         let segments = getSegmentsForExport(type: selectedType)
         if segments.isEmpty {
-            print("Нет сегментов для экспорта")
+            errorMessage = ^String.Titles.fullControlExportNoSegments
+            showErrorAlert = true
             return
         }
         
@@ -567,11 +626,13 @@ struct FullControlView: View {
                                 try FileManager.default.copyItem(at: outputURL, to: url)
                                 print("\(^String.Titles.fullControlExportFilmSuccess) \(url)")
                             } catch {
-                                print("Ошибка сохранения фильма: \(error)")
+                                self.errorMessage = "\(^String.Titles.fullControlExportFilmError): \(error.localizedDescription)"
+                                self.showErrorAlert = true
                             }
                         }
                     case .failure(let error):
-                        print("\(^String.Titles.fullControlExportFilmError) \(error)")
+                        self.errorMessage = "\(^String.Titles.fullControlExportFilmError): \(error.localizedDescription)"
+                        self.showErrorAlert = true
                     }
                 }
             }
@@ -588,13 +649,14 @@ struct FullControlView: View {
                         if panel.runModal() == .OK, let url = panel.url {
                             do {
                                 try FileManager.default.copyItem(at: zipURL, to: url)
-                                print("Плейлист экспортирован и сохранён по \(url)")
                             } catch {
-                                print("Ошибка сохранения плейлиста: \(error)")
+                                self.errorMessage = "Ошибка сохранения плейлиста: \(error.localizedDescription)"
+                                self.showErrorAlert = true
                             }
                         }
                     case .failure(let error):
-                        print("Ошибка экспорта плейлиста: \(error)")
+                        self.errorMessage = "Ошибка экспорта плейлиста: \(error.localizedDescription)"
+                        self.showErrorAlert = true
                     }
                 }
             }
@@ -617,46 +679,63 @@ struct FullControlView: View {
     
     @ViewBuilder
     private func scrollBlock() -> some View {
-        VStack(spacing: 0) {
-            // Modern timeline container with rounded corners and shadow
-            ScrollView(.vertical) {
-                ScrollViewReader { scrollProxy in
-                    timelineContent(proxy: scrollProxy)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.1))
-                    .shadow(
-                        color: Color.black.opacity(0.1),
-                        radius: 8,
-                        x: 0,
-                        y: 2
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-            )
-            .gesture(
-                MagnificationGesture()
-                    .updating($magnifyScale) { currentState, gestureState, _ in
-                        gestureState = max(1.0, currentState)
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 0) {
+                ScrollView(.vertical) {
+                    ScrollViewReader { scrollProxy in
+                        timelineContent(proxy: scrollProxy)
                     }
-                    .onEnded { value in
-                        let newScale = timelineScale * value
-                        let duration = max(1.0, videoManager.videoDuration)
-                        let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
-                        if potentialInterval >= 0.5 {
-                            timelineScale = max(1.0, newScale)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.gray.opacity(0.1))
+                        .shadow(
+                            color: Color.black.opacity(0.1),
+                            radius: 8,
+                            x: 0,
+                            y: 2
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+                .gesture(
+                    MagnificationGesture()
+                        .updating($magnifyScale) { currentState, gestureState, _ in
+                            gestureState = max(1.0, currentState)
+                        }
+                        .onEnded { value in
+                            let newScale = timelineScale * value
+                            let duration = max(1.0, videoManager.videoDuration)
+                            let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
+                            if potentialInterval >= 0.5 {
+                                timelineScale = max(1.0, newScale)
+                            } else {
+                                let baseInterval = 5.0
+                                let maxScale = baseInterval / 0.5
+                                timelineScale = maxScale
+                            }
+                        }
+                )
+            }
+            
+            if let stampInfo = hoveredStampInfo {
+                stampHoverPopup(stampInfo: stampInfo)
+                    .padding(.top, 16)
+                    .padding(.trailing, 20)
+                    .allowsHitTesting(false)
+                    .onHover { hovering in
+                        isHoveringOnPopup = hovering
+                        if hovering {
+                            popupHideWorkItem?.cancel()
+                            popupHideWorkItem = nil
                         } else {
-                            let baseInterval = 5.0
-                            let maxScale = baseInterval / 0.5
-                            timelineScale = maxScale
+                            startPopupHideTimer()
                         }
                     }
-            )
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -668,11 +747,106 @@ struct FullControlView: View {
         return max(0.5, baseInterval)
     }
     
+    private func timelineScrollView(geo: GeometryProxy, effectiveScale: CGFloat, duration: Double, popupInfo: String?, popupLocation: CGPoint?) -> some View {
+        let interval = calculateTimeGridInterval(scale: effectiveScale, totalDuration: duration)
+        let gridWidth = geo.size.width * max(effectiveScale, 1.0)
+        
+        return ScrollView(.horizontal) {
+            HStack(spacing: 0) {
+                timelineZStackContent(
+                    duration: duration,
+                    interval: interval,
+                    gridWidth: gridWidth,
+                    effectiveScale: effectiveScale
+                )
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    private func formatTimeForHover(_ time: Double) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        let milliseconds = Int((time.truncatingRemainder(dividingBy: 1.0)) * 1000)
+        return String(format: "%02d:%02d.%03d", minutes, seconds, milliseconds)
+    }
+    
+    private func calculateTimeFromPosition(_ x: CGFloat, duration: Double, gridWidth: CGFloat) -> Double {
+        guard duration > 0 && gridWidth > 0 else { return 0.0 }
+        let time = (x / gridWidth) * duration
+        return max(0.0, min(time, duration))
+    }
+    
+    @ViewBuilder
+    private func timelineZStackContent(duration: Double, interval: Double, gridWidth: CGFloat, effectiveScale: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            TimeGridView(
+                duration: duration,
+                interval: interval,
+                width: gridWidth,
+                height: 30 * CGFloat(timelineData.lines.count + 1)
+            )
+            
+            VStack(spacing: 0) {
+                TimelineTimestampsHeaderView(
+                    duration: duration,
+                    interval: interval,
+                    width: gridWidth
+                )
+                .frame(height: 30)
+                
+                ForEach(timelineData.lines) { line in
+                    TimelineLineView(
+                        videoManager: VideoPlayerManager.shared,
+                        timelineData: TimelineDataManager.shared,
+                        line: line,
+                        scale: effectiveScale,
+                        widthMax: gridWidth,
+                        isSelected: (line.id == timelineData.selectedLineID),
+                        onSelect: { timelineData.selectLine(line.id) },
+                        onEditLabelsRequest: { stampID in
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                showLabelEditSheet = true
+                            }
+                            UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
+                            UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
+                        },
+                        tagLibrary: TagLibraryManager.shared,
+                        scrollOffset: $scrollOffset
+                    )
+                    .frame(height: 30)
+                    .id("timeline-\(line.id)")
+                }
+            }
+            
+            Rectangle()
+                .fill(Color.red)
+                .frame(width: 2)
+                .offset(x: duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0)
+        }
+        .frame(width: gridWidth)
+        .contentShape(Rectangle())
+        .background(
+            TimelineMouseTracker(
+                duration: duration,
+                gridWidth: gridWidth,
+                lines: timelineData.lines,
+                tagLibrary: TagLibraryManager.shared,
+                onStampUpdate: { stampInfo, location in
+                    NotificationCenter.default.post(
+                        name: .timelineStampHoverChanged,
+                        object: nil,
+                        userInfo: ["stampInfo": stampInfo as Any]
+                    )
+                }
+            )
+        )
+    }
+    
     @ViewBuilder
     private func timelineContent(proxy: ScrollViewProxy) -> some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                // Modern header with gradient matching button blocks
                 LinearGradient(
                     gradient: Gradient(colors: [
                         Color.gray.opacity(0.05),
@@ -691,7 +865,6 @@ struct FullControlView: View {
                 ForEach(timelineData.lines) { line in
                     if markupMode == .standard {
                         HStack(spacing: 8) {
-                            // Timeline name on the left
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(line.name)
                                     .font(.system(size: 14, weight: .medium))
@@ -709,7 +882,7 @@ struct FullControlView: View {
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 4)
                                             .stroke((line.id == timelineData.selectedLineID) ?
-                                                   Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
+                                                    Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
                                     )
                                     .onTapGesture {
                                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -720,7 +893,6 @@ struct FullControlView: View {
                             
                             Spacer()
                             
-                            // Buttons row on the right
                             HStack(spacing: 4) {
                                 Button(action: {
                                     timelineData.selectLine(line.id)
@@ -785,7 +957,6 @@ struct FullControlView: View {
                         .id("name-\(line.id)")
                     } else {
                         HStack(spacing: 8) {
-                            // Timeline name on the left
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(line.name)
                                     .font(.system(size: 14, weight: .medium))
@@ -803,7 +974,7 @@ struct FullControlView: View {
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 4)
                                             .stroke((line.id == timelineData.selectedLineID) ?
-                                                   Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
+                                                    Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
                                     )
                                     .onTapGesture {
                                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -813,8 +984,7 @@ struct FullControlView: View {
                             }
                             
                             Spacer()
-                            
-                            // Buttons row on the right
+
                             HStack(spacing: 4) {
                                 Button(action: {
                                     let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
@@ -869,72 +1039,37 @@ struct FullControlView: View {
             )
             
             GeometryReader { geo in
-                let effectiveScale = timelineScale * magnifyScale
-                let duration = max(1.0, videoManager.videoDuration)
-                let interval = calculateTimeGridInterval(scale: effectiveScale, totalDuration: duration)
-                let gridWidth = geo.size.width * max(effectiveScale, 1.0)
-                ScrollView(.horizontal) {
-                    HStack(spacing: 0) {
-                        ZStack(alignment: .topLeading) {
-                            TimeGridView(
-                                duration: duration,
-                                interval: interval,
-                                width: gridWidth,
-                                height: 30 * CGFloat(timelineData.lines.count + 1)
-                            )
-                            
-                            VStack(spacing: 0) {
-                                TimelineTimestampsHeaderView(
-                                    duration: duration,
-                                    interval: interval,
-                                    width: gridWidth
-                                )
-                                .frame(height: 30)
-                                
-                                ForEach(timelineData.lines) { line in
-                                    TimelineLineView(
-                                        videoManager: VideoPlayerManager.shared,
-                                        timelineData: TimelineDataManager.shared,
-                                        line: line,
-                                        scale: effectiveScale,
-                                        widthMax: gridWidth,
-                                        isSelected: (line.id == timelineData.selectedLineID),
-                                        onSelect: { timelineData.selectLine(line.id) },
-                                        onEditLabelsRequest: { stampID in
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                                showLabelEditSheet = true
-                                            }
-                                            UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
-                                            UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
-                                        },
-                                        tagLibrary: TagLibraryManager.shared,
-                                        scrollOffset: $scrollOffset
-                                    )
-                                    .frame(height: 30)
-                                    .id("timeline-\(line.id)")
-                                }
-                            }
-                        }
-                        .frame(width: gridWidth)
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .sheet(isPresented: $showAiReportSheet) {
-                    AiReportSheet(onSubmit: { teamName, opponentName, venue, matchDate in
-                        generateAndDownloadAiReport(teamName: teamName,
-                                                    opponentName: opponentName,
-                                                    venue: venue,
-                                                    matchDate: matchDate)
-                    })
-                }
-                .sheet(isPresented: $showEditNameSheet) {
-                    if let lineID = timelineData.selectedLineID,
-                       let line = timelineData.lines.first(where: { $0.id == lineID }) {
-                        EditTimelineNameSheet(lineName: line.name) { newName in
-                            if let index = timelineData.lines.firstIndex(where: { $0.id == lineID }) {
-                                timelineData.lines[index].name = newName
-                                timelineData.updateTimelines()
-                            }
+                timelineScrollView(
+                    geo: geo,
+                    effectiveScale: timelineScale * magnifyScale,
+                    duration: max(1.0, videoManager.videoDuration),
+                    popupInfo: nil,
+                    popupLocation: nil
+                )
+            }
+            .sheet(isPresented: $showAiReportSheet) {
+                AiReportSheet(onSubmit: { teamName, opponentName, venue, matchDate in
+                    generateAndDownloadAiReport(teamName: teamName,
+                                                opponentName: opponentName,
+                                                venue: venue,
+                                                matchDate: matchDate)
+                })
+            }
+            .sheet(isPresented: $showSimpleReportSheet) {
+                AiReportSheet(onSubmit: { teamName, opponentName, venue, matchDate in
+                    generateSimpleReport(teamName: teamName,
+                                         opponentName: opponentName,
+                                         venue: venue,
+                                         matchDate: matchDate)
+                })
+            }
+            .sheet(isPresented: $showEditNameSheet) {
+                if let lineID = timelineData.selectedLineID,
+                   let line = timelineData.lines.first(where: { $0.id == lineID }) {
+                    EditTimelineNameSheet(lineName: line.name) { newName in
+                        if let index = timelineData.lines.firstIndex(where: { $0.id == lineID }) {
+                            timelineData.lines[index].name = newName
+                            timelineData.updateTimelines()
                         }
                     }
                 }
@@ -986,40 +1121,121 @@ struct FullControlView: View {
                     self.isExporting = false
                     
                     if let error = error {
-                        print("Error: \(error.localizedDescription)")
+                        self.errorMessage = "Ошибка генерации AI отчета: \(error.localizedDescription)"
+                        self.showErrorAlert = true
                         return
                     }
                     
                     guard let data = data, let httpResponse = response as? HTTPURLResponse else {
-                        print("No data returned or invalid response")
+                        self.errorMessage = "Ошибка: нет данных от сервера"
+                        self.showErrorAlert = true
                         return
                     }
                     
                     if httpResponse.statusCode == 200 {
                         self.showHtmlReportInWebView(data: data, teamName: teamName, opponentName: opponentName)
                     } else {
-                        print("Server error: \(httpResponse.statusCode)")
+                        var errorMsg = "Ошибка сервера: \(httpResponse.statusCode)"
                         if let responseString = String(data: data, encoding: .utf8) {
-                            print("Response: \(responseString)")
+                            errorMsg += "\n\(responseString)"
                         }
+                        self.errorMessage = errorMsg
+                        self.showErrorAlert = true
                     }
                 }
             }.resume()
         } catch {
             DispatchQueue.main.async {
                 self.isExporting = false
-                print("Failed to encode request: \(error.localizedDescription)")
+                self.errorMessage = "Ошибка кодирования запроса: \(error.localizedDescription)"
+                self.showErrorAlert = true
+            }
+        }
+    }
+    
+    func generateSimpleReport(teamName: String, opponentName: String, venue: String, matchDate: String) {
+        let fullLines = transformToFullTimelineLines()
+        
+        struct SimpleReportRequest: Encodable {
+            let match_data: MatchData
+            let team_name: String
+            let opponent_name: String
+            let venue: String
+            let match_date: String
+            
+            struct MatchData: Encodable {
+                let data: [FullTimelineLine]
+            }
+        }
+        
+        let request = SimpleReportRequest(
+            match_data: SimpleReportRequest.MatchData(data: fullLines),
+            team_name: teamName,
+            opponent_name: opponentName,
+            venue: venue,
+            match_date: matchDate
+        )
+        
+        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-match-report") else {
+            print("Invalid URL")
+            return
+        }
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        isExporting = true
+        
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            urlRequest.httpBody = try encoder.encode(request)
+            
+            URLSession.shared.dataTask(with: urlRequest) { data, response, error in
+                DispatchQueue.main.async {
+                    self.isExporting = false
+                    
+                    if let error = error {
+                        self.errorMessage = "Ошибка генерации простого отчета: \(error.localizedDescription)"
+                        self.showErrorAlert = true
+                        return
+                    }
+                    
+                    guard let data = data, let httpResponse = response as? HTTPURLResponse else {
+                        self.errorMessage = "Ошибка: нет данных от сервера"
+                        self.showErrorAlert = true
+                        return
+                    }
+                    
+                    if httpResponse.statusCode == 200 {
+                        self.saveReportFile(data: data, teamName: teamName, opponentName: opponentName)
+                    } else {
+                        var errorMsg = "Ошибка сервера: \(httpResponse.statusCode)"
+                        if let responseString = String(data: data, encoding: .utf8) {
+                            errorMsg += "\n\(responseString)"
+                        }
+                        self.errorMessage = errorMsg
+                        self.showErrorAlert = true
+                    }
+                }
+            }.resume()
+        } catch {
+            DispatchQueue.main.async {
+                self.isExporting = false
+                self.errorMessage = "Ошибка кодирования запроса: \(error.localizedDescription)"
+                self.showErrorAlert = true
             }
         }
     }
     
     func showHtmlReportInWebView(data: Data, teamName: String, opponentName: String) {
         guard let htmlString = String(data: data, encoding: .utf8) else {
-            print("Failed to convert data to HTML string")
+            errorMessage = "Ошибка: не удалось преобразовать данные в HTML"
+            showErrorAlert = true
             return
         }
         
-        // Показываем окно отчета через WindowsManager
         WindowsManager.shared.showReportWindow(
             htmlString: htmlString,
             teamName: teamName,
@@ -1035,88 +1251,219 @@ struct FullControlView: View {
         if panel.runModal() == .OK, let url = panel.url {
             do {
                 try data.write(to: url)
-                print("Report saved successfully at \(url)")
             } catch {
-                print("Failed to save report: \(error.localizedDescription)")
+                errorMessage = "Ошибка сохранения отчета: \(error.localizedDescription)"
+                showErrorAlert = true
             }
         }
     }
     
     
-    // MARK: - Compact Control Panel
     @ViewBuilder
-    private var compactControlPanel: some View {
+    private func compactControlPanel(width: CGFloat) -> some View {
+        let isSmallScreen = width < 1700
+        
         HStack(alignment: .top, spacing: 12) {
-            // Block 1: Video Controls
             VStack(alignment: .leading, spacing: 8) {
                 Text(^String.Titles.video)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
                 
-                HStack(spacing: 8) {
-                    Button(action: { videoManager.seek(by: -10) }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "gobackward.10")
-                                .font(.system(size: 12, weight: .medium))
-                            Text("10s")
-                                .font(.system(size: 10, weight: .medium))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(.blue)
-                        .cornerRadius(6)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Button(action: { videoManager.togglePlayPause() }) {
-                        Image(systemName: "playpause")
-                            .font(.system(size: 14, weight: .medium))
-                            .padding(6)
-                            .background(Color.green.opacity(0.1))
-                            .foregroundColor(.green)
-                            .cornerRadius(6)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Button(action: { videoManager.seek(by: 10) }) {
-                        HStack(spacing: 4) {
-                            Text("10s")
-                                .font(.system(size: 10, weight: .medium))
-                            Image(systemName: "goforward.10")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(.blue)
-                        .cornerRadius(6)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // Speed Control
-                    Menu {
-                        ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0], id: \.self) { speed in
-                            Button(String(format: "%.2fx", speed)) {
-                                videoManager.changePlaybackSpeed(to: speed)
+                if isSmallScreen {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 8) {
+                            Button(action: { videoManager.seek(by: -10) }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "gobackward.10")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text("10s")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.1))
+                                .foregroundColor(.blue)
+                                .cornerRadius(6)
                             }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Button(action: { videoManager.seek(by: -5) }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "gobackward.5")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text("5s")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.cyan.opacity(0.1))
+                                .foregroundColor(.cyan)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Button(action: { videoManager.togglePlayPause() }) {
+                                Image(systemName: "playpause")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .padding(6)
+                                    .background(Color.green.opacity(0.1))
+                                    .foregroundColor(.green)
+                                    .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Button(action: { videoManager.seek(by: 5) }) {
+                                HStack(spacing: 4) {
+                                    Text("5s")
+                                        .font(.system(size: 10, weight: .medium))
+                                    Image(systemName: "goforward.5")
+                                        .font(.system(size: 12, weight: .medium))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.cyan.opacity(0.1))
+                                .foregroundColor(.cyan)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Button(action: { videoManager.seek(by: 10) }) {
+                                HStack(spacing: 4) {
+                                    Text("10s")
+                                        .font(.system(size: 10, weight: .medium))
+                                    Image(systemName: "goforward.10")
+                                        .font(.system(size: 12, weight: .medium))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.1))
+                                .foregroundColor(.blue)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "speedometer")
-                                .font(.system(size: 12, weight: .medium))
-                            Text("x\(String(format: "%.2f", videoManager.playbackSpeed))")
-                                .font(.system(size: 10, weight: .medium))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8))
+                        
+                        HStack(spacing: 8) {
+                            Menu {
+                                ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0], id: \.self) { speed in
+                                    Button(String(format: "%.2fx", speed)) {
+                                        videoManager.changePlaybackSpeed(to: speed)
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "speedometer")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text("x\(String(format: "%.2f", videoManager.playbackSpeed))")
+                                        .font(.system(size: 10, weight: .medium))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 8))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.orange.opacity(0.1))
+                                .foregroundColor(.orange)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            Spacer()
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.orange.opacity(0.1))
-                        .foregroundColor(.orange)
-                        .cornerRadius(6)
                     }
-                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    HStack(spacing: 8) {
+                        Button(action: { videoManager.seek(by: -10) }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "gobackward.10")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("10s")
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Button(action: { videoManager.seek(by: -5) }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "gobackward.5")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("5s")
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.cyan.opacity(0.1))
+                            .foregroundColor(.cyan)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Button(action: { videoManager.togglePlayPause() }) {
+                            Image(systemName: "playpause")
+                                .font(.system(size: 14, weight: .medium))
+                                .padding(6)
+                                .background(Color.green.opacity(0.1))
+                                .foregroundColor(.green)
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Button(action: { videoManager.seek(by: 5) }) {
+                            HStack(spacing: 4) {
+                                Text("5s")
+                                    .font(.system(size: 10, weight: .medium))
+                                Image(systemName: "goforward.5")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.cyan.opacity(0.1))
+                            .foregroundColor(.cyan)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Button(action: { videoManager.seek(by: 10) }) {
+                            HStack(spacing: 4) {
+                                Text("10s")
+                                    .font(.system(size: 10, weight: .medium))
+                                Image(systemName: "goforward.10")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Menu {
+                            ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0], id: \.self) { speed in
+                                Button(String(format: "%.2fx", speed)) {
+                                    videoManager.changePlaybackSpeed(to: speed)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "speedometer")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("x\(String(format: "%.2f", videoManager.playbackSpeed))")
+                                    .font(.system(size: 10, weight: .medium))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.opacity(0.1))
+                            .foregroundColor(.orange)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
                 }
             }
             .padding(.horizontal, 12)
@@ -1124,92 +1471,174 @@ struct FullControlView: View {
             .background(Color.gray.opacity(0.05))
             .cornerRadius(8)
             
-            // Block 2: Timeline Management
             VStack(alignment: .leading, spacing: 8) {
                 Text(^String.Titles.timelines)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
                 
-                // First row: Add button, Mode selector, and Zoom controls
-                HStack(spacing: 8) {
-                    if markupMode == .standard {
-                        Button {
-                            showAddLineSheet = true
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.green)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .help(^String.Titles.fullControlButtonAddTimeline)
-                    }
-                    
-                    // Mode Selector
-                    HStack(spacing: 2) {
-                        Button(action: {
-                            WindowsManager.shared.setMarkupMode(.standard)
-                        }) {
-                            HStack(spacing: 2) {
-                                Image(systemName: "list.bullet")
-                                    .font(.system(size: 10))
-                                Text("Standard")
-                                    .font(.system(size: 10, weight: .medium))
+                if isSmallScreen {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 8) {
+                            if markupMode == .standard {
+                                Button {
+                                    showAddLineSheet = true
+                                } label: {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.green)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .help(^String.Titles.fullControlButtonAddTimeline)
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(markupMode == .standard ? Color.blue : Color.gray.opacity(0.1))
-                            .foregroundColor(markupMode == .standard ? .white : .primary)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Button(action: {
-                            WindowsManager.shared.setMarkupMode(.tagBased)
-                        }) {
+                            
                             HStack(spacing: 2) {
-                                Image(systemName: "tag")
-                                    .font(.system(size: 10))
-                                Text("Tags")
-                                    .font(.system(size: 10, weight: .medium))
+                                Button(action: {
+                                    WindowsManager.shared.setMarkupMode(.standard)
+                                }) {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "list.bullet")
+                                            .font(.system(size: 10))
+                                        Text("Standard")
+                                            .font(.system(size: 10, weight: .medium))
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(markupMode == .standard ? Color.blue : Color.gray.opacity(0.1))
+                                    .foregroundColor(markupMode == .standard ? .white : .primary)
+                                    .cornerRadius(6)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                
+                                Button(action: {
+                                    WindowsManager.shared.setMarkupMode(.tagBased)
+                                }) {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "tag")
+                                            .font(.system(size: 10))
+                                        Text("Tags")
+                                            .font(.system(size: 10, weight: .medium))
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(markupMode == .tagBased ? Color.blue : Color.gray.opacity(0.1))
+                                    .foregroundColor(markupMode == .tagBased ? .white : .primary)
+                                    .cornerRadius(6)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(markupMode == .tagBased ? Color.blue : Color.gray.opacity(0.1))
-                            .foregroundColor(markupMode == .tagBased ? .white : .primary)
-                            .cornerRadius(6)
+                            .help(^String.Titles.fullControlModeHelp)
+                            Spacer()
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        
+                        HStack(spacing: 4) {
+                            Text("Zoom")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary)
+                            
+                            Button {
+                                timelineScale = max(1.0, timelineScale - 0.5)
+                            } label: {
+                                Image(systemName: "minus.magnifyingglass")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .buttonStyle(CompactButtonStyle(icon: "minus.magnifyingglass", color: .gray))
+                            .help(^String.Titles.fullControlButtonTimelineZoomOut)
+                            
+                            Text(String(format: "%.1fx", timelineScale))
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 4)
+                            
+                            Button {
+                                timelineScale += 0.5
+                            } label: {
+                                Image(systemName: "plus.magnifyingglass")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .buttonStyle(CompactButtonStyle(icon: "plus.magnifyingglass", color: .gray))
+                            .help(^String.Titles.fullControlButtonTimelineZoomIn)
+                            Spacer()
+                        }
                     }
-                    .help(^String.Titles.fullControlModeHelp)
-                    
-                    // Timeline Zoom Controls (moved to first row)
-                    HStack(spacing: 4) {
-                        Text("Zoom")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        Button {
-                            timelineScale = max(1.0, timelineScale - 0.5)
-                        } label: {
-                            Image(systemName: "minus.magnifyingglass")
-                                .font(.system(size: 12, weight: .medium))
+                } else {
+                    HStack(spacing: 8) {
+                        if markupMode == .standard {
+                            Button {
+                                showAddLineSheet = true
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.green)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .help(^String.Titles.fullControlButtonAddTimeline)
                         }
-                        .buttonStyle(CompactButtonStyle(icon: "minus.magnifyingglass", color: .gray))
-                        .help(^String.Titles.fullControlButtonTimelineZoomOut)
                         
-                        Text(String(format: "%.1fx", timelineScale))
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                        
-                        Button {
-                            timelineScale += 0.5
-                        } label: {
-                            Image(systemName: "plus.magnifyingglass")
-                                .font(.system(size: 12, weight: .medium))
+                        HStack(spacing: 2) {
+                            Button(action: {
+                                WindowsManager.shared.setMarkupMode(.standard)
+                            }) {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "list.bullet")
+                                        .font(.system(size: 10))
+                                    Text("Standard")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(markupMode == .standard ? Color.blue : Color.gray.opacity(0.1))
+                                .foregroundColor(markupMode == .standard ? .white : .primary)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Button(action: {
+                                WindowsManager.shared.setMarkupMode(.tagBased)
+                            }) {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "tag")
+                                        .font(.system(size: 10))
+                                    Text("Tags")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(markupMode == .tagBased ? Color.blue : Color.gray.opacity(0.1))
+                                .foregroundColor(markupMode == .tagBased ? .white : .primary)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
-                        .buttonStyle(CompactButtonStyle(icon: "plus.magnifyingglass", color: .gray))
-                        .help(^String.Titles.fullControlButtonTimelineZoomIn)
+                        .help(^String.Titles.fullControlModeHelp)
+                        
+                        HStack(spacing: 4) {
+                            Text("Zoom")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary)
+                            
+                            Button {
+                                timelineScale = max(1.0, timelineScale - 0.5)
+                            } label: {
+                                Image(systemName: "minus.magnifyingglass")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .buttonStyle(CompactButtonStyle(icon: "minus.magnifyingglass", color: .gray))
+                            .help(^String.Titles.fullControlButtonTimelineZoomOut)
+                            
+                            Text(String(format: "%.1fx", timelineScale))
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 4)
+                            
+                            Button {
+                                timelineScale += 0.5
+                            } label: {
+                                Image(systemName: "plus.magnifyingglass")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .buttonStyle(CompactButtonStyle(icon: "plus.magnifyingglass", color: .gray))
+                            .help(^String.Titles.fullControlButtonTimelineZoomIn)
+                        }
                     }
                 }
             }
@@ -1218,84 +1647,171 @@ struct FullControlView: View {
             .background(Color.gray.opacity(0.05))
             .cornerRadius(8)
             
-            // Block 3: Export & Reports
             VStack(alignment: .leading, spacing: 8) {
                 Text(^String.Titles.exportReports)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
                 
-                HStack(spacing: 8) {
-                    // JSON Export Menu
-                    Menu {
-                        Button(^String.Titles.fullControlButtonJSONSimple) {
-                            exportSimpleJSON()
+                if isSmallScreen {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 8) {
+                            Menu {
+                                Button(^String.Titles.fullControlButtonJSONSimple) {
+                                    exportSimpleJSON()
+                                }
+                                Button(^String.Titles.fullControlButtonJSONFull) {
+                                    exportFullJSON()
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "doc.text")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text("JSON")
+                                        .font(.system(size: 10, weight: .medium))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 8))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.purple.opacity(0.1))
+                                .foregroundColor(.purple)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Menu {
+                                Button(^String.Titles.fullControlButtonExportTimeline) {
+                                    selectedExportType = .currentTimeline
+                                    showExportModeSheet = true
+                                }
+                                Button(^String.Titles.fullControlButtonExportAll) {
+                                    selectedExportType = .allTimelines
+                                    showExportModeSheet = true
+                                }
+                                Button(^String.Titles.fullControlButtonExportTags) {
+                                    showTagSelectionSheet = true
+                                }
+                                Button(^String.Titles.fullControlButtonExportLabels) {
+                                    showLabelSelectionSheet = true
+                                }
+                                Button(^String.Titles.fullControlButtonExportEvents) {
+                                    showEventSelectionSheet = true
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "video")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text("Export")
+                                        .font(.system(size: 10, weight: .medium))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 8))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.red.opacity(0.1))
+                                .foregroundColor(.red)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            Spacer()
                         }
-                        Button(^String.Titles.fullControlButtonJSONFull) {
-                            exportFullJSON()
+                        
+                        HStack(spacing: 8) {
+                            Button(^String.Titles.aIReports) {
+                                showAiReportSheet = true
+                            }
+                            .buttonStyle(CompactButtonStyle(icon: "brain", color: .indigo, showText: true))
+                            
+                        Button(^String.Titles.simpleReport) {
+                            showSimpleReportSheet = true
                         }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.text")
-                                .font(.system(size: 12, weight: .medium))
-                            Text("JSON")
-                                .font(.system(size: 10, weight: .medium))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8))
+                        .buttonStyle(CompactButtonStyle(icon: "doc.text", color: .pink, showText: true, text: ^String.Titles.simpleReport))
+                        
+                        Button(^String.Titles.view) {
+                            WindowsManager.shared.showViewerWindow()
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.purple.opacity(0.1))
-                        .foregroundColor(.purple)
-                        .cornerRadius(6)
+                        .buttonStyle(CompactButtonStyle(icon: "eye", color: .purple, showText: true, text: ^String.Titles.view))
+                            Spacer()
+                        }
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Menu {
-                        Button(^String.Titles.fullControlButtonExportTimeline) {
-                            selectedExportType = .currentTimeline
-                            showExportModeSheet = true
+                } else {
+                    HStack(spacing: 8) {
+                        Menu {
+                            Button(^String.Titles.fullControlButtonJSONSimple) {
+                                exportSimpleJSON()
+                            }
+                            Button(^String.Titles.fullControlButtonJSONFull) {
+                                exportFullJSON()
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("JSON")
+                                    .font(.system(size: 10, weight: .medium))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.purple.opacity(0.1))
+                            .foregroundColor(.purple)
+                            .cornerRadius(6)
                         }
-                        Button(^String.Titles.fullControlButtonExportAll) {
-                            selectedExportType = .allTimelines
-                            showExportModeSheet = true
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Menu {
+                            Button(^String.Titles.fullControlButtonExportTimeline) {
+                                selectedExportType = .currentTimeline
+                                showExportModeSheet = true
+                            }
+                            Button(^String.Titles.fullControlButtonExportAll) {
+                                selectedExportType = .allTimelines
+                                showExportModeSheet = true
+                            }
+                            Button(^String.Titles.fullControlButtonExportTags) {
+                                showTagSelectionSheet = true
+                            }
+                            Button(^String.Titles.fullControlButtonExportLabels) {
+                                showLabelSelectionSheet = true
+                            }
+                            Button(^String.Titles.fullControlButtonExportEvents) {
+                                showEventSelectionSheet = true
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "video")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("Export")
+                                    .font(.system(size: 10, weight: .medium))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .cornerRadius(6)
                         }
-                        Button(^String.Titles.fullControlButtonExportTags) {
-                            showTagSelectionSheet = true
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        
+                        Button(^String.Titles.aIReports) {
+                            showAiReportSheet = true
                         }
-                        Button(^String.Titles.fullControlButtonExportLabels) {
-                            showLabelSelectionSheet = true
+                        .buttonStyle(CompactButtonStyle(icon: "brain", color: .indigo, showText: true))
+                        
+                        
+                        Button(^String.Titles.simpleReport) {
+                            showSimpleReportSheet = true
                         }
-                        Button(^String.Titles.fullControlButtonExportEvents) {
-                            showEventSelectionSheet = true
+                        .buttonStyle(CompactButtonStyle(icon: "doc.text", color: .pink, showText: true, text: ^String.Titles.simpleReport))
+                        
+                        Button(^String.Titles.view) {
+                            WindowsManager.shared.showViewerWindow()
                         }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "video")
-                                .font(.system(size: 12, weight: .medium))
-                            Text("Export")
-                                .font(.system(size: 10, weight: .medium))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.red.opacity(0.1))
-                        .foregroundColor(.red)
-                        .cornerRadius(6)
+                        .buttonStyle(CompactButtonStyle(icon: "eye", color: .purple, showText: true, text: ^String.Titles.view))
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // AI Reports
-                    Button(^String.Titles.aIReports) {
-                        showAiReportSheet = true
-                    }
-                    .buttonStyle(CompactButtonStyle(icon: "brain", color: .indigo, showText: true))
-                    
-                    // Viewer
-                    Button("Просмотр") {
-                        WindowsManager.shared.showViewerWindow()
-                    }
-                    .buttonStyle(CompactButtonStyle(icon: "eye", color: .purple, showText: true, text: "Просмотр"))
                 }
             }
             .padding(.horizontal, 12)
@@ -1305,43 +1821,79 @@ struct FullControlView: View {
             
             Spacer()
             
-            // Block 4: Screenshots & Map (Right aligned)
             VStack(alignment: .leading, spacing: 8) {
                 Text(^String.Titles.tools)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
                 
-                HStack(spacing: 8) {
-                    // Screenshots
-                    Button(^String.Titles.fullControlButtonScreenshots) {
-                        WindowsManager.shared.showScreenshots()
+                if isSmallScreen {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 8) {
+                            Button(^String.Titles.fullControlButtonScreenshots) {
+                                WindowsManager.shared.showScreenshots()
+                            }
+                            .buttonStyle(CompactButtonStyle(icon: "camera", color: .teal, showText: true, text: ^String.Titles.screenshots))
+                            Spacer()
+                        }
+                        
+                        HStack(spacing: 8) {
+                            Menu {
+                                Button(^String.Titles.configureVisualization) {
+                                    WindowsManager.shared.showFieldMapConfigurationWindow()
+                                }
+                                Button(^String.Titles.fullControlButtonMap) {
+                                    WindowsManager.shared.showFieldMapVisualizationPicker()
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "map")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text(^String.Titles.map)
+                                        .font(.system(size: 10, weight: .medium))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 8))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.brown.opacity(0.1))
+                                .foregroundColor(.brown)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            Spacer()
+                        }
                     }
-                    .buttonStyle(CompactButtonStyle(icon: "camera", color: .teal, showText: true, text: ^String.Titles.screenshots))
-                    
-                    // Map Menu
-                    Menu {
-                        Button(^String.Titles.configureVisualization) {
-                            WindowsManager.shared.showFieldMapConfigurationWindow()
+                } else {
+                    HStack(spacing: 8) {
+                        Button(^String.Titles.fullControlButtonScreenshots) {
+                            WindowsManager.shared.showScreenshots()
                         }
-                        Button(^String.Titles.fullControlButtonMap) {
-                            WindowsManager.shared.showFieldMapVisualizationPicker()
+                        .buttonStyle(CompactButtonStyle(icon: "camera", color: .teal, showText: true, text: ^String.Titles.screenshots))
+                        
+                        Menu {
+                            Button(^String.Titles.configureVisualization) {
+                                WindowsManager.shared.showFieldMapConfigurationWindow()
+                            }
+                            Button(^String.Titles.fullControlButtonMap) {
+                                WindowsManager.shared.showFieldMapVisualizationPicker()
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "map")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text(^String.Titles.map)
+                                    .font(.system(size: 10, weight: .medium))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.brown.opacity(0.1))
+                            .foregroundColor(.brown)
+                            .cornerRadius(6)
                         }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "map")
-                                .font(.system(size: 12, weight: .medium))
-                            Text(^String.Titles.map)
-                                .font(.system(size: 10, weight: .medium))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.brown.opacity(0.1))
-                        .foregroundColor(.brown)
-                        .cornerRadius(6)
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(.horizontal, 12)
@@ -1351,7 +1903,6 @@ struct FullControlView: View {
         }
     }
     
-    // MARK: - Helper Methods
     private func exportSimpleJSON() {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
@@ -1364,7 +1915,8 @@ struct FullControlView: View {
                 try data.write(to: url)
             }
         } catch {
-            print("Ошибка сохранения JSON: \(error)")
+            errorMessage = "Ошибка сохранения JSON: \(error.localizedDescription)"
+            showErrorAlert = true
         }
     }
     
@@ -1382,14 +1934,71 @@ struct FullControlView: View {
                 try data.write(to: url)
             }
         } catch {
-            print("Ошибка сохранения полного JSON: \(error)")
+            errorMessage = "Ошибка сохранения полного JSON: \(error.localizedDescription)"
+            showErrorAlert = true
         }
+    }
+    
+    private func startPopupHideTimer() {
+        popupHideWorkItem?.cancel()
+        
+        let workItem = DispatchWorkItem {
+            if !self.isHoveringOnPopup {
+                self.hoveredStampInfo = nil
+            }
+            self.popupHideWorkItem = nil
+        }
+        
+        popupHideWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: workItem)
+    }
+    
+    private func stampHoverPopup(stampInfo: String) -> some View {
+        let lines = stampInfo.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard lines.count >= 4 else { return AnyView(EmptyView()) }
+        
+        return AnyView(
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(lines[0].trimmingCharacters(in: .whitespaces))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.trailing)
+                
+                Text(lines[1].trimmingCharacters(in: .whitespaces))
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.trailing)
+                
+                Text(lines[2].trimmingCharacters(in: .whitespaces))
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
+                
+                Text(lines[3].trimmingCharacters(in: .whitespaces))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.trailing)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 0.5)
+                    )
+            )
+            .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+            .frame(maxWidth: 200)
+        )
     }
     
     var body: some View {
         GeometryReader { geo in
             VStack(alignment: .leading, spacing: 12) {
-                compactControlPanel
+                compactControlPanel(width: geo.size.width)
                 scrollBlock()
             }
             .padding(.horizontal)
@@ -1398,18 +2007,20 @@ struct FullControlView: View {
             .overlay(
                 Group {
                     if isExporting {
-                        ViewsFactory.customHUD()
-                            .transition(.opacity)
-                    }
-                }
-            )
-            .padding()
-            .frame(minWidth: 800, minHeight: 300)
-            .overlay(
-                Group {
-                    if isExporting {
-                        ViewsFactory.customHUD()
-                            .transition(.opacity)
+                        VStack {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                                .scaleEffect(1.5)
+                            Text(^String.Titles.exporting)
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.top, 8)
+                        }
+                        .padding(30)
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(12)
+                        .shadow(radius: 20)
+                        .transition(.opacity)
                     }
                 }
             )
@@ -1424,12 +2035,34 @@ struct FullControlView: View {
                         self.markupMode = MarkupMode.current
                     }
                 }
+                
+                NotificationCenter.default.addObserver(
+                    forName: .timelineStampHoverChanged,
+                    object: nil,
+                    queue: .main
+                ) { notification in
+                    if let userInfo = notification.userInfo {
+                        if let stampInfo = userInfo["stampInfo"] as? String {
+                            hoveredStampInfo = stampInfo
+                            if !isHoveringOnPopup {
+                                startPopupHideTimer()
+                            }
+                        } else {
+                            hoveredStampInfo = nil
+                            popupHideWorkItem?.cancel()
+                            popupHideWorkItem = nil
+                        }
+                    }
+                }
             }
             .onDisappear {
                 if let monitor = keyEventMonitor {
                     NSEvent.removeMonitor(monitor)
                 }
-                NotificationCenter.default.removeObserver(self)
+                popupHideWorkItem?.cancel()
+                popupHideWorkItem = nil
+                NotificationCenter.default.removeObserver(self, name: .markupModeChanged, object: nil)
+                NotificationCenter.default.removeObserver(self, name: .timelineStampHoverChanged, object: nil)
             }
             .onChange(of: geo.size) { newSize in
                 parentWindowHeight = newSize.height
@@ -1449,9 +2082,6 @@ struct FullControlView: View {
                 showExportModeSheet = false
             }
         }
-        
-        
-
         .sheet(isPresented: $showLabelSelectionSheet) {
             LabelSelectionSheetView(
                 uniqueLabels: uniqueLabelsFromTimelines(),
@@ -1479,61 +2109,60 @@ struct FullControlView: View {
             )
             .frame(width: 300, height: 300)
         }
-
-
+        
+        
         
         .sheet(item: $multiTagSelectionItem) { item in
-                    if let label = item.label {
-                        let availableTags = tagsForLabel(label)
-                        
-                        MultiTagSelectionSheetView(
-                            availableTags: availableTags,
-                            onDone: { selectedTags in
-                                selectedExportType = .labelWithTags(selectedLabel: label, selectedTags: selectedTags)
-                                multiTagSelectionItem = nil
-                                showExportModeSheet = true
-                            },
-                            onSkip: {
-                                selectedExportType = .label(selectedLabel: label)
-                                multiTagSelectionItem = nil
-                                showExportModeSheet = true
-                            }
-                        )
-                        .frame(width: 400, height: 300)
-                    }
-                }
+            if let label = item.label {
+                let availableTags = tagsForLabel(label)
                 
-                // Заменяем sheet для мультивыбора лейблов
-                .sheet(item: $multiLabelSelectionItem) { item in
-                    if let tag = item.tag {
-                        let availableLabels = labelsForTag(tag)
-                        
-                        MultiLabelSelectionSheetView(
-                            availableLabels: availableLabels,
-                            onDone: { selectedLabels in
-                                selectedExportType = .tagWithLabels(selectedTag: tag, selectedLabels: selectedLabels)
-                                multiLabelSelectionItem = nil
-                                showExportModeSheet = true
-                            },
-                            onSkip: {
-                                selectedExportType = .tag(selectedTag: tag)
-                                multiLabelSelectionItem = nil
-                                showExportModeSheet = true
-                            }
-                        )
-                        .frame(width: 400, height: 300)
+                MultiTagSelectionSheetView(
+                    availableTags: availableTags,
+                    onDone: { selectedTags in
+                        selectedExportType = .labelWithTags(selectedLabel: label, selectedTags: selectedTags)
+                        multiTagSelectionItem = nil
+                        showExportModeSheet = true
+                    },
+                    onSkip: {
+                        selectedExportType = .label(selectedLabel: label)
+                        multiTagSelectionItem = nil
+                        showExportModeSheet = true
                     }
-                }
-
+                )
+                .frame(width: 400, height: 300)
+            }
+        }
+        
+        .sheet(item: $multiLabelSelectionItem) { item in
+            if let tag = item.tag {
+                let availableLabels = labelsForTag(tag)
+                
+                MultiLabelSelectionSheetView(
+                    availableLabels: availableLabels,
+                    onDone: { selectedLabels in
+                        selectedExportType = .tagWithLabels(selectedTag: tag, selectedLabels: selectedLabels)
+                        multiLabelSelectionItem = nil
+                        showExportModeSheet = true
+                    },
+                    onSkip: {
+                        selectedExportType = .tag(selectedTag: tag)
+                        multiLabelSelectionItem = nil
+                        showExportModeSheet = true
+                    }
+                )
+                .frame(width: 400, height: 300)
+            }
+        }
+        
         .sheet(isPresented: $showEventSelectionSheet) {
             EventSelectionSheetView(timeEvents: uniqueEventsFromTimelines()) { selectedEvent in
                 selectedExportType = .timeEvent(selectedEvent: selectedEvent)
                 showEventSelectionSheet = false
                 showExportModeSheet = true
             }
-            .frame(width: 300, height: 300) // Фиксированный размер вместо динамического
+            .frame(width: 300, height: 300)
         }
-
+        
         .sheet(isPresented: $showTagSelectionSheet) {
             TagSelectionSheetView(
                 uniqueTags: uniqueTagsFromTimelines(),
@@ -1549,7 +2178,14 @@ struct FullControlView: View {
                     }
                 }
             )
-            .frame(width: 300, height: 300) // Фиксированный размер вместо динамического
+            .frame(width: 300, height: 300)
+        }
+        .alert(isPresented: $showErrorAlert) {
+            Alert(
+                title: Text("Ошибка"),
+                message: Text(errorMessage),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
     
@@ -1597,10 +2233,10 @@ struct FullControlView: View {
     }
     
     func showMultiTagSelection(for label: Label) {
-            multiTagSelectionItem = MultiSelectionItem(label: label)
-        }
+        multiTagSelectionItem = MultiSelectionItem(label: label)
+    }
+
         
-        // В функции где показываем мультивыбор лейблов (замена showMultiLabelSelectionSheet = true)
         func showMultiLabelSelection(for tag: Tag) {
             multiLabelSelectionItem = MultiSelectionItem(tag: tag)
         }
@@ -1708,11 +2344,8 @@ struct FullControlView: View {
         }
         
         let uniqueLabelIDs = Array(Set(labelIDs))
-        print("Для тега \(tag.name) найдены лейблы с ID: \(uniqueLabelIDs)")
         
         let labels = TagLibraryManager.shared.allLabels.filter { uniqueLabelIDs.contains($0.id) }
-        print("Найдены лейблы: \(labels.map { $0.name })")
-        
         return labels
     }
 
@@ -1723,11 +2356,8 @@ struct FullControlView: View {
         }
         
         let uniqueTagIDs = Array(Set(tagIDs))
-        print("Для лейбла \(label.name) найдены теги с ID: \(uniqueTagIDs)")
         
         let tags = TagLibraryManager.shared.allTags.filter { uniqueTagIDs.contains($0.id) }
-        print("Найдены теги: \(tags.map { $0.name })")
-        
         return tags
     }
     
@@ -1749,8 +2379,6 @@ struct FullControlView: View {
     
 }
 
-// Sheet для выбора лейблов
-// Модифицируйте LabelSelectionSheetView
 struct LabelSelectionSheetView: View {
     let uniqueLabels: [Label]
     let onLabelSelected: (Label) -> Void
@@ -1844,13 +2472,10 @@ struct MultiTagSelectionSheetView: View {
         }
         .frame(width: 400, height: 300)
         .onAppear {
-            print("MultiTagSelectionSheetView появился")
-            print("Доступные теги: \(availableTags.map { $0.name })")
         }
     }
 }
 
-// Обновите MultiLabelSelectionSheetView аналогичным образом
 struct MultiLabelSelectionSheetView: View {
     let availableLabels: [Label]
     @State private var selectedLabels: Set<String> = []
@@ -1909,7 +2534,6 @@ struct MultiLabelSelectionSheetView: View {
     }
 }
 
-// MARK: - TimelineDropDelegate
 struct TimelineDropDelegate: DropDelegate {
     let currentLine: TimelineLine
     let timelineData: TimelineDataManager
@@ -1935,11 +2559,9 @@ struct TimelineDropDelegate: DropDelegate {
     }
     
     func dropEntered(info: DropInfo) {
-        // Можно добавить визуальную обратную связь при наведении
     }
     
     func dropExited(info: DropInfo) {
-        // Можно добавить визуальную обратную связь при выходе
     }
     
     private func reorderTimelines(draggedID: UUID, targetID: UUID) {
@@ -1951,11 +2573,9 @@ struct TimelineDropDelegate: DropDelegate {
         let draggedLine = timelineData.lines.remove(at: draggedIndex)
         let newTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex
         timelineData.lines.insert(draggedLine, at: newTargetIndex)
-        // Don't call updateTimelines() for simple reordering - it doesn't change stamp counts
     }
 }
 
-// MARK: - Custom Button Styles
 struct CompactButtonStyle: ButtonStyle {
     let icon: String
     let color: Color
@@ -2028,6 +2648,155 @@ struct ZoomButtonStyle: ButtonStyle {
             .cornerRadius(8)
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+struct TimelineMouseTracker: NSViewRepresentable {
+    let duration: Double
+    let gridWidth: CGFloat
+    let lines: [TimelineLine]
+    let tagLibrary: TagLibraryManager
+    let onStampUpdate: (String?, CGPoint?) -> Void
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = TrackingView()
+        view.duration = duration
+        view.gridWidth = gridWidth
+        view.lines = lines
+        view.tagLibrary = tagLibrary
+        view.onStampUpdate = onStampUpdate
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let trackingView = nsView as? TrackingView {
+            trackingView.duration = duration
+            trackingView.gridWidth = gridWidth
+            trackingView.lines = lines
+            trackingView.tagLibrary = tagLibrary
+            trackingView.onStampUpdate = onStampUpdate
+        }
+    }
+    
+    class TrackingView: NSView {
+        var duration: Double = 0
+        var gridWidth: CGFloat = 0
+        var lines: [TimelineLine] = []
+        var tagLibrary: TagLibraryManager?
+        var onStampUpdate: ((String?, CGPoint?) -> Void)?
+        private var trackingArea: NSTrackingArea?
+        private var lastUpdateTime: TimeInterval = 0
+        private let updateInterval: TimeInterval = 0.1
+        private let lineHeight: CGFloat = 30
+        private let headerHeight: CGFloat = 30
+        
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            
+            if let trackingArea = trackingArea {
+                removeTrackingArea(trackingArea)
+            }
+            
+            let options: NSTrackingArea.Options = [
+                .activeInKeyWindow,
+                .mouseMoved,
+                .inVisibleRect
+            ]
+            
+            trackingArea = NSTrackingArea(
+                rect: bounds,
+                options: options,
+                owner: self,
+                userInfo: nil
+            )
+            
+            if let trackingArea = trackingArea {
+                addTrackingArea(trackingArea)
+            }
+        }
+        
+        override func mouseMoved(with event: NSEvent) {
+            let currentTime = event.timestamp
+            if currentTime - lastUpdateTime < updateInterval {
+                return
+            }
+            lastUpdateTime = currentTime
+            
+            let locationInView = convert(event.locationInWindow, from: nil)
+            let relativeX = locationInView.x
+            let relativeY = locationInView.y
+            
+            guard duration > 0 && gridWidth > 0 else {
+                onStampUpdate?(nil, nil)
+                return
+            }
+            
+            
+            let yFromTop = bounds.height - relativeY
+            
+            guard yFromTop > headerHeight else {
+                onStampUpdate?(nil, nil)
+                return
+            }
+            
+            let lineIndex = Int((yFromTop - headerHeight) / lineHeight)
+            
+            guard lineIndex >= 0 && lineIndex < lines.count else {
+                onStampUpdate?(nil, nil)
+                return
+            }
+            
+            let line = lines[lineIndex]
+            
+            let clampedX = max(0.0, min(relativeX, gridWidth))
+            let time = (clampedX / gridWidth) * duration
+            let clampedTime = max(0.0, min(time, duration))
+            
+            let foundStamp = line.stamps.first { stamp in
+                clampedTime >= stamp.startSeconds && clampedTime <= stamp.finishSeconds
+            }
+            
+            if let stamp = foundStamp, let tagLibrary = tagLibrary {
+                let tag = tagLibrary.findTagById(stamp.idTag)
+                let tagName = tag?.name ?? stamp.label
+                
+                let labelNames = stamp.labels.compactMap { labelID in
+                    tagLibrary.findLabelById(labelID)?.name
+                }
+                let labelsString = labelNames.isEmpty ? "—" : labelNames.joined(separator: ", ")
+                
+                let startTime = formatTimeStringCompact(stamp.startSeconds)
+                let durationTime = formatTimeStringCompact(stamp.duration)
+                
+                let info = """
+                \(tagName)
+                \(line.name)
+                \(labelsString)
+                \(startTime) • \(durationTime)
+                """
+                
+                onStampUpdate?(info, nil)
+            } else {
+                onStampUpdate?(nil, nil)
+            }
+        }
+        
+        override func mouseExited(with event: NSEvent) {
+            onStampUpdate?(nil, nil)
+        }
+        
+        private func formatTimeString(_ seconds: Double) -> String {
+            let minutes = Int(seconds) / 60
+            let secs = Int(seconds) % 60
+            let milliseconds = Int((seconds.truncatingRemainder(dividingBy: 1.0)) * 1000)
+            return String(format: "%02d:%02d.%03d", minutes, secs, milliseconds)
+        }
+        
+        private func formatTimeStringCompact(_ seconds: Double) -> String {
+            let minutes = Int(seconds) / 60
+            let secs = Int(seconds) % 60
+            return String(format: "%02d:%02d", minutes, secs)
+        }
     }
 }
 

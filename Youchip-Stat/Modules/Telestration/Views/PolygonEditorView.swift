@@ -18,7 +18,6 @@ struct PolygonEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top toolbar
             HStack {
                 Button(action: {
                     viewModel.showingTypeSelection = true
@@ -62,7 +61,6 @@ struct PolygonEditorView: View {
             .padding()
             
             HStack(spacing: 0) {
-                // Main canvas area
                 GeometryReader { geometry in
                     ZStack {
                         Image(nsImage: viewModel.image)
@@ -70,17 +68,14 @@ struct PolygonEditorView: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                                                 // Render all visible objects
                          ForEach(viewModel.objects.filter { $0.isVisible }) { object in
                              ObjectView(object: object, viewModel: viewModel, geometry: geometry)
                          }
                          
-                         // Render all visible templates
                          ForEach(viewModel.templateObjects.filter { $0.isVisible }) { template in
                              TemplateView(template: template, viewModel: viewModel, geometry: geometry)
                          }
                         
-                        // Render temporary vertices during creation
                         if viewModel.isCreatingObject {
                             ForEach(Array(viewModel.tempVertices.enumerated()), id: \.offset) { index, position in
                                 Circle()
@@ -89,7 +84,6 @@ struct PolygonEditorView: View {
                                     .position(viewModel.viewPoint(fromImagePoint: position, in: geometry.size))
                             }
                             
-                            // Show temporary lines/area
                             if let objectType = viewModel.currentObjectType {
                                 Group {
                                     switch objectType {
@@ -135,7 +129,6 @@ struct PolygonEditorView: View {
                 }
                 .background(Color.gray.opacity(0.1))
                 
-                // Objects list
                 VStack(alignment: .leading, spacing: 0) {
                     Text(^String.Titles.objects)
                         .font(.headline)

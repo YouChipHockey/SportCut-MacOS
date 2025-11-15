@@ -22,7 +22,6 @@ struct AppNavigationButtonsView: View {
             )
             Button(
                 action: {
-                    // no implementation
                 },
                 label: {
                     AppImage.sfChevronRight.systemImage

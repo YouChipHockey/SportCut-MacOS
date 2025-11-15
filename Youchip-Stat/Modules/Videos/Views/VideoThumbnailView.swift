@@ -17,7 +17,6 @@ struct VideoThumbnailView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Карточка с превью
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(NSColor.controlBackgroundColor))
@@ -36,9 +35,31 @@ struct VideoThumbnailView: View {
                     )
                 
                 VStack(spacing: 0) {
-                    // Превью видео
                     ZStack {
-                        if let image = viewModel.filesPreviewManager.getThumbnail(for: file.url) {
+                        if file.isBroken {
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.red.opacity(0.3),
+                                            Color.red.opacity(0.1)
+                                        ]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(height: 120)
+                                .overlay(
+                                    VStack(spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 40))
+                                            .foregroundColor(.orange)
+                                        Text(^String.Titles.videoUnavailable)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                    }
+                                )
+                        } else if let image = viewModel.filesPreviewManager.getThumbnail(for: file.url) {
                             Image(nsImage: image)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
@@ -59,17 +80,18 @@ struct VideoThumbnailView: View {
                                 .frame(height: 120)
                         }
                         
-                        // Overlay с кнопкой воспроизведения
                         ZStack {
-                            // Полупрозрачный фон
                             Rectangle()
                                 .fill(Color.black.opacity(0.3))
                                 .opacity(isHovered ? 1 : 0)
                                 .animation(.easeInOut(duration: 0.2), value: isHovered)
                             
-                            // Кнопка воспроизведения
                             Button(action: {
-                                viewModel.action.send(.openVideo(id: id))
+                                if file.isBroken {
+                                    viewModel.action.send(.showRebindAlert(file: file))
+                                } else {
+                                    viewModel.action.send(.openVideo(id: id))
+                                }
                             }) {
                                 ZStack {
                                     Circle()
@@ -77,10 +99,10 @@ struct VideoThumbnailView: View {
                                         .frame(width: 50, height: 50)
                                         .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                                     
-                                    Image(systemName: "play.fill")
+                                    Image(systemName: file.isBroken ? "arrow.triangle.2.circlepath" : "play.fill")
                                         .font(.system(size: 18, weight: .medium))
-                                        .foregroundColor(.blue)
-                                        .offset(x: 2) // Небольшое смещение для визуального центрирования
+                                        .foregroundColor(file.isBroken ? .orange : .blue)
+                                        .offset(x: file.isBroken ? 0 : 2)
                                 }
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -92,9 +114,7 @@ struct VideoThumbnailView: View {
                         RoundedRectangle(cornerRadius: 12)
                     )
                     
-                    // Информация о видео
                     VStack(alignment: .leading, spacing: 8) {
-                        // Название файла с звездочкой избранного
                         HStack {
                             Text(file.name)
                                 .font(.system(size: 13, weight: .medium))
@@ -104,7 +124,6 @@ struct VideoThumbnailView: View {
                             
                             Spacer()
                             
-                            // Звездочка избранного
                             if isFavorite {
                                 Image(systemName: "star.fill")
                                     .font(.system(size: 12))
@@ -113,9 +132,7 @@ struct VideoThumbnailView: View {
                             }
                         }
                         
-                        // Метаданные
                         HStack {
-                            // Дата
                             HStack(spacing: 4) {
                                 Image(systemName: "calendar")
                                     .font(.system(size: 10))
@@ -128,7 +145,6 @@ struct VideoThumbnailView: View {
                             
                             Spacer()
                             
-                            // Размер файла (если доступен)
                             if let url = file.url {
                                 Text(formatFileSize(url))
                                     .font(.system(size: 11))
@@ -156,16 +172,27 @@ struct VideoThumbnailView: View {
         }
     }
     
-    // MARK: - Context Menu
     private var contextMenuContent: some View {
         Group {
-            Button(action: {
-                viewModel.action.send(.openVideo(id: id))
-            }) {
-                HStack {
-                    Image(systemName: "play.fill")
-                        .foregroundColor(.blue)
-                    Text(^String.Titles.openButtonTitle)
+            if file.isBroken {
+                Button(action: {
+                    viewModel.action.send(.showRebindAlert(file: file))
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundColor(.orange)
+                        Text(^String.Titles.rebindVideo)
+                    }
+                }
+            } else {
+                Button(action: {
+                    viewModel.action.send(.openVideo(id: id))
+                }) {
+                    HStack {
+                        Image(systemName: "play.fill")
+                            .foregroundColor(.blue)
+                        Text(^String.Titles.openButtonTitle)
+                    }
                 }
             }
             
@@ -196,6 +223,18 @@ struct VideoThumbnailView: View {
             Divider()
             
             Button(action: {
+                viewModel.action.send(.exportProject(file: file))
+            }) {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundColor(.green)
+                    Text(^String.Titles.exportProject)
+                }
+            }
+            
+            Divider()
+            
+            Button(action: {
                 viewModel.action.send(.deleteFile(file: file))
             }) {
                 HStack {
@@ -207,9 +246,7 @@ struct VideoThumbnailView: View {
         }
     }
     
-    // MARK: - Helper Functions
     private func updateFavoriteState() {
-        // Находим обновленный файл в списке
         if let updatedFile = viewModel.state.files.first(where: { $0.id == file.id }) {
             let newFavoriteState = viewModel.filesManager.isFavorite(updatedFile)
             if isFavorite != newFavoriteState {
@@ -240,7 +277,7 @@ struct VideoThumbnailView: View {
                 return ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
             }
         } catch {
-            // Игнорируем ошибки
+             
         }
         return ""
     }

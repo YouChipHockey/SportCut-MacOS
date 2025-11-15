@@ -7,6 +7,71 @@
 
 import SwiftUI
 import Foundation
+import AppKit
+
+// MARK: - Editable TextField Helper
+
+struct AutoFocusTextField: NSViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    let onSubmit: () -> Void
+    
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = NSTextField()
+        textField.delegate = context.coordinator
+        textField.placeholderString = placeholder
+        textField.isBordered = false
+        textField.backgroundColor = .clear
+        textField.focusRingType = .none
+        return textField
+    }
+    
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        
+        if !context.coordinator.didFocus {
+            DispatchQueue.main.async {
+                nsView.window?.makeFirstResponder(nsView)
+                if let editor = nsView.currentEditor() as? NSTextView {
+                    let length = editor.string.count
+                    editor.selectedRange = NSRange(location: length, length: 0)
+                }
+                context.coordinator.didFocus = true
+            }
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, onSubmit: onSubmit)
+    }
+    
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        @Binding var text: String
+        let onSubmit: () -> Void
+        var didFocus = false
+        
+        init(text: Binding<String>, onSubmit: @escaping () -> Void) {
+            _text = text
+            self.onSubmit = onSubmit
+        }
+        
+        func controlTextDidChange(_ obj: Notification) {
+            if let textField = obj.object as? NSTextField {
+                text = textField.stringValue
+            }
+        }
+        
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                onSubmit()
+                return true
+            }
+            return false
+        }
+    }
+}
 
 struct CreateCustomCollectionsView: View {
     
@@ -41,7 +106,6 @@ struct CreateCustomCollectionsView: View {
     @State private var tempImageBookmark: Data? = nil
     @State private var isCapturingLabelHotkeys: [String: Bool] = [:]
     
-    // Search states
     @State private var searchText = ""
     @State private var isSearching = false
     @State private var searchScope: SearchScope = .all
@@ -213,7 +277,6 @@ struct CreateCustomCollectionsView: View {
             }
             .frame(width: 250)
             
-            // Save button
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if collectionManager.saveCollectionToFiles() {
@@ -244,7 +307,6 @@ struct CreateCustomCollectionsView: View {
             .scaleEffect(showSaveSuccess ? 1.05 : 1.0)
             .animation(.easeInOut(duration: 0.2), value: showSaveSuccess)
             
-            // Export button
             Button(action: {
                 if let exportedURL = collectionManager.exportCollection() {
                     print("Collection exported to: \(exportedURL.path)")
@@ -253,7 +315,7 @@ struct CreateCustomCollectionsView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "square.and.arrow.up")
                         .foregroundColor(.white)
-                    Text("Экспорт")
+                    Text(^String.Titles.fieldMapButtonExport)
                         .foregroundColor(.white)
                 }
                 .padding(.horizontal, 16)
@@ -267,7 +329,6 @@ struct CreateCustomCollectionsView: View {
             
             Spacer()
             
-            // View mode picker
             Picker("", selection: $viewMode) {
                 Text(^String.Titles.tagGroups)
                     .tag(ViewMode.tagGroups)
@@ -285,7 +346,6 @@ struct CreateCustomCollectionsView: View {
     
     var sidebarView: some View {
         VStack(spacing: 0) {
-            // Search bar
             searchBarView
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -293,7 +353,6 @@ struct CreateCustomCollectionsView: View {
             
             Divider()
             
-            // Content
             List {
                 if viewMode == .tagGroups {
                     tagGroupsListSection
@@ -493,26 +552,28 @@ struct CreateCustomCollectionsView: View {
                 .frame(width: 16)
             
             if selectedTagGroupID == group.id && isEditingGroupName {
-                FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(NSColor.windowBackgroundColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.blue.opacity(0.5), lineWidth: 1)
-                            )
-                    )
-                    .onAppear {
-                        newGroupName = group.name
-                    }
-                    .onSubmit {
+                AutoFocusTextField(
+                    text: $newGroupName,
+                    placeholder: ^String.Titles.groupName,
+                    onSubmit: {
                         collectionManager.renameTagGroup(id: group.id, newName: newGroupName)
                         isEditingGroupName = false
                     }
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(NSColor.windowBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.blue.opacity(0.5), lineWidth: 1)
+                        )
+                )
+                .onAppear {
+                    newGroupName = group.name
+                }
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.name)
@@ -547,7 +608,6 @@ struct CreateCustomCollectionsView: View {
                             selectedTagID = nil
                         }
                         
-                        // Автоматически сохраняем коллекцию в файлы
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     }) {
@@ -710,23 +770,10 @@ struct CreateCustomCollectionsView: View {
                 .frame(width: 12, height: 12)
             
             if selectedTagID == tag.id && isEditingName {
-                FocusAwareTextField(text: $editingName, placeholder: ^String.Titles.tagName)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(NSColor.windowBackgroundColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.blue.opacity(0.5), lineWidth: 1)
-                            )
-                    )
-                    .onAppear {
-                        editingName = tag.name
-                    }
-                    .onSubmit {
+                AutoFocusTextField(
+                    text: $editingName,
+                    placeholder: ^String.Titles.tagName,
+                    onSubmit: {
                         tagFormData.name = editingName
                         let success = collectionManager.updateTag(
                             id: tag.id,
@@ -747,13 +794,27 @@ struct CreateCustomCollectionsView: View {
                             selectedTagID = updatedTag.id
                             tagFormData = TagFormData(from: updatedTag)
                             
-                            // Автоматически сохраняем коллекцию в файлы
                             _ = collectionManager.saveCollectionToFiles()
                             NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                         }
                         
                         isEditingName = false
                     }
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(NSColor.windowBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.blue.opacity(0.5), lineWidth: 1)
+                        )
+                )
+                .onAppear {
+                    editingName = tag.name
+                }
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tag.name)
@@ -799,7 +860,6 @@ struct CreateCustomCollectionsView: View {
                             selectedTagID = nil
                         }
                         
-                        // Автоматически сохраняем коллекцию в файлы
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     }) {
@@ -867,26 +927,28 @@ struct CreateCustomCollectionsView: View {
                 .frame(width: 16)
             
             if selectedLabelGroupID == group.id && isEditingGroupName {
-                FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(NSColor.windowBackgroundColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.green.opacity(0.5), lineWidth: 1)
-                            )
-                    )
-                    .onAppear {
-                        newGroupName = group.name
-                    }
-                    .onSubmit {
+                AutoFocusTextField(
+                    text: $newGroupName,
+                    placeholder: ^String.Titles.groupName,
+                    onSubmit: {
                         collectionManager.renameLabelGroup(id: group.id, newName: newGroupName)
                         isEditingGroupName = false
                     }
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(NSColor.windowBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.green.opacity(0.5), lineWidth: 1)
+                        )
+                )
+                .onAppear {
+                    newGroupName = group.name
+                }
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.name)
@@ -921,7 +983,6 @@ struct CreateCustomCollectionsView: View {
                             selectedLabelID = nil
                         }
                         
-                        // Автоматически сохраняем коллекцию в файлы
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     }) {
@@ -1057,23 +1118,10 @@ struct CreateCustomCollectionsView: View {
                 .frame(width: 16)
             
             if selectedLabelID == label.id && isEditingName {
-                FocusAwareTextField(text: $editingName, placeholder: ^String.Titles.renameLabelPlaceholder)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(NSColor.windowBackgroundColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.green.opacity(0.5), lineWidth: 1)
-                            )
-                    )
-                    .onAppear {
-                        editingName = label.name
-                    }
-                    .onSubmit {
+                AutoFocusTextField(
+                    text: $editingName,
+                    placeholder: ^String.Titles.renameLabelPlaceholder,
+                    onSubmit: {
                         collectionManager.updateLabel(
                             id: label.id,
                             name: editingName,
@@ -1081,12 +1129,26 @@ struct CreateCustomCollectionsView: View {
                         )
                         newLabelName = editingName
                         
-                        // Автоматически сохраняем коллекцию в файлы
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                         
                         isEditingName = false
                     }
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(NSColor.windowBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.green.opacity(0.5), lineWidth: 1)
+                        )
+                )
+                .onAppear {
+                    editingName = label.name
+                }
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label.name)
@@ -1123,7 +1185,6 @@ struct CreateCustomCollectionsView: View {
                             selectedLabelID = nil
                         }
                         
-                        // Автоматически сохраняем коллекцию в файлы
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     }) {
@@ -1280,7 +1341,6 @@ struct CreateCustomCollectionsView: View {
     var fieldMapDetailView: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Header
                 VStack(spacing: 12) {
                     HStack {
                         Image(systemName: "map.fill")
@@ -1298,7 +1358,6 @@ struct CreateCustomCollectionsView: View {
                 }
                 
                 if let playField = collectionManager.playField {
-                    // Field Map Image Section
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text(^String.Titles.fieldMap)
@@ -1307,7 +1366,6 @@ struct CreateCustomCollectionsView: View {
                             
                             Spacer()
                             
-                            // Action Buttons
                             HStack(spacing: 12) {
                                 Button(action: {
                                     activeTagsOnTimelines = countActiveMapTagsOnTimelines()
@@ -1343,7 +1401,6 @@ struct CreateCustomCollectionsView: View {
                             }
                         }
                         
-                        // Image Display
                         VStack(spacing: 16) {
                             if let imageBookmark = collectionManager.playField?.imageBookmark,
                                let imageURL = createImageUrl(imageBookmark),
@@ -1391,7 +1448,6 @@ struct CreateCustomCollectionsView: View {
                             }
                         }
                         
-                        // Dimensions Settings
                         VStack(alignment: .leading, spacing: 16) {
                             Text(^String.Titles.fieldDimensions)
                                 .font(.subheadline)
@@ -1399,10 +1455,9 @@ struct CreateCustomCollectionsView: View {
                                 .foregroundColor(.secondary)
                             
                             HStack(spacing: 24) {
-                                // Width Setting
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack {
-                                        Image(systemName: "arrow.left.and.right")
+                                        Image(systemName: "arrow.up.and.down")
                                             .foregroundColor(.blue)
                                         Text(^String.Titles.collectionsFieldWidth)
                                             .font(.subheadline)
@@ -1434,10 +1489,9 @@ struct CreateCustomCollectionsView: View {
                                         )
                                 )
                                 
-                                // Height Setting
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack {
-                                        Image(systemName: "arrow.up.and.down")
+                                        Image(systemName: "arrow.left.and.right")
                                             .foregroundColor(.green)
                                         Text(^String.Titles.collectionsFieldHeight)
                                             .font(.subheadline)
@@ -1484,7 +1538,6 @@ struct CreateCustomCollectionsView: View {
                     )
                     
                 } else {
-                    // Empty State
                     VStack(spacing: 24) {
                         VStack(spacing: 16) {
                             Image(systemName: "map")
@@ -1528,7 +1581,6 @@ struct CreateCustomCollectionsView: View {
                     )
                 }
                 
-                // Tags for Map Section
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Image(systemName: "tag.fill")
@@ -1579,7 +1631,6 @@ struct CreateCustomCollectionsView: View {
         }
     }
     
-    // Computed properties for tag counts
     private var allTagsForMap: [Tag] {
         collectionManager.tags
     }
@@ -1604,7 +1655,6 @@ struct CreateCustomCollectionsView: View {
                     
                     if !groupTags.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            // Group Header
                             HStack {
                                 Image(systemName: "folder.fill")
                                     .foregroundColor(.blue)
@@ -1628,7 +1678,6 @@ struct CreateCustomCollectionsView: View {
                                     )
                             }
                             
-                            // Tags in Group
                             LazyVGrid(columns: [
                                 GridItem(.flexible(), spacing: 8),
                                 GridItem(.flexible(), spacing: 8)
@@ -1657,7 +1706,6 @@ struct CreateCustomCollectionsView: View {
 
     private func tagMapToggleCard(tag: Tag) -> some View {
         VStack(spacing: 12) {
-            // Tag Color and Name
             HStack {
                 Circle()
                     .fill(Color(hex: tag.color))
@@ -1671,7 +1719,6 @@ struct CreateCustomCollectionsView: View {
                 Spacer()
             }
             
-            // Description (if available)
             if !tag.description.isEmpty {
                 Text(tag.description)
                     .font(.caption)
@@ -1681,7 +1728,6 @@ struct CreateCustomCollectionsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             
-            // Toggle
             HStack {
                 Text(^String.Titles.useOnMap)
                     .font(.caption)
@@ -1784,7 +1830,6 @@ struct CreateCustomCollectionsView: View {
     func tagDetailView(tag: Tag) -> some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Header
                 VStack(spacing: 12) {
                     HStack {
                         Circle()
@@ -1801,14 +1846,12 @@ struct CreateCustomCollectionsView: View {
                     Divider()
                 }
                 
-                // Basic Information Section
                 VStack(alignment: .leading, spacing: 16) {
                     Text(^String.Titles.basicInformation)
                         .font(.headline)
                         .foregroundColor(.primary)
                     
                     VStack(spacing: 16) {
-                        // Name Field
                         VStack(alignment: .leading, spacing: 8) {
                             Text(^String.Titles.name)
                                 .font(.subheadline)
@@ -1819,7 +1862,6 @@ struct CreateCustomCollectionsView: View {
                                 .textFieldStyle(ModernNewTextFieldStyle())
                         }
                         
-                        // Description Field
                         VStack(alignment: .leading, spacing: 8) {
                             Text(^String.Titles.description)
                                 .font(.subheadline)
@@ -1839,7 +1881,6 @@ struct CreateCustomCollectionsView: View {
                                 )
                         }
                         
-                        // Color Picker
                         VStack(alignment: .leading, spacing: 8) {
                             Text(^String.Titles.color)
                                 .font(.subheadline)
@@ -1869,84 +1910,81 @@ struct CreateCustomCollectionsView: View {
                     )
                 }
                 
-                // Time Settings Section
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(^String.Titles.timeSettings)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    VStack(spacing: 20) {
-                        // Time Before
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(^String.Titles.collectionsTagTimeBefore)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.secondary)
-                                
-                                Spacer()
-                                
-                                Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.blue)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.blue.opacity(0.1))
-                                    )
-                            }
-                            
-                            Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
-                                .accentColor(.blue)
-                        }
+                if !tagFormData.isInterval {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(^String.Titles.timeSettings)
+                            .font(.headline)
+                            .foregroundColor(.primary)
                         
-                        // Time After
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(^String.Titles.collectionsTagTimeAfter)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.secondary)
+                        VStack(spacing: 20) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(^String.Titles.collectionsTagTimeBefore)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.blue)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color.blue.opacity(0.1))
+                                        )
+                                }
                                 
-                                Spacer()
-                                
-                                Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.blue)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.blue.opacity(0.1))
-                                    )
+                                Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
+                                    .accentColor(.blue)
                             }
                             
-                            Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
-                                .accentColor(.blue)
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(^String.Titles.collectionsTagTimeAfter)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.blue)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color.blue.opacity(0.1))
+                                        )
+                                }
+                                
+                                Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
+                                    .accentColor(.blue)
+                            }
                         }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(NSColor.windowBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                )
+                        )
                     }
-                    .padding(20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(NSColor.windowBackgroundColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                            )
-                    )
                 }
                 
-                // Settings Section
                 VStack(alignment: .leading, spacing: 16) {
                     Text(^String.Titles.additionalSettings)
                         .font(.headline)
                         .foregroundColor(.primary)
                     
                     VStack(spacing: 16) {
-                        // Map Toggle
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(^String.Titles.collectionsTagUseWithMap)
@@ -1975,7 +2013,6 @@ struct CreateCustomCollectionsView: View {
                                 )
                         )
                         
-                        // Interval Toggle
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(^String.Titles.collectionsTagIsInterval)
@@ -1991,6 +2028,12 @@ struct CreateCustomCollectionsView: View {
                             
                             Toggle("", isOn: $tagFormData.isInterval)
                                 .toggleStyle(SwitchToggleStyle(tint: .blue))
+                                .onChange(of: tagFormData.isInterval) { newValue in
+                                    if newValue {
+                                        tagFormData.defaultTimeBefore = 0
+                                        tagFormData.defaultTimeAfter = 0
+                                    }
+                                }
                         }
                         .padding(16)
                         .background(
@@ -2013,7 +2056,6 @@ struct CreateCustomCollectionsView: View {
                     )
                 }
                 
-                // Hotkey Section
                 VStack(alignment: .leading, spacing: 16) {
                     Text(^String.Titles.hotkeys)
                         .font(.headline)
@@ -2095,7 +2137,6 @@ struct CreateCustomCollectionsView: View {
                     )
                 }
                 
-                // Label Groups Section
                 VStack(alignment: .leading, spacing: 16) {
                     Text(^String.Titles.collectionsLabelLabelGroups)
                         .font(.headline)
@@ -2229,7 +2270,6 @@ struct CreateCustomCollectionsView: View {
                     )
                 }
                 
-                // Save Button
                 Button(^String.Titles.collectionsButtonSaveChanges) {
                     let success = collectionManager.updateTag(
                         id: tag.id,
@@ -2250,7 +2290,6 @@ struct CreateCustomCollectionsView: View {
                         selectedTagID = updatedTag.id
                         tagFormData = TagFormData(from: updatedTag)
                         
-                        // Автоматически сохраняем коллекцию в файлы
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     }
@@ -2274,7 +2313,6 @@ struct CreateCustomCollectionsView: View {
     func labelDetailView(label: Label) -> some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Header
                 VStack(spacing: 12) {
                     HStack {
                         Image(systemName: "label.fill")
@@ -2291,14 +2329,12 @@ struct CreateCustomCollectionsView: View {
                     Divider()
                 }
                 
-                // Basic Information Section
                 VStack(alignment: .leading, spacing: 16) {
                     Text(^String.Titles.basicInformation)
                         .font(.headline)
                         .foregroundColor(.primary)
                     
                     VStack(spacing: 16) {
-                        // Name Field
                         VStack(alignment: .leading, spacing: 8) {
                             Text(^String.Titles.name)
                                 .font(.subheadline)
@@ -2309,7 +2345,6 @@ struct CreateCustomCollectionsView: View {
                                 .textFieldStyle(ModernNewTextFieldStyle())
                         }
                         
-                        // Description Field
                         VStack(alignment: .leading, spacing: 8) {
                             Text(^String.Titles.description)
                                 .font(.subheadline)
@@ -2340,7 +2375,6 @@ struct CreateCustomCollectionsView: View {
                     )
                 }
                 
-                // Related Tags Section
                 VStack(alignment: .leading, spacing: 16) {
                     Text(^String.Titles.relatedTags)
                         .font(.headline)
@@ -2420,7 +2454,6 @@ struct CreateCustomCollectionsView: View {
                     }
                 }
                 
-                // Save Button
                 Button(^String.Titles.collectionsButtonSaveChanges) {
                     if let index = collectionManager.labels.firstIndex(where: { $0.id == label.id }) {
                         collectionManager.labels[index] = Label(
@@ -2429,7 +2462,6 @@ struct CreateCustomCollectionsView: View {
                             description: newLabelDescription
                         )
                         
-                        // Автоматически сохраняем коллекцию в файлы
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     }
@@ -2462,14 +2494,12 @@ struct CreateCustomCollectionsView: View {
                     Divider()
                 }
                 
-                // Basic Information Section
                 VStack(alignment: .leading, spacing: 16) {
                     Text(^String.Titles.basicInformation)
                         .font(.headline)
                         .foregroundColor(.primary)
                     
                     VStack(spacing: 16) {
-                        // Name Field
                         VStack(alignment: .leading, spacing: 8) {
                             Text(^String.Titles.eventName)
                                 .font(.subheadline)
@@ -2480,14 +2510,13 @@ struct CreateCustomCollectionsView: View {
                                 .textFieldStyle(ModernNewTextFieldStyle())
                         }
                         
-                        // Event Description
                         VStack(alignment: .leading, spacing: 8) {
                             Text(^String.Titles.description)
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(.secondary)
                             
-                            Text("Общие события позволяют быстро добавлять повторяющиеся события на временную шкалу без необходимости каждый раз создавать новые теги.")
+                            Text(^String.Titles.commonEventsDescription)
                                 .font(.body)
                                 .foregroundColor(.secondary)
                                 .padding(16)
@@ -2512,9 +2541,7 @@ struct CreateCustomCollectionsView: View {
                     )
                 }
                 
-                // Action Buttons
                 VStack(spacing: 16) {
-                    // Save Button
                     Button(^String.Titles.collectionsButtonSaveChanges) {
                         if let index = collectionManager.timeEvents.firstIndex(where: { $0.id == event.id }) {
                             collectionManager.timeEvents[index] = TimeEvent(
@@ -2522,7 +2549,6 @@ struct CreateCustomCollectionsView: View {
                                 name: newTimeEventName
                             )
                             
-                            // Автоматически сохраняем коллекцию в файлы
                             _ = collectionManager.saveCollectionToFiles()
                             NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                         }
@@ -2530,12 +2556,9 @@ struct CreateCustomCollectionsView: View {
                     .buttonStyle(ModernPrimaryButtonStyle())
                     .frame(maxWidth: .infinity)
                     
-                    // Delete Button
                     Button(^String.Titles.deleteEvent) {
                         collectionManager.removeTimeEvent(id: event.id)
                         selectedTimeEventID = nil
-                        
-                        // Автоматически сохраняем коллекцию в файлы
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     }
@@ -2563,7 +2586,7 @@ struct CreateCustomCollectionsView: View {
             .padding(.top, 20)
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("Название группы")
+                Text(^String.Titles.groupNameLabel)
                     .font(.headline)
                     .foregroundColor(.primary)
                 
@@ -2595,7 +2618,6 @@ struct CreateCustomCollectionsView: View {
                 Button(^String.Titles.collectionsButtonAdd) {
                     let _ = collectionManager.createTagGroup(name: newGroupName)
                     
-                    // Автоматически сохраняем коллекцию в файлы
                     _ = collectionManager.saveCollectionToFiles()
                     NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     
@@ -2634,7 +2656,7 @@ struct CreateCustomCollectionsView: View {
             .padding(.top, 20)
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("Название группы")
+                Text(^String.Titles.groupNameLabel)
                     .font(.headline)
                     .foregroundColor(.primary)
                 
@@ -2666,7 +2688,6 @@ struct CreateCustomCollectionsView: View {
                 Button(^String.Titles.collectionsButtonAdd) {
                     let _ = collectionManager.createLabelGroup(name: newGroupName)
                     
-                    // Автоматически сохраняем коллекцию в файлы
                     _ = collectionManager.saveCollectionToFiles()
                     NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                     
@@ -2691,11 +2712,12 @@ struct CreateCustomCollectionsView: View {
     }
     
     func addGroupSheet(title: String, onAdd: @escaping () -> Void) -> some View {
-        VStack(spacing: 24) {
+        let isLabelGroup = title.localizedCaseInsensitiveContains("label")
+        return VStack(spacing: 24) {
             VStack(spacing: 8) {
-                Image(systemName: title.contains("лейблов") ? "label.fill" : "tag.fill")
+                Image(systemName: isLabelGroup ? "label.fill" : "tag.fill")
                     .font(.system(size: 40))
-                    .foregroundColor(title.contains("лейблов") ? .green : .blue)
+                    .foregroundColor(isLabelGroup ? .green : .blue)
                 
                 Text(title)
                     .font(.title2)
@@ -2705,7 +2727,7 @@ struct CreateCustomCollectionsView: View {
             .padding(.top, 20)
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("Название группы")
+                Text(^String.Titles.groupNameLabel)
                     .font(.headline)
                     .foregroundColor(.primary)
                 
@@ -2727,7 +2749,7 @@ struct CreateCustomCollectionsView: View {
             HStack(spacing: 16) {
                 Button(^String.Titles.collectionsButtonCancel) {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        if title.contains("лейблов") {
+                        if isLabelGroup {
                             showAddLabelGroupSheet = false
                         } else {
                             showAddTagGroupSheet = false
@@ -2740,7 +2762,7 @@ struct CreateCustomCollectionsView: View {
                 Button(^String.Titles.collectionsButtonAdd) {
                     onAdd()
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        if title.contains("лейблов") {
+                        if isLabelGroup {
                             showAddLabelGroupSheet = false
                         } else {
                             showAddTagGroupSheet = false
@@ -2764,7 +2786,6 @@ struct CreateCustomCollectionsView: View {
     
     func addTagSheet() -> some View {
         VStack(spacing: 0) {
-            // Header
             VStack(spacing: 16) {
                 HStack {
                     Image(systemName: "tag.fill")
@@ -2783,17 +2804,14 @@ struct CreateCustomCollectionsView: View {
             .padding(24)
             .background(Color(NSColor.windowBackgroundColor))
             
-            // Content
             ScrollView {
-                VStack(spacing: 24) {
-                    // Basic Information
+                VStack(spacing: 24) {ё
                     VStack(alignment: .leading, spacing: 16) {
                         Text(^String.Titles.basicInformation)
                             .font(.headline)
                             .foregroundColor(.primary)
                         
                         VStack(spacing: 16) {
-                            // Name Field
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(^String.Titles.name)
                                     .font(.subheadline)
@@ -2804,7 +2822,6 @@ struct CreateCustomCollectionsView: View {
                                     .textFieldStyle(ModernNewTextFieldStyle())
                             }
                             
-                            // Description Field
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(^String.Titles.description)
                                     .font(.subheadline)
@@ -2824,7 +2841,6 @@ struct CreateCustomCollectionsView: View {
                                     )
                             }
                             
-                            // Color Picker
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(^String.Titles.color)
                                     .font(.subheadline)
@@ -2854,84 +2870,81 @@ struct CreateCustomCollectionsView: View {
                         )
                     }
                     
-                    // Time Settings
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(^String.Titles.timeSettings)
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        VStack(spacing: 20) {
-                            // Time Before
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text(^String.Titles.collectionsTagTimeBefore)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.secondary)
-                                    
-                                    Spacer()
-                                    
-                                    Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.blue)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(Color.blue.opacity(0.1))
-                                        )
-                                }
-                                
-                                Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
-                                    .accentColor(.blue)
-                            }
+                    if !tagFormData.isInterval {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(^String.Titles.timeSettings)
+                                .font(.headline)
+                                .foregroundColor(.primary)
                             
-                            // Time After
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text(^String.Titles.collectionsTagTimeAfter)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.secondary)
+                            VStack(spacing: 20) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Text(^String.Titles.collectionsTagTimeBefore)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.secondary)
+                                        
+                                        Spacer()
+                                        
+                                        Text("\(Int(tagFormData.defaultTimeBefore)) \(^String.Titles.collectionsTagTimeFormat)")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.blue)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 4)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .fill(Color.blue.opacity(0.1))
+                                            )
+                                    }
                                     
-                                    Spacer()
-                                    
-                                    Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.blue)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(Color.blue.opacity(0.1))
-                                        )
+                                    Slider(value: $tagFormData.defaultTimeBefore, in: 0...30, step: 1)
+                                        .accentColor(.blue)
                                 }
                                 
-                                Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
-                                    .accentColor(.blue)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Text(^String.Titles.collectionsTagTimeAfter)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.secondary)
+                                        
+                                        Spacer()
+                                        
+                                        Text("\(Int(tagFormData.defaultTimeAfter)) \(^String.Titles.collectionsTagTimeFormat)")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.blue)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 4)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .fill(Color.blue.opacity(0.1))
+                                            )
+                                    }
+                                    
+                                    Slider(value: $tagFormData.defaultTimeAfter, in: 0...30, step: 1)
+                                        .accentColor(.blue)
+                                }
                             }
+                            .padding(20)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color(NSColor.windowBackgroundColor))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
                         }
-                        .padding(20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color(NSColor.windowBackgroundColor))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
-                                )
-                        )
                     }
                     
-                    // Additional Settings
                     VStack(alignment: .leading, spacing: 16) {
                         Text(^String.Titles.additionalSettings)
                             .font(.headline)
                             .foregroundColor(.primary)
                         
                         VStack(spacing: 16) {
-                            // Interval Toggle
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(^String.Titles.collectionsTagIsInterval)
@@ -2947,6 +2960,12 @@ struct CreateCustomCollectionsView: View {
                                 
                                 Toggle("", isOn: $tagFormData.isInterval)
                                     .toggleStyle(SwitchToggleStyle(tint: .blue))
+                                    .onChange(of: tagFormData.isInterval) { newValue in
+                                        if newValue {
+                                            tagFormData.defaultTimeBefore = 0
+                                            tagFormData.defaultTimeAfter = 0
+                                        }
+                                    }
                             }
                             .padding(16)
                             .background(
@@ -2958,7 +2977,6 @@ struct CreateCustomCollectionsView: View {
                                     )
                             )
                             
-                            // Hotkey
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(^String.Titles.collectionsTagHotkey)
                                     .font(.subheadline)
@@ -3039,7 +3057,6 @@ struct CreateCustomCollectionsView: View {
                 .padding(24)
             }
             
-            // Footer
             VStack(spacing: 0) {
                 Divider()
                 
@@ -3081,7 +3098,6 @@ struct CreateCustomCollectionsView: View {
                                 )
                             }
                             
-                            // Автоматически сохраняем коллекцию в файлы
                             _ = collectionManager.saveCollectionToFiles()
                             NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                             
@@ -3112,7 +3128,6 @@ struct CreateCustomCollectionsView: View {
     
     func addLabelSheet() -> some View {
         VStack(spacing: 0) {
-            // Header
             VStack(spacing: 16) {
                 HStack {
                     Image(systemName: "label.fill")
@@ -3131,7 +3146,6 @@ struct CreateCustomCollectionsView: View {
             .padding(24)
             .background(Color(NSColor.windowBackgroundColor))
             
-            // Content
             ScrollView {
                 VStack(spacing: 24) {
                     VStack(alignment: .leading, spacing: 16) {
@@ -3140,7 +3154,6 @@ struct CreateCustomCollectionsView: View {
                             .foregroundColor(.primary)
                         
                         VStack(spacing: 16) {
-                            // Name Field
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(^String.Titles.name)
                                     .font(.subheadline)
@@ -3151,7 +3164,6 @@ struct CreateCustomCollectionsView: View {
                                     .textFieldStyle(ModernNewTextFieldStyle())
                             }
                             
-                            // Description Field
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(^String.Titles.description)
                                     .font(.subheadline)
@@ -3171,14 +3183,13 @@ struct CreateCustomCollectionsView: View {
                                     )
                             }
                             
-                            // Info
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Информация")
+                                Text(^String.Titles.informationLabel)
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                                     .foregroundColor(.secondary)
                                 
-                                Text("Лейблы используются для категоризации и дополнительной маркировки тегов. Они помогают организовать события по типам или важности.")
+                                Text(^String.Titles.labelsDescriptionText)
                                     .font(.body)
                                     .foregroundColor(.secondary)
                                     .padding(16)
@@ -3206,7 +3217,6 @@ struct CreateCustomCollectionsView: View {
                 .padding(24)
             }
             
-            // Footer
             VStack(spacing: 0) {
                 Divider()
                 
@@ -3227,7 +3237,6 @@ struct CreateCustomCollectionsView: View {
                                 inGroup: groupID
                             )
                             
-                            // Автоматически сохраняем коллекцию в файлы
                             _ = collectionManager.saveCollectionToFiles()
                             NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                             
@@ -3254,7 +3263,6 @@ struct CreateCustomCollectionsView: View {
     
     func addTimeEventSheet() -> some View {
         VStack(spacing: 0) {
-            // Header
             VStack(spacing: 16) {
                 HStack {
                     Image(systemName: "clock.fill")
@@ -3273,7 +3281,6 @@ struct CreateCustomCollectionsView: View {
             .padding(24)
             .background(Color(NSColor.windowBackgroundColor))
             
-            // Content
             ScrollView {
                 VStack(spacing: 24) {
                     VStack(alignment: .leading, spacing: 16) {
@@ -3282,7 +3289,6 @@ struct CreateCustomCollectionsView: View {
                             .foregroundColor(.primary)
                         
                         VStack(spacing: 16) {
-                            // Name Field
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(^String.Titles.eventName)
                                     .font(.subheadline)
@@ -3293,14 +3299,13 @@ struct CreateCustomCollectionsView: View {
                                     .textFieldStyle(ModernNewTextFieldStyle())
                             }
                             
-                            // Info
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Информация")
+                                Text(^String.Titles.informationLabel)
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                                     .foregroundColor(.secondary)
                                 
-                                Text("Общие события позволяют быстро добавлять повторяющиеся события на временную шкалу без необходимости каждый раз создавать новые теги. Это удобно для часто используемых событий.")
+                                Text(^String.Titles.commonEventsDescriptionExtended)
                                     .font(.body)
                                     .foregroundColor(.secondary)
                                     .padding(16)
@@ -3328,7 +3333,6 @@ struct CreateCustomCollectionsView: View {
                 .padding(24)
             }
             
-            // Footer
             VStack(spacing: 0) {
                 Divider()
                 
@@ -3343,7 +3347,6 @@ struct CreateCustomCollectionsView: View {
                     Button(^String.Titles.collectionsButtonAdd) {
                         collectionManager.createTimeEvent(name: newTimeEventName)
                         
-                        // Автоматически сохраняем коллекцию в файлы
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                         
@@ -3365,9 +3368,7 @@ struct CreateCustomCollectionsView: View {
                 .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
         )
     }
-    
-    // MARK: - Search Functions
-    
+        
     var filteredTagGroups: [TagGroup] {
         if searchText.isEmpty {
             return collectionManager.tagGroups
@@ -3446,8 +3447,6 @@ struct CreateCustomCollectionsView: View {
     }
 }
 
-// MARK: - Modern Button Styles
-
 struct ModernPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -3514,8 +3513,6 @@ struct ModernDestructiveButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Modern Text Field Style
-
 struct ModernNewTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
@@ -3531,8 +3528,6 @@ struct ModernNewTextFieldStyle: TextFieldStyle {
             .font(.body)
     }
 }
-
-// MARK: - Legacy Button Styles (for compatibility)
 
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

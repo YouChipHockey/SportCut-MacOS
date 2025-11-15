@@ -46,7 +46,6 @@ class TimelineDataManager: ObservableObject {
         lines[lineIndex].stamps.removeAll(where: { $0.id == stampID })
         updateTimelines()
         
-        // Notify that stamp counts may have changed
         NotificationCenter.default.post(name: .stampCountsChanged, object: nil)
     }
     
@@ -137,7 +136,6 @@ class TimelineDataManager: ObservableObject {
         
         updateTimelines()
         
-        // Notify that stamp counts may have changed
         NotificationCenter.default.post(name: .stampCountsChanged, object: nil)
     }
     

@@ -39,7 +39,6 @@ class WindowsManager: NSObject {
         screenshotsWindow?.window?.delegate = nil
         fieldMapConfigurationWindow = nil
         
-        // Останавливаем плеер в viewer window перед закрытием
         NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
         viewerWindow?.close()
         viewerWindow = nil
@@ -98,14 +97,11 @@ class WindowsManager: NSObject {
     
     func setMarkupMode(_ mode: MarkupMode) {
         MarkupMode.current = mode
-        if mode == .tagBased {
-            print("Tag-based markup mode activated. Each tag will have its own timeline.")
-        } else {
-            print("Standard markup mode activated. Full timeline editing enabled.")
-        }
     }
     
     func openCustomCollectionsWindow(withExistingCollection existingCollection: CollectionBookmark? = nil) {
+        VideoPlayerManager.shared.player?.pause()
+        
         let view: AnyView
         
         if let existingCollection = existingCollection {
@@ -166,8 +162,18 @@ class WindowsManager: NSObject {
     
     func openVideo(id: String) {
         currentVideoId = id
-        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == id }) else { return }
-        guard let file = filesFile.url, isClosing else { return }
+        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == id }) else { 
+            return
+        }
+        guard let file = filesFile.url, isClosing else { 
+            return
+        }
+        
+        let timelineNames = filesFile.videoData.timelines.map { $0.name }
+        let uniqueNames = Set(timelineNames)
+        if timelineNames.count != uniqueNames.count {
+            let nameCounts = Dictionary(grouping: filesFile.videoData.timelines, by: { $0.name }).mapValues { $0.count }
+        }
         
         UserDefaults.standard.set("", forKey: "editingStampLineID")
         UserDefaults.standard.set("", forKey: "editingStampID")
@@ -319,8 +325,21 @@ class ActiveWindowManager {
     func isAllowedWindowActive() -> Bool {
         guard let activeWindow = currentActiveWindow else { return false }
         
-        return allowedWindowControllers.contains { windowController in
+        let isDirectlyAllowed = allowedWindowControllers.contains { windowController in
             windowController.window == activeWindow
         }
+        
+        if isDirectlyAllowed {
+            return true
+        }
+        if activeWindow.isSheet {
+            if let sheetParent = activeWindow.sheetParent {
+                return allowedWindowControllers.contains { windowController in
+                    windowController.window == sheetParent
+                }
+            }
+        }
+        
+        return false
     }
 }

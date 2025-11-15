@@ -2,12 +2,12 @@
   "labels": [
       {
           "id": "2899bfb3-0a40-4afa-a430-d97bf31dcae8",
-          "name": "On the rush",
+          "name": "Off rush",
           "description": ""
       },
       {
           "id": "0d05f06e-414b-43ad-bdd6-724e6b25e199",
-          "name": "Positional",
+          "name": "OZ possession",
           "description": ""
       },
       {
@@ -17,12 +17,12 @@
       },
       {
           "id": "3e16b05f-77a6-4927-bb63-4946f31e9abc",
-          "name": "Forechecking",
+          "name": "Forecheck",
           "description": ""
       },
       {
           "id": "8342c976-7ab0-415d-b930-2bf913ca3f26",
-          "name": "2+ breakaway",
+          "name": "Net-front traffic",
           "description": ""
       },
       {
@@ -77,12 +77,12 @@
       },
       {
           "id": "8b3d6cb9-cce0-4884-a9c2-22a9c20ac550",
-          "name": "Through pass",
+          "name": "Pass in",
           "description": ""
       },
       {
           "id": "89ac25bc-e300-45fb-99c7-6d11c49b4e1f",
-          "name": "Carry-in",
+          "name": "Carry in",
           "description": ""
       },
       {
@@ -117,17 +117,17 @@
       },
       {
           "id": "48c98a8e-49ad-434e-9da6-c492d1a2b4c8",
-          "name": "In defense",
+          "name": "D-zone",
           "description": ""
       },
       {
           "id": "48c98a8e-49ad-434e-9da6-c492d1a2b4c7",
-          "name": "In neutral",
+          "name": "N-zone",
           "description": ""
       },
       {
           "id": "def9cfb6-f056-41c5-9db5-4f68dfded1ca",
-          "name": "In offense",
+          "name": "O-zone",
           "description": ""
       },
       {
@@ -142,27 +142,27 @@
       },
       {
           "id": "cbd0b8f2-f3f7-42c3-ad26-858b0981be68",
-          "name": "Breakout pass",
+          "name": "Pass out",
           "description": ""
       },
       {
           "id": "eb81fdb6-ae5d-4410-b148-0a65d5344b9d",
-          "name": "Carry breakout",
+          "name": "Carry out",
           "description": ""
       },
       {
           "id": "2510e2b8-6cc9-4360-9859-e28e8b056843",
-          "name": "Exit under pressure",
+          "name": "Breakout",
           "description": ""
       },
       {
           "id": "5153a28a-8387-4372-ab7e-d02f7e135fa5",
-          "name": "Regroup breakout",
+          "name": "DZ regroup",
           "description": ""
       },
       {
           "id": "bbac12fc-8cdb-4c02-b642-a24d5cbcf8aa",
-          "name": "From zone faceoff",
+          "name": "Off DZ faceoff",
           "description": ""
       },
       {
@@ -182,12 +182,12 @@
       },
       {
           "id": "46eebb8e-96b3-4ee9-96e6-6fe36fc38c08",
-          "name": "Breakout under pressur",
+          "name": "Breakout",
           "description": ""
       },
       {
           "id": "e650df69-2fd4-4f11-8ee3-661dab0a1c76",
-          "name": "Regroup breakout",
+          "name": "DZ regroup",
           "description": ""
       },
       {
@@ -222,7 +222,7 @@
       },
       {
           "id": "e81e9b48-df78-48f7-831c-5ec8f9b3rt34",
-          "name": "Deffence player",
+          "name": "Defense player",
           "description": ""
       },
       {

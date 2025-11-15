@@ -100,9 +100,9 @@ enum CutsExportType {
     case allTimelines
     case tag(selectedTag: Tag)
     case timeEvent(selectedEvent: TimeEvent)
-    case label(selectedLabel: Label) // Новый тип для экспорта по лейблу
-    case tagWithLabels(selectedTag: Tag, selectedLabels: [Label]) // Тег с выбранными лейблами
-    case labelWithTags(selectedLabel: Label, selectedTags: [Tag]) // Лейбл с выбранными тегами
+    case label(selectedLabel: Label) 
+    case tagWithLabels(selectedTag: Tag, selectedLabels: [Label])
+    case labelWithTags(selectedLabel: Label, selectedTags: [Tag])
 }
 
 struct ExportSegment {
@@ -110,6 +110,16 @@ struct ExportSegment {
     let lineName: String?
     let tagName: String
     let groupName: String?
+    let labels: [Label]?
+    let labelGroupName: String?
+    let selectedLabel: Label?
+}
+
+struct ExportSegmentOrganaizer {
+    let timeRange: CMTimeRange
+    let tagName: String
+    let groupName: String
+    let labels: [Label]
 }
 
 struct TimelineLine: Identifiable, Codable, Equatable {

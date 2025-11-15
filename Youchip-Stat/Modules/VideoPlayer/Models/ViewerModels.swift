@@ -10,13 +10,11 @@ import AVFoundation
 import UniformTypeIdentifiers
 import SwiftUI
 
-// MARK: - Notifications
 extension Notification.Name {
     static let playSingleTag = Notification.Name("playSingleTag")
     static let stopViewerPlayer = Notification.Name("stopViewerPlayer")
 }
 
-// MARK: - Playlist System
 class PlaylistManager: ObservableObject {
     @Published var playlists: [SavedPlaylist] = [] {
         didSet {
@@ -34,6 +32,12 @@ class PlaylistManager: ObservableObject {
     init(videoID: String) {
         self.videoID = videoID
         loadPlaylists()
+    }
+    
+    var isPlaylistModified: Bool {
+        guard let current = currentPlaylist else { return false }
+        return current.tags.count != currentTags.count ||
+               !current.tags.elementsEqual(currentTags, by: { $0.stampID == $1.stampID })
     }
     
     func createNewPlaylist() {
@@ -55,6 +59,22 @@ class PlaylistManager: ObservableObject {
         currentPlaylist = newPlaylist
     }
     
+    func updateCurrentPlaylist() {
+        guard let current = currentPlaylist, !currentTags.isEmpty else { return }
+        
+        let updatedPlaylist = SavedPlaylist(
+            id: current.id,
+            name: current.name,
+            tags: currentTags,
+            createdAt: current.createdAt
+        )
+        
+        if let index = playlists.firstIndex(where: { $0.id == current.id }) {
+            playlists[index] = updatedPlaylist
+            currentPlaylist = updatedPlaylist
+        }
+    }
+    
     func loadPlaylist(_ playlist: SavedPlaylist) {
         currentPlaylist = playlist
         currentTags = playlist.tags
@@ -64,42 +84,37 @@ class PlaylistManager: ObservableObject {
         playlists.removeAll { $0.id == playlist.id }
         if currentPlaylist?.id == playlist.id {
             createNewPlaylist()
+            NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
         }
     }
     
     func addTag(_ tag: OrganizerTag) {
         if !currentTags.contains(where: { $0.stampID == tag.stampID }) {
             currentTags.append(tag)
-            // Сбрасываем текущий плейлист при изменении
-            currentPlaylist = nil
         }
     }
     
     func removeTag(at index: Int) {
         guard index < currentTags.count else { return }
         currentTags.remove(at: index)
-        // Сбрасываем текущий плейлист при изменении
-        currentPlaylist = nil
     }
     
     func moveTag(from source: IndexSet, to destination: Int) {
         currentTags.move(fromOffsets: source, toOffset: destination)
-        // Сбрасываем текущий плейлист при изменении
-        currentPlaylist = nil
     }
     
     func clear() {
         currentTags.removeAll()
         currentPlaylist = nil
+        NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
     }
     
-    // MARK: - Persistence
     private func savePlaylists() {
         do {
             let data = try JSONEncoder().encode(playlists)
             UserDefaults.standard.set(data, forKey: playlistsKey)
         } catch {
-            print("Ошибка сохранения плейлистов: \(error)")
+            print(error)
         }
     }
     
@@ -109,7 +124,6 @@ class PlaylistManager: ObservableObject {
         do {
             playlists = try JSONDecoder().decode([SavedPlaylist].self, from: data)
         } catch {
-            print("Ошибка загрузки плейлистов: \(error)")
             playlists = []
         }
     }
@@ -131,7 +145,6 @@ struct SavedPlaylist: Identifiable, Codable {
     }
 }
 
-// MARK: - Organizer Models (Legacy - keeping for compatibility)
 class TagOrganizer: ObservableObject {
     @Published var tags: [OrganizerTag] = []
     
@@ -164,8 +177,11 @@ struct OrganizerTag: Identifiable, Equatable, Codable {
     let startTime: Double
     let duration: Double
     let color: String
+    let tagGroupName: String?
+    let labelIDs: [String]
+    let eventIDs: [String]
     
-    init(stampID: UUID, lineID: UUID, tagName: String, lineName: String, startTime: Double, duration: Double, color: String) {
+    init(stampID: UUID, lineID: UUID, tagName: String, lineName: String, startTime: Double, duration: Double, color: String, tagGroupName: String? = nil, labelIDs: [String] = [], eventIDs: [String] = []) {
         self.id = UUID()
         self.stampID = stampID
         self.lineID = lineID
@@ -174,6 +190,9 @@ struct OrganizerTag: Identifiable, Equatable, Codable {
         self.startTime = startTime
         self.duration = duration
         self.color = color
+        self.tagGroupName = tagGroupName
+        self.labelIDs = labelIDs
+        self.eventIDs = eventIDs
     }
     
     static func == (lhs: OrganizerTag, rhs: OrganizerTag) -> Bool {
@@ -181,32 +200,82 @@ struct OrganizerTag: Identifiable, Equatable, Codable {
     }
 }
 
-// MARK: - Export Mode
 enum ViewerExportMode {
     case archive
     case film
 }
 
-// MARK: - Drawing State
+enum DrawingTool {
+    case pencil
+    case eraser
+}
+
+enum DrawingLineStyle: Codable {
+    case solid
+    case dashed
+    
+    var dashPattern: [CGFloat]? {
+        switch self {
+        case .solid:
+            return nil
+        case .dashed:
+            return [10, 5]
+        }
+    }
+}
+
+class DrawingSettings: ObservableObject {
+    @Published var lineWidth: CGFloat = 3.0
+    @Published var lineStyle: DrawingLineStyle = .solid
+    @Published var color: Color = .red
+    @Published var eraserWidth: CGFloat = 20.0
+}
+
 class DrawingState: ObservableObject {
     @Published var isDrawingMode: Bool = false
+    @Published var showDrawingMenu: Bool = false
+    @Published var currentTool: DrawingTool = .pencil
     @Published var currentPath: DrawingPath = DrawingPath()
     @Published var completedPaths: [DrawingPath] = []
     @Published var currentTime: Double = 0.0
+    @Published var settings = DrawingSettings()
+    @Published var viewSize: CGSize = .zero
     
     func startNewPath(at point: CGPoint) {
-        currentPath = DrawingPath()
-        currentPath.addPoint(point)
+        if currentTool == .pencil {
+            currentPath = DrawingPath(
+                color: settings.color,
+                lineWidth: settings.lineWidth,
+                lineStyle: settings.lineStyle
+            )
+            currentPath.addPoint(point)
+        } else {
+            eraseAt(point)
+        }
     }
     
     func addPoint(_ point: CGPoint) {
-        currentPath.addPoint(point)
+        if currentTool == .pencil {
+            currentPath.addPoint(point)
+        } else {
+            eraseAt(point)
+        }
     }
     
     func finishPath() {
-        if !currentPath.points.isEmpty {
+        if currentTool == .pencil && !currentPath.points.isEmpty {
             completedPaths.append(currentPath)
             currentPath = DrawingPath()
+        }
+    }
+    
+    func eraseAt(_ point: CGPoint) {
+        let eraserRadius = settings.eraserWidth / 2
+        completedPaths.removeAll { path in
+            path.points.contains { pathPoint in
+                let distance = hypot(pathPoint.x - point.x, pathPoint.y - point.y)
+                return distance < eraserRadius
+            }
         }
     }
     
@@ -221,17 +290,27 @@ class DrawingState: ObservableObject {
 }
 
 struct DrawingPath: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     var points: [CGPoint] = []
-    let color: String = "red"
-    let lineWidth: CGFloat = 3.0
+    var colorHex: String
+    var lineWidth: CGFloat
+    var lineStyle: DrawingLineStyle
+    
+    var color: Color {
+        Color(hex: colorHex)
+    }
+    
+    init(color: Color = .red, lineWidth: CGFloat = 3.0, lineStyle: DrawingLineStyle = .solid) {
+        self.colorHex = color.toHex() ?? "FF0000"
+        self.lineWidth = lineWidth
+        self.lineStyle = lineStyle
+    }
     
     mutating func addPoint(_ point: CGPoint) {
         points.append(point)
     }
 }
 
-// MARK: - Viewer State
 class ViewerState: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var currentTime: Double = 0.0
@@ -244,10 +323,18 @@ class ViewerState: ObservableObject {
     }
 }
 
-// MARK: - Timeline Display Mode
 enum TimelineDisplayMode: String, CaseIterable {
-    case timeline = "Таймлайн"
-    case table = "Таблица"
+    case timeline
+    case table
+    
+    var localizedName: String {
+        switch self {
+        case .timeline:
+            return ^String.Titles.timelineView
+        case .table:
+            return ^String.Titles.table
+        }
+    }
     
     var icon: String {
         switch self {
@@ -259,7 +346,6 @@ enum TimelineDisplayMode: String, CaseIterable {
     }
 }
 
-// MARK: - Timeline Filter
 class TimelineFilter: ObservableObject {
     @Published var selectedTags: Set<String> = []
     @Published var selectedLabels: Set<String> = []
@@ -282,17 +368,14 @@ class TimelineFilter: ObservableObject {
             return true
         }
         
-        // Проверяем теги
         if !selectedTags.isEmpty && !selectedTags.contains(stamp.idTag) {
             return false
         }
         
-        // Проверяем лейблы
         if !selectedLabels.isEmpty && selectedLabels.isDisjoint(with: stamp.labels) {
             return false
         }
         
-        // Проверяем события
         if !selectedEvents.isEmpty && selectedEvents.isDisjoint(with: stamp.timeEvents) {
             return false
         }
@@ -301,7 +384,6 @@ class TimelineFilter: ObservableObject {
     }
 }
 
-// MARK: - Video Playlist Manager
 class VideoPlaylistManager: ObservableObject {
     @Published var currentPlaylist: [OrganizerTag] = []
     @Published var currentIndex: Int = 0
@@ -319,7 +401,6 @@ class VideoPlaylistManager: ObservableObject {
     func playPlaylist() {
         guard !currentPlaylist.isEmpty else { return }
         isPlaying = true
-        // Логика воспроизведения плейлиста будет реализована в VideoView
     }
     
     func stopPlayback() {
@@ -336,7 +417,6 @@ class VideoPlaylistManager: ObservableObject {
         currentIndex = 0
         isPlaying = true
         
-        // Отправляем уведомление для запуска воспроизведения
         NotificationCenter.default.post(name: .playSingleTag, object: tag)
     }
 }

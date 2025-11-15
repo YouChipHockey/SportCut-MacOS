@@ -13,4 +13,5 @@ extension NSNotification.Name {
     static let collectionEditorClosed = NSNotification.Name("collectionEditorClosed")
     static let markupModeChanged = NSNotification.Name("markupModeChanged")
     static let stampCountsChanged = NSNotification.Name("stampCountsChanged")
+    static let timelineStampHoverChanged = NSNotification.Name("timelineStampHoverChanged")
 }

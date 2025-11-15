@@ -38,6 +38,12 @@ struct FieldMapVisualizationView: View {
     
     @State private var displayMode: DisplayMode = .tags
     
+    private var sortedStamps: [TimelineStamp] {
+        stamps.sorted {
+            timeStringToSeconds($0.timeStart) < timeStringToSeconds($1.timeStart)
+        }
+    }
+    
     private var displayedStamps: [TimelineStamp] {
         stamps.filter { stamp in
             visibleStampIDs.contains(stamp.id) && filteredStampIDs.contains(stamp.id)
@@ -80,7 +86,6 @@ struct FieldMapVisualizationView: View {
         }
     }
     
-    // MARK: - Tag List View
         private var tagListView: some View {
             VStack {
                 Text(^String.Titles.fieldMapTitleTagsList)
@@ -127,12 +132,12 @@ struct FieldMapVisualizationView: View {
         
         private var tagListContent: some View {
             List {
-                ForEach(stamps, id: \.id) { stamp in
+                ForEach(sortedStamps, id: \.id) { stamp in
                     tagListItem(stamp)
                 }
             }
-            .listStyle(PlainListStyle()) // Use plain style for better height management
-            .environment(\.defaultMinListRowHeight, 1) // Allow rows to be as small as needed
+            .listStyle(PlainListStyle())
+            .environment(\.defaultMinListRowHeight, 1)
         }
         
         private func tagListItem(_ stamp: TimelineStamp) -> some View {
@@ -142,11 +147,11 @@ struct FieldMapVisualizationView: View {
                 tagListItemLabel(stamp)
             }
             .opacity(filteredStampIDs.contains(stamp.id) ? 1.0 : 0.6)
-            .fixedSize(horizontal: false, vertical: true) // Allow height to grow as needed
+            .fixedSize(horizontal: false, vertical: true)
         }
         
         private func tagListItemLabel(_ stamp: TimelineStamp) -> some View {
-            HStack(alignment: .top) { // Changed to .top alignment for better vertical layout
+            HStack(alignment: .top) {
                 Toggle("", isOn: Binding(
                     get: { visibleStampIDs.contains(stamp.id) },
                     set: { isVisible in
@@ -373,7 +378,6 @@ struct FieldMapVisualizationView: View {
             .padding(.horizontal)
         }
         
-        // MARK: - Map Content View
         private var mapContentView: some View {
             VStack {
                 mapHeaderView
@@ -832,11 +836,25 @@ struct FieldMapVisualizationView: View {
     
     private func assignStampNumbers() {
         let sortedStamps = stamps.sorted {
-            $0.label < $1.label
+            timeStringToSeconds($0.timeStart) < timeStringToSeconds($1.timeStart)
         }
         for (index, stamp) in sortedStamps.enumerated() {
             numberedStamps[stamp.id] = index + 1
         }
+    }
+    
+    private func timeStringToSeconds(_ timeString: String) -> Double {
+        let components = timeString.split(separator: ":").compactMap { Double($0) }
+        
+        if components.count == 3 {
+            return components[0] * 3600 + components[1] * 60 + components[2]
+        } else if components.count == 2 {
+            return components[0] * 60 + components[1]
+        } else if components.count == 1 {
+            return components[0]
+        }
+        
+        return 0
     }
     
     private func updateFilteredStamps() {
@@ -845,6 +863,7 @@ struct FieldMapVisualizationView: View {
         } else {
             filteredStampIDs = Set(stamps.map { $0.id })
         }
+        assignStampNumbers()
     }
     
     private func initializeVisibility() {

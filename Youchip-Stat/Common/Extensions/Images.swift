@@ -7,9 +7,6 @@
 
 import SwiftUI
 
-// Some icons are used from SF symbols (available since iOS 13), some of them are available only in iOS 14.
-// Therefore, icons available only in iOS 14 are added to assets with names as in SF symbols.
-// In iOS 14 they will be initialized from SF symbols, and in iOS 13 from assets.
 enum AppImage: String {
     
     // System Images

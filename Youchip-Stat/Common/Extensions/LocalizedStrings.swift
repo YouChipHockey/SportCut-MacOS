@@ -15,6 +15,7 @@ extension String {
     
     enum Titles: String {
         case cancelButtonTitle
+        case deleteButtonTitle
         case fullControlButtonExportLabels
         case saveButtonTitle
         case closeButtonTitle
@@ -461,6 +462,160 @@ extension String {
         case workingCopyDescription
         case applyChanges
         case unsaved
+        
+        case projectImportTitle
+        case projectImportTeam1
+        case projectImportTeam2
+        case projectImportScore
+        case projectImportCreationDate
+        case projectImportTimelinesCount
+        case projectImportCustomName
+        case projectImportVideoBinding
+        case projectImportChangeVideo
+        case projectImportSelectVideoPrompt
+        case projectImportSelectVideo
+        case projectImportCreateWithoutVideo
+        case projectImportCreateProject
+        case selectNewVideo
+        case warning
+        case playlists
+        case load
+        case currentUnsaved
+        case newPlaylist
+        case tagsCountNew
+        case savePlaylist
+        case clearPlaylist
+        case exportAsArchive
+        case exportAsFilm
+        case exportPlaylist
+        case pause
+        case play
+        case playlistEmpty
+        case dragTagsFromTimeline
+        case deletePlaylistQuestion
+        case confirmDeletePlaylist
+        case drawingTools
+        case clearDrawing
+        case saveScreenshot
+        case noVideoToPlay
+        case addTagsToOrganizer
+        case pressPlayButton
+        case lineWidth
+        case pixels
+        case lineStyleDrawing
+        case normal
+        case dashed
+        case selectColor
+        case eraserWidth
+        case drawingSettings
+        case pencil
+        case eraser
+        case settings
+        case screenshotSaved
+        case errorCreatingScreenshot
+        case view
+        case simpleReport
+        case timeline
+        case duration
+        case addToOrganizer
+        case moveAll
+        case addAll
+        case filter
+        case filterTimestamps
+        case clearFilters
+        case decreaseZoom
+        case increaseZoom
+        case filterTimestampsTitle
+        case clear
+        case timelineView
+        case table
+        case solid
+        case dashedLine
+        case square
+        case diamond
+        case line
+        case trianglePlusOne
+        case wFormation
+        case pentagon
+        case arrow
+        case cross
+        case hexagon
+        case twoTwoTwo
+        case star
+        case doubleTriangle
+        case threeTwoTwo
+        case vFormation
+        case flower
+        case arrowFormation
+        case threeThreeTwo
+        case octagon
+        case doubleDiamond
+        case fortress
+        case defense
+        case attack
+        case universal
+        
+        case exportProject
+        case selectProjectSaveLocation
+        case projectExportedSuccessfully
+        case projectSavedToFile
+        case exportError
+        case failedToSaveProject
+        case selectProjectFileForImport
+        case importError
+        case failedToLoadProject
+        case videoUnavailableMessage
+        case importCollection
+        case selectCollectionFilePrompt
+        case importingCollection
+        case selectCollectionFileButton
+        case selectFile
+        case selectCollectionFile
+        case selectCollectionFileMessage
+        case selectVideoFile
+        case selectNewVideoFileMessage
+        case unknownError
+        case exporting
+        case selectPlaylist
+        case savePlaylistTitle
+        case playlistName
+        case playlistInfo
+        case error
+        case playlistAlreadyExists
+        case labelsNone
+        case labelsPrefix
+        case eventsNone
+        case eventsPrefix
+        case timeAndMoment
+        case playTag
+        case removeFromOrganizer
+        
+        case groupNameLabel
+        case informationLabel
+        case commonEventsDescription
+        case commonEventsDescriptionExtended
+        case labelsDescriptionText
+        case rebindVideo
+        case timestampsTable
+        case noTimestamps
+        case tryChangeFilters
+        case hideNumber
+        case showNumber
+        case zoneBetweenObjects
+        case lineBetweenObjects
+        case objectHighlight
+        case simpleZone
+        case testCollection
+        case testTags
+        case testTag
+        case testTagDescription
+        case testLabels
+        case testLabel
+        case testLabelDescription
+        case testEvent
+        case exportCollectionTitle
+        case selectCollectionSaveLocation
+        case timestampsCount
     }
     
 }

@@ -29,6 +29,6 @@ struct TemplateCustomization {
     var fillColor: Color = .cyan
     var lineStyle: LineStyle = .dashed
     var showMisalignedVertices: Bool = true
-    var misalignmentThreshold: CGFloat = 20 // pixels
+    var misalignmentThreshold: CGFloat = 20
     var misalignedVertexColor: Color = .red
 }

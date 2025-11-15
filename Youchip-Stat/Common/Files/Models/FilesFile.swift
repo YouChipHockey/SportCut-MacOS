@@ -36,6 +36,10 @@ struct FilesFile {
         }
     }
     
+    var isBroken: Bool {
+        return url == nil
+    }
+    
     var dateAdded: Date { url?.dateAdded ?? Date() }
     var dateOpened: Date { url?.dateOpened ?? Date() }
     var dateModified: Date { url?.dateModified  ?? Date() }
@@ -43,7 +47,15 @@ struct FilesFile {
     var isFile: Bool { !(url?.isFolder ?? true) }
     var isFolder: Bool { url?.isFolder ?? false }
     
-    var name: String { videoData.customName ?? url?.lastPathComponent ?? "" }
+    var name: String { 
+        if let customName = videoData.customName, !customName.isEmpty {
+            return customName
+        } else if let urlName = url?.lastPathComponent {
+            return urlName
+        } else {
+            return "Видео недоступно"
+        }
+    }
     var pathExtension: String { url?.pathExtension  ?? "" }
     var lastPathComponent: String { url?.lastPathComponent  ?? "" }
     var sizeString: String { url?.sizeString ?? "" }
@@ -223,8 +235,6 @@ private struct ReadableUnit {
             return String(format: format, bytes, "B")
         }
     }
-    
-    // MARK: - Helpers
     
     private func powInt(_ int: Int, raise: Int) -> Int {
         return Int(pow(Double(int), Double(raise)))

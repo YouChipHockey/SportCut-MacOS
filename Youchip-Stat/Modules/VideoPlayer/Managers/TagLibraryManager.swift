@@ -87,21 +87,16 @@ class TagLibraryManager: ObservableObject {
     private func loadBaseCollections() {
         guard let namesUrl = Bundle.main.url(forResource: "names", withExtension: "json") else { return }
         
-        // Загружаем новую структуру с языковыми коллекциями
         guard let languageCollectionsData: LanguageCollectionsData = loadJSON(url: namesUrl) else { return }
         
-        // Получаем текущий язык системы
         let currentLanguage = getSystemLanguage()
         
-        // Находим коллекции для текущего языка
         guard let currentLanguageCollection = languageCollectionsData.collections.first(where: { $0.language == currentLanguage }) else {
-            // Если коллекции для текущего языка не найдены, используем английский как fallback
             guard let fallbackCollection = languageCollectionsData.collections.first(where: { $0.language == "en" }) else { return }
             loadCollectionsForNames(fallbackCollection.names)
             return
         }
         
-        // Загружаем коллекции для текущего языка
         loadCollectionsForNames(currentLanguageCollection.names)
     }
     
@@ -149,7 +144,6 @@ class TagLibraryManager: ObservableObject {
                 }
             }
             
-            // Для отображения используем оригинальное имя без языкового суффикса
             let displayName = name
             let collection = StandardCollection(
                 name: displayName,

@@ -18,7 +18,6 @@ struct DrawableObject: Identifiable {
     var showNumber: Bool = false
     var positions: [CGPoint] = []
     
-    // Customization properties
     var edgeColor: Color = .red
     var vertexColor: Color = .red
     var fillColor: Color = .red

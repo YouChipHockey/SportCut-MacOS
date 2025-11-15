@@ -22,5 +22,10 @@ struct VideosState {
     var newFileName: String = ""
     var limitInfoText: String = ""
     var showAuthSheet: Bool = false
+    var showRebindAlert: Bool = false
+    var fileToRebind: FilesFile? = nil    
+    var showProjectImportSheet = false
+    var importedProjectData: ProjectImportModel? = nil
+    var showVideoBindingSheet = false
     
 }

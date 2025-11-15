@@ -15,65 +15,187 @@ struct OrganizerView: View {
     @State private var showSavePlaylistSheet = false
     @State private var showPlaylistMenu = false
     @State private var isExporting = false
+    @State private var showDeleteAlert = false
+    @State private var playlistToDelete: SavedPlaylist?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Text("Плейлисты")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                // Playlist selector
+            headerView
+            Divider()
+            playlistControlsView
+            Divider()
+            tagsListView
+        }
+        .sheet(isPresented: $showSavePlaylistSheet) {
+            SavePlaylistSheet(playlistManager: playlistManager)
+        }
+        .alert(^String.Titles.deletePlaylistQuestion, isPresented: $showDeleteAlert) {
+            Button(^String.Titles.cancelButtonTitle, role: .cancel) {
+                playlistToDelete = nil
+            }
+            Button(^String.Titles.deleteButtonTitle, role: .destructive) {
+                if let playlist = playlistToDelete {
+                    playlistManager.deletePlaylist(playlist)
+                    playlistToDelete = nil
+                }
+            }
+        } message: {
+            if let playlist = playlistToDelete {
+                Text(String(format: ^String.Titles.confirmDeletePlaylist, playlist.name))
+            }
+        }
+        .overlay(exportOverlayView)
+    }
+    
+    private var headerView: some View {
+        HStack {
+            Text(^String.Titles.playlists)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+            
+            Spacer()
+            
+            playlistSelectorMenu
+            saveButton
+            clearButton
+            exportButton
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+    
+    private var playlistSelectorMenu: some View {
+        Menu {
+            if playlistManager.currentPlaylist == nil && !playlistManager.currentTags.isEmpty {
+                Button(action: {
+                    showPlaylistMenu = false
+                }) {
+                    HStack {
+                        Text(^String.Titles.currentUnsaved)
+                            .foregroundColor(.orange)
+                        Spacer()
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundColor(.orange)
+                    }
+                }
+            }
+            
+            ForEach(playlistManager.playlists) { playlist in
                 Menu {
-                    // Current playlist (if unsaved)
-                    if playlistManager.currentPlaylist == nil && !playlistManager.currentTags.isEmpty {
-                        Button(action: {
-                            showPlaylistMenu = false
-                        }) {
-                            HStack {
-                                Text("Текущий (не сохранен)")
-                                    .foregroundColor(.orange)
-                                Spacer()
-                                Image(systemName: "exclamationmark.triangle")
-                                    .foregroundColor(.orange)
-                            }
-                        }
+                    Button(^String.Titles.load) {
+                        playlistManager.loadPlaylist(playlist)
+                        showPlaylistMenu = false
                     }
                     
-                    // Saved playlists
-                    ForEach(playlistManager.playlists) { playlist in
-                        Button(action: {
-                            playlistManager.loadPlaylist(playlist)
-                            showPlaylistMenu = false
-                        }) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(playlist.name)
-                                    .foregroundColor(.primary)
-                                Text("\(playlist.tagCount) тегов • \(formatDuration(playlist.duration))")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
+                    Divider()
                     
-                    if !playlistManager.playlists.isEmpty {
-                        Divider()
-                    }
-                    
-                    Button("Новый плейлист") {
-                        playlistManager.createNewPlaylist()
+                    Button(^String.Titles.deleteButtonTitle, role: .destructive) {
+                        playlistToDelete = playlist
+                        showDeleteAlert = true
                         showPlaylistMenu = false
                     }
                 } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(playlist.name)
+                            .foregroundColor(.primary)
+                        Text("\(playlist.tagCount) \(^String.Titles.tagsCountNew) • \(formatDuration(playlist.duration))")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            if !playlistManager.playlists.isEmpty {
+                Divider()
+            }
+            
+            Button(^String.Titles.newPlaylist) {
+                playlistManager.createNewPlaylist()
+                showPlaylistMenu = false
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(playlistManager.currentPlaylist?.name ?? ^String.Titles.newPlaylist)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.blue.opacity(0.1))
+            .foregroundColor(.blue)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .help(^String.Titles.selectPlaylist)
+    }
+    
+    @ViewBuilder
+    private var saveButton: some View {
+        if (!playlistManager.currentTags.isEmpty && playlistManager.currentPlaylist == nil) || playlistManager.isPlaylistModified {
+            Button(action: {
+                if playlistManager.currentPlaylist != nil {
+                    playlistManager.updateCurrentPlaylist()
+                } else {
+                    showSavePlaylistSheet = true
+                }
+            }) {
+                Image(systemName: playlistManager.currentPlaylist != nil ? "arrow.down.circle" : "plus.circle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.green)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help(playlistManager.currentPlaylist != nil ? ^String.Titles.collectionsButtonSaveChanges : ^String.Titles.savePlaylist)
+        }
+    }
+    
+    private var clearButton: some View {
+        Button(action: {
+            playlistManager.clear()
+        }) {
+            Image(systemName: "trash")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.red)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .help(^String.Titles.clearPlaylist)
+    }
+    
+    @ViewBuilder
+    private var exportButton: some View {
+        if !playlistManager.currentTags.isEmpty {
+            Menu {
+                Button(^String.Titles.exportAsArchive) {
+                    exportPlaylist(mode: .archive)
+                }
+                
+                Button(^String.Titles.exportAsFilm) {
+                    exportPlaylist(mode: .film)
+                }
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.blue)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help(^String.Titles.exportPlaylist)
+        }
+    }
+    
+    @ViewBuilder
+    private var playlistControlsView: some View {
+        if !playlistManager.currentTags.isEmpty {
+            HStack(spacing: 8) {
+                Button(action: {
+                    videoPlaylistManager.setPlaylist(playlistManager.currentTags)
+                    videoPlaylistManager.playPlaylist()
+                }) {
                     HStack(spacing: 4) {
-                        Text(playlistManager.currentPlaylist?.name ?? "Новый плейлист")
+                        Image(systemName: videoPlaylistManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(videoPlaylistManager.isPlaying ? ^String.Titles.pause : ^String.Titles.play)
                             .font(.system(size: 12, weight: .medium))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8))
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -82,191 +204,161 @@ struct OrganizerView: View {
                     .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Выбрать плейлист")
                 
-                // Save button
-                if playlistManager.currentPlaylist == nil && !playlistManager.currentTags.isEmpty {
-                    Button(action: {
-                        showSavePlaylistSheet = true
-                    }) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.green)
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(playlistManager.currentTags.count) \(^String.Titles.tagsCountNew)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    if playlistManager.currentPlaylist == nil {
+                        Text(^String.Titles.unsaved)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.orange)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Сохранить плейлист")
                 }
-                
-                // Clear button
-                        Button(action: {
-                            playlistManager.clear()
-                            videoPlaylistManager.stopPlayback()
-                        }) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.red)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .help("Очистить плейлист")
-                        
-                        // Export button
-                        if !playlistManager.currentTags.isEmpty {
-                            Menu {
-                                Button("Экспорт как архив") {
-                                    exportPlaylist(mode: .archive)
-                                }
-                                
-                                Button("Экспорт как фильм") {
-                                    exportPlaylist(mode: .film)
-                                }
-                            } label: {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.blue)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .help("Экспортировать плейлист")
-                        }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            
-            Divider()
-            
-            // Playlist controls
-            if !playlistManager.currentTags.isEmpty {
-                HStack(spacing: 8) {
-                    Button(action: {
-                        videoPlaylistManager.setPlaylist(playlistManager.currentTags)
-                        videoPlaylistManager.playPlaylist()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: videoPlaylistManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                                .font(.system(size: 14, weight: .medium))
-                            Text(videoPlaylistManager.isPlaying ? "Пауза" : "Воспроизвести")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(.blue)
-                        .cornerRadius(6)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(playlistManager.currentTags.count) тегов")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        if playlistManager.currentPlaylist == nil {
-                            Text("Не сохранен")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.orange)
-                        }
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-            }
-            
-            Divider()
-            
-            // Tags list
+            .padding(.vertical, 6)
+        }
+    }
+    
+    private var tagsListView: some View {
+        Group {
             if playlistManager.currentTags.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "tray")
-                        .font(.system(size: 32))
-                        .foregroundColor(.gray)
-                    
-                    Text("Плейлист пуст")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
-                    
-                    Text("Перетащите теги с таймлайна\nили используйте ПКМ")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onDrop(of: ["com.youchip.organizerTag"], isTargeted: nil) { providers in
-                    handleDrop(providers: providers)
-                    return true
-                }
+                emptyPlaylistView
             } else {
-                List {
-                    ForEach(playlistManager.currentTags) { tag in
-                        OrganizerTagRow(
-                            tag: tag,
-                            onPlay: {
-                                videoPlaylistManager.playSingleTag(tag)
-                            },
-                            onRemove: {
-                                if let index = playlistManager.currentTags.firstIndex(where: { $0.id == tag.id }) {
-                                    playlistManager.removeTag(at: index)
-                                    videoPlaylistManager.stopPlayback()
-                                }
-                            }
-                        )
-                        .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
-                        .listRowBackground(Color.clear)
-                    }
-                    .onMove(perform: playlistManager.moveTag)
-                    .onDelete { indexSet in
-                        for index in indexSet {
+                tagsListContent
+            }
+        }
+    }
+    
+    private var emptyPlaylistView: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "tray")
+                .font(.system(size: 32))
+                .foregroundColor(.gray)
+            
+            Text(^String.Titles.playlistEmpty)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.secondary)
+            
+            Text(^String.Titles.dragTagsFromTimeline)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.gray.opacity(0.05))
+        .onDrop(of: ["public.data", "com.youchip.organizerTag"], isTargeted: nil) { providers in
+            handleDrop(providers: providers)
+            return true
+        }
+    }
+    
+    private var tagsListContent: some View {
+        List {
+            ForEach(playlistManager.currentTags) { tag in
+                OrganizerTagRow(
+                    tag: tag,
+                    onPlay: {
+                        videoPlaylistManager.playSingleTag(tag)
+                    },
+                    onRemove: {
+                        if let index = playlistManager.currentTags.firstIndex(where: { $0.id == tag.id }) {
                             playlistManager.removeTag(at: index)
+                            videoPlaylistManager.stopPlayback()
                         }
-                        videoPlaylistManager.stopPlayback()
                     }
+                )
+                .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                .listRowBackground(Color.clear)
+            }
+            .onMove(perform: playlistManager.moveTag)
+            .onDelete { indexSet in
+                for index in indexSet {
+                    playlistManager.removeTag(at: index)
                 }
-                .listStyle(PlainListStyle())
-                .onDrop(of: ["com.youchip.organizerTag"], isTargeted: nil) { providers in
-                    handleDrop(providers: providers)
-                    return true
-                }
+                videoPlaylistManager.stopPlayback()
             }
         }
-        .sheet(isPresented: $showSavePlaylistSheet) {
-            SavePlaylistSheet(playlistManager: playlistManager)
+        .listStyle(PlainListStyle())
+        .background(Color.clear)
+        .onDrop(of: ["public.data", "com.youchip.organizerTag"], isTargeted: nil) { providers in
+            handleDrop(providers: providers)
+            return true
         }
-        .overlay(
-            Group {
-                if isExporting {
-                    VStack {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                        Text("Экспорт...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding()
-                    .background(Color.black.opacity(0.7))
-                    .cornerRadius(8)
-                }
+    }
+    
+    @ViewBuilder
+    private var exportOverlayView: some View {
+        if isExporting {
+            VStack {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+                Text(^String.Titles.exporting)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-        )
+            .padding()
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(8)
+        }
     }
     
     private func handleDrop(providers: [NSItemProvider]) {
-        print("🎯 Drop detected! Providers count: \(providers.count)")
         for provider in providers {
-            provider.loadDataRepresentation(forTypeIdentifier: "com.youchip.organizerTag") { data, error in
-                if let error = error {
-                    print("❌ Error loading data: \(error)")
-                    return
-                }
-                
-                if let data = data,
-                   let tag = try? JSONDecoder().decode(OrganizerTag.self, from: data) {
-                    print("✅ Successfully decoded tag: \(tag.tagName)")
-                    DispatchQueue.main.async {
-                        playlistManager.addTag(tag)
-                        print("✅ Tag added to playlist: \(tag.tagName)")
+            if provider.hasItemConformingToTypeIdentifier("com.youchip.organizerTags") {
+                provider.loadDataRepresentation(forTypeIdentifier: "com.youchip.organizerTags") { data, error in
+                    if let error = error {
+                        return
                     }
-                } else {
-                    print("❌ Failed to decode tag data")
+                    
+                    if let data = data,
+                       let tags = try? JSONDecoder().decode([OrganizerTag].self, from: data) {
+                        DispatchQueue.main.async {
+                            for tag in tags {
+                                self.playlistManager.addTag(tag)
+                            }
+                        }
+                    }
+                }
+            }
+            else if provider.hasItemConformingToTypeIdentifier("com.youchip.organizerTag") {
+                provider.loadDataRepresentation(forTypeIdentifier: "com.youchip.organizerTag") { data, error in
+                    if let error = error {
+                        return
+                    }
+                    
+                    if let data = data,
+                       let tag = try? JSONDecoder().decode(OrganizerTag.self, from: data) {
+                        DispatchQueue.main.async {
+                            self.playlistManager.addTag(tag)
+                        }
+                    }
+                }
+            }
+            else if provider.hasItemConformingToTypeIdentifier("public.data") {
+                provider.loadDataRepresentation(forTypeIdentifier: "public.data") { data, error in
+                    if let error = error {
+                        return
+                    }
+                    
+                    if let data = data {
+                        if let tags = try? JSONDecoder().decode([OrganizerTag].self, from: data) {
+                            DispatchQueue.main.async {
+                                for tag in tags {
+                                    self.playlistManager.addTag(tag)
+                                }
+                            }
+                        }
+                        else if let tag = try? JSONDecoder().decode(OrganizerTag.self, from: data) {
+                            DispatchQueue.main.async {
+                                self.playlistManager.addTag(tag)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -278,16 +370,13 @@ struct OrganizerView: View {
         return String(format: "%d:%02d", minutes, remainingSeconds)
     }
     
-    // MARK: - Export Functions
     private func exportPlaylist(mode: ViewerExportMode) {
         guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
-            print("Asset not found")
             return
         }
         
         let segments = getSegmentsForExport()
         if segments.isEmpty {
-            print("Нет сегментов для экспорта")
             return
         }
         
@@ -306,13 +395,12 @@ struct OrganizerView: View {
                         if panel.runModal() == .OK, let url = panel.url {
                             do {
                                 try FileManager.default.copyItem(at: outputURL, to: url)
-                                print("Фильм экспортирован: \(url)")
                             } catch {
-                                print("Ошибка сохранения фильма: \(error)")
+                                print(error.localizedDescription)
                             }
                         }
                     case .failure(let error):
-                        print("Ошибка экспорта фильма: \(error)")
+                        print(error.localizedDescription)
                     }
                 }
             }
@@ -329,24 +417,22 @@ struct OrganizerView: View {
                         if panel.runModal() == .OK, let url = panel.url {
                             do {
                                 try FileManager.default.copyItem(at: zipURL, to: url)
-                                print("Архив экспортирован: \(url)")
                             } catch {
-                                print("Ошибка сохранения архива: \(error)")
+                                print(error.localizedDescription)
                             }
                         }
                     case .failure(let error):
-                        print("Ошибка экспорта архива: \(error)")
+                        print(error.localizedDescription)
                     }
                 }
             }
         }
     }
     
-    private func getSegmentsForExport() -> [ExportSegment] {
-        var result: [ExportSegment] = []
+    private func getSegmentsForExport() -> [ExportSegmentOrganaizer] {
+        var result: [ExportSegmentOrganaizer] = []
         let tagLibrary = TagLibraryManager.shared
         
-        // Получаем максимальное время видео
         let maxVideoDuration = max(1.0, VideoPlayerManager.shared.videoDuration)
         
         for tag in playlistManager.currentTags {
@@ -360,14 +446,17 @@ struct OrganizerView: View {
             
             let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
             let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
-            let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.stampID.uuidString) })
+            
+            let labels = tag.labelIDs.compactMap { labelID in
+                tagLibrary.findLabelById(labelID)
+            }
             
             result.append(
-                ExportSegment(
+                ExportSegmentOrganaizer(
                     timeRange: CMTimeRange(start: start, duration: duration),
-                    lineName: tag.lineName,
                     tagName: tag.tagName,
-                    groupName: possibleGroup?.name
+                    groupName: tag.tagGroupName ?? "",
+                    labels: labels.isEmpty ? [] : labels,
                 )
             )
         }
@@ -379,23 +468,20 @@ struct OrganizerView: View {
         var correctedStart = startSeconds
         var correctedDuration = durationSeconds
         
-        // Корректируем время: начало не может быть меньше 0
         if correctedStart < 0 {
             correctedStart = 0
         }
         
-        // Корректируем время: конец не может быть больше максимального времени видео
         let endSeconds = correctedStart + correctedDuration
         if endSeconds > maxVideoDuration {
             let newDuration = maxVideoDuration - correctedStart
             if newDuration > 0 {
                 correctedDuration = newDuration
             } else {
-                return nil // Сегмент полностью за пределами видео
+                return nil
             }
         }
         
-        // Проверяем, что после корректировки у нас есть валидная длительность
         guard correctedDuration > 0 else {
             return nil
         }
@@ -403,7 +489,7 @@ struct OrganizerView: View {
         return (correctedStart, correctedDuration)
     }
     
-    private func exportFilm(segments: [ExportSegment], asset: AVAsset, completion: @escaping (Result<URL, Error>) -> Void) {
+    private func exportFilm(segments: [ExportSegmentOrganaizer], asset: AVAsset, completion: @escaping (Result<URL, Error>) -> Void) {
         let composition = AVMutableComposition()
         
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
@@ -451,18 +537,11 @@ struct OrganizerView: View {
         }
     }
     
-    private func exportPlaylistArchive(segments: [ExportSegment], asset: AVAsset, completion: @escaping (Result<URL, Error>) -> Void) {
-        print("🎬 Starting playlist archive export with \(segments.count) segments")
-        
-        // Проверяем, что есть сегменты для экспорта
+    private func exportPlaylistArchive(segments: [ExportSegmentOrganaizer], asset: AVAsset, completion: @escaping (Result<URL, Error>) -> Void) {
         if segments.isEmpty {
-            print("❌ No segments to export")
             completion(.failure(NSError(domain: "Export", code: -1, userInfo: [NSLocalizedDescriptionKey: "No segments to export"])))
             return
         }
-        
-        print("📊 Exporting \(segments.count) segments")
-        
         var exportedURLs: [URL] = []
         let group = DispatchGroup()
         var exportError: Error? = nil
@@ -476,14 +555,11 @@ struct OrganizerView: View {
         for (index, segment) in segments.enumerated() {
             group.enter()
             
-            print("🎬 Processing segment \(index + 1)/\(segments.count): \(segment.lineName) - \(segment.tagName)")
-            print("   Time range: \(segment.timeRange.start.seconds)s to \(segment.timeRange.start.seconds + segment.timeRange.duration.seconds)s")
-            
+
             let composition = AVMutableComposition()
             guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video,
                                                                    preferredTrackID: kCMPersistentTrackID_Invalid)
             else {
-                print("❌ Failed to create video track for segment \(index + 1)")
                 exportError = NSError(domain: "Export", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])
                 group.leave()
                 continue
@@ -493,11 +569,8 @@ struct OrganizerView: View {
                 compAudioTrack = composition.addMutableTrack(withMediaType: .audio,
                                                              preferredTrackID: kCMPersistentTrackID_Invalid)
                 do {
-                    print("   🎵 Inserting audio time range: \(segment.timeRange.start.seconds)s to \(segment.timeRange.start.seconds + segment.timeRange.duration.seconds)s")
                     try compAudioTrack?.insertTimeRange(segment.timeRange, of: aTrack, at: .zero)
-                    print("   ✅ Audio track inserted successfully")
                 } catch {
-                    print("   ❌ Failed to insert audio time range: \(error.localizedDescription)")
                     exportError = error
                     group.leave()
                     continue
@@ -505,17 +578,29 @@ struct OrganizerView: View {
             }
             
             do {
-                print("   📹 Inserting video time range: \(segment.timeRange.start.seconds)s to \(segment.timeRange.start.seconds + segment.timeRange.duration.seconds)s")
                 try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: .zero)
-                print("   ✅ Video track inserted successfully")
             } catch {
-                print("   ❌ Failed to insert video time range: \(error.localizedDescription)")
                 exportError = error
                 group.leave()
                 continue
             }
             
-            let fileName = "\(segment.lineName)_\(segment.tagName)_\(index + 1).mp4"
+            let fileName: String
+            var nameParts: [String] = []
+            
+            nameParts.append(segment.tagName)
+            
+            if !segment.groupName.isEmpty {
+                nameParts.append(segment.groupName)
+            }
+            
+            if !segment.labels.isEmpty {
+                for label in segment.labels {
+                    nameParts.append(label.name)
+                }
+            }
+            
+            fileName = "\(nameParts.joined(separator: "_")).mp4"
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try? FileManager.default.removeItem(at: clipOutputURL)
             
@@ -525,10 +610,8 @@ struct OrganizerView: View {
             
             exportSession?.exportAsynchronously {
                 if exportSession?.status == .completed {
-                    print("   ✅ Export completed for segment \(index + 1): \(fileName)")
                     exportedURLs.append(clipOutputURL)
                 } else {
-                    print("   ❌ Export failed for segment \(index + 1): \(exportSession?.error?.localizedDescription ?? "Unknown error")")
                     exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
                 group.leave()
@@ -536,15 +619,9 @@ struct OrganizerView: View {
         }
         
         group.notify(queue: .main) {
-            print("🏁 All export tasks completed")
-            print("   Exported URLs count: \(exportedURLs.count)")
-            print("   Export error: \(exportError?.localizedDescription ?? "None")")
-            
             if let error = exportError {
-                print("❌ Export failed with error: \(error)")
                 completion(.failure(error))
             } else {
-                print("✅ All segments exported successfully, compressing files...")
                 compressFiles(urls: exportedURLs, completion: completion)
             }
         }
@@ -574,7 +651,7 @@ struct OrganizerView: View {
                 completion(.success(zipURL))
             } else {
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let errorMessage = String(data: data, encoding: .utf8) ?? "Неизвестная ошибка"
+                let errorMessage = String(data: data, encoding: .utf8) ?? ^String.Titles.unknownError
                 let error = NSError(domain: "ZIPError", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errorMessage])
                 completion(.failure(error))
             }
@@ -585,7 +662,6 @@ struct OrganizerView: View {
     
 }
 
-// MARK: - Save Playlist Sheet
 struct SavePlaylistSheet: View {
     @ObservedObject var playlistManager: PlaylistManager
     @Environment(\.presentationMode) var presentationMode
@@ -594,16 +670,16 @@ struct SavePlaylistSheet: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("Сохранить плейлист")
+            Text(^String.Titles.savePlaylistTitle)
                 .font(.headline)
                 .foregroundColor(.primary)
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("Название плейлиста")
+                Text(^String.Titles.playlistName)
                     .font(.subheadline)
                     .fontWeight(.medium)
                 
-                TextField("Введите название", text: $playlistName)
+                TextField(^String.Titles.enterName, text: $playlistName)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .onSubmit {
                         savePlaylist()
@@ -611,19 +687,19 @@ struct SavePlaylistSheet: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Информация о плейлисте:")
+                Text(^String.Titles.playlistInfo)
                     .font(.subheadline)
                     .fontWeight(.medium)
                 
                 HStack {
-                    Text("Тегов:")
+                    Text(^String.Titles.tags)
                         .foregroundColor(.secondary)
                     Text("\(playlistManager.currentTags.count)")
                         .fontWeight(.medium)
                 }
                 
                 HStack {
-                    Text("Длительность:")
+                    Text(^String.Titles.duration)
                         .foregroundColor(.secondary)
                     Text(formatDuration(playlistManager.currentTags.reduce(0) { $0 + $1.duration }))
                         .fontWeight(.medium)
@@ -633,14 +709,14 @@ struct SavePlaylistSheet: View {
             .cornerRadius(8)
             
             HStack(spacing: 12) {
-                Button("Отмена") {
+                Button(^String.Titles.cancel) {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
-                Button("Сохранить") {
+                Button(^String.Titles.save) {
                     savePlaylist()
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -650,10 +726,10 @@ struct SavePlaylistSheet: View {
         }
         .padding(20)
         .frame(width: 400, height: 300)
-        .alert("Ошибка", isPresented: $showingAlert) {
+        .alert(^String.Titles.error, isPresented: $showingAlert) {
             Button("OK") { }
         } message: {
-            Text("Плейлист с таким названием уже существует")
+            Text(^String.Titles.playlistAlreadyExists)
         }
     }
     
@@ -661,7 +737,6 @@ struct SavePlaylistSheet: View {
         let trimmedName = playlistName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         
-        // Проверяем, не существует ли уже плейлист с таким именем
         if playlistManager.playlists.contains(where: { $0.name == trimmedName }) {
             showingAlert = true
             return
@@ -683,31 +758,72 @@ struct OrganizerTagRow: View {
     let onPlay: () -> Void
     let onRemove: () -> Void
     
+    private var labels: [Label] {
+        tag.labelIDs.compactMap { labelID in
+            TagLibraryManager.shared.findLabelById(labelID)
+        }
+    }
+    
+    private var events: [TimeEvent] {
+        tag.eventIDs.compactMap { eventID in
+            TagLibraryManager.shared.allTimeEvents.first { $0.id == eventID }
+        }
+    }
+    
+    private var tagTitle: String {
+        if let groupName = tag.tagGroupName {
+            return "\(tag.tagName) (\(groupName))"
+        } else {
+            return tag.tagName
+        }
+    }
+    
+    private var labelsText: String {
+        if labels.isEmpty {
+            return ^String.Titles.labelsNone
+        } else {
+            let labelNames = labels.map { $0.name }.joined(separator: ", ")
+            return String(format: ^String.Titles.labelsPrefix, labelNames)
+        }
+    }
+    
+    private var eventsText: String {
+        if events.isEmpty {
+            return ^String.Titles.eventsNone
+        } else {
+            let eventNames = events.map { $0.name }.joined(separator: ", ")
+            return String(format: ^String.Titles.eventsPrefix, eventNames)
+        }
+    }
+    
     var body: some View {
         HStack(spacing: 8) {
-            // Color indicator
             Circle()
                 .fill(Color(hex: tag.color) ?? .gray)
                 .frame(width: 8, height: 8)
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(tag.tagName)
+                Text(tagTitle)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
                 
-                Text(tag.lineName)
-                    .font(.system(size: 10))
+                Text(labelsText)
+                    .font(.system(size: 9))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 
-                Text(formatTime(tag.startTime))
+                Text(eventsText)
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+
+                Text(String(format: ^String.Titles.timeAndMoment, formatTime(tag.duration), formatTime(tag.startTime)))
                     .font(.system(size: 9))
                     .foregroundColor(.secondary)
             }
             
             Spacer()
             
-            // Action buttons
             HStack(spacing: 4) {
                 Button(action: onPlay) {
                     Image(systemName: "play.circle")
@@ -715,7 +831,7 @@ struct OrganizerTagRow: View {
                         .foregroundColor(.blue)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Воспроизвести тег")
+                .help(^String.Titles.playTag)
                 
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle")
@@ -723,7 +839,7 @@ struct OrganizerTagRow: View {
                         .foregroundColor(.red)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Удалить из органайзера")
+                .help(^String.Titles.removeFromOrganizer)
             }
         }
         .padding(.vertical, 4)

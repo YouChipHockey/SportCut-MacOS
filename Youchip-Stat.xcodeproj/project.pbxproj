@@ -135,6 +135,8 @@
 		DD7E18152DFDCFA500342214 /* FieldMapFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E18142DFDCFA400342214 /* FieldMapFilters.swift */; };
 		DD7E18172DFDCFC800342214 /* FieldMapFilterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E18162DFDCFBE00342214 /* FieldMapFilterView.swift */; };
 		DD7E18192DFDEDE300342214 /* HeatMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E18182DFDEDE200342214 /* HeatMapView.swift */; };
+		DD7F54AD2E9EAAAD00E7D768 /* ProjectImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7F54AC2E9EAAAD00E7D768 /* ProjectImportView.swift */; };
+		DD7F54AF2E9EAAB400E7D768 /* ProjectExportModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7F54AE2E9EAAB400E7D768 /* ProjectExportModel.swift */; };
 		DD8937FE2DEF936B009B1BC2 /* CropImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */; };
 		DD8938182DEFBA42009B1BC2 /* FieldMapVisualizationPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */; };
 		DD89381A2DEFBA4D009B1BC2 /* FieldMapVisualizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */; };
@@ -312,6 +314,8 @@
 		DD7E18142DFDCFA400342214 /* FieldMapFilters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapFilters.swift; sourceTree = "<group>"; };
 		DD7E18162DFDCFBE00342214 /* FieldMapFilterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapFilterView.swift; sourceTree = "<group>"; };
 		DD7E18182DFDEDE200342214 /* HeatMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatMapView.swift; sourceTree = "<group>"; };
+		DD7F54AC2E9EAAAD00E7D768 /* ProjectImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectImportView.swift; sourceTree = "<group>"; };
+		DD7F54AE2E9EAAB400E7D768 /* ProjectExportModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectExportModel.swift; sourceTree = "<group>"; };
 		DD8937FD2DEF936B009B1BC2 /* CropImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropImageView.swift; sourceTree = "<group>"; };
 		DD8938172DEFBA40009B1BC2 /* FieldMapVisualizationPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationPicker.swift; sourceTree = "<group>"; };
 		DD8938192DEFBA4C009B1BC2 /* FieldMapVisualizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldMapVisualizationView.swift; sourceTree = "<group>"; };
@@ -355,6 +359,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		DD7F54AA2E9EAAA600E7D768 /* Managers */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Managers;
+			sourceTree = "<group>";
+		};
 		DD8971AA2E420A6A00DD2AB8 /* BaseCollections */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = BaseCollections;
@@ -406,6 +415,7 @@
 		DD2A704C2D74C2CC00287BA8 /* Videos */ = {
 			isa = PBXGroup;
 			children = (
+				DD7F54AA2E9EAAA600E7D768 /* Managers */,
 				DD2A704F2D74C2DA00287BA8 /* Models */,
 				DD2A704E2D74C2D500287BA8 /* ViewModels */,
 				DD2A704D2D74C2D100287BA8 /* Views */,
@@ -417,6 +427,7 @@
 			isa = PBXGroup;
 			children = (
 				DD2A70792D74E08300287BA8 /* VideoThumbnailView.swift */,
+				DD7F54AC2E9EAAAD00E7D768 /* ProjectImportView.swift */,
 				DD2A706F2D74D5C300287BA8 /* VideosView.swift */,
 			);
 			path = Views;
@@ -435,6 +446,7 @@
 			children = (
 				DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */,
 				DD2A705D2D74C65D00287BA8 /* VideosActions.swift */,
+				DD7F54AE2E9EAAB400E7D768 /* ProjectExportModel.swift */,
 				DD2A70532D74C31600287BA8 /* VideosState.swift */,
 			);
 			path = Models;
@@ -881,6 +893,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				DD7F54AA2E9EAAA600E7D768 /* Managers */,
 				DD8971AA2E420A6A00DD2AB8 /* BaseCollections */,
 				DDA9C3062E833EDF00B5E3F3 /* Viewer */,
 				DDFB1A352DE510CF00175D97 /* web/dist */,
@@ -1067,6 +1080,7 @@
 				DD5CF9E42E0467C3009CD51A /* EditTimelineNameSheet.swift in Sources */,
 				DD5CF9C52E046581009CD51A /* NSColor+Convenience.swift in Sources */,
 				DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */,
+				DD7F54AF2E9EAAB400E7D768 /* ProjectExportModel.swift in Sources */,
 				DD5CF9F32E04683C009CD51A /* LabelChip.swift in Sources */,
 				DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */,
 				DDCA6B5B2DCA66330025EF9E /* TagStatisticsLegend.swift in Sources */,
@@ -1095,6 +1109,7 @@
 				DD408C762E6C736F00E615E5 /* ObjectCustomization.swift in Sources */,
 				DD408C772E6C736F00E615E5 /* ObjectType.swift in Sources */,
 				DD408C782E6C736F00E615E5 /* TemplateObject.swift in Sources */,
+				DD7F54AD2E9EAAAD00E7D768 /* ProjectImportView.swift in Sources */,
 				DD408C792E6C736F00E615E5 /* PolygonEditorViewModel.swift in Sources */,
 				DD408C7A2E6C736F00E615E5 /* ExportSheet.swift in Sources */,
 				DD408C7B2E6C736F00E615E5 /* FormationCard.swift in Sources */,
@@ -1368,7 +1383,7 @@
 					"$(PROJECT_DIR)/OpenCv",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 2.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.YouChip.YouChipSportCut;
 				PRODUCT_NAME = SportCut;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1413,7 +1428,7 @@
 					"$(PROJECT_DIR)/OpenCv",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 2.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.YouChip.YouChipSportCut;
 				PRODUCT_NAME = SportCut;
 				PROVISIONING_PROFILE_SPECIFIER = "";

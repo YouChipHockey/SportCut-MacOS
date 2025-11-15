@@ -15,7 +15,7 @@
       },
       {
           "id": "e37c417c-589f-4cd6-a759-570fba4f5cef",
-          "name": "Shot in frame",
+          "name": "Shot on goal",
           "description":"",
           "color": "17a589",
           "defaultTimeBefore": 5,
@@ -117,7 +117,7 @@
       },
       {
           "id": "361ab26e-40b9-455e-89ee-1944f0ff122f",
-          "name": "Fight for puck",
+          "name": "Puck battle",
           "description":"",
           "color": "e67e22",
           "defaultTimeBefore": 5,
@@ -130,7 +130,7 @@
       },
       {
           "id": "914d7e1c-c135-4ff5-a775-b377c871a6f0",
-          "name": "With control",
+          "name": "Controlled",
           "description":"",
           "color": "00FF00",
           "defaultTimeBefore": 10,
@@ -143,7 +143,7 @@
       },
       {
           "id": "4948ad9b-d348-4bb8-b0f5-eef76dc098e3",
-          "name": "Without control",
+          "name": "Uncontrolled",
           "description":"",
           "color": "f7dc6f",
           "defaultTimeBefore": 10,
@@ -182,7 +182,7 @@
       },
       {
           "id": "713ca542-1cb8-46cd-95ef-84b3ba76b21c",
-          "name": "With control",
+          "name": "Controlled",
           "description":"",
           "color": "28b463",
           "defaultTimeBefore": 10,
@@ -195,7 +195,7 @@
       },
       {
           "id": "5c4a9555-19e5-4fbc-a224-6e00bd586d8f",
-          "name": "Without control",
+          "name": "Uncontrolled",
           "description":"e67e22",
           "color": "",
           "defaultTimeBefore": 10,

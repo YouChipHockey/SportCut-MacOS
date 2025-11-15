@@ -9,10 +9,10 @@ import Foundation
 
 class CustomTypes {
     
-    typealias Completion = (FileDocumentPickerFileResponse) -> Void // CustomTypes.Completion
-    typealias MultipleFilesCompletion = (FileDocumentPickerFilesResponse) -> Void // CustomTypes.MultipleFilesCompletion
-    typealias SubscriptionRequestHandler = (Result<Data, Error>) -> Void // CustomTypes.SubscriptionRequestHandler
-    typealias CompletionWithResult = (Result<URL, Error>) -> Void // CustomTypes.CompletionWithResult
-    typealias DataCompletion = (Result<Data, Error>) -> Void // CustomTypes.DataCompletion
+    typealias Completion = (FileDocumentPickerFileResponse) -> Void
+    typealias MultipleFilesCompletion = (FileDocumentPickerFilesResponse) -> Void
+    typealias SubscriptionRequestHandler = (Result<Data, Error>) -> Void
+    typealias CompletionWithResult = (Result<URL, Error>) -> Void
+    typealias DataCompletion = (Result<Data, Error>) -> Void
     
 }

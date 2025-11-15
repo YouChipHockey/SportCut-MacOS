@@ -78,11 +78,11 @@ struct ObjectListItem: View {
         .background(object.isVisible ? Color.clear : Color.gray.opacity(0.1))
         .cornerRadius(4)
         .contextMenu {
-            Button(object.isVisible ? "Скрыть" : "Показать") {
+            Button(object.isVisible ? ^String.Titles.hide : ^String.Titles.show) {
                 viewModel.toggleObjectVisibility(object)
             }
             
-            Button(object.showNumber ? "Скрыть номер" : "Показать номер") {
+            Button(object.showNumber ? ^String.Titles.hideNumber : ^String.Titles.showNumber) {
                 viewModel.toggleObjectNumberVisibility(object)
             }
             
@@ -92,7 +92,6 @@ struct ObjectListItem: View {
                                  viewModel.deleteObject(object)
                              }
                              
-                             // Add template option for non-highlight objects
                              if object.type != .objectHighlight && object.positions.count >= 4 && object.positions.count <= 8 {
                                  Divider()
                                  

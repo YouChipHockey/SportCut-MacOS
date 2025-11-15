@@ -18,10 +18,9 @@ class ViewerWindowController: NSWindowController {
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
-        window.title = "Просмотр"
+        window.title = ^String.Titles.view
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         
-        // Устанавливаем размер окна как у основных окон
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
             let windowSize = NSSize(width: screenFrame.width, height: screenFrame.height)
@@ -33,8 +32,6 @@ class ViewerWindowController: NSWindowController {
         }
         
         super.init(window: window)
-        
-        // Настраиваем делегат окна
         window.delegate = self
     }
     
@@ -48,21 +45,16 @@ class ViewerWindowController: NSWindowController {
     }
 }
 
-// MARK: - NSWindowDelegate
 extension ViewerWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        // Очистка ресурсов при закрытии окна
-        // Отправляем уведомление для остановки плеера
         NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
     }
     
     func windowDidBecomeKey(_ notification: Notification) {
-        // Окно стало активным
         print("Viewer window became key")
     }
     
     func windowDidResignKey(_ notification: Notification) {
-        // Окно потеряло фокус
         print("Viewer window resigned key")
     }
 }

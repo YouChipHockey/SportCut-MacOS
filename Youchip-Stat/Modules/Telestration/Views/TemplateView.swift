@@ -17,7 +17,6 @@ struct TemplateView: View {
         let misalignedIndices = viewModel.getMisalignedVertices(for: template)
         
         ZStack {
-            // Template shape
             if template.templatePositions.count >= 3 {
                 PolygonShape(points: template.templatePositions.map { viewModel.viewPoint(fromImagePoint: $0, in: geometry.size) })
                     .fill(customization.fillColor.opacity(0.2))
@@ -30,7 +29,6 @@ struct TemplateView: View {
                     )
             }
             
-            // Template vertices
             ForEach(Array(template.templatePositions.enumerated()), id: \.offset) { index, position in
                 Circle()
                     .fill(customization.vertexColor)
@@ -42,7 +40,6 @@ struct TemplateView: View {
                     .position(viewModel.viewPoint(fromImagePoint: position, in: geometry.size))
             }
             
-            // Misaligned vertex indicators
             if customization.showMisalignedVertices {
                 ForEach(misalignedIndices, id: \.self) { index in
                     if index < template.originalObject.positions.count {

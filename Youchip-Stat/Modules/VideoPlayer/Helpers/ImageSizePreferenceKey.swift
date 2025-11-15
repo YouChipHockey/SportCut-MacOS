@@ -5,7 +5,7 @@
 //  Created by Сергей Бекезин on 6/19/25.
 //
 
-import SwiftUICore
+import SwiftUI
 
 struct ImageSizePreferenceKey: PreferenceKey {
     static var defaultValue: CGRect = .zero

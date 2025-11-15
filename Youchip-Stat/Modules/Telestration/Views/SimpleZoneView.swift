@@ -28,7 +28,6 @@ struct SimpleZoneView: View {
                             ))
                     )
             }
-            // No vertices for simple zone
         }
     }
 }

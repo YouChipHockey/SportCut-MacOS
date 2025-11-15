@@ -28,7 +28,6 @@ struct FocusTrackingView: NSViewRepresentable {
                 var currentView: NSView? = textField
                 var isInOurHierarchy = false
                 
-                // Check if the text field is in our view hierarchy
                 while let parent = currentView?.superview {
                     if parent == nsView.superview?.superview {
                         isInOurHierarchy = true

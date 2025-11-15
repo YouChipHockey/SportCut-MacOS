@@ -47,7 +47,6 @@ struct PlayFieldExport: Codable {
         self.width = playField.width
         self.height = playField.height
         
-        // Convert image bookmark to base64 data
         if let imageBookmark = playField.imageBookmark {
             do {
                 var isStale = false
@@ -77,7 +76,6 @@ struct PlayFieldExport: Codable {
     }
     
     func toPlayField() -> PlayField? {
-        // Create temporary file for image
         let tempDir = FileManager.default.temporaryDirectory
         let fileName = UUID().uuidString + ".png"
         let tempURL = tempDir.appendingPathComponent(fileName)
@@ -86,7 +84,6 @@ struct PlayFieldExport: Codable {
             if let imageData = imageData {
                 try imageData.write(to: tempURL)
             } else {
-                // Create a placeholder image if no image data
                 let placeholderSize = NSSize(width: width, height: height)
                 let placeholderImage = NSImage(size: placeholderSize)
                 placeholderImage.lockFocus()
@@ -108,9 +105,6 @@ struct PlayFieldExport: Codable {
                                                       includingResourceValuesForKeys: nil, 
                                                       relativeTo: nil)
             
-            // Don't clean up temporary file immediately - it's needed for the bookmark
-            // The file will be cleaned up when the app terminates or when the bookmark is no longer needed
-            
             return PlayField(
                 id: id,
                 name: name,
@@ -126,8 +120,6 @@ struct PlayFieldExport: Codable {
     }
 }
 
-// MARK: - Collection Import Manager
-
 class CollectionImportManager: ObservableObject {
     @Published var isImporting = false
     @Published var importError: String?
@@ -142,9 +134,7 @@ class CollectionImportManager: ObservableObject {
         
         do {
             let data = try Data(contentsOf: url)
-            print("Loaded data size: \(data.count) bytes")
             
-            // Try to decode as JSON first
             if let jsonString = String(data: data, encoding: .utf8) {
                 print("JSON content preview: \(String(jsonString.prefix(200)))...")
             }

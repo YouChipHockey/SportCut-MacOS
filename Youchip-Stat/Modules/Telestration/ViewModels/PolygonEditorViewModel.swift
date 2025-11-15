@@ -22,7 +22,6 @@ final class PolygonEditorViewModel: ObservableObject {
     @Published var currentCustomization = ObjectCustomization()
     @Published var pendingObject: DrawableObject?
     
-    // Template-related properties
     @Published var showingFormationSelection: Bool = false
     @Published var showingTemplateCustomization: Bool = false
     @Published var selectedObjectForTemplate: DrawableObject?
@@ -36,8 +35,6 @@ final class PolygonEditorViewModel: ObservableObject {
     }
 
     var imageSize: CGSize { image.size }
-    
-    // MARK: - Object Management
     
     func startCreatingObject(type: ObjectType) {
         currentObjectType = type
@@ -53,7 +50,6 @@ final class PolygonEditorViewModel: ObservableObject {
         
         switch objectType {
         case .objectHighlight:
-            // For highlight, only one position
             tempVertices = [imageSpacePoint]
             finishCreatingObject()
         case .zoneBetweenObjects, .simpleZone, .lineBetweenObjects:
@@ -68,7 +64,6 @@ final class PolygonEditorViewModel: ObservableObject {
         var newObject = DrawableObject(number: nextObjectNumber, type: objectType)
         newObject.positions = tempVertices
         
-        // Set default customization based on type
         switch objectType {
         case .objectHighlight:
             newObject.radius = 30
@@ -90,7 +85,6 @@ final class PolygonEditorViewModel: ObservableObject {
     func confirmObjectCreation() {
         guard var object = pendingObject else { return }
         
-        // Apply customization
         object.edgeColor = currentCustomization.edgeColor
         object.vertexColor = currentCustomization.vertexColor
         object.fillColor = currentCustomization.fillColor
@@ -101,7 +95,6 @@ final class PolygonEditorViewModel: ObservableObject {
         objects.append(object)
         nextObjectNumber += 1
         
-        // Reset state
         pendingObject = nil
         showingCustomization = false
         currentCustomization = ObjectCustomization()
@@ -139,8 +132,6 @@ final class PolygonEditorViewModel: ObservableObject {
         cancelObjectCreation()
     }
     
-    // MARK: - Template Management
-    
     func showFormationSelection(for object: DrawableObject) {
         selectedObjectForTemplate = object
         showingFormationSelection = true
@@ -159,32 +150,25 @@ final class PolygonEditorViewModel: ObservableObject {
         let originalPositions = selectedObject.positions
         guard !originalPositions.isEmpty && !formation.positions.isEmpty else { return }
         
-        // Calculate bounding box of the original object (excluding first vertex)
         let otherPositions = Array(originalPositions.dropFirst())
         let minX = otherPositions.map { $0.x }.min() ?? originalPositions[0].x
         let maxX = otherPositions.map { $0.x }.max() ?? originalPositions[0].x
         let minY = otherPositions.map { $0.y }.min() ?? originalPositions[0].y
         let maxY = otherPositions.map { $0.y }.max() ?? originalPositions[0].y
         
-        let width = max(maxX - minX, 50) // Minimum width to avoid zero scaling
-        let height = max(maxY - minY, 50) // Minimum height to avoid zero scaling
+        let width = max(maxX - minX, 50)
+        let height = max(maxY - minY, 50)
         
-        // First vertex of user's figure
         let firstUserVertex = originalPositions[0]
         
-        // First vertex of template (normalized)
         let firstTemplateVertex = formation.positions[0]
         
-        // Convert normalized formation positions to actual positions
-        // First vertex is aligned with user's first vertex
         var templatePositions: [CGPoint] = []
         
         for (index, normalizedPos) in formation.positions.enumerated() {
             if index == 0 {
-                // First vertex matches exactly
                 templatePositions.append(firstUserVertex)
             } else {
-                // Other vertices are positioned relative to the first vertex
                 let relativeX = (normalizedPos.x - firstTemplateVertex.x) * width
                 let relativeY = (normalizedPos.y - firstTemplateVertex.y) * height
                 
@@ -210,12 +194,10 @@ final class PolygonEditorViewModel: ObservableObject {
     func confirmTemplateCreation() {
         guard var template = pendingTemplate else { return }
         
-        // Apply customization
         template.templateCustomization = currentTemplateCustomization
         
         templateObjects.append(template)
         
-        // Reset state
         pendingTemplate = nil
         selectedObjectForTemplate = nil
         showingTemplateCustomization = false
@@ -298,12 +280,10 @@ final class PolygonEditorViewModel: ObservableObject {
         let imageRect = NSRect(origin: .zero, size: size)
         image.draw(in: imageRect)
 
-        // Draw all visible objects
         for object in visibleObjects {
             drawObject(object)
         }
         
-        // Draw all visible templates
         for template in visibleTemplates {
             drawTemplate(template)
         }
@@ -324,7 +304,6 @@ final class PolygonEditorViewModel: ObservableObject {
             drawSimpleZone(object)
         }
         
-        // Draw object number if enabled
         if object.showNumber {
             drawObjectNumber(object)
         }
@@ -351,7 +330,6 @@ final class PolygonEditorViewModel: ObservableObject {
         }
         path.stroke()
         
-        // Draw vertices
         for position in object.positions {
             let rect = NSRect(x: position.x - 15, y: position.y - 15, width: 30, height: 30)
             NSColor(object.vertexColor).setFill()
@@ -385,7 +363,6 @@ final class PolygonEditorViewModel: ObservableObject {
         }
         path.stroke()
         
-        // Draw vertices
         for position in object.positions {
             let rect = NSRect(x: position.x - 15, y: position.y - 15, width: 30, height: 30)
             NSColor(object.vertexColor).setFill()
@@ -401,7 +378,6 @@ final class PolygonEditorViewModel: ObservableObject {
     private func drawObjectHighlight(_ object: DrawableObject) {
         guard let position = object.positions.first else { return }
         
-        // Vertical glowing column (width = oval width, height = 2 × oval width)
         let columnRect = NSRect(
             x: position.x - object.radius / 2,
             y: position.y,
@@ -411,7 +387,6 @@ final class PolygonEditorViewModel: ObservableObject {
         
         let columnPath = NSBezierPath(rect: columnRect)
         
-        // Create vertical gradient for glowing column
         let columnGradient = NSGradient(colors: [
             NSColor(object.glowColor).withAlphaComponent(0.9),
             NSColor(object.glowColor).withAlphaComponent(0.6),
@@ -421,7 +396,6 @@ final class PolygonEditorViewModel: ObservableObject {
         
         columnGradient?.draw(in: columnPath, angle: 90)
         
-        // Add blur effect by drawing multiple semi-transparent layers
         for i in 1...3 {
             let blurRect = columnRect.insetBy(dx: -CGFloat(i), dy: 0)
             let blurPath = NSBezierPath(rect: blurRect)
@@ -429,7 +403,6 @@ final class PolygonEditorViewModel: ObservableObject {
             blurPath.fill()
         }
         
-        // Flat oval on the surface
         let ovalRect = NSRect(
             x: position.x - object.radius/2,
             y: position.y - (object.radius * 0.6)/2,
@@ -439,7 +412,6 @@ final class PolygonEditorViewModel: ObservableObject {
         
         let ovalPath = NSBezierPath(ovalIn: ovalRect)
         
-        // Fill with radial gradient effect
         let ovalGradient = NSGradient(colors: [
             NSColor(object.edgeColor).withAlphaComponent(0.8),
             NSColor(object.edgeColor).withAlphaComponent(0.6),
@@ -448,7 +420,6 @@ final class PolygonEditorViewModel: ObservableObject {
         
         ovalGradient?.draw(in: ovalPath, relativeCenterPosition: NSPoint(x: 0, y: 0))
         
-        // Draw stroke
         NSColor(object.edgeColor).setStroke()
         ovalPath.lineWidth = 2
         ovalPath.stroke()
@@ -474,8 +445,6 @@ final class PolygonEditorViewModel: ObservableObject {
             path.setLineDash([5, 5], count: 2, phase: 0)
         }
         path.stroke()
-        
-        // No vertices for simple zone
     }
     
     private func drawObjectNumber(_ object: DrawableObject) {
@@ -501,7 +470,6 @@ final class PolygonEditorViewModel: ObservableObject {
     private func drawTemplate(_ template: TemplateObject) {
         let customization = template.templateCustomization
         
-        // Draw template shape
         if template.templatePositions.count >= 3 {
             let path = NSBezierPath()
             path.move(to: NSPoint(x: template.templatePositions[0].x, y: template.templatePositions[0].y))
@@ -522,7 +490,6 @@ final class PolygonEditorViewModel: ObservableObject {
             path.stroke()
         }
         
-        // Draw template vertices
         for position in template.templatePositions {
             let rect = NSRect(x: position.x - 15, y: position.y - 15, width: 30, height: 30)
             NSColor(customization.vertexColor).setFill()
@@ -534,7 +501,6 @@ final class PolygonEditorViewModel: ObservableObject {
             b.stroke()
         }
         
-        // Draw misaligned vertices if enabled
         if customization.showMisalignedVertices {
             let misalignedIndices = getMisalignedVertices(for: template)
             let originalPositions = template.originalObject.positions
@@ -544,7 +510,6 @@ final class PolygonEditorViewModel: ObservableObject {
                     let position = originalPositions[index]
                     let rect = NSRect(x: position.x - 20, y: position.y - 20, width: 40, height: 40)
                     
-                    // Draw warning circle
                     NSColor(customization.misalignedVertexColor).withAlphaComponent(0.3).setFill()
                     NSBezierPath(ovalIn: rect).fill()
                     

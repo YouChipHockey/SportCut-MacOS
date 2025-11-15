@@ -17,9 +17,9 @@ enum LineStyle: String, CaseIterable {
     var displayName: String {
         switch self {
         case .solid:
-            return "Сплошная"
+            return ^String.Titles.solid
         case .dashed:
-            return "Пунктирная"
+            return ^String.Titles.dashedLine
         }
     }
 }

@@ -872,25 +872,21 @@ class CustomCollectionManager: ObservableObject {
         return false
     }
     
-    // MARK: - Test Functions
-    
     func createTestCollection() {
-        collectionName = "Тестовая коллекция"
+        collectionName = ^String.Titles.testCollection
         
-        // Create test tag group
         let tagGroup = TagGroup(
             id: UUID().uuidString,
-            name: "Тестовые теги",
+            name: ^String.Titles.testTags,
             tags: []
         )
         tagGroups.append(tagGroup)
         
-        // Create test tag
         let tag = Tag(
             id: UUID().uuidString,
             primaryID: nil,
-            name: "Тестовый тег",
-            description: "Описание тестового тега",
+            name: ^String.Titles.testTag,
+            description: ^String.Titles.testTagDescription,
             color: "FF5733",
             defaultTimeBefore: 2.0,
             defaultTimeAfter: 3.0,
@@ -903,41 +899,33 @@ class CustomCollectionManager: ObservableObject {
         )
         tags.append(tag)
         
-        // Add tag to group
         if let index = tagGroups.firstIndex(where: { $0.id == tagGroup.id }) {
             tagGroups[index].tags.append(tag.id)
         }
         
-        // Create test label group
         let labelGroup = LabelGroupData(
             id: UUID().uuidString,
-            name: "Тестовые лейблы",
+            name: ^String.Titles.testLabels,
             lables: []
         )
         labelGroups.append(labelGroup)
         
-        // Create test label
         let label = Label(
             id: UUID().uuidString,
-            name: "Тестовый лейбл",
-            description: "Описание тестового лейбла"
+            name: ^String.Titles.testLabel,
+            description: ^String.Titles.testLabelDescription
         )
         labels.append(label)
-        
-        // Add label to group
         if let index = labelGroups.firstIndex(where: { $0.id == labelGroup.id }) {
             labelGroups[index].lables.append(label.id)
         }
         
-        // Create test time event
         let timeEvent = TimeEvent(
             id: UUID().uuidString,
-            name: "Тестовое событие"
+            name: ^String.Titles.testEvent
         )
         timeEvents.append(timeEvent)
     }
-    
-    // MARK: - Export Functions
     
     func exportCollection() -> URL? {
         let exportData = SportcutCollectionExport(collectionManager: self)
@@ -949,12 +937,11 @@ class CustomCollectionManager: ObservableObject {
             
             let jsonData = try encoder.encode(exportData)
             
-            // Create save panel
             let savePanel = NSSavePanel()
             savePanel.allowedContentTypes = [.json]
             savePanel.nameFieldStringValue = "\(collectionName).sportcutCollection"
-            savePanel.title = "Экспорт коллекции"
-            savePanel.message = "Выберите место для сохранения коллекции"
+            savePanel.title = ^String.Titles.exportCollectionTitle
+            savePanel.message = ^String.Titles.selectCollectionSaveLocation
             
             if savePanel.runModal() == .OK, let url = savePanel.url {
                 try jsonData.write(to: url)
@@ -962,7 +949,7 @@ class CustomCollectionManager: ObservableObject {
             }
             
         } catch {
-            print("Error exporting collection: \(error)")
+            print(error)
         }
         
         return nil

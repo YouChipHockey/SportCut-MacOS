@@ -14,11 +14,10 @@ struct FootballFormation {
     let id = UUID()
     let name: String
     let playerCount: Int
-    let positions: [CGPoint] // Normalized positions (0.0-1.0)
+    let positions: [CGPoint]
     let category: String
     
     static let formations: [FootballFormation] = [
-        // 4 игрока
         FootballFormation(name: "Квадрат", playerCount: 4, positions: [
             CGPoint(x: 0.3, y: 0.3), CGPoint(x: 0.7, y: 0.3),
             CGPoint(x: 0.7, y: 0.7), CGPoint(x: 0.3, y: 0.7)
@@ -39,7 +38,6 @@ struct FootballFormation {
             CGPoint(x: 0.5, y: 0.8), CGPoint(x: 0.3, y: 0.6)
         ], category: "Атака"),
         
-        // 5 игроков
         FootballFormation(name: "W-формация", playerCount: 5, positions: [
             CGPoint(x: 0.4, y: 0.2), CGPoint(x: 0.6, y: 0.2),
             CGPoint(x: 0.8, y: 0.4), CGPoint(x: 0.5, y: 0.6),
@@ -64,7 +62,6 @@ struct FootballFormation {
             CGPoint(x: 0.5, y: 0.5)
         ], category: "Универсал"),
         
-        // 6 игроков
         FootballFormation(name: "Гексагон", playerCount: 6, positions: [
             CGPoint(x: 0.5, y: 0.2), CGPoint(x: 0.7, y: 0.35),
             CGPoint(x: 0.7, y: 0.65), CGPoint(x: 0.5, y: 0.8),
@@ -89,7 +86,6 @@ struct FootballFormation {
             CGPoint(x: 0.3, y: 0.7), CGPoint(x: 0.5, y: 0.45)
         ], category: "Атака"),
         
-        // 7 игроков
         FootballFormation(name: "3-2-2", playerCount: 7, positions: [
             CGPoint(x: 0.2, y: 0.3), CGPoint(x: 0.5, y: 0.3),
             CGPoint(x: 0.8, y: 0.3), CGPoint(x: 0.65, y: 0.55),
@@ -118,7 +114,6 @@ struct FootballFormation {
             CGPoint(x: 0.3, y: 0.35)
         ], category: "Атака"),
         
-        // 8 игроков
         FootballFormation(name: "3-3-2", playerCount: 8, positions: [
             CGPoint(x: 0.2, y: 0.3), CGPoint(x: 0.5, y: 0.3),
             CGPoint(x: 0.8, y: 0.3), CGPoint(x: 0.8, y: 0.55),

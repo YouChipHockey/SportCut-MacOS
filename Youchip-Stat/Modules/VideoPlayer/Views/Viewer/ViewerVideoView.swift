@@ -26,39 +26,48 @@ struct ViewerVideoView: View {
     
     private var videoRotation: Double {
         guard videoSize.width > 0 && videoSize.height > 0 else { return 0 }
-        // Если высота больше ширины (портретная ориентация), поворачиваем на 90 градусов против часовой стрелки
         return videoSize.height > videoSize.width ? 90 : 0
     }
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
-                Text("Видео")
+                Text(^String.Titles.video)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                Spacer()
-                
-                // Drawing controls
                 HStack(spacing: 8) {
-                    // Drawing mode toggle
                     Button(action: {
-                        drawingState.isDrawingMode.toggle()
-                        if drawingState.isDrawingMode {
-                            // Pause video when entering drawing mode
+                        if playlistManager.isPlaying {
                             player?.pause()
                             playlistManager.isPlaying = false
                         }
+                        
+                        drawingState.showDrawingMenu.toggle()
                     }) {
-                        Image(systemName: drawingState.isDrawingMode ? "pencil.circle.fill" : "pencil.circle")
+                        Image(systemName: drawingState.showDrawingMenu ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
                             .font(.system(size: 16))
-                            .foregroundColor(drawingState.isDrawingMode ? .red : .gray)
+                            .foregroundColor(drawingState.showDrawingMenu ? .blue : .gray)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .help("Режим рисования")
+                    .help(^String.Titles.drawingTools)
+                    .popover(isPresented: $drawingState.showDrawingMenu, arrowEdge: .bottom) {
+                        DrawingToolsMenu(
+                            drawingState: drawingState,
+                            onReset: {
+                                drawingState.clearDrawing()
+                                drawingState.isDrawingMode = false
+                                drawingState.showDrawingMenu = false
+                                
+                                if !organizer.currentTags.isEmpty && !playlistManager.isPlaying {
+                                    playlistManager.setPlaylist(organizer.currentTags)
+                                    playlistManager.playPlaylist()
+                                    playCurrentPlaylist()
+                                }
+                            }
+                        )
+                    }
                     
-                    // Clear drawing
                     if drawingState.hasDrawing {
                         Button(action: {
                             drawingState.clearDrawing()
@@ -68,10 +77,9 @@ struct ViewerVideoView: View {
                                 .foregroundColor(.red)
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .help("Очистить рисунок")
+                        .help(^String.Titles.clearDrawing)
                     }
                     
-                    // Save screenshot
                     Button(action: {
                         saveScreenshot()
                     }) {
@@ -80,16 +88,13 @@ struct ViewerVideoView: View {
                             .foregroundColor(.blue)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .help("Сохранить скриншот")
+                    .help(^String.Titles.saveScreenshot)
                 }
                 
-                // Play/Pause button
                 if playlistManager.isPlaying {
                     Button(action: {
                         player?.pause()
                         playlistManager.isPlaying = false
-                        // Clear drawing when playing
-                        drawingState.clearDrawing()
                     }) {
                         Image(systemName: "pause.circle.fill")
                             .font(.system(size: 20))
@@ -99,13 +104,14 @@ struct ViewerVideoView: View {
                 } else {
                     Button(action: {
                         if organizer.currentTags.isEmpty {
-                            // Если органайзер пуст, показать сообщение
                         } else {
+                            drawingState.clearDrawing()
+                            drawingState.isDrawingMode = false
+                            drawingState.showDrawingMenu = false
+                            
                             playlistManager.setPlaylist(organizer.currentTags)
                             playlistManager.playPlaylist()
                             playCurrentPlaylist()
-                            // Clear drawing when playing
-                            drawingState.clearDrawing()
                         }
                     }) {
                         Image(systemName: "play.circle.fill")
@@ -114,6 +120,8 @@ struct ViewerVideoView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
+                
+                Spacer()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -121,7 +129,6 @@ struct ViewerVideoView: View {
             
             Divider()
             
-            // Video player area
             ZStack {
                 if let player = player {
                     VideoPlayer(player: player)
@@ -129,7 +136,6 @@ struct ViewerVideoView: View {
                         .rotationEffect(.degrees(videoRotation))
                         .background(Color.black)
                         .overlay(
-                            // Drawing overlay
                             DrawingOverlay(drawingState: drawingState)
                                 .allowsHitTesting(drawingState.isDrawingMode)
                         )
@@ -139,16 +145,16 @@ struct ViewerVideoView: View {
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
                         
-                        Text("Нет видео для воспроизведения")
+                        Text(^String.Titles.noVideoToPlay)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.secondary)
                         
                         if organizer.currentTags.isEmpty {
-                            Text("Добавьте теги в органайзер")
+                            Text(^String.Titles.addTagsToOrganizer)
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                         } else {
-                            Text("Нажмите кнопку воспроизведения")
+                            Text(^String.Titles.pressPlayButton)
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                         }
@@ -168,7 +174,6 @@ struct ViewerVideoView: View {
             removeNotifications()
         }
         .onChange(of: playlistManager.currentPlaylist) { _ in
-            // Когда плейлист изменился, нужно пересоздать композицию
             if playlistManager.isPlaying {
                 createCompositionFromPlaylist()
             }
@@ -183,7 +188,6 @@ struct ViewerVideoView: View {
     }
     
     private func setupPlayer() {
-        // Инициализация плеера
         player = AVPlayer()
         isPlayerReady = true
     }
@@ -210,7 +214,6 @@ struct ViewerVideoView: View {
     
     private func createCompositionFromPlaylist() {
         guard let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset else {
-            print("Original video asset not found")
             return
         }
         
@@ -218,7 +221,6 @@ struct ViewerVideoView: View {
         
         guard let videoTrack = originalAsset.tracks(withMediaType: .video).first,
               let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            print("Failed to create video track")
             return
         }
         
@@ -242,7 +244,6 @@ struct ViewerVideoView: View {
                 }
                 currentTime = currentTime + duration
             } catch {
-                print("Failed to insert time range: \(error)")
                 return
             }
         }
@@ -250,11 +251,7 @@ struct ViewerVideoView: View {
         currentComposition = composition
         let playerItem = AVPlayerItem(asset: composition)
         player?.replaceCurrentItem(with: playerItem)
-        
-        // Получаем размер видео
         updateVideoSize(from: originalAsset)
-        
-        // Воспроизводим
         player?.play()
         playlistManager.isPlaying = true
     }
@@ -266,19 +263,14 @@ struct ViewerVideoView: View {
         let size = videoTrack.naturalSize
         let transform = videoTrack.preferredTransform
         
-        // Учитываем трансформацию для получения правильного размера
         let actualSize: CGSize
         if transform.a == 0 && transform.b == 1.0 && transform.c == -1.0 && transform.d == 0 {
-            // Поворот на 90 градусов
             actualSize = CGSize(width: size.height, height: size.width)
         } else if transform.a == 0 && transform.b == -1.0 && transform.c == 1.0 && transform.d == 0 {
-            // Поворот на -90 градусов
             actualSize = CGSize(width: size.height, height: size.width)
         } else if transform.a == -1.0 && transform.b == 0 && transform.c == 0 && transform.d == -1.0 {
-            // Поворот на 180 градусов
             actualSize = size
         } else {
-            // Без поворота
             actualSize = size
         }
         
@@ -287,7 +279,6 @@ struct ViewerVideoView: View {
         }
     }
     
-    // MARK: - Notifications
     private func setupNotifications() {
         NotificationCenter.default.addObserver(
             forName: .playSingleTag,
@@ -295,6 +286,10 @@ struct ViewerVideoView: View {
             queue: .main
         ) { notification in
             if let tag = notification.object as? OrganizerTag {
+                self.drawingState.clearDrawing()
+                self.drawingState.isDrawingMode = false
+                self.drawingState.showDrawingMenu = false
+                
                 self.playSingleTag(tag)
             }
         }
@@ -313,23 +308,23 @@ struct ViewerVideoView: View {
         NotificationCenter.default.removeObserver(self, name: .stopViewerPlayer, object: nil)
     }
     
-    // MARK: - Public Methods
     func forceStopPlayer() {
-        cleanupPlayer()
+        if let observer = timeObserver {
+            player?.removeTimeObserver(observer)
+            timeObserver = nil
+        }
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        playlistManager.stopPlayback()
     }
     
-    // MARK: - Screenshot Functions
     private func saveScreenshot() {
-        // Pause video when taking screenshot
         player?.pause()
         playlistManager.isPlaying = false
         
         guard let player = player else { return }
         
-        // Get current time
         let currentTime = player.currentTime()
-        
-        // Create image generator
         let imageGenerator = AVAssetImageGenerator(asset: player.currentItem?.asset ?? AVAsset())
         imageGenerator.appliesPreferredTrackTransform = true
         imageGenerator.requestedTimeToleranceAfter = .zero
@@ -339,10 +334,7 @@ struct ViewerVideoView: View {
             let cgImage = try imageGenerator.copyCGImage(at: currentTime, actualTime: nil)
             let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
             
-            // Create final image with drawing overlay if exists
             let finalImage = createImageWithDrawing(originalImage: nsImage)
-            
-            // Save image
             let panel = NSSavePanel()
             panel.allowedFileTypes = ["png"]
             panel.nameFieldStringValue = "screenshot_\(Int(currentTime.seconds)).png"
@@ -352,11 +344,11 @@ struct ViewerVideoView: View {
                    let bitmapRep = NSBitmapImageRep(data: tiffData),
                    let pngData = bitmapRep.representation(using: .png, properties: [:]) {
                     try pngData.write(to: url)
-                    print("Скриншот сохранен: \(url)")
+                    print(String(format: ^String.Titles.screenshotSaved, url.path))
                 }
             }
         } catch {
-            print("Ошибка создания скриншота: \(error)")
+            print(String(format: ^String.Titles.errorCreatingScreenshot, error.localizedDescription))
         }
     }
     
@@ -365,16 +357,10 @@ struct ViewerVideoView: View {
         let finalImage = NSImage(size: size)
         
         finalImage.lockFocus()
-        
-        // Draw original image
         originalImage.draw(in: NSRect(origin: .zero, size: size))
-        
-        // Draw completed paths
         for path in drawingState.completedPaths {
             drawPath(path, in: NSRect(origin: .zero, size: size))
         }
-        
-        // Draw current path
         if !drawingState.currentPath.points.isEmpty {
             drawPath(drawingState.currentPath, in: NSRect(origin: .zero, size: size))
         }
@@ -388,56 +374,75 @@ struct ViewerVideoView: View {
         guard path.points.count > 1 else { return }
         
         let bezierPath = NSBezierPath()
-        bezierPath.move(to: path.points[0])
         
+        let viewSize = drawingState.viewSize
+        let scaleX = viewSize.width > 0 ? rect.width / viewSize.width : 1.0
+        let scaleY = viewSize.height > 0 ? rect.height / viewSize.height : 1.0
+        let scaledX = path.points[0].x * scaleX
+        let scaledY = path.points[0].y * scaleY
+        let flippedFirstPoint = CGPoint(x: scaledX, y: rect.height - scaledY)
+        bezierPath.move(to: flippedFirstPoint)
         for i in 1..<path.points.count {
-            bezierPath.line(to: path.points[i])
+            let scaledX = path.points[i].x * scaleX
+            let scaledY = path.points[i].y * scaleY
+            let flippedPoint = CGPoint(x: scaledX, y: rect.height - scaledY)
+            bezierPath.line(to: flippedPoint)
         }
-        
-        NSColor.red.setStroke()
-        bezierPath.lineWidth = path.lineWidth
+        NSColor(path.color).setStroke()
+        let scale = max(scaleX, scaleY)
+        bezierPath.lineWidth = path.lineWidth * scale
         bezierPath.lineCapStyle = .round
         bezierPath.lineJoinStyle = .round
+        if let dashPattern = path.lineStyle.dashPattern {
+            let scaledDashPattern = dashPattern.map { $0 * scale }
+            bezierPath.setLineDash(scaledDashPattern, count: scaledDashPattern.count, phase: 0)
+        }
+        
         bezierPath.stroke()
     }
 }
 
-// MARK: - Drawing Overlay
 struct DrawingOverlay: View {
     @ObservedObject var drawingState: DrawingState
     @State private var dragLocation: CGPoint = .zero
     
     var body: some View {
-        Canvas { context, size in
-            // Draw completed paths
-            for path in drawingState.completedPaths {
-                drawPath(path, in: context, size: size)
+        GeometryReader { geometry in
+            Canvas { context, size in
+                DispatchQueue.main.async {
+                    if drawingState.viewSize != size {
+                        drawingState.viewSize = size
+                    }
+                }
+                
+                for path in drawingState.completedPaths {
+                    drawPath(path, in: context, size: size)
+                }
+                
+                if !drawingState.currentPath.points.isEmpty {
+                    drawPath(drawingState.currentPath, in: context, size: size)
+                }
             }
-            
-            // Draw current path
-            if !drawingState.currentPath.points.isEmpty {
-                drawPath(drawingState.currentPath, in: context, size: size)
-            }
-        }
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    if drawingState.isDrawingMode {
-                        let location = value.location
-                        
-                        if drawingState.currentPath.points.isEmpty {
-                            drawingState.startNewPath(at: location)
-                        } else {
-                            drawingState.addPoint(location)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if drawingState.isDrawingMode {
+                            let location = value.location
+                            
+                            if drawingState.currentPath.points.isEmpty {
+                                drawingState.startNewPath(at: location)
+                            } else {
+                                drawingState.addPoint(location)
+                            }
                         }
                     }
-                }
-                .onEnded { _ in
-                    if drawingState.isDrawingMode {
-                        drawingState.finishPath()
+                    .onEnded { _ in
+                        if drawingState.isDrawingMode {
+                            drawingState.finishPath()
+                        }
                     }
-                }
-        )
+            )
+        }
     }
     
     private func drawPath(_ drawingPath: DrawingPath, in context: GraphicsContext, size: CGSize) {
@@ -450,10 +455,289 @@ struct DrawingOverlay: View {
             path.addLine(to: drawingPath.points[i])
         }
         
+        var strokeStyle = StrokeStyle(lineWidth: drawingPath.lineWidth, lineCap: .round, lineJoin: .round)
+        if let dashPattern = drawingPath.lineStyle.dashPattern {
+            strokeStyle.dash = dashPattern
+        }
+        
         context.stroke(
             path,
-            with: .color(.red),
-            lineWidth: drawingPath.lineWidth
+            with: .color(drawingPath.color),
+            style: strokeStyle
         )
+    }
+}
+
+struct DrawingToolsMenu: View {
+    @ObservedObject var drawingState: DrawingState
+    @State private var showSettings = false
+    let onReset: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            Text(^String.Titles.drawingTools)
+                .font(.system(size: 14, weight: .semibold))
+                .padding(.top, 8)
+            
+            Divider()
+            
+            Button(action: {
+                if drawingState.currentTool == .pencil && drawingState.isDrawingMode {
+                    drawingState.isDrawingMode = false
+                } else {
+                    drawingState.currentTool = .pencil
+                    drawingState.isDrawingMode = true
+                }
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "pencil.tip")
+                        .font(.system(size: 16))
+                        .foregroundColor(drawingState.currentTool == .pencil && drawingState.isDrawingMode ? .blue : .primary)
+                    
+                    Text(^String.Titles.pencil)
+                        .font(.system(size: 13))
+                    
+                    Spacer()
+                    
+                    if drawingState.currentTool == .pencil && drawingState.isDrawingMode {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(drawingState.currentTool == .pencil && drawingState.isDrawingMode ? Color.blue.opacity(0.1) : Color.clear)
+                .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            Button(action: {
+                if drawingState.currentTool == .eraser && drawingState.isDrawingMode {
+                    drawingState.isDrawingMode = false
+                } else {
+                    drawingState.currentTool = .eraser
+                    drawingState.isDrawingMode = true
+                }
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "eraser")
+                        .font(.system(size: 16))
+                        .foregroundColor(drawingState.currentTool == .eraser && drawingState.isDrawingMode ? .blue : .primary)
+                    
+                    Text(^String.Titles.eraser)
+                        .font(.system(size: 13))
+                    
+                    Spacer()
+                    
+                    if drawingState.currentTool == .eraser && drawingState.isDrawingMode {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(drawingState.currentTool == .eraser && drawingState.isDrawingMode ? Color.blue.opacity(0.1) : Color.clear)
+                .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            Divider()
+            
+            Button(action: {
+                showSettings = true
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 16))
+                    
+                    Text(^String.Titles.settings)
+                        .font(.system(size: 13))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            Divider()
+            
+            Button(action: {
+                onReset()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.counterclockwise.circle")
+                        .font(.system(size: 16))
+                        .foregroundColor(.green)
+                    
+                    Text(^String.Titles.reset)
+                        .font(.system(size: 13))
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.vertical, 8)
+        .frame(width: 200)
+        .sheet(isPresented: $showSettings) {
+            DrawingSettingsSheet(settings: drawingState.settings)
+        }
+    }
+}
+
+struct DrawingSettingsSheet: View {
+    @ObservedObject var settings: DrawingSettings
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text(^String.Titles.drawingSettings)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top)
+            
+            Divider()
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.lineWidth)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        
+                        HStack {
+                            Slider(value: $settings.lineWidth, in: 1...20, step: 1)
+                            
+                            Text("\(Int(settings.lineWidth)) \(^String.Titles.pixels)")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                        
+                        Rectangle()
+                            .fill(settings.color)
+                            .frame(height: settings.lineWidth)
+                            .cornerRadius(settings.lineWidth / 2)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.lineStyleDrawing)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                settings.lineStyle = .solid
+                            }) {
+                                VStack(spacing: 4) {
+                                    Rectangle()
+                                        .fill(settings.lineStyle == .solid ? Color.blue : Color.gray)
+                                        .frame(width: 60, height: 4)
+                                    
+                                    Text(^String.Titles.normal)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(settings.lineStyle == .solid ? .blue : .secondary)
+                                }
+                                .padding(8)
+                                .background(settings.lineStyle == .solid ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Button(action: {
+                                settings.lineStyle = .dashed
+                            }) {
+                                VStack(spacing: 4) {
+                                    HStack(spacing: 2) {
+                                        ForEach(0..<3) { _ in
+                                            Rectangle()
+                                                .fill(settings.lineStyle == .dashed ? Color.blue : Color.gray)
+                                                .frame(width: 12, height: 4)
+                                        }
+                                    }
+                                    
+                                    Text(^String.Titles.dashed)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(settings.lineStyle == .dashed ? .blue : .secondary)
+                                }
+                                .padding(8)
+                                .background(settings.lineStyle == .dashed ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.color)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        
+                        ColorPicker(^String.Titles.selectColor, selection: $settings.color)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.eraserWidth)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        
+                        HStack {
+                            Slider(value: $settings.eraserWidth, in: 10...50, step: 5)
+                            
+                            Text("\(Int(settings.eraserWidth)) \(^String.Titles.pixels)")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            
+            Spacer()
+            
+            Divider()
+            
+            HStack(spacing: 12) {
+                Button(action: {
+                    presentationMode.wrappedValue.dismiss()
+                }) {
+                    Text(^String.Titles.closeButtonTitle)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.gray.opacity(0.2))
+                        .cornerRadius(8)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Button(action: {
+                    presentationMode.wrappedValue.dismiss()
+                }) {
+                    Text(^String.Titles.apply)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+        .frame(width: 350, height: 500)
     }
 }

@@ -14,7 +14,6 @@ struct FormationCard: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 12) {
-                // Formation preview
                 ZStack {
                     Rectangle()
                         .fill(Color.green.opacity(0.1))

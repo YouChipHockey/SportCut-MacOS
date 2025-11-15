@@ -70,7 +70,6 @@ class ViewsFactory {
             .background(background)
             .clipShape(RoundedRectangle(cornerRadius: 5))
         }
-        //        .frame(maxWidth: .infinity)
         .buttonStyle(PlainButtonStyle())
         .shadow(radius: 2)
     }
@@ -89,7 +88,6 @@ class ViewsFactory {
             .background(Color.appSystemWhite)
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
-        //        .frame(maxWidth: .infinity)
         .buttonStyle(PlainButtonStyle())
         .shadow(radius: 2)
     }
@@ -108,7 +106,6 @@ class ViewsFactory {
             .background(Color.hex_007AFF)
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
-        //        .frame(maxWidth: .infinity)
         .buttonStyle(PlainButtonStyle())
         .shadow(radius: 2)
     }

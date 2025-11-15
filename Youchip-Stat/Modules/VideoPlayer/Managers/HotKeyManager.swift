@@ -136,6 +136,23 @@ class HotKeyManager: ObservableObject {
             return false
         }
         
+        if event.keyCode == 49 {
+            VideoPlayerManager.shared.togglePlayPause()
+            return true
+        }
+        
+        if event.modifierFlags.contains(.shift) {
+            switch event.keyCode {
+            case 123:
+                VideoPlayerManager.shared.seek(by: -3)
+                return true
+            case 124:
+                VideoPlayerManager.shared.seek(by: 3)
+                return true
+            default:
+                break
+            }
+        }
         
         let hotkeyString = hotkeyStringFromEvent(event)
         

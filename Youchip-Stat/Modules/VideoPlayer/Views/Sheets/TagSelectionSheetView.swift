@@ -20,7 +20,7 @@ struct TagSelectionSheetView: View {
     
     let uniqueTags: [Tag]
     let onSelect: (Tag) -> Void
-    let onSelectWithLabels: (Tag) -> Void // Новый обработчик для выбора с лейблами
+    let onSelectWithLabels: (Tag) -> Void
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @Environment(\.presentationMode) var presentationMode
     
@@ -37,7 +37,6 @@ struct TagSelectionSheetView: View {
                                 Text(tag.name)
                                 Spacer()
                                 
-                                // Кнопка для перехода к выбору лейблов
                                 if hasLabelsForTag(tag) {
                                     Button(action: {
                                         onSelectWithLabels(tag)
@@ -75,7 +74,6 @@ struct TagSelectionSheetView: View {
     }
     
     private func hasLabelsForTag(_ tag: Tag) -> Bool {
-        // Проверяем, есть ли у этого тега какие-либо лейблы в таймлайнах
         let timelineData = TimelineDataManager.shared
         return timelineData.lines.contains { line in
             line.stamps.contains { stamp in

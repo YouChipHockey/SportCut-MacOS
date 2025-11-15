@@ -21,6 +21,7 @@ class VideoPlayerManager: ObservableObject {
         player?.currentItem?.duration.seconds ?? 0
     }
     private var timeObserverToken: Any?
+    
     func loadVideo(from url: URL) {
         player = AVPlayer(url: url)
         player?.play()
@@ -34,8 +35,10 @@ class VideoPlayerManager: ObservableObject {
         }
         
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
-            self?.startTimeObserver()
+        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            guard let self = self else { return }
+            self.currentTime = self.player?.currentTime().seconds ?? time
+            self.startTimeObserver()
         }
     }
     func deleteVideo() {
@@ -64,7 +67,9 @@ class VideoPlayerManager: ObservableObject {
         }
     }
     func seek(by seconds: Double) {
-        seek(to: currentTime + seconds)
+        guard let player = player else { return }
+        let actualCurrentTime = player.currentTime().seconds
+        seek(to: actualCurrentTime + seconds)
     }
     func changePlaybackSpeed(to speed: Double) {
         playbackSpeed = speed

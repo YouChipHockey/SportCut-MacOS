@@ -59,7 +59,6 @@ struct ScreenshotsGalleryView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar
             if !screenshots.isEmpty {
                 HStack {
                     Text("\(screenshots.count) \(^String.Titles.screenshotsCount)")
@@ -218,21 +217,12 @@ struct ScreenshotsGalleryView: View {
             }
             
             DispatchQueue.main.async {
-                // Remove deleted screenshots from the array
                 self.screenshots.removeAll { screenshot in
                     self.screenshotsToDelete.contains { $0.id == screenshot.id }
                 }
                 
-                // Clear selection
                 self.selectedScreenshots.removeAll()
-                self.screenshotsToDelete.removeAll()
-                
-                // Show result
-                if !errors.isEmpty {
-                    print("Ошибки при удалении: \(errors.joined(separator: ", "))")
-                }
-                
-                print("Удалено скриншотов: \(deletedCount)")
+                self.screenshotsToDelete.removeAll()                
             }
         }
     }
