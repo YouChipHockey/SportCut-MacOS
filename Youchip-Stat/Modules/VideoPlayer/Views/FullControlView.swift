@@ -182,29 +182,42 @@ struct FullControlView: View {
             
             for line in timelineData.lines {
                 for stamp in line.stamps {
-                    if stamp.idTag == selectedTag.id {
-                        guard let correctedTime = correctTimeRange(
-                            startSeconds: stamp.startSeconds,
-                            durationSeconds: stamp.duration,
-                            maxVideoDuration: maxVideoDuration
-                        ) else {
-                            continue
-                        }
-                        
-                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
-                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
-                        result.append(
-                            ExportSegment(
-                                timeRange: CMTimeRange(start: start, duration: duration),
-                                lineName: line.name,
-                                tagName: stamp.label,
-                                groupName: possibleGroup?.name,
-                                labels: nil,
-                                labelGroupName: nil,
-                                selectedLabel: nil
-                            )
-                        )
+                    guard stamp.idTag == selectedTag.id else {
+                        continue
                     }
+                    
+                    guard let correctedTime = correctTimeRange(
+                        startSeconds: stamp.startSeconds,
+                        durationSeconds: stamp.duration,
+                        maxVideoDuration: maxVideoDuration
+                    ) else {
+                        continue
+                    }
+                    
+                    let segmentRatio = correctedTime.duration / maxVideoDuration
+                    if correctedTime.start < 0.1 && segmentRatio > 0.99 {
+                        print("Пропущен сегмент тега '\(stamp.label)' в getSegmentsForExport: покрывает \(segmentRatio * 100)% видео")
+                        continue
+                    }
+                    
+                    if correctedTime.duration < 0.1 {
+                        print("Пропущен слишком короткий сегмент тега '\(stamp.label)': duration=\(correctedTime.duration)")
+                        continue
+                    }
+                    
+                    let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
+                    let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
+                    result.append(
+                        ExportSegment(
+                            timeRange: CMTimeRange(start: start, duration: duration),
+                            lineName: line.name,
+                            tagName: stamp.label,
+                            groupName: possibleGroup?.name,
+                            labels: nil,
+                            labelGroupName: nil,
+                            selectedLabel: nil
+                        )
+                    )
                 }
             }
         case .timeEvent(let selectedEvent):
@@ -358,6 +371,12 @@ struct FullControlView: View {
     }
     
     func exportFilm(segments: [ExportSegment], asset: AVAsset, type: CutsExportType, completion: @escaping (Result<URL, Error>) -> Void) {
+        // Проверка на пустоту сегментов перед созданием композиции
+        if segments.isEmpty {
+            completion(.failure(NSError(domain: "Export", code: -1, userInfo: [NSLocalizedDescriptionKey: "No segments to export"])))
+            return
+        }
+        
         let composition = AVMutableComposition()
         
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
@@ -365,6 +384,9 @@ struct FullControlView: View {
             return
         }
         let audioTrack = asset.tracks(withMediaType: .audio).first
+        
+        // Получаем длительность видео для валидации сегментов
+        let videoDuration = CMTimeGetSeconds(asset.duration)
         
         guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             completion(.failure(NSError(domain: "Export", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])))
@@ -377,6 +399,17 @@ struct FullControlView: View {
         
         var currentTime = CMTime.zero
         for segment in segments {
+            // Проверяем, что сегмент не равен всему видео (с допуском 0.1 секунды)
+            let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
+            let segmentDuration = CMTimeGetSeconds(segment.timeRange.duration)
+            let segmentEnd = segmentStart + segmentDuration
+            
+            // Пропускаем сегменты, которые покрывают почти всё видео (более 99% длительности)
+            if segmentStart < 0.1 && segmentEnd > videoDuration * 0.99 {
+                print("Пропущен сегмент, который равен всему видео: start=\(segmentStart), duration=\(segmentDuration), videoDuration=\(videoDuration)")
+                continue
+            }
+            
             do {
                 try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: currentTime)
                 if let compAudio = compAudioTrack, let aTrack = audioTrack {
@@ -387,6 +420,12 @@ struct FullControlView: View {
                 completion(.failure(error))
                 return
             }
+        }
+        
+        // Проверяем, что в композицию были добавлены сегменты
+        if currentTime == CMTime.zero {
+            completion(.failure(NSError(domain: "Export", code: -2, userInfo: [NSLocalizedDescriptionKey: "No valid segments to export"])))
+            return
         }
         
         let fileName: String
@@ -459,7 +498,21 @@ struct FullControlView: View {
         }
         let audioTrack = asset.tracks(withMediaType: .audio).first
         
+        // Получаем длительность видео для валидации сегментов
+        let videoDuration = CMTimeGetSeconds(asset.duration)
+        
         for (index, segment) in segments.enumerated() {
+            // Проверяем, что сегмент не равен всему видео (с допуском 0.1 секунды)
+            let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
+            let segmentDuration = CMTimeGetSeconds(segment.timeRange.duration)
+            let segmentEnd = segmentStart + segmentDuration
+            
+            // Пропускаем сегменты, которые покрывают почти всё видео (более 99% длительности)
+            if segmentStart < 0.1 && segmentEnd > videoDuration * 0.99 {
+                print("Пропущен сегмент в плейлисте, который равен всему видео: start=\(segmentStart), duration=\(segmentDuration), videoDuration=\(videoDuration)")
+                continue
+            }
+            
             group.enter()
             
             let composition = AVMutableComposition()
@@ -547,6 +600,8 @@ struct FullControlView: View {
         group.notify(queue: .main) {
             if let error = exportError {
                 completion(.failure(error))
+            } else if exportedURLs.isEmpty {
+                completion(.failure(NSError(domain: "Export", code: -3, userInfo: [NSLocalizedDescriptionKey: "No valid segments were exported"])))
             } else {
                 compressFiles(urls: exportedURLs, completion: completion)
             }

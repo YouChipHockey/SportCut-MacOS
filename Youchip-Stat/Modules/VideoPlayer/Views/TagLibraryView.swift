@@ -157,29 +157,23 @@ struct TagLibraryView: View {
             HStack {
                 collectionTitleView
                 Spacer()
-                if #available(macOS 26.0, *) {
-                    Button(action: {
-                        WindowsManager.shared.openCustomCollectionsWindow()
-                    }) {
-                        HStack {
-                            Image(systemName: "plus.circle")
-                            Text(^String.Titles.createCollection)
-                        }
+                Button(action: {
+                    WindowsManager.shared.openCustomCollectionsWindow()
+                }) {
+                    HStack {
+                        Image(systemName: "plus.circle")
+                        Text(^String.Titles.createCollection)
                     }
-                    .buttonStyle(.borderless)
-                    .help(^String.Titles.createCollection)
-                    .disabled(!activeIntervalTags.isEmpty)
-                } else {
-                    collectionsMenuButton
                 }
+                .buttonStyle(.borderless)
+                .help(^String.Titles.createCollection)
+                .disabled(!activeIntervalTags.isEmpty)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(Color(.windowBackgroundColor))
             
-            if #available(macOS 26.0, *) {
-                collectionsScrollView
-            }
+            collectionsScrollView
             
             Divider()
                 .background(Color(.separatorColor))
@@ -240,7 +234,6 @@ struct TagLibraryView: View {
         }
     }
     
-    @available(macOS 26.0, *)
     private var collectionsScrollView: some View {
         VStack(spacing: 8) {
             if !tagLibrary.standardCollections.isEmpty {
@@ -286,7 +279,6 @@ struct TagLibraryView: View {
         .background(Color(.controlBackgroundColor))
     }
     
-    @available(macOS 26.0, *)
     private func standardCollectionChip(collection: StandardCollection, isSelected: Bool) -> some View {
         Button(action: {
             guard activeIntervalTags.isEmpty else { return }
@@ -325,7 +317,6 @@ struct TagLibraryView: View {
         .disabled(!activeIntervalTags.isEmpty)
     }
     
-    @available(macOS 26.0, *)
     private func customCollectionChip(collection: CollectionBookmark) -> some View {
         let isSelected = isUserCollectionActive && selectedUserCollection?.name == collection.name
         

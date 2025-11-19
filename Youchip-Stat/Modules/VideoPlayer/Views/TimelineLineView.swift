@@ -27,6 +27,18 @@ struct TimelineLineView: View {
     @State private var isDraggingOver = false
     @Binding var scrollOffset: CGFloat
     
+    // State for edge resizing
+    @State private var resizingStampID: UUID? = nil
+    @State private var resizingEdge: ResizeEdge? = nil
+    @State private var dragStartTime: Double = 0
+    @State private var originalStartTime: Double = 0
+    @State private var originalEndTime: Double = 0
+    
+    enum ResizeEdge {
+        case left
+        case right
+    }
+    
     private func getOverlapCount(stamp: TimelineStamp, stamps: [TimelineStamp], stampIndex: Int) -> Int {
         var count = 0
         
@@ -93,80 +105,12 @@ struct TimelineLineView: View {
                         timelineData.selectStamp(stampID: nil)
                     }
                     ForEach(Array(line.stamps.enumerated()), id: \.element.id) { index, stamp in
-                        let currentStartTime = stamp.startSeconds
-                        let currentEndTime = stamp.finishSeconds
-                        let currentDuration = currentEndTime - currentStartTime
-                        
-                        let startRatio = currentStartTime / totalDuration
-                        let durationRatio = currentDuration / totalDuration
-                        
-                        let stampWidth = durationRatio * widthMax
-                        let stampX = startRatio * widthMax
-                        
-                        let isSelected = timelineData.selectedStampID == stamp.id
-                        let overlapCount = getOverlapCount(stamp: stamp, stamps: line.stamps, stampIndex: index)
-                        let hasOverlaps = overlapCount > 0
-                        
-                        let borderColor = (hasOverlaps && !isSelected) ? Color.red :
-                        (isSelected && hasOverlaps) ? Color.red :
-                        (isSelected) ? Color.blue : Color.clear
-                        let heightReduction = CGFloat(overlapCount * 6)
-                        let stampHeight: CGFloat = 25 - heightReduction
-                        let verticalOffset = (30 - stampHeight) / 2
-                        
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            stamp.color,
-                                            stamp.color.opacity(0.8)
-                                        ]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .frame(height: stampHeight)
-                                .shadow(
-                                    color: stamp.color.opacity(0.3),
-                                    radius: isSelected ? 4 : 2,
-                                    x: 0,
-                                    y: isSelected ? 2 : 1
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(borderColor, lineWidth: isSelected ? 2.5 : 1.5)
-                                )
-                            
-                            StampLabelsOverlayView(
-                                stamp: stamp,
-                                maxWidth: stampWidth
-                            )
-                            .frame(height: stampHeight)
-                            .padding(.horizontal, 4)
-                        }
-                        .frame(width: stampWidth, height: stampHeight)
-                        .position(x: stampX + stampWidth / 2, y: 15)
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                videoManager.seek(to: stamp.startSeconds)
-                                timelineData.selectStamp(stampID: stamp.id)
-                                videoManager.player?.play()
-                            }
-                        }
-                        .onDrag {
-                            let stampInfo = StampDragInfo(
-                                lineID: line.id,
-                                stampID: stamp.id
-                            )
-                            if let data = try? JSONEncoder().encode(stampInfo) {
-                                return NSItemProvider(item: data as NSData, typeIdentifier: UTType.plainText.identifier)
-                            }
-                            return NSItemProvider()
-                        }
-                        .contextMenu {
-                            menuForTag(stamp: stamp)
-                        }
+                        stampView(
+                            stamp: stamp,
+                            index: index,
+                            totalDuration: totalDuration,
+                            widthMax: widthMax
+                        )
                     }
                 }
             }
@@ -178,6 +122,203 @@ struct TimelineLineView: View {
                     }
             )
         }
+    }
+    
+    @ViewBuilder
+    private func stampView(stamp: TimelineStamp, index: Int, totalDuration: Double, widthMax: CGFloat) -> some View {
+        let isResizing = resizingStampID == stamp.id
+        let currentStartTime = isResizing && resizingEdge == .left ? dragStartTime : stamp.startSeconds
+        let currentEndTime = isResizing && resizingEdge == .right ? dragStartTime : stamp.finishSeconds
+        let currentDuration = currentEndTime - currentStartTime
+        
+        let startRatio = currentStartTime / totalDuration
+        let durationRatio = currentDuration / totalDuration
+        
+        let stampWidth = max(durationRatio * widthMax, 10) // Minimum width
+        let stampX = startRatio * widthMax
+        
+        let isSelected = timelineData.selectedStampID == stamp.id
+        let overlapCount = getOverlapCount(stamp: stamp, stamps: line.stamps, stampIndex: index)
+        let hasOverlaps = overlapCount > 0
+        
+        let borderColor = (hasOverlaps && !isSelected) ? Color.red :
+        (isSelected && hasOverlaps) ? Color.red :
+        (isSelected) ? Color.blue : Color.clear
+        let heightReduction = CGFloat(overlapCount * 6)
+        let stampHeight: CGFloat = 25 - heightReduction
+        
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            stamp.color,
+                            stamp.color.opacity(0.8)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(height: stampHeight)
+                .shadow(
+                    color: stamp.color.opacity(0.3),
+                    radius: isSelected ? 4 : 2,
+                    x: 0,
+                    y: isSelected ? 2 : 1
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(borderColor, lineWidth: isSelected ? 2.5 : 1.5)
+                )
+            
+            StampLabelsOverlayView(
+                stamp: stamp,
+                maxWidth: stampWidth
+            )
+            .frame(height: stampHeight)
+            .padding(.horizontal, 4)
+        }
+        .overlay(
+            edgeHandlesView(
+                stamp: stamp,
+                isSelected: isSelected,
+                stampHeight: stampHeight,
+                stampWidth: stampWidth,
+                totalDuration: totalDuration,
+                widthMax: widthMax
+            )
+        )
+        .frame(width: stampWidth, height: stampHeight)
+        .position(x: stampX + stampWidth / 2, y: 15)
+        .onTapGesture {
+            if resizingStampID == nil {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    videoManager.seek(to: stamp.startSeconds)
+                    timelineData.selectStamp(stampID: stamp.id)
+                    videoManager.player?.play()
+                }
+            }
+        }
+        .onDrag {
+            if resizingStampID == nil {
+                let stampInfo = StampDragInfo(
+                    lineID: line.id,
+                    stampID: stamp.id
+                )
+                if let data = try? JSONEncoder().encode(stampInfo) {
+                    return NSItemProvider(item: data as NSData, typeIdentifier: UTType.plainText.identifier)
+                }
+            }
+            return NSItemProvider()
+        }
+        .contextMenu {
+            menuForTag(stamp: stamp)
+        }
+    }
+    
+    @ViewBuilder
+    private func edgeHandlesView(
+        stamp: TimelineStamp,
+        isSelected: Bool,
+        stampHeight: CGFloat,
+        stampWidth: CGFloat,
+        totalDuration: Double,
+        widthMax: CGFloat
+    ) -> some View {
+        Group {
+            if isSelected {
+                HStack(spacing: 0) {
+                    // Left edge handle
+                    EdgeResizeHandle(
+                        edge: .left,
+                        stampHeight: stampHeight
+                    )
+                    .frame(width: 8)
+                    .gesture(
+                        leftEdgeDragGesture(
+                            stamp: stamp,
+                            totalDuration: totalDuration,
+                            widthMax: widthMax
+                        )
+                    )
+                    
+                    Spacer()
+                    
+                    // Right edge handle
+                    EdgeResizeHandle(
+                        edge: .right,
+                        stampHeight: stampHeight
+                    )
+                    .frame(width: 8)
+                    .gesture(
+                        rightEdgeDragGesture(
+                            stamp: stamp,
+                            totalDuration: totalDuration,
+                            widthMax: widthMax
+                        )
+                    )
+                }
+                .frame(width: stampWidth)
+            }
+        }
+    }
+    
+    private func leftEdgeDragGesture(stamp: TimelineStamp, totalDuration: Double, widthMax: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if resizingStampID != stamp.id {
+                    resizingStampID = stamp.id
+                    resizingEdge = .left
+                    originalStartTime = stamp.startSeconds
+                    originalEndTime = stamp.finishSeconds
+                }
+                
+                let deltaX = value.translation.width
+                let deltaTime = (deltaX / widthMax) * totalDuration
+                let newStartTime = max(0, min(originalStartTime + deltaTime, originalEndTime - 0.5))
+                dragStartTime = newStartTime
+            }
+            .onEnded { _ in
+                if let stampID = resizingStampID, resizingEdge == .left {
+                    let finalStartTime = dragStartTime
+                    timelineData.updateStampTime(
+                        lineID: line.id,
+                        stampID: stampID,
+                        newStart: finalStartTime
+                    )
+                }
+                resizingStampID = nil
+                resizingEdge = nil
+            }
+    }
+    
+    private func rightEdgeDragGesture(stamp: TimelineStamp, totalDuration: Double, widthMax: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if resizingStampID != stamp.id {
+                    resizingStampID = stamp.id
+                    resizingEdge = .right
+                    originalStartTime = stamp.startSeconds
+                    originalEndTime = stamp.finishSeconds
+                }
+                
+                let deltaX = value.translation.width
+                let deltaTime = (deltaX / widthMax) * totalDuration
+                let newEndTime = max(originalStartTime + 0.5, min(originalEndTime + deltaTime, totalDuration))
+                dragStartTime = newEndTime
+            }
+            .onEnded { _ in
+                if let stampID = resizingStampID, resizingEdge == .right {
+                    let finalEndTime = dragStartTime
+                    timelineData.updateStampTime(
+                        lineID: line.id,
+                        stampID: stampID,
+                        newEnd: finalEndTime
+                    )
+                }
+                resizingStampID = nil
+                resizingEdge = nil
+            }
     }
     
     @ViewBuilder
@@ -249,5 +390,26 @@ struct TimelineLineView: View {
         timelineData.lines[destLineIndex].stamps.append(newStamp)
         timelineData.lines[sourceLineIndex].stamps.remove(at: stampIndex)
         timelineData.updateTimelines()
+    }
+}
+
+// Edge resize handle view
+struct EdgeResizeHandle: View {
+    let edge: TimelineLineView.ResizeEdge
+    let stampHeight: CGFloat
+    
+    private let handleWidth: CGFloat = 8
+    private let handleHeight: CGFloat = 20
+    
+    var body: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.8))
+            .frame(width: handleWidth, height: min(handleHeight, stampHeight))
+            .overlay(
+                Rectangle()
+                    .stroke(Color.blue, lineWidth: 1.5)
+            )
+            .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+            .contentShape(Rectangle())
     }
 }
