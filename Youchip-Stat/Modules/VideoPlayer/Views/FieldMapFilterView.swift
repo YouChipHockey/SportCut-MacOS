@@ -83,6 +83,7 @@ struct FieldMapFilterView: View {
                     onApply()
                 }
                 .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal)
         }

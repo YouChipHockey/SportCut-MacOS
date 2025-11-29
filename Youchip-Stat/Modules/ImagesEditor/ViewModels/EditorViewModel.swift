@@ -282,6 +282,7 @@ struct ScreenshotNameSheet: View {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .disabled(screenshotName.isEmpty)
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding()

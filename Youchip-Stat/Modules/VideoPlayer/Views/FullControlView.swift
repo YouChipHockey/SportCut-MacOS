@@ -42,9 +42,10 @@ struct FullControlView: View {
             }
             
             switch event.keyCode {
-            case 53:
-                timelineData.selectStamp(stampID: nil)
-                return nil
+            /// removed because it blocks "escape" from handling cancelAction in sheets 
+//            case 53:
+//                timelineData.selectStamp(stampID: nil)
+//                return nil
             case 51:
                 if event.modifierFlags.contains(.option) {
                     if let stampID = timelineData.selectedStampID {
@@ -2520,6 +2521,7 @@ struct MultiTagSelectionSheetView: View {
                     onDone(selected)
                 }
                 .disabled(selectedTags.isEmpty)
+                .keyboardShortcut(.defaultAction)
             }
             .padding()
         }

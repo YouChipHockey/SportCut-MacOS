@@ -570,6 +570,7 @@ struct TimelineFilterSheet: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .foregroundColor(.blue)
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal)
             .padding(.bottom)

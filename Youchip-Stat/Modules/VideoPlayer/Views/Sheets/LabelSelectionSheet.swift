@@ -27,7 +27,6 @@ struct LabelSelectionSheet: View {
     @State private var markupMode = MarkupMode.current
     @ObservedObject var timelineData = TimelineDataManager.shared
     @State private var hotkeyObserver: Any? = nil
-    @State private var keyEventMonitor: Any? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -112,6 +111,7 @@ struct LabelSelectionSheet: View {
                 Button(^String.Titles.collectionsButtonAdd) {
                     completeSelection()
                 }
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding()
@@ -119,12 +119,10 @@ struct LabelSelectionSheet: View {
         .onAppear {
             selectedLabels = Set(initialLabels)
             setupLabelHotkeys()
-            setupEnterKeyMonitor()
             markupMode = MarkupMode.current
         }
         .onDisappear {
             cleanupHotkeys()
-            removeEnterKeyMonitor()
         }
     }
     
@@ -151,23 +149,6 @@ struct LabelSelectionSheet: View {
                     selectedLabels.insert(labelInfo.labelId)
                 }
             }
-        }
-    }
-    
-    private func setupEnterKeyMonitor() {
-        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 36 || event.keyCode == 76 {
-                completeSelection()
-                return nil
-            }
-            return event
-        }
-    }
-    
-    private func removeEnterKeyMonitor() {
-        if let monitor = keyEventMonitor {
-            NSEvent.removeMonitor(monitor)
-            keyEventMonitor = nil
         }
     }
     

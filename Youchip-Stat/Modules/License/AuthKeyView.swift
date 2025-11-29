@@ -66,6 +66,7 @@ struct AuthKeyView: View {
                 }
                 .disabled(authManager.isValidating)
                 .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
             }
             .padding()
         }

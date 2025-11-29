@@ -2610,7 +2610,6 @@ struct CreateCustomCollectionsView: View {
                         newGroupName = ""
                     }
                 }
-                .keyboardShortcut(.escape)
                 .buttonStyle(SecondaryButtonStyle())
                 
                 Button(^String.Titles.collectionsButtonAdd) {
@@ -2624,9 +2623,9 @@ struct CreateCustomCollectionsView: View {
                         showAddTagGroupSheet = false
                     }
                 }
-                .keyboardShortcut(.return)
                 .disabled(newGroupName.isEmpty)
                 .buttonStyle(PrimaryButtonStyle())
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
@@ -2694,9 +2693,9 @@ struct CreateCustomCollectionsView: View {
                         showAddLabelGroupSheet = false
                     }
                 }
-                .keyboardShortcut(.return)
                 .disabled(newGroupName.isEmpty)
                 .buttonStyle(PrimaryButtonStyle())
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
@@ -2767,7 +2766,7 @@ struct CreateCustomCollectionsView: View {
                         }
                     }
                 }
-                .keyboardShortcut(.return)
+                .keyboardShortcut(.defaultAction)
                 .disabled(newGroupName.isEmpty)
                 .buttonStyle(PrimaryButtonStyle())
             }
@@ -3103,7 +3102,7 @@ struct CreateCustomCollectionsView: View {
                         }
                         showAddTagSheet = false
                     }
-                    .keyboardShortcut(.return)
+                    .keyboardShortcut(.defaultAction)
                     .disabled(tagFormData.name.isEmpty || selectedTagGroupID == nil)
                     .buttonStyle(ModernPrimaryButtonStyle())
                 }
@@ -3243,7 +3242,7 @@ struct CreateCustomCollectionsView: View {
                         }
                         showAddLabelSheet = false
                     }
-                    .keyboardShortcut(.return)
+                    .keyboardShortcut(.defaultAction)
                     .disabled(newLabelName.isEmpty || selectedLabelGroupID == nil)
                     .buttonStyle(ModernPrimaryButtonStyle())
                 }
@@ -3351,7 +3350,7 @@ struct CreateCustomCollectionsView: View {
                         newTimeEventName = ""
                         showAddTimeEventSheet = false
                     }
-                    .keyboardShortcut(.return)
+                    .keyboardShortcut(.defaultAction)
                     .disabled(newTimeEventName.isEmpty)
                     .buttonStyle(ModernPrimaryButtonStyle())
                 }

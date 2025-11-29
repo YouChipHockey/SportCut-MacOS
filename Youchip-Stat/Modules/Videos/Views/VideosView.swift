@@ -537,6 +537,7 @@ struct VideosView: View {
                     .buttonStyle(PlainButtonStyle())
                     .disabled(team1Name.isEmpty || team2Name.isEmpty)
                     .opacity(team1Name.isEmpty || team2Name.isEmpty ? 0.6 : 1.0)
+                    .keyboardShortcut(.defaultAction)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
@@ -644,6 +645,7 @@ struct VideosView: View {
                     .buttonStyle(PlainButtonStyle())
                     .disabled(viewModel.state.newFileName.isEmpty)
                     .opacity(viewModel.state.newFileName.isEmpty ? 0.6 : 1.0)
+                    .keyboardShortcut(.defaultAction)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
@@ -767,6 +769,7 @@ struct VideosView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .disabled(importManager.isImporting)
+                    .keyboardShortcut(.defaultAction)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)

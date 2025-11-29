@@ -34,6 +34,7 @@ struct AddLineSheet: View {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .disabled(lineName.isEmpty)
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding()

@@ -722,6 +722,7 @@ struct SavePlaylistSheet: View {
                 .buttonStyle(PlainButtonStyle())
                 .foregroundColor(.blue)
                 .disabled(playlistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)

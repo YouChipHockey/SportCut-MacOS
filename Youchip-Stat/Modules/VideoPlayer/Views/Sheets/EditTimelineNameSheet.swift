@@ -44,6 +44,7 @@ struct EditTimelineNameSheet: View {
                     }
                 }
                 .disabled(lineName.isEmpty)
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding()

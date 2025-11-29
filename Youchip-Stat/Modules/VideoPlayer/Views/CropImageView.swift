@@ -146,6 +146,7 @@ struct CropImageView: View {
                 .keyboardShortcut(.return)
                 .buttonStyle(BorderedButtonStyle())
                 .disabled(!hasSelection)
+                .keyboardShortcut(.defaultAction)
             }
             .padding()
         }

@@ -131,6 +131,7 @@ struct ProjectImportView: View {
                         createProjectWithVideo()
                     }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
             .padding(.top)

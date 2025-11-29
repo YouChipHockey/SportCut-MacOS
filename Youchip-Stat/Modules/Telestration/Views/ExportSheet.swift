@@ -35,6 +35,7 @@ struct ExportSheet: View {
                     showSavePanel = true
                 }
                 .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding()

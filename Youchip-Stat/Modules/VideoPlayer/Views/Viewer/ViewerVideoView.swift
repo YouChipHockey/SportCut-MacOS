@@ -734,6 +734,7 @@ struct DrawingSettingsSheet: View {
                         .cornerRadius(8)
                 }
                 .buttonStyle(PlainButtonStyle())
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal)
             .padding(.bottom)

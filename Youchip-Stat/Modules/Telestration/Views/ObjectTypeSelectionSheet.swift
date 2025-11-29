@@ -82,6 +82,7 @@ struct ObjectCustomizationSheet: View {
                         presentationMode.wrappedValue.dismiss()
                     }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
         }
