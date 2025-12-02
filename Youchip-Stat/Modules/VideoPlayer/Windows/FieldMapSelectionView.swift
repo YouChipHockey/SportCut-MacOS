@@ -86,7 +86,7 @@ struct FieldMapSelectionView: View {
                 Button(^String.Titles.collectionsButtonCancel) {
                     NSApp.keyWindow?.close()
                 }
-                .keyboardShortcut(.escape)
+                .keyboardShortcut(.cancelAction)
                 
                 Spacer()
                 
@@ -96,7 +96,7 @@ struct FieldMapSelectionView: View {
                     }
                     NSApp.keyWindow?.close()
                 }
-                .keyboardShortcut(.return)
+                .keyboardShortcut(.defaultAction)
                 .disabled(selectedCoordinate == nil)
             }
             .padding()

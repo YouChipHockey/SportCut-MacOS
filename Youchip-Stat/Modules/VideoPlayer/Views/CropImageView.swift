@@ -143,7 +143,6 @@ struct CropImageView: View {
                         presentationMode.wrappedValue.dismiss()
                     }
                 }
-                .keyboardShortcut(.return)
                 .buttonStyle(BorderedButtonStyle())
                 .disabled(!hasSelection)
                 .keyboardShortcut(.defaultAction)
