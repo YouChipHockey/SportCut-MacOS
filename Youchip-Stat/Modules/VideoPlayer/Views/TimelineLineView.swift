@@ -34,6 +34,9 @@ struct TimelineLineView: View {
     @State private var originalStartTime: Double = 0
     @State private var originalEndTime: Double = 0
     
+    @State private var visualWidth: CGFloat? = nil
+    @State private var visualOffsetX: CGFloat? = nil
+    
     enum ResizeEdge {
         case left
         case right
@@ -45,10 +48,10 @@ struct TimelineLineView: View {
         for i in 0..<stampIndex {
             let olderStamp = stamps[i]
             
-            let stampStart = stamp.startSeconds
-            let stampEnd = stamp.finishSeconds
-            let olderStart = olderStamp.startSeconds
-            let olderEnd = olderStamp.finishSeconds
+            let stampStart = stamp.timeStartSeconds
+            let stampEnd = stamp.timeFinishSeconds
+            let olderStart = olderStamp.timeStartSeconds
+            let olderEnd = olderStamp.timeFinishSeconds
             
             if stampStart < olderEnd && olderStart < stampEnd {
                 count += 1
@@ -127,15 +130,23 @@ struct TimelineLineView: View {
     @ViewBuilder
     private func stampView(stamp: TimelineStamp, index: Int, totalDuration: Double, widthMax: CGFloat) -> some View {
         let isResizing = resizingStampID == stamp.id
-        let currentStartTime = isResizing && resizingEdge == .left ? dragStartTime : stamp.startSeconds
-        let currentEndTime = isResizing && resizingEdge == .right ? dragStartTime : stamp.finishSeconds
+        let currentStartTime = isResizing && resizingEdge == .left ? dragStartTime : stamp.timeStartSeconds
+        let currentEndTime = isResizing && resizingEdge == .right ? dragStartTime : stamp.timeFinishSeconds
         let currentDuration = currentEndTime - currentStartTime
         
         let startRatio = currentStartTime / totalDuration
         let durationRatio = currentDuration / totalDuration
         
-        let stampWidth = max(durationRatio * widthMax, 10) // Minimum width
-        let stampX = startRatio * widthMax
+        let baseStampWidth = max(durationRatio * widthMax, 10)
+        let baseStampX = startRatio * widthMax
+        //let stampWidth = max(durationRatio * widthMax, 10) // Minimum width
+        let stampWidth = ((isResizing && resizingEdge == .right) ?
+            (visualWidth ?? baseStampWidth) : (isResizing && resizingEdge == .left) ?
+            (visualWidth ?? baseStampWidth) : baseStampWidth) ?? 0
+        
+
+        let stampX = ((isResizing && resizingEdge == .left) ?
+                      (visualOffsetX ?? baseStampX) : baseStampX) ?? 0//startRatio * widthMax
         
         let isSelected = timelineData.selectedStampID == stamp.id
         let overlapCount = getOverlapCount(stamp: stamp, stamps: line.stamps, stampIndex: index)
@@ -193,7 +204,7 @@ struct TimelineLineView: View {
         .onTapGesture {
             if resizingStampID == nil {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    videoManager.seek(to: stamp.startSeconds)
+                    videoManager.seek(to: stamp.timeStartSeconds)
                     timelineData.selectStamp(stampID: stamp.id)
                     videoManager.player?.play()
                 }
@@ -269,28 +280,60 @@ struct TimelineLineView: View {
                 if resizingStampID != stamp.id {
                     resizingStampID = stamp.id
                     resizingEdge = .left
-                    originalStartTime = stamp.startSeconds
-                    originalEndTime = stamp.finishSeconds
+                    originalStartTime = stamp.timeStartSeconds
+                    originalEndTime = stamp.timeFinishSeconds
+                    dragStartTime = originalStartTime
+                    
+                    // Исходные геометрия
+                    let baseDuration = originalEndTime - originalStartTime
+                    let baseDurationRatio = baseDuration / totalDuration
+                    visualWidth = max(baseDurationRatio * widthMax, 10)
+                    
+                    let baseStartRatio = originalStartTime / totalDuration
+                    visualOffsetX = baseStartRatio * widthMax
                 }
                 
                 let deltaX = value.translation.width
-                let deltaTime = (deltaX / widthMax) * totalDuration
-                let newStartTime = max(0, min(originalStartTime + deltaTime, originalEndTime - 0.5))
-                dragStartTime = newStartTime
+                let baseWidth = visualWidth ?? 0
+                let baseOffsetX = visualOffsetX ?? 0
+                
+                // Сдвигаем левый край: offset увеличивается, ширина уменьшается
+                let newOffsetX = baseOffsetX + deltaX
+                let newWidth = max(baseWidth - deltaX, 10)
+                
+                visualOffsetX = max(newOffsetX, 0) // не левее 0
+                visualWidth = newWidth
             }
             .onEnded { _ in
-                if let stampID = resizingStampID, resizingEdge == .left {
-                    let finalStartTime = dragStartTime
+                if let stampID = resizingStampID,
+                   let finalOffsetX = visualOffsetX,
+                   let finalWidth = visualWidth,
+                   resizingEdge == .left {
+                    
+                    // Пересчитываем обратно во время
+                    let finalStartRatio = finalOffsetX / widthMax
+                    let finalStartTime = max(finalStartRatio * totalDuration, 0)
+                    
+                    let finalDurationRatio = finalWidth / widthMax
+                    let finalDuration = finalDurationRatio * totalDuration
+                    let finalEndTime = min(finalStartTime + finalDuration, totalDuration)
+                    
+                    // Проверка минимальной длительности
+                    let adjustedStartTime = min(finalStartTime, finalEndTime - 0.5)
+                    
                     timelineData.updateStampTime(
                         lineID: line.id,
                         stampID: stampID,
-                        newStart: finalStartTime
+                        newStart: adjustedStartTime
                     )
                 }
                 resizingStampID = nil
                 resizingEdge = nil
+                visualWidth = nil
+                visualOffsetX = nil
             }
     }
+
     
     private func rightEdgeDragGesture(stamp: TimelineStamp, totalDuration: Double, widthMax: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
@@ -298,18 +341,31 @@ struct TimelineLineView: View {
                 if resizingStampID != stamp.id {
                     resizingStampID = stamp.id
                     resizingEdge = .right
-                    originalStartTime = stamp.startSeconds
-                    originalEndTime = stamp.finishSeconds
+                    originalStartTime = stamp.timeStartSeconds
+                    originalEndTime = stamp.timeFinishSeconds
+                    dragStartTime = originalStartTime
+                    
+                    // Запомнить исходную ширину в пикселях
+                    let baseDuration = originalEndTime - originalStartTime
+                    let baseDurationRatio = baseDuration / totalDuration
+                    visualWidth = max(baseDurationRatio * widthMax, 10)
                 }
                 
-                let deltaX = value.translation.width
-                let deltaTime = (deltaX / widthMax) * totalDuration
-                let newEndTime = max(originalStartTime + 0.5, min(originalEndTime + deltaTime, totalDuration))
-                dragStartTime = newEndTime
+                // Меняем ширину напрямую на deltaX
+                let baseWidth = visualWidth ?? 0
+                let newWidth = max(baseWidth + value.translation.width, 10) // минимум 10px
+                visualWidth = newWidth
             }
             .onEnded { _ in
-                if let stampID = resizingStampID, resizingEdge == .right {
-                    let finalEndTime = dragStartTime
+                if let stampID = resizingStampID,
+                   let finalWidth = visualWidth,
+                   resizingEdge == .right {
+                    
+                    // Пересчитываем ширину обратно во время
+                    let finalDurationRatio = finalWidth / widthMax
+                    let finalDuration = finalDurationRatio * totalDuration
+                    let finalEndTime = min(originalStartTime + finalDuration, totalDuration)
+                    
                     timelineData.updateStampTime(
                         lineID: line.id,
                         stampID: stampID,
@@ -318,6 +374,8 @@ struct TimelineLineView: View {
                 }
                 resizingStampID = nil
                 resizingEdge = nil
+                visualWidth = nil
+                visualOffsetX = nil
             }
     }
     
@@ -378,8 +436,8 @@ struct TimelineLineView: View {
             id: UUID(),
             idTag: stamp.idTag,
             primaryID: stamp.primaryID,
-            timeStart: stamp.timeStart,
-            timeFinish: stamp.timeFinish,
+            timeStartSeconds: stamp.timeStartSeconds,
+            timeFinishSeconds: stamp.timeFinishSeconds,
             colorHex: stamp.colorHex,
             label: stamp.label,
             labels: stamp.labels,

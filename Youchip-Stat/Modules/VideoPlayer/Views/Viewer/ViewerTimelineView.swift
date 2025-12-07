@@ -291,7 +291,7 @@ struct ViewerTimelineView: View {
                     lineID: line.id,
                     tagName: stamp.label,
                     lineName: line.name,
-                    startTime: stamp.startSeconds,
+                    startTime: stamp.timeStartSeconds,
                     duration: stamp.duration,
                     color: tag?.color ?? "FFFFFF",
                     tagGroupName: tagGroup?.name,
@@ -321,7 +321,7 @@ struct ViewerTimelineLineView: View {
                 .fill(Color.clear)
                 .frame(width: widthMax, height: 30)
             ForEach(line.stamps.filter { filter.matches(stamp: $0) }) { stamp in
-                let startX = (stamp.startSeconds / videoManager.videoDuration) * widthMax
+                let startX = (stamp.timeStartSeconds / videoManager.videoDuration) * widthMax
                 let width = (stamp.duration / videoManager.videoDuration) * widthMax
                 
                         ViewerStampView(
@@ -415,7 +415,7 @@ struct ViewerStampView: View {
             lineID: line.id,
             tagName: stamp.label,
             lineName: line.name,
-            startTime: stamp.startSeconds,
+            startTime: stamp.timeStartSeconds,
             duration: stamp.duration,
             color: tag?.color ?? "FFFFFF",
             tagGroupName: tagGroup?.name,

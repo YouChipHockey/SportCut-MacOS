@@ -226,7 +226,7 @@ struct TableRowView: View {
             Divider()
                 .frame(height: 20)
             
-            Text(formatTime(stampWithLine.stamp.startSeconds))
+            Text(formatTime(stampWithLine.stamp.timeStartSeconds))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
                 .frame(width: 100, alignment: .leading)
@@ -355,7 +355,7 @@ struct TableRowView: View {
             lineID: stampWithLine.line.id,
             tagName: stampWithLine.stamp.label,
             lineName: stampWithLine.line.name,
-            startTime: stampWithLine.stamp.startSeconds,
+            startTime: stampWithLine.stamp.timeStartSeconds,
             duration: stampWithLine.stamp.duration,
             color: tag?.color ?? "FFFFFF",
             tagGroupName: tagGroup?.name,
@@ -389,7 +389,7 @@ struct TableRowView: View {
                     lineID: stampWithLine.line.id,
                     tagName: stampWithLine.stamp.label,
                     lineName: stampWithLine.line.name,
-                    startTime: stampWithLine.stamp.startSeconds,
+                    startTime: stampWithLine.stamp.timeStartSeconds,
                     duration: stampWithLine.stamp.duration,
                     color: tag?.color ?? "FFFFFF",
                     tagGroupName: tagGroup?.name,

@@ -40,7 +40,7 @@ struct FieldMapVisualizationView: View {
     
     private var sortedStamps: [TimelineStamp] {
         stamps.sorted {
-            timeStringToSeconds($0.timeStart) < timeStringToSeconds($1.timeStart)
+            timeStringToSeconds($0.timeStartString) < timeStringToSeconds($1.timeStartString)
         }
     }
     
@@ -209,7 +209,7 @@ struct FieldMapVisualizationView: View {
                     }
                 }
                 
-                Text(stamp.timeStart)
+                Text(stamp.timeStartString)
                     .font(.caption)
                     .foregroundColor(.secondary)
                     
@@ -515,7 +515,7 @@ struct FieldMapVisualizationView: View {
             Text("\(^String.Titles.fieldMapTagTitleNoNumber) \(stamp.label)")
         }
         
-        Text("\(^String.Titles.time): \(stamp.timeStart) - \(stamp.timeFinish)")
+        Text("\(^String.Titles.time): \(stamp.timeStartString) - \(stamp.timeFinishString)")
         if let position = stamp.position {
             Text("\(^String.Titles.fieldMapDetailPosition) \(String(format: "x: %.2f, y: %.2f", position.x, position.y))")
         }
@@ -755,7 +755,7 @@ struct FieldMapVisualizationView: View {
                 Text("\(^String.Titles.time):")
                     .foregroundColor(.secondary)
                     .frame(width: 80, alignment: .leading)
-                Text("\(stamp.timeStart) - \(stamp.timeFinish)")
+                Text("\(stamp.timeStartString) - \(stamp.timeFinishString)")
             }
             
             HStack {
@@ -836,7 +836,7 @@ struct FieldMapVisualizationView: View {
     
     private func assignStampNumbers() {
         let sortedStamps = stamps.sorted {
-            timeStringToSeconds($0.timeStart) < timeStringToSeconds($1.timeStart)
+            timeStringToSeconds($0.timeStartString) < timeStringToSeconds($1.timeStartString)
         }
         for (index, stamp) in sortedStamps.enumerated() {
             numberedStamps[stamp.id] = index + 1
@@ -909,7 +909,7 @@ struct FieldMapVisualizationView: View {
                             detailRow(title: ^String.Titles.fieldMapDetailGroup, value: tagGroup.name)
                         }
 //                        
-                        detailRow(title: "\(^String.Titles.time):", value: "\(stamp.timeStart) - \(stamp.timeFinish)")
+                        detailRow(title: "\(^String.Titles.time):", value: "\(stamp.timeStartString) - \(stamp.timeFinishString)")
                         
                         detailRow(title: ^String.Titles.fieldMapDetailDuration, value: String(format: ^String.Titles.fieldMapFormatDuration, stamp.duration))
                         

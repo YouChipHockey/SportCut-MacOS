@@ -121,7 +121,7 @@ struct FullControlView: View {
                let line = timelineData.lines.first(where: { $0.id == lineID }) {
                 for stamp in line.stamps {
                     guard let correctedTime = correctTimeRange(
-                        startSeconds: stamp.startSeconds,
+                        startSeconds: stamp.timeStartSeconds,
                         durationSeconds: stamp.duration,
                         maxVideoDuration: maxVideoDuration
                     ) else {
@@ -149,7 +149,7 @@ struct FullControlView: View {
             for line in timelineData.lines {
                 for stamp in line.stamps {
                     guard let correctedTime = correctTimeRange(
-                        startSeconds: stamp.startSeconds,
+                        startSeconds: stamp.timeStartSeconds,
                         durationSeconds: stamp.duration,
                         maxVideoDuration: maxVideoDuration
                     ) else {
@@ -188,7 +188,7 @@ struct FullControlView: View {
                     }
                     
                     guard let correctedTime = correctTimeRange(
-                        startSeconds: stamp.startSeconds,
+                        startSeconds: stamp.timeStartSeconds,
                         durationSeconds: stamp.duration,
                         maxVideoDuration: maxVideoDuration
                     ) else {
@@ -226,7 +226,7 @@ struct FullControlView: View {
                 for stamp in line.stamps {
                     if stamp.timeEvents.contains(selectedEvent.id) {
                         guard let correctedTime = correctTimeRange(
-                            startSeconds: stamp.startSeconds,
+                            startSeconds: stamp.timeStartSeconds,
                             durationSeconds: stamp.duration,
                             maxVideoDuration: maxVideoDuration
                         ) else {
@@ -264,7 +264,7 @@ struct FullControlView: View {
                 for stamp in line.stamps {
                     if stamp.labels.contains(selectedLabel.id) {
                         guard let correctedTime = correctTimeRange(
-                            startSeconds: stamp.startSeconds,
+                            startSeconds: stamp.timeStartSeconds,
                             durationSeconds: stamp.duration,
                             maxVideoDuration: maxVideoDuration
                         ) else {
@@ -296,7 +296,7 @@ struct FullControlView: View {
                 for stamp in line.stamps {
                     if stamp.idTag == selectedTag.id && !Set(stamp.labels).isDisjoint(with: labelIDs) {
                         guard let correctedTime = correctTimeRange(
-                            startSeconds: stamp.startSeconds,
+                            startSeconds: stamp.timeStartSeconds,
                             durationSeconds: stamp.duration,
                             maxVideoDuration: maxVideoDuration
                         ) else {
@@ -340,7 +340,7 @@ struct FullControlView: View {
                 for stamp in line.stamps {
                     if stamp.labels.contains(selectedLabel.id) && tagIDs.contains(stamp.idTag) {
                         guard let correctedTime = correctTimeRange(
-                            startSeconds: stamp.startSeconds,
+                            startSeconds: stamp.timeStartSeconds,
                             durationSeconds: stamp.duration,
                             maxVideoDuration: maxVideoDuration
                         ) else {
@@ -2362,8 +2362,8 @@ struct FullControlView: View {
                 
                 return FullTimelineStamp(
                     id: stamp.id,
-                    timeStart: stamp.timeStart,
-                    timeFinish: stamp.timeFinish,
+                    timeStart: stamp.timeStartString,
+                    timeFinish: stamp.timeFinishString,
                     tag: fullTag,
                     labels: fullLabels,
                     timeEvents: fullTimeEvents,
@@ -2807,7 +2807,7 @@ struct TimelineMouseTracker: NSViewRepresentable {
             let clampedTime = max(0.0, min(time, duration))
             
             let foundStamp = line.stamps.first { stamp in
-                clampedTime >= stamp.startSeconds && clampedTime <= stamp.finishSeconds
+                clampedTime >= stamp.timeStartSeconds && clampedTime <= stamp.timeFinishSeconds
             }
             
             if let stamp = foundStamp, let tagLibrary = tagLibrary {
@@ -2819,7 +2819,7 @@ struct TimelineMouseTracker: NSViewRepresentable {
                 }
                 let labelsString = labelNames.isEmpty ? "—" : labelNames.joined(separator: ", ")
                 
-                let startTime = formatTimeStringCompact(stamp.startSeconds)
+                let startTime = formatTimeStringCompact(stamp.timeStartSeconds)
                 let durationTime = formatTimeStringCompact(stamp.duration)
                 
                 let info = """

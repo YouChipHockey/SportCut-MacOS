@@ -73,8 +73,8 @@ struct MiniPlayerView: View {
         
         DispatchQueue.global(qos: .userInitiated).async {
             let asset = AVAsset(url: videoURL)
-            let startTime = CMTime(seconds: stamp.startSeconds, preferredTimescale: 600)
-            let endTime = CMTime(seconds: stamp.finishSeconds, preferredTimescale: 600)
+            let startTime = CMTime(seconds: stamp.timeStartSeconds, preferredTimescale: 600)
+            let endTime = CMTime(seconds: stamp.timeFinishSeconds, preferredTimescale: 600)
             
             let bufferTime = CMTime(seconds: 0.5, preferredTimescale: 600)
             let adjustedStartTime = CMTimeSubtract(startTime, bufferTime)

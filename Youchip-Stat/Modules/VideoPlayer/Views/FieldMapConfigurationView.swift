@@ -529,8 +529,8 @@ struct FieldMapConfigurationView: View {
                     lineId: line.id,
                     name: stamp.label,
                     colorHex: stamp.colorHex,
-                    timeStart: stamp.timeStart,
-                    timeFinish: stamp.timeFinish,
+                    timeStart: stamp.timeStartString,
+                    timeFinish: stamp.timeFinishString,
                     position: position,
                     isActiveForMapView: stamp.isActiveForMapView ?? false
                 )

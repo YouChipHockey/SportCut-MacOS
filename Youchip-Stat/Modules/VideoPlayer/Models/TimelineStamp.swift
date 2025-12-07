@@ -15,8 +15,8 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
     let id: UUID
     var idTag: String
     let primaryID: String?
-    var timeStart: String
-    var timeFinish: String
+    var timeStartSeconds: Double
+    var timeFinishSeconds: Double
     var colorHex: String
     var label: String
     var isActiveForMapView: Bool?
@@ -26,28 +26,31 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
     var color: Color {
         Color(hex: colorHex)
     }
-    var startSeconds: Double {
-        timeStringToSeconds(timeStart)
+    
+    var timeStartString: String {
+        secondsToTimeString(timeStartSeconds)
     }
-    var finishSeconds: Double {
-        timeStringToSeconds(timeFinish)
+    var timeFinishString: String {
+        secondsToTimeString(timeStartSeconds)
     }
     var duration: Double {
-        finishSeconds - startSeconds
+        timeFinishSeconds - timeStartSeconds
     }
     
-    init(id: UUID = UUID(), idTag: String, primaryID: String?, timeStart: String, timeFinish: String, colorHex: String, label: String, labels: [String], timeEvents: [String] = [], position: CGPoint? = nil, isActiveForMapView: Bool? = nil) {
+    init(id: UUID = UUID(), idTag: String, primaryID: String?, timeStartSeconds: Double, timeFinishSeconds: Double, timeStartString: String? = nil, timeFinishString: String? = nil, colorHex: String, label: String, labels: [String], timeEvents: [String] = [], position: CGPoint? = nil, isActiveForMapView: Bool? = nil) {
         self.id = id
         self.primaryID = primaryID
         self.idTag = idTag
-        self.timeStart = timeStart
-        self.timeFinish = timeFinish
         self.colorHex = colorHex
         self.label = label
         self.labels = labels
         self.timeEvents = timeEvents
         self.position = position
         self.isActiveForMapView = isActiveForMapView
+        
+        // to ensure backward compatibility with old stamps
+        self.timeStartSeconds = timeStartSeconds
+        self.timeFinishSeconds = timeFinishSeconds
     }
     
     static func == (lhs: TimelineStamp, rhs: TimelineStamp) -> Bool {

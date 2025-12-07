@@ -89,7 +89,7 @@ class TimelineDataManager: ObservableObject {
         }
     }
     
-    func addStampToSelectedLine(idTag: String, primaryId: String?, name: String, timeStart: String, timeFinish: String, color: String, labels: [String], position: CGPoint? = nil) {
+    func addStampToSelectedLine(idTag: String, primaryId: String?, name: String, timeStartSeconds: Double, timeFinishSeconds: Double, color: String, labels: [String], position: CGPoint? = nil) {
         if MarkupMode.current == .standard {
             guard let lineID = selectedLineID,
                   let idx = lines.firstIndex(where: { $0.id == lineID }) else { return }
@@ -99,8 +99,8 @@ class TimelineDataManager: ObservableObject {
             let stamp = TimelineStamp(
                 idTag: idTag,
                 primaryID: primaryId,
-                timeStart: timeStart,
-                timeFinish: timeFinish,
+                timeStartSeconds: timeStartSeconds,
+                timeFinishSeconds: timeFinishSeconds,
                 colorHex: color,
                 label: name,
                 labels: labels,
@@ -120,8 +120,8 @@ class TimelineDataManager: ObservableObject {
                     let stamp = TimelineStamp(
                         idTag: idTag,
                         primaryID: primaryId,
-                        timeStart: timeStart,
-                        timeFinish: timeFinish,
+                        timeStartSeconds: timeStartSeconds,
+                        timeFinishSeconds: timeFinishSeconds,
                         colorHex: color,
                         label: name,
                         labels: labels,
@@ -155,10 +155,10 @@ class TimelineDataManager: ObservableObject {
         return lines[lineIndex].stamps.contains { otherStamp in
             guard otherStamp.id != stampID else { return false }
             
-            let stampStart = stamp.startSeconds
-            let stampEnd = stamp.finishSeconds
-            let otherStart = otherStamp.startSeconds
-            let otherEnd = otherStamp.finishSeconds
+            let stampStart = stamp.timeStartSeconds
+            let stampEnd = stamp.timeFinishSeconds
+            let otherStart = otherStamp.timeStartSeconds
+            let otherEnd = otherStamp.timeFinishSeconds
             return (stampStart < otherEnd && otherStart < stampEnd)
         }
     }
@@ -172,13 +172,13 @@ class TimelineDataManager: ObservableObject {
         var stamp = lines[lineIndex].stamps[stampIndex]
         
         if let newStartTime = newStart {
-            let limitedStart = min(newStartTime, stamp.finishSeconds - 0.5)
-            stamp.timeStart = secondsToTimeString(limitedStart)
+            let limitedStart = min(newStartTime, stamp.timeFinishSeconds - 0.5)
+            stamp.timeStartSeconds = limitedStart
         }
         
         if let newEndTime = newEnd {
-            let limitedEnd = max(newEndTime, stamp.startSeconds + 0.5)
-            stamp.timeFinish = secondsToTimeString(limitedEnd)
+            let limitedEnd = max(newEndTime, stamp.timeStartSeconds + 0.5)
+            stamp.timeFinishSeconds = limitedEnd
         }
         
         lines[lineIndex].stamps[stampIndex] = stamp
@@ -228,11 +228,8 @@ class TimelineDataManager: ObservableObject {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }),
               let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }
         
-        let startTimeString = secondsToTimeString(newStartTime)
-        let endTimeString = secondsToTimeString(newEndTime)
-        
-        lines[lineIndex].stamps[stampIndex].timeStart = startTimeString
-        lines[lineIndex].stamps[stampIndex].timeFinish = endTimeString
+        lines[lineIndex].stamps[stampIndex].timeStartSeconds = newStartTime
+        lines[lineIndex].stamps[stampIndex].timeFinishSeconds = newEndTime
         
         updateTimelines()
     }

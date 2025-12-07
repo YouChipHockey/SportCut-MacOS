@@ -784,8 +784,6 @@ struct TagLibraryView: View {
         let videoDuration = max(1.0, videoManager.videoDuration)
         let startTime = max(0, currentTime - tag.defaultTimeBefore)
         let finishTime = min(videoDuration, startTime + tag.defaultTimeBefore + tag.defaultTimeAfter)
-        let timeStartString = secondsToTimeString(startTime)
-        let timeFinishString = secondsToTimeString(finishTime)
         
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {
@@ -807,8 +805,8 @@ struct TagLibraryView: View {
             idTag: tag.id,
             primaryId: tag.primaryID,
             name: tag.name,
-            timeStart: timeStartString,
-            timeFinish: timeFinishString,
+            timeStartSeconds: startTime,
+            timeFinishSeconds: finishTime,
             color: tag.color,
             labels: selectedLabels,
             position: fieldPosition
@@ -847,16 +845,14 @@ struct TagLibraryView: View {
                                     let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                     let timeStart = min(start, end)
                                     let timeFinish = max(start, end)
-                                    let timeStartString = secondsToTimeString(timeStart)
-                                    let timeFinishString = secondsToTimeString(timeFinish)
                                     
                                     
                                     activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                     
                                     addTagToTimelineInterval(
                                         tag: tag,
-                                        timeStartString: timeStartString,
-                                        timeFinishString: timeFinishString,
+                                        timeStartSeconds: timeStart,
+                                        timeFinishSeconds: timeFinish,
                                         selectedLabels: selectedLabels
                                     )
                                 }
@@ -885,16 +881,14 @@ struct TagLibraryView: View {
                                         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                         let timeStart = min(start, end)
                                         let timeFinish = max(start, end)
-                                        let timeStartString = secondsToTimeString(timeStart)
-                                        let timeFinishString = secondsToTimeString(timeFinish)
                                         
                                         
                                         activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                         
                                         addTagToTimelineInterval(
                                             tag: tag,
-                                            timeStartString: timeStartString,
-                                            timeFinishString: timeFinishString,
+                                            timeStartSeconds: timeStart,
+                                            timeFinishSeconds: timeFinish,
                                             selectedLabels: []
                                         )
                                     }
@@ -928,16 +922,14 @@ struct TagLibraryView: View {
                                     let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                     let timeStart = min(start, end)
                                     let timeFinish = max(start, end)
-                                    let timeStartString = secondsToTimeString(timeStart)
-                                    let timeFinishString = secondsToTimeString(timeFinish)
                                     
                                     
                                     activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                     
                                     addTagToTimelineInterval(
                                         tag: tag,
-                                        timeStartString: timeStartString,
-                                        timeFinishString: timeFinishString,
+                                        timeStartSeconds: timeStart,
+                                        timeFinishSeconds: timeFinish,
                                         selectedLabels: selectedLabels
                                     )
                                 }
@@ -966,16 +958,14 @@ struct TagLibraryView: View {
                                         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                         let timeStart = min(start, end)
                                         let timeFinish = max(start, end)
-                                        let timeStartString = secondsToTimeString(timeStart)
-                                        let timeFinishString = secondsToTimeString(timeFinish)
                                         
                                         
                                         activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                         
                                         addTagToTimelineInterval(
                                             tag: tag,
-                                            timeStartString: timeStartString,
-                                            timeFinishString: timeFinishString,
+                                            timeStartSeconds: timeStart,
+                                            timeFinishSeconds: timeFinish,
                                             selectedLabels: []
                                         )
                                     }
@@ -1043,8 +1033,6 @@ struct TagLibraryView: View {
                         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                         let timeStart = min(start, end)
                         let timeFinish = max(start, end)
-                        let timeStartString = secondsToTimeString(timeStart)
-                        let timeFinishString = secondsToTimeString(timeFinish)
                         
                         selectedTag = tag
                         showLabelSheet = false
@@ -1056,7 +1044,7 @@ struct TagLibraryView: View {
                                 showLabelSheet = true
                             } else {
                                 activeIntervalTags.remove(at: index)
-                                addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
+                                addTagToTimelineInterval(tag: tag, timeStartSeconds: timeFinish, timeFinishSeconds: timeFinish, selectedLabels: [])
                             }
                         }
                     } else {
@@ -1152,8 +1140,6 @@ struct TagLibraryView: View {
                 let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                 let timeStart = min(start, end)
                 let timeFinish = max(start, end)
-                let timeStartString = secondsToTimeString(timeStart)
-                let timeFinishString = secondsToTimeString(timeFinish)
                 
                 selectedTag = tag
                 showLabelSheet = false
@@ -1165,7 +1151,7 @@ struct TagLibraryView: View {
                         showLabelSheet = true
                     } else {
                         activeIntervalTags.remove(at: index)
-                        addTagToTimelineInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: [])
+                        addTagToTimelineInterval(tag: tag, timeStartSeconds: timeFinish, timeFinishSeconds: timeFinish, selectedLabels: [])
                     }
                 }
             } else {
@@ -1184,23 +1170,23 @@ struct TagLibraryView: View {
         }
     }
     
-    private func addTagToTimelineInterval(tag: Tag, timeStartString: String, timeFinishString: String, selectedLabels: [String]) {
+    private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [String]) {
         if tag.mapEnabled == true {
             let collectionManager = CustomCollectionManager()
             if let collectionName = tagLibrary.currentCollectionType.name,
                collectionManager.loadCollectionFromBookmarks(named: collectionName),
                let playField = collectionManager.playField,
                let imageBookmark = playField.imageBookmark {
-                showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartString: timeStartString, timeFinishString: timeFinishString, selectedLabels: selectedLabels)
+                showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
                 return
             }
         }
-        proceedWithTagAdditionInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, coordinates: nil, selectedLabels: selectedLabels)
+        proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
     }
     
-    private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartString: String, timeFinishString: String, selectedLabels: [String]) {
+    private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [String]) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
-            proceedWithTagAdditionInterval(tag: tag, timeStartString: timeStartString, timeFinishString: timeFinishString, coordinates: coordinates, selectedLabels: selectedLabels)
+            proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: coordinates, selectedLabels: selectedLabels)
             if videoManager.playbackSpeed > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     videoManager.player?.play()
@@ -1209,7 +1195,7 @@ struct TagLibraryView: View {
         }
     }
     
-    private func proceedWithTagAdditionInterval(tag: Tag, timeStartString: String, timeFinishString: String, coordinates: CGPoint?, selectedLabels: [String]) {
+    private func proceedWithTagAdditionInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, coordinates: CGPoint?, selectedLabels: [String]) {
         
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {
@@ -1229,8 +1215,8 @@ struct TagLibraryView: View {
             idTag: tag.id,
             primaryId: tag.primaryID,
             name: tag.name,
-            timeStart: timeStartString,
-            timeFinish: timeFinishString,
+            timeStartSeconds: timeStartSeconds,
+            timeFinishSeconds: timeFinishSeconds,
             color: tag.color,
             labels: selectedLabels,
             position: fieldPosition

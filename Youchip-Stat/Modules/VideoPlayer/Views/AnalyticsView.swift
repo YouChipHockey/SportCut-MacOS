@@ -123,8 +123,8 @@ struct AnalyticsView: View {
         
         let allStamps = timelineData.lines.flatMap { $0.stamps }
         let stampRanges = allStamps.map { stamp -> (start: Double, end: Double) in
-            let start = timeStringToSeconds(stamp.timeStart)
-            let end = timeStringToSeconds(stamp.timeFinish)
+            let start = timeStringToSeconds(stamp.timeStartString)
+            let end = timeStringToSeconds(stamp.timeFinishString)
             return (start, end)
         }
         
@@ -170,12 +170,12 @@ struct AnalyticsView: View {
         }
         
         for line in timelineData.lines {
-            let stamps = line.stamps.sorted { timeStringToSeconds($0.timeStart) < timeStringToSeconds($1.timeStart) }
+            let stamps = line.stamps.sorted { timeStringToSeconds($0.timeStartString) < timeStringToSeconds($1.timeStartString) }
             for i in 0..<stamps.count {
                 if i + 1 < stamps.count {
                     let current = stamps[i]
                     let next = stamps[i + 1]
-                    if current.label == next.label && timeStringToSeconds(current.timeFinish) > timeStringToSeconds(next.timeStart) {
+                    if current.label == next.label && timeStringToSeconds(current.timeFinishString) > timeStringToSeconds(next.timeStartString) {
                         issues.append(String(format: ^String.Titles.tagsOverlapFormat, current.label, line.name))
                     }
                 }
