@@ -258,4 +258,6 @@ struct CollectionBookmark: Codable, Hashable {
 struct StampDragInfo: Codable {
     let lineID: UUID
     let stampID: UUID
+    let startSecond: Double
+    let endSecond: Double
 }

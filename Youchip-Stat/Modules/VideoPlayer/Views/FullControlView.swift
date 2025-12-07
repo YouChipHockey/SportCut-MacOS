@@ -887,6 +887,7 @@ struct FullControlView: View {
         }
         .frame(width: gridWidth)
         .contentShape(Rectangle())
+        .coordinateSpace(name: "timelineSpace")
         .background(
             TimelineMouseTracker(
                 duration: duration,

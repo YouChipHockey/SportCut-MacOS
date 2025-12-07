@@ -27,8 +27,9 @@ struct TimelineLineView: View {
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @State private var isDraggingOver = false
     @Binding var scrollOffset: CGFloat
+    private let lineHeight: CGFloat = 30
     
-    // State for edge resizing
+    // MARK: - Stamp edges drag properties
     @State private var resizingStampID: UUID? = nil
     @State private var resizingEdge: ResizeEdge? = nil
     @State private var dragStartTime: Double = 0
@@ -37,6 +38,11 @@ struct TimelineLineView: View {
     
     @State private var visualWidth: CGFloat? = nil
     @State private var visualOffsetX: CGFloat? = nil
+    @State private var maxVisualOffsetX: CGFloat? = nil
+    
+    // MARK: - drag properties
+    @State private var dragOffset: CGSize = .zero
+    @State private var draggingStampID: UUID?
     
     enum ResizeEdge {
         case left
@@ -64,7 +70,6 @@ struct TimelineLineView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            let baseWidth = geometry.size.width
             let totalDuration = max(1, videoManager.videoDuration)
             
             HStack(spacing: 0) {
@@ -77,7 +82,7 @@ struct TimelineLineView: View {
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(width: widthMax, height: 30)
+                    .frame(width: widthMax, height: lineHeight)
                     .overlay(
                         RoundedRectangle(cornerRadius: 0)
                             .stroke(
@@ -85,23 +90,6 @@ struct TimelineLineView: View {
                                 lineWidth: 0.5
                             )
                     )
-                    .onDrop(
-                        of: [.init(UTType.plainText.identifier)],
-                        isTargeted: $isDraggingOver
-                    ) { providers, _ in
-                        if let provider = providers.first {
-                            provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) { (data, error) in
-                                if let stampData = data as? Data,
-                                   let stampInfo = try? JSONDecoder().decode(StampDragInfo.self, from: stampData) {
-                                    DispatchQueue.main.async {
-                                        transferStamp(stampInfo, to: line.id)
-                                    }
-                                }
-                            }
-                            return true
-                        }
-                        return false
-                    }
                     .onTapGesture {
                         timelineData.selectStamp(stampID: nil)
                     }
@@ -124,6 +112,7 @@ struct TimelineLineView: View {
             )
         }
     }
+
     
     @ViewBuilder
     private func stampView(stamp: TimelineStamp, index: Int, totalDuration: Double, widthMax: CGFloat) -> some View {
@@ -131,6 +120,14 @@ struct TimelineLineView: View {
         let currentStartTime = isResizing && resizingEdge == .left ? dragStartTime : stamp.timeStartSeconds
         let currentEndTime = isResizing && resizingEdge == .right ? dragStartTime : stamp.timeFinishSeconds
         let currentDuration = currentEndTime - currentStartTime
+        
+        let isDragging = draggingStampID == stamp.id
+        let dragOffsetX = isDragging ? dragOffset.width : 0
+        
+        let currentLineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }) ?? 0
+        let maxYOffset = CGFloat(timelineData.lines.count - 1 - currentLineIndex) * lineHeight
+        let minYOffset = -1 * CGFloat(currentLineIndex) * lineHeight
+        let dragOffsetY = isDragging ? max(min(dragOffset.height, maxYOffset), minYOffset) : 0
         
         let startRatio = currentStartTime / totalDuration
         let durationRatio = currentDuration / totalDuration
@@ -144,7 +141,7 @@ struct TimelineLineView: View {
         
 
         let stampX = ((isResizing && resizingEdge == .left) ?
-                      (visualOffsetX ?? baseStampX) : baseStampX) ?? 0//startRatio * widthMax
+                      (visualOffsetX ?? baseStampX) : baseStampX) ?? 0
         
         let isSelected = timelineData.selectedStampID == stamp.id
         let overlapCount = getOverlapCount(stamp: stamp, stamps: line.stamps, stampIndex: index)
@@ -155,6 +152,8 @@ struct TimelineLineView: View {
         (isSelected) ? Color.blue : Color.clear
         let heightReduction = CGFloat(overlapCount * 6)
         let stampHeight: CGFloat = 25 - heightReduction
+
+        let positionX = max(min(widthMax, dragOffsetX + stampX + stampWidth / 2), 0)
         
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 6)
@@ -198,7 +197,7 @@ struct TimelineLineView: View {
             )
         )
         .frame(width: stampWidth, height: stampHeight)
-        .position(x: stampX + stampWidth / 2, y: 15)
+        .position(x: clampedCenterX(isDragging: isDragging, stampX: stampX, stampWidth: stampWidth), y: dragOffsetY + 15)
         .onTapGesture {
             if resizingStampID == nil {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -208,21 +207,50 @@ struct TimelineLineView: View {
                 }
             }
         }
-        .onDrag {
-            if resizingStampID == nil {
-                let stampInfo = StampDragInfo(
-                    lineID: line.id,
-                    stampID: stamp.id
-                )
-                if let data = try? JSONEncoder().encode(stampInfo) {
-                    return NSItemProvider(item: data as NSData, typeIdentifier: UTType.plainText.identifier)
+        .gesture(
+            (resizingStampID == nil ? DragGesture() : nil)
+                .onChanged { value in
+                    if draggingStampID == nil {
+                        draggingStampID = stamp.id
+                    }
+                    dragOffset = value.translation
+                    print(widthMax, dragOffsetX + stampX + stampWidth / 2)
                 }
-            }
-            return NSItemProvider()
-        }
+                .onEnded { value in
+                    dragOffset = .zero
+                    guard let draggingStampID else { return }
+                    let offsetInSeconds = Double(dragOffsetX) / widthMax * totalDuration
+                    var newStartSecond = stamp.timeStartSeconds + offsetInSeconds
+                    newStartSecond = max(newStartSecond, 0)
+                    var newEndSecond = stamp.timeFinishSeconds + offsetInSeconds
+                    newEndSecond = min(newEndSecond, totalDuration)
+                    
+                    let lineHeight: CGFloat = lineHeight
+                    let sourceLineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }) ?? 0
+                    let y = value.location.y + CGFloat(sourceLineIndex) * lineHeight
+                    
+                    var destLineIndex = Int(y / lineHeight)
+                    destLineIndex = max(0, destLineIndex)
+                    destLineIndex = min(timelineData.lines.count - 1, destLineIndex)
+
+                    let destLineID = timelineData.lines[destLineIndex].id
+                    
+                    let stampInfo = StampDragInfo(
+                        lineID: line.id,
+                        stampID: draggingStampID,
+                        startSecond: newStartSecond,
+                        endSecond: newEndSecond
+                    )
+                    transferStamp(stampInfo, to: destLineID)
+                    
+                    self.draggingStampID = nil
+                    self.dragOffset = .zero
+                }
+        )
         .contextMenu {
             menuForTag(stamp: stamp)
         }
+        .coordinateSpace(name: "timelineSpace")
     }
     
     @ViewBuilder
@@ -289,6 +317,7 @@ struct TimelineLineView: View {
                     
                     let baseStartRatio = originalStartTime / totalDuration
                     visualOffsetX = baseStartRatio * widthMax
+                    maxVisualOffsetX = (visualOffsetX ?? 0) + (visualWidth ?? 0) - 10
                 }
                 
                 let deltaX = value.translation.width
@@ -299,7 +328,10 @@ struct TimelineLineView: View {
                 let newOffsetX = baseOffsetX + deltaX
                 let newWidth = max(baseWidth - deltaX, 10)
                 
-                visualOffsetX = max(newOffsetX, 0) // не левее 0
+                if newOffsetX < 0 || newOffsetX > maxVisualOffsetX ?? 0 {
+                    return
+                }
+                visualOffsetX = newOffsetX
                 visualWidth = newWidth
                 
                 let time = (newOffsetX / widthMax) * totalDuration
@@ -348,6 +380,9 @@ struct TimelineLineView: View {
                     originalEndTime = stamp.timeFinishSeconds
                     dragStartTime = originalStartTime
                     
+                    let baseStartRatio = originalStartTime / totalDuration
+                    visualOffsetX = baseStartRatio * widthMax
+                    
                     // Запомнить исходную ширину в пикселях
                     let baseDuration = originalEndTime - originalStartTime
                     let baseDurationRatio = baseDuration / totalDuration
@@ -357,6 +392,9 @@ struct TimelineLineView: View {
                 // Меняем ширину напрямую на deltaX
                 let baseWidth = visualWidth ?? 0
                 let newWidth = max(baseWidth + value.translation.width, 10) // минимум 10px
+                if let visualOffsetX, visualOffsetX + newWidth > widthMax {
+                    return
+                }
                 visualWidth = newWidth
                 
                 let time = originalStartTime + ((visualWidth ?? 0) / widthMax) * totalDuration
@@ -434,9 +472,9 @@ struct TimelineLineView: View {
             return
         }
         
-        if stampInfo.lineID == destLineID {
-            return
-        }
+//        if stampInfo.lineID == destLineID {
+//            return
+//        }
         
         let stamp = timelineData.lines[sourceLineIndex].stamps[stampIndex]
         
@@ -444,8 +482,8 @@ struct TimelineLineView: View {
             id: UUID(),
             idTag: stamp.idTag,
             primaryID: stamp.primaryID,
-            timeStartSeconds: stamp.timeStartSeconds,
-            timeFinishSeconds: stamp.timeFinishSeconds,
+            timeStartSeconds: stampInfo.startSecond,
+            timeFinishSeconds: stampInfo.endSecond,
             colorHex: stamp.colorHex,
             label: stamp.label,
             labels: stamp.labels,
@@ -456,6 +494,19 @@ struct TimelineLineView: View {
         timelineData.lines[destLineIndex].stamps.append(newStamp)
         timelineData.lines[sourceLineIndex].stamps.remove(at: stampIndex)
         timelineData.updateTimelines()
+    }
+    
+    private func clampedCenterX(isDragging: Bool, stampX: CGFloat, stampWidth: CGFloat) -> CGFloat {
+        let dragX = isDragging ? dragOffset : .zero
+        
+        let baseCenterX = stampX + stampWidth / 2
+        var centerX = baseCenterX + dragX.width
+
+        let minCenterX = stampWidth / 2
+        let maxCenterX = widthMax - stampWidth / 2
+
+        centerX = max(minCenterX, min(centerX, maxCenterX))
+        return centerX
     }
 }
 
