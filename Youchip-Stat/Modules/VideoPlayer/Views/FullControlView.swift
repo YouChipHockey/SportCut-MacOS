@@ -2854,3 +2854,11 @@ struct TimelineMouseTracker: NSViewRepresentable {
     }
 }
 
+extension TimelineMouseTracker: Equatable {
+    static func == (lhs: TimelineMouseTracker, rhs: TimelineMouseTracker) -> Bool {
+        lhs.duration == rhs.duration &&
+        lhs.gridWidth == rhs.gridWidth &&
+        lhs.lines == rhs.lines
+    }
+}
+
