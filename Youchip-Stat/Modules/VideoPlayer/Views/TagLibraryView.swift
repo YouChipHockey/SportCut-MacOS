@@ -1044,7 +1044,7 @@ struct TagLibraryView: View {
                                 showLabelSheet = true
                             } else {
                                 activeIntervalTags.remove(at: index)
-                                addTagToTimelineInterval(tag: tag, timeStartSeconds: timeFinish, timeFinishSeconds: timeFinish, selectedLabels: [])
+                                addTagToTimelineInterval(tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish, selectedLabels: [])
                             }
                         }
                     } else {
@@ -1151,7 +1151,7 @@ struct TagLibraryView: View {
                         showLabelSheet = true
                     } else {
                         activeIntervalTags.remove(at: index)
-                        addTagToTimelineInterval(tag: tag, timeStartSeconds: timeFinish, timeFinishSeconds: timeFinish, selectedLabels: [])
+                        addTagToTimelineInterval(tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish, selectedLabels: [])
                     }
                 }
             } else {

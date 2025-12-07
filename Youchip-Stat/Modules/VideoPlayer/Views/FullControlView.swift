@@ -34,6 +34,7 @@ struct FullControlView: View {
     @State private var timelineScale: CGFloat = 1.0
     @GestureState private var magnifyScale: CGFloat = 1.0
     @State private var keyEventMonitor: Any?
+    @State private var tagEdgePosition: CGFloat? = nil
     
     private func setupKeyboardShortcuts() {
         keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -867,6 +868,9 @@ struct FullControlView: View {
                             UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
                             UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
                         },
+                        onTagDragging: { tagEdgePosition in
+                            self.tagEdgePosition = tagEdgePosition
+                        },
                         tagLibrary: TagLibraryManager.shared,
                         scrollOffset: $scrollOffset
                     )
@@ -875,10 +879,11 @@ struct FullControlView: View {
                 }
             }
             
+            let timeOffsetToPixels = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
             Rectangle()
                 .fill(Color.red)
                 .frame(width: 2)
-                .offset(x: duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0)
+                .offset(x: tagEdgePosition ?? timeOffsetToPixels)
         }
         .frame(width: gridWidth)
         .contentShape(Rectangle())

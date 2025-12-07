@@ -22,6 +22,7 @@ struct TimelineLineView: View {
     let isSelected: Bool
     let onSelect: () -> Void
     let onEditLabelsRequest: (UUID) -> Void
+    let onTagDragging: (CGFloat?) -> Void
     
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @State private var isDraggingOver = false
@@ -63,11 +64,8 @@ struct TimelineLineView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            
-            
             let baseWidth = geometry.size.width
             let totalDuration = max(1, videoManager.videoDuration)
-            let computedWidth = baseWidth * max(scale, 1.0)
             
             HStack(spacing: 0) {
                 ZStack(alignment: .topLeading) {
@@ -303,6 +301,10 @@ struct TimelineLineView: View {
                 
                 visualOffsetX = max(newOffsetX, 0) // не левее 0
                 visualWidth = newWidth
+                
+                let time = (newOffsetX / widthMax) * totalDuration
+                onTagDragging(newOffsetX)
+                videoManager.seek(to: time)
             }
             .onEnded { _ in
                 if let stampID = resizingStampID,
@@ -326,6 +328,7 @@ struct TimelineLineView: View {
                         stampID: stampID,
                         newStart: adjustedStartTime
                     )
+                    onTagDragging(nil)
                 }
                 resizingStampID = nil
                 resizingEdge = nil
@@ -355,6 +358,10 @@ struct TimelineLineView: View {
                 let baseWidth = visualWidth ?? 0
                 let newWidth = max(baseWidth + value.translation.width, 10) // минимум 10px
                 visualWidth = newWidth
+                
+                let time = originalStartTime + ((visualWidth ?? 0) / widthMax) * totalDuration
+                onTagDragging(time / totalDuration * widthMax)
+                videoManager.seek(to: time)
             }
             .onEnded { _ in
                 if let stampID = resizingStampID,
@@ -371,6 +378,7 @@ struct TimelineLineView: View {
                         stampID: stampID,
                         newEnd: finalEndTime
                     )
+                    onTagDragging(nil)
                 }
                 resizingStampID = nil
                 resizingEdge = nil
