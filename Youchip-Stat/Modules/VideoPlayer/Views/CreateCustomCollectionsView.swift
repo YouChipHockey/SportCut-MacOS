@@ -293,7 +293,7 @@ struct CreateCustomCollectionsView: View {
             }) {
                 HStack(spacing: 8) {
                     Image(systemName: showSaveSuccess ? "checkmark.circle.fill" : (collectionManager.isEditingExisting ? "arrow.clockwise" : "square.and.arrow.down"))
-                        .foregroundColor(showSaveSuccess ? .green : .white)
+                        .foregroundColor(.white)
                     Text(collectionManager.isEditingExisting ? ^String.Titles.updateCollection : ^String.Titles.saveCollection)
                         .foregroundColor(.white)
                 }
