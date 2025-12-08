@@ -85,7 +85,6 @@ struct FullControlView: View {
     @State private var errorMessage = ""
     @State private var hoveredStampInfo: String? = nil
     @State private var isHoveringOnPopup = false
-    @State private var popupHideWorkItem: DispatchWorkItem? = nil
 
     private func correctTimeRange(startSeconds: Double, durationSeconds: Double, maxVideoDuration: Double) -> (start: Double, duration: Double)? {
         var correctedStart = startSeconds
@@ -785,12 +784,6 @@ struct FullControlView: View {
                     .allowsHitTesting(false)
                     .onHover { hovering in
                         isHoveringOnPopup = hovering
-                        if hovering {
-                            popupHideWorkItem?.cancel()
-                            popupHideWorkItem = nil
-                        } else {
-                            startPopupHideTimer()
-                        }
                     }
             }
         }
@@ -2001,20 +1994,6 @@ struct FullControlView: View {
         }
     }
     
-    private func startPopupHideTimer() {
-        popupHideWorkItem?.cancel()
-        
-        let workItem = DispatchWorkItem {
-            if !self.isHoveringOnPopup {
-                self.hoveredStampInfo = nil
-            }
-            self.popupHideWorkItem = nil
-        }
-        
-        popupHideWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: workItem)
-    }
-    
     private func stampHoverPopup(stampInfo: String) -> some View {
         let lines = stampInfo.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count >= 4 else { return AnyView(EmptyView()) }
@@ -2106,13 +2085,8 @@ struct FullControlView: View {
                     if let userInfo = notification.userInfo {
                         if let stampInfo = userInfo["stampInfo"] as? String {
                             hoveredStampInfo = stampInfo
-                            if !isHoveringOnPopup {
-                                startPopupHideTimer()
-                            }
                         } else {
                             hoveredStampInfo = nil
-                            popupHideWorkItem?.cancel()
-                            popupHideWorkItem = nil
                         }
                     }
                 }
@@ -2121,8 +2095,6 @@ struct FullControlView: View {
                 if let monitor = keyEventMonitor {
                     NSEvent.removeMonitor(monitor)
                 }
-                popupHideWorkItem?.cancel()
-                popupHideWorkItem = nil
                 NotificationCenter.default.removeObserver(self, name: .markupModeChanged, object: nil)
                 NotificationCenter.default.removeObserver(self, name: .timelineStampHoverChanged, object: nil)
             }
