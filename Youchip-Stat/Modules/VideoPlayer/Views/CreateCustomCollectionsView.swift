@@ -81,6 +81,7 @@ struct CreateCustomCollectionsView: View {
     @State private var showAddLabelGroupSheet = false
     @State private var isEditingName: Bool = false
     @State private var isEditingGroupName: Bool = false
+    @State private var isEditingCollectionName: Bool = false
     @State private var editingName: String = ""
     @State private var activeAlert: ActiveAlert? = nil
     @State private var showAddTagSheet = false
@@ -244,22 +245,10 @@ struct CreateCustomCollectionsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                if collectionManager.isEditingExisting {
-                    HStack {
-                        Image(systemName: "folder.fill")
-                            .foregroundColor(.blue)
-                        Text(collectionManager.collectionName)
-                            .font(.headline)
-                            .foregroundColor(.primary)
+                if isEditingCollectionName || !collectionManager.isEditingExisting {
+                    AutoFocusTextField(text: $collectionManager.collectionName, placeholder: ^String.Titles.collectionName) {
+                        saveCollectionData()
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.blue.opacity(0.1))
-                    )
-                } else {
-                    FocusAwareTextField(text: $collectionManager.collectionName, placeholder: ^String.Titles.collectionName)
                         .textFieldStyle(PlainTextFieldStyle())
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -271,21 +260,35 @@ struct CreateCustomCollectionsView: View {
                                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                 )
                         )
+                } else {
+                    HStack {
+                        Image(systemName: "folder.fill")
+                            .foregroundColor(.blue)
+                        Text(collectionManager.collectionName)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        Button(action: {
+                            isEditingCollectionName = true
+                        }) {
+                            Image(systemName: "pencil")
+                                .foregroundStyle(Color.blue)
+                                .frame(width: 20, height: 20)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.blue.opacity(0.1))
+                    )
                 }
             }
             .frame(width: 250)
             
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    if collectionManager.saveCollectionToFiles() {
-                        showSaveSuccess = true
-                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showSaveSuccess = false
-                            }
-                        }
-                    }
+                    saveCollectionData()
                 }
             }) {
                 HStack(spacing: 8) {
@@ -694,6 +697,19 @@ struct CreateCustomCollectionsView: View {
                             .cornerRadius(8)
                     }
                     .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+    
+    private func saveCollectionData() {
+        if collectionManager.saveCollectionToFiles() {
+            showSaveSuccess = true
+            isEditingCollectionName = false
+            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showSaveSuccess = false
                 }
             }
         }

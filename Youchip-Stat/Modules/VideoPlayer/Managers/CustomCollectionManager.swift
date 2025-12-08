@@ -19,6 +19,7 @@ class CustomCollectionManager: ObservableObject {
     @Published var labels: [Label] = []
     @Published var timeEvents: [TimeEvent] = []
     @Published var collectionName: String = ^String.Titles.myCollection
+    @Published var collectionID: UUID = UUID()
     @Published var isEditingExisting: Bool = false
     var originalName: String = ""
     
@@ -28,6 +29,7 @@ class CustomCollectionManager: ObservableObject {
         self.isEditingExisting = true
         self.originalName = bookmark.name
         self.collectionName = bookmark.name
+        self.collectionID = bookmark.id
         loadCollectionFromBookmarks(named: bookmark.name)
     }
     
@@ -266,7 +268,7 @@ class CustomCollectionManager: ObservableObject {
     }
     
     func saveCollectionToFiles() -> Bool {
-        if isEditingExisting {
+        if collectionName == originalName || collectionName.isEmpty {
             collectionName = originalName
         } else {
             collectionName = ensureUniqueCollectionName(collectionName)
@@ -326,6 +328,7 @@ class CustomCollectionManager: ObservableObject {
             }
             
             let collectionBookmark = CollectionBookmark(
+                id: collectionID,
                 name: collectionName,
                 tagGroupsBookmark: tagGroupsBookmark,
                 tagsBookmark: tagsBookmark,
@@ -373,6 +376,7 @@ class CustomCollectionManager: ObservableObject {
         return newName
     }
     
+    @discardableResult
     func loadCollectionFromBookmarks(named collectionName: String) -> Bool {
         guard let bookmark = UserDefaults.standard.getCollectionBookmarks()
             .first(where: { $0.name == collectionName }) else {
@@ -762,6 +766,7 @@ class CustomCollectionManager: ObservableObject {
             }
             
             let refreshedBookmark = CollectionBookmark(
+                id: collectionID,
                 name: collection,
                 tagGroupsBookmark: tagGroupsBookmark,
                 tagsBookmark: tagsBookmark,

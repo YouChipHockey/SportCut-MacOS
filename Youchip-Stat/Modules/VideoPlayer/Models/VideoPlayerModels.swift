@@ -238,6 +238,7 @@ struct ColorOption {
 }
 
 struct CollectionBookmark: Codable, Hashable {
+    let id: UUID
     let name: String
     let tagGroupsBookmark: Data
     let tagsBookmark: Data
@@ -246,12 +247,56 @@ struct CollectionBookmark: Codable, Hashable {
     let timeEventsBookmark: Data
     let playFieldBookmark: Data?
     
+    init(
+        id: UUID = UUID(),
+        name: String,
+        tagGroupsBookmark: Data,
+        tagsBookmark: Data,
+        labelGroupsBookmark: Data,
+        labelsBookmark: Data,
+        timeEventsBookmark: Data,
+        playFieldBookmark: Data? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.tagGroupsBookmark = tagGroupsBookmark
+        self.tagsBookmark = tagsBookmark
+        self.labelGroupsBookmark = labelGroupsBookmark
+        self.labelsBookmark = labelsBookmark
+        self.timeEventsBookmark = timeEventsBookmark
+        self.playFieldBookmark = playFieldBookmark
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case tagGroupsBookmark
+        case tagsBookmark
+        case labelGroupsBookmark
+        case labelsBookmark
+        case timeEventsBookmark
+        case playFieldBookmark
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        tagGroupsBookmark = try container.decode(Data.self, forKey: .tagGroupsBookmark)
+        tagsBookmark = try container.decode(Data.self, forKey: .tagsBookmark)
+        labelGroupsBookmark = try container.decode(Data.self, forKey: .labelGroupsBookmark)
+        labelsBookmark = try container.decode(Data.self, forKey: .labelsBookmark)
+        timeEventsBookmark = try container.decode(Data.self, forKey: .timeEventsBookmark)
+        playFieldBookmark = try container.decodeIfPresent(Data.self, forKey: .playFieldBookmark)
+    }
+    
     func hash(into hasher: inout Hasher) {
-        hasher.combine(name)
+        hasher.combine(id)
     }
     
     static func == (lhs: CollectionBookmark, rhs: CollectionBookmark) -> Bool {
-        return lhs.name == rhs.name
+        return lhs.id == rhs.id
     }
 }
 

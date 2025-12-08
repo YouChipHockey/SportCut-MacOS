@@ -14,7 +14,7 @@ extension UserDefaults {
     
     func saveCollectionBookmark(_ bookmark: CollectionBookmark) {
         var collections = getCollectionBookmarks()
-        if let index = collections.firstIndex(where: { $0.name == bookmark.name }) {
+        if let index = collections.firstIndex(where: { $0.id == bookmark.id }) {
             collections[index] = bookmark
         } else {
             collections.append(bookmark)
