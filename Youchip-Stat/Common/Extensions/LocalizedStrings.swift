@@ -262,6 +262,8 @@ extension String {
         case fieldMap
         case fieldMapSettings
         case addEvent
+        case renameEvent
+        case eventName
         case groupName
         case renameGroup
         case addGroup
@@ -397,7 +399,6 @@ extension String {
         case additionalSettings
         case hotkeys
         case noRelatedTags
-        case eventName
         case timeEventsDescription
         case information
         case labelsDescription

@@ -255,6 +255,8 @@
 "FieldMapSettings" = "Configuración del Mapa de Campo";  // ^String.Titles.fieldMapSettings
 
 "AddEvent" = "Agregar Evento";  // ^String.Titles.addEvent
+"RenameEvent" = "Renombrar evento";  // ^String.Titles.renameEvent
+"EventName" = "Nombre del evento"; // ^String.Titles.eventName
 "GroupName" = "Nombre del grupo";  // ^String.Titles.groupName
 "RenameGroup" = "Renombrar Grupo";  // ^String.Titles.renameGroup
 "AddGroup" = "Agregar Grupo";  // ^String.Titles.addGroup

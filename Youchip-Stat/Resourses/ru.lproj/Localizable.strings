@@ -256,6 +256,8 @@
 
 "AddEvent" = "Добавить событие";  // ^String.Titles.addEvent
 "GroupName" = "Название группы";  // ^String.Titles.groupName
+"RenameEvent" = "Переименовать событие";  // ^String.Titles.renameEvent
+"EventName" = "Название события"; // ^String.Titles.eventName
 "RenameGroup" = "Переименовать группу";  // ^String.Titles.renameGroup
 "AddGroup" = "Добавить группу";  // ^String.Titles.addGroup
 "TagsInGroup" = "Теги в группе";  // ^String.Titles.tagsInGroup

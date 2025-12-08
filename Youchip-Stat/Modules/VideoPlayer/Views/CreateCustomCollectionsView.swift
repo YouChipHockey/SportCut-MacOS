@@ -93,6 +93,7 @@ struct CreateCustomCollectionsView: View {
     @State private var selectedTagID: String?
     @State private var selectedLabelID: String?
     @State private var selectedTimeEventID: String?
+    @State private var isEditingTimeEvent = false
     @State private var tagFormData = TagFormData()
     @State private var newLabelName = ""
     @State private var newLabelDescription = ""
@@ -491,14 +492,64 @@ struct CreateCustomCollectionsView: View {
                 .foregroundColor(.orange)
                 .frame(width: 16)
             
-            Text(event.name)
-                .font(.body)
+            if selectedTimeEventID == event.id && isEditingTimeEvent {
+                AutoFocusTextField(
+                    text: $newTimeEventName,
+                    placeholder: ^String.Titles.eventName,
+                    onSubmit: {
+                        collectionManager.renameTimeEvent(id: event.id, newName: newTimeEventName)
+                        isEditingTimeEvent = false
+                    }
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(NSColor.windowBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.blue.opacity(0.5), lineWidth: 1)
+                        )
+                )
+                .onAppear {
+                    newTimeEventName = event.name
+                }
+            } else {
+                Text(event.name)
+                    .font(.body)
+            }
             
             Spacer()
             
-            if selectedTimeEventID == event.id {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.blue)
+            if selectedTimeEventID == event.id && !isEditingTimeEvent {
+                HStack(spacing: 8) {
+                    Button(action: {
+                        newTimeEventName = event.name
+                        isEditingTimeEvent = true
+                    }) {
+                        Image(systemName: "pencil")
+                            .foregroundColor(.blue)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(^String.Titles.renameEvent)
+                    
+                    Button(action: {
+                        collectionManager.deleteTimeEvent(id: event.id)
+                        if selectedTimeEventID == event.id {
+                            selectedTimeEventID = nil
+                        }
+                        
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -512,12 +563,15 @@ struct CreateCustomCollectionsView: View {
                 .stroke(selectedTimeEventID == event.id ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
         )
         .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedTimeEventID = event.id
-                selectedTagID = nil
-                selectedLabelID = nil
-                newTimeEventName = event.name
+            if !isEditingTimeEvent {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTimeEventID = event.id
+                    selectedTagID = nil
+                    selectedLabelID = nil
+                    newTimeEventName = event.name
+                }
             }
+
         }
     }
     

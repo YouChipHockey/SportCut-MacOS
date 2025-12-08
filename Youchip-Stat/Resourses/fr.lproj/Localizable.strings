@@ -255,6 +255,8 @@
 "FieldMapSettings" = "Paramètres de carte de terrain";  // ^String.Titles.fieldMapSettings
 
 "AddEvent" = "Ajouter un événement";  // ^String.Titles.addEvent
+"RenameEvent" = "Renommer l’événement";  // ^String.Titles.renameEvent
+"EventName" = "Nom de l’événement"; // ^String.Titles.eventName
 "GroupName" = "Nom du groupe";  // ^String.Titles.groupName
 "RenameGroup" = "Renommer le groupe";  // ^String.Titles.renameGroup
 "AddGroup" = "Ajouter un groupe";  // ^String.Titles.addGroup

@@ -55,6 +55,16 @@ class CustomCollectionManager: ObservableObject {
         }
     }
     
+    func renameTimeEvent(id: String, newName: String) {
+        if let index = timeEvents.firstIndex(where: { $0.id == id }) {
+            timeEvents[index] = TimeEvent(
+                id: id,
+                name: newName
+            )
+            objectWillChange.send()
+        }
+    }
+    
     func updateLabel(id: String, name: String, description: String) {
         if let index = labels.firstIndex(where: { $0.id == id }) {
             labels[index] = Label(
@@ -139,6 +149,11 @@ class CustomCollectionManager: ObservableObject {
             tags[tagIndex].labelHotkeys?.removeValue(forKey: id)
         }
         labels.removeAll { $0.id == id }
+        objectWillChange.send()
+    }
+    
+    func deleteTimeEvent(id: String) {
+        timeEvents.removeAll { $0.id == id }
         objectWillChange.send()
     }
     

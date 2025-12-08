@@ -255,6 +255,8 @@
 "FieldMapSettings" = "Field Map Settings";  // ^String.Titles.fieldMapSettings
 
 "AddEvent" = "Add Event";  // ^String.Titles.addEvent
+"RenameEvent" = "Rename Event";  // ^String.Titles.renameEvent
+"EventName" = "Event Name"; // ^String.Titles.eventName
 "GroupName" = "Group name";  // ^String.Titles.groupName
 "RenameGroup" = "Rename Group";  // ^String.Titles.renameGroup
 "AddGroup" = "Add Group";  // ^String.Titles.addGroup

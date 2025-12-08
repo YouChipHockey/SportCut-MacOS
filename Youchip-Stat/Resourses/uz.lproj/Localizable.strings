@@ -255,6 +255,8 @@
 "FieldMapSettings" = "Maydon xaritasi sozlamalari";  // ^String.Titles.fieldMapSettings
 
 "AddEvent" = "Voqea qo'shish";  // ^String.Titles.addEvent
+"RenameEvent" = "Tadbir nomini o'zgartirish";  // ^String.Titles.renameEvent
+"EventName" = "Tadbir nomi"; // ^String.Titles.eventName
 "GroupName" = "Guruh nomi";  // ^String.Titles.groupName
 "RenameGroup" = "Guruhni qayta nomlash";  // ^String.Titles.renameGroup
 "AddGroup" = "Guruh qo'shish";  // ^String.Titles.addGroup

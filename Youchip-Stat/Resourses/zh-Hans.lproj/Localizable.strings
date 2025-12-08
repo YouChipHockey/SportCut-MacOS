@@ -255,6 +255,8 @@
 "FieldMapSettings" = "场地地图设置";  // ^String.Titles.fieldMapSettings
 
 "AddEvent" = "添加事件";  // ^String.Titles.addEvent
+"RenameEvent" = "重命名事件";  // ^String.Titles.renameEvent
+"EventName" = "事件名称"; // ^String.Titles.eventName
 "GroupName" = "组名称";  // ^String.Titles.groupName
 "RenameGroup" = "重命名组";  // ^String.Titles.renameGroup
 "AddGroup" = "添加组";  // ^String.Titles.addGroup
