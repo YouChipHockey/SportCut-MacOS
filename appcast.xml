@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>SportCut</title>
+        <item>
+            <title>2.0.0</title>
+            <pubDate>Mon, 08 Dec 2025 17:18:52 +0300</pubDate>
+            <sparkle:version>158</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/YouChipHockey/SportCut-MacOS/releases/download/verTest/SportCut%202.0.0.dmg" length="21110219" type="application/octet-stream" sparkle:edSignature="CStbzPvDH1cA2Oe0Ar1rkfuSExkPzM2AlC2Sct9Q8UOomLO+z6CRRVSWnO85pC5h6Eixk3jU9j8DkrT+uoYEDA=="/>
+        </item>
+    </channel>
+</rss>
