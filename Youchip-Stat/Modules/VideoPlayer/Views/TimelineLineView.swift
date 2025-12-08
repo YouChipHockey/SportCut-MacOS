@@ -41,7 +41,7 @@ struct TimelineLineView: View {
     @State private var maxVisualOffsetX: CGFloat? = nil
     
     // MARK: - drag properties
-    @State private var dragOffset: CGSize = .zero
+    @State private var dragOffsetY: CGFloat = 0
     @State private var draggingStampID: UUID?
     
     enum ResizeEdge {
@@ -122,12 +122,11 @@ struct TimelineLineView: View {
         let currentDuration = currentEndTime - currentStartTime
         
         let isDragging = draggingStampID == stamp.id
-        let dragOffsetX = isDragging ? dragOffset.width : 0
         
         let currentLineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }) ?? 0
         let maxYOffset = CGFloat(timelineData.lines.count - 1 - currentLineIndex) * lineHeight
         let minYOffset = -1 * CGFloat(currentLineIndex) * lineHeight
-        let dragOffsetY = isDragging ? max(min(dragOffset.height, maxYOffset), minYOffset) : 0
+        let verticalOffset = isDragging ? max(min(dragOffsetY, maxYOffset), minYOffset) : 0
         
         let startRatio = currentStartTime / totalDuration
         let durationRatio = currentDuration / totalDuration
@@ -152,8 +151,6 @@ struct TimelineLineView: View {
         (isSelected) ? Color.blue : Color.clear
         let heightReduction = CGFloat(overlapCount * 6)
         let stampHeight: CGFloat = 25 - heightReduction
-
-        let positionX = max(min(widthMax, dragOffsetX + stampX + stampWidth / 2), 0)
         
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 6)
@@ -197,7 +194,7 @@ struct TimelineLineView: View {
             )
         )
         .frame(width: stampWidth, height: stampHeight)
-        .position(x: clampedCenterX(isDragging: isDragging, stampX: stampX, stampWidth: stampWidth), y: dragOffsetY + 15)
+        .position(x: clampedCenterX(isDragging: isDragging, stampX: stampX, stampWidth: stampWidth), y: verticalOffset + 15)
         .onTapGesture {
             if resizingStampID == nil {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -213,18 +210,12 @@ struct TimelineLineView: View {
                     if draggingStampID == nil {
                         draggingStampID = stamp.id
                     }
-                    dragOffset = value.translation
-                    print(widthMax, dragOffsetX + stampX + stampWidth / 2)
+                    dragOffsetY = value.translation.height
                 }
                 .onEnded { value in
-                    dragOffset = .zero
+                    dragOffsetY = 0
                     guard let draggingStampID else { return }
-                    let offsetInSeconds = Double(dragOffsetX) / widthMax * totalDuration
-                    var newStartSecond = stamp.timeStartSeconds + offsetInSeconds
-                    newStartSecond = max(newStartSecond, 0)
-                    var newEndSecond = stamp.timeFinishSeconds + offsetInSeconds
-                    newEndSecond = min(newEndSecond, totalDuration)
-                    
+
                     let lineHeight: CGFloat = lineHeight
                     let sourceLineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }) ?? 0
                     let y = value.location.y + CGFloat(sourceLineIndex) * lineHeight
@@ -238,13 +229,11 @@ struct TimelineLineView: View {
                     let stampInfo = StampDragInfo(
                         lineID: line.id,
                         stampID: draggingStampID,
-                        startSecond: newStartSecond,
-                        endSecond: newEndSecond
                     )
                     transferStamp(stampInfo, to: destLineID)
                     
                     self.draggingStampID = nil
-                    self.dragOffset = .zero
+                    dragOffsetY = 0
                 }
         )
         .contextMenu {
@@ -472,18 +461,14 @@ struct TimelineLineView: View {
             return
         }
         
-//        if stampInfo.lineID == destLineID {
-//            return
-//        }
-        
         let stamp = timelineData.lines[sourceLineIndex].stamps[stampIndex]
         
         let newStamp = TimelineStamp(
             id: UUID(),
             idTag: stamp.idTag,
             primaryID: stamp.primaryID,
-            timeStartSeconds: stampInfo.startSecond,
-            timeFinishSeconds: stampInfo.endSecond,
+            timeStartSeconds: stamp.timeStartSeconds,
+            timeFinishSeconds: stamp.timeFinishSeconds,
             colorHex: stamp.colorHex,
             label: stamp.label,
             labels: stamp.labels,
@@ -497,10 +482,8 @@ struct TimelineLineView: View {
     }
     
     private func clampedCenterX(isDragging: Bool, stampX: CGFloat, stampWidth: CGFloat) -> CGFloat {
-        let dragX = isDragging ? dragOffset : .zero
-        
         let baseCenterX = stampX + stampWidth / 2
-        var centerX = baseCenterX + dragX.width
+        var centerX = baseCenterX
 
         let minCenterX = stampWidth / 2
         let maxCenterX = widthMax - stampWidth / 2
