@@ -562,6 +562,7 @@ struct CreateCustomCollectionsView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(selectedTimeEventID == event.id ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
         )
+        .contentShape(Rectangle())
         .onTapGesture {
             if !isEditingTimeEvent {
                 withAnimation(.easeInOut(duration: 0.2)) {
