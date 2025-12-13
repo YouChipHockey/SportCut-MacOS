@@ -1114,11 +1114,16 @@ struct TagLibraryView: View {
     private func deleteCollection(_ collection: CollectionBookmark) {
         UserDefaults.standard.removeCollectionBookmark(named: collection.name)
         
-        let collectionsFolder = URL.appDocumentsDirectory
-            .appendingPathComponent("YouChip-Stat/Collections/\(collection.name)", isDirectory: true)
-            .fixedFile()
+        let collectionFolderUrlString = URLConstants.getCollecitonFolderStringUrl(with: collection.id)
+        let collectionFolderUrl = URL.appDocumentsDirectory
+            .appendingPathComponent(collectionFolderUrlString, isDirectory: true)
         
-        try? FileManager.default.removeItem(at: collectionsFolder)
+        do {
+            try FileManager.default.removeItem(at: collectionFolderUrl)
+        } catch {
+            print("ERROR REMOVING FILE: \(error)")
+        }
+
         
         if isUserCollectionActive && selectedUserCollection?.name == collection.name {
             isUserCollectionActive = false

@@ -238,7 +238,7 @@ struct ColorOption {
 }
 
 struct CollectionBookmark: Codable, Hashable {
-    let id: UUID
+    let id: String
     let name: String
     let tagGroupsBookmark: Data
     let tagsBookmark: Data
@@ -248,7 +248,7 @@ struct CollectionBookmark: Codable, Hashable {
     let playFieldBookmark: Data?
     
     init(
-        id: UUID = UUID(),
+        id: String,
         name: String,
         tagGroupsBookmark: Data,
         tagsBookmark: Data,
@@ -281,8 +281,8 @@ struct CollectionBookmark: Codable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? name
         tagGroupsBookmark = try container.decode(Data.self, forKey: .tagGroupsBookmark)
         tagsBookmark = try container.decode(Data.self, forKey: .tagsBookmark)
         labelGroupsBookmark = try container.decode(Data.self, forKey: .labelGroupsBookmark)

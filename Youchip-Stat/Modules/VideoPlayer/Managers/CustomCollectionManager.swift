@@ -19,7 +19,7 @@ class CustomCollectionManager: ObservableObject {
     @Published var labels: [Label] = []
     @Published var timeEvents: [TimeEvent] = []
     @Published var collectionName: String = ^String.Titles.myCollection
-    @Published var collectionID: UUID = UUID()
+    @Published var collectionID: String = UUID().uuidString
     @Published var isEditingExisting: Bool = false
     var originalName: String = ""
     
@@ -283,10 +283,11 @@ class CustomCollectionManager: ObservableObject {
     }
     
     func saveCollectionToFiles() -> Bool {
+        collectionName = collectionName.trimmingCharacters(in: .whitespacesAndNewlines)
         if collectionName == originalName || collectionName.isEmpty {
             collectionName = originalName
         } else {
-            collectionName = ensureUniqueCollectionName(collectionName)
+            collectionName = ensureUniqueCollectionName(collectionName, collectionID: collectionID)
         }
         
         do {
@@ -296,21 +297,21 @@ class CustomCollectionManager: ObservableObject {
             let labelsData = LabelsData(labels: labels)
             let timeEventsData = TimeEventsData(events: timeEvents)
             
-            let fileManager = FileManager.default
-            let collectionsFolder = URL.appDocumentsDirectory
-                .appendingPathComponent("YouChip-Stat/Collections/\(collectionName)", isDirectory: true)
-                .fixedFile()
+            let urlString = URLConstants.getCollecitonFolderStringUrl(with: collectionID)
+            let collectionsFolderUrl = URL.appDocumentsDirectory
+                .appendingPathComponent(urlString, isDirectory: true)
             
-            if !fileManager.fileExists(atPath: collectionsFolder.path) {
-                try fileManager.createDirectory(at: collectionsFolder, withIntermediateDirectories: true)
+            let fileManager = FileManager.default
+            if !fileManager.fileExists(atPath: collectionsFolderUrl.path) {
+                try fileManager.createDirectory(at: collectionsFolderUrl, withIntermediateDirectories: true)
             }
             
-            let tagGroupsURL = collectionsFolder.appendingPathComponent("tagGroups.json")
-            let tagsURL = collectionsFolder.appendingPathComponent("tags.json")
-            let labelGroupsURL = collectionsFolder.appendingPathComponent("labelGroups.json")
-            let labelsURL = collectionsFolder.appendingPathComponent("labels.json")
-            let timeEventsURL = collectionsFolder.appendingPathComponent("timeEvents.json")
-            let playFieldURL = collectionsFolder.appendingPathComponent("playField.json")
+            let tagGroupsURL = collectionsFolderUrl.appendingPathComponent("tagGroups.json")
+            let tagsURL = collectionsFolderUrl.appendingPathComponent("tags.json")
+            let labelGroupsURL = collectionsFolderUrl.appendingPathComponent("labelGroups.json")
+            let labelsURL = collectionsFolderUrl.appendingPathComponent("labels.json")
+            let timeEventsURL = collectionsFolderUrl.appendingPathComponent("timeEvents.json")
+            let playFieldURL = collectionsFolderUrl.appendingPathComponent("playField.json")
             
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
@@ -371,12 +372,16 @@ class CustomCollectionManager: ObservableObject {
             
             return true
         } catch {
+            print("SAVE ERROR:", error.localizedDescription)
             return false
         }
     }
     
-    func ensureUniqueCollectionName(_ baseName: String) -> String {
-        let existingNames = UserDefaults.standard.getCollectionBookmarks().map { $0.name }
+    func ensureUniqueCollectionName(_ baseName: String, collectionID: String) -> String {
+        let existingNames = UserDefaults.standard
+            .getCollectionBookmarks()
+            .filter { $0.id != collectionID }
+            .map(\.name)
         if (isEditingExisting && baseName == originalName) || !existingNames.contains(baseName) {
             return baseName
         }

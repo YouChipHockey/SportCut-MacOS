@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */; };
+		BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFDA33492EEDBD9100358696 /* URLConstants.swift */; };
 		DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */; };
 		DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67E2DBAFB8A00CB2AE0 /* VideosViewModel.swift */; };
 		DD1DAEE32E81E65E00850FAC /* ReportWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1DAEE22E81E65E00850FAC /* ReportWindow.swift */; };
@@ -180,6 +181,7 @@
 /* Begin PBXFileReference section */
 		23DAB237503920889C6C4438 /* Pods-Youchip-Stat.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.debug.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.debug.xcconfig"; sourceTree = "<group>"; };
 		2EA66B918FEF070C401BD61D /* Pods-Youchip-Stat.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.release.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.release.xcconfig"; sourceTree = "<group>"; };
+		BFDA33492EEDBD9100358696 /* URLConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLConstants.swift; sourceTree = "<group>"; };
 		D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Youchip_Stat.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoMetadataModel.swift; sourceTree = "<group>"; };
 		DD1BF67E2DBAFB8A00CB2AE0 /* VideosViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideosViewModel.swift; sourceTree = "<group>"; };
@@ -522,6 +524,7 @@
 		DD32C2672D74A0110052B5C6 /* Common */ = {
 			isa = PBXGroup;
 			children = (
+				BFDA33492EEDBD9100358696 /* URLConstants.swift */,
 				DD2A70652D74D2DB00287BA8 /* Files */,
 				DD32C29F2D74A1C80052B5C6 /* Extensions */,
 				DD32C28E2D74A1990052B5C6 /* AppSetupManager.swift */,
@@ -1100,6 +1103,7 @@
 				DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */,
 				DD5CFA052E04694A009CD51A /* FieldMapSelectionWindowController.swift in Sources */,
 				DD408C6F2E6C736F00E615E5 /* DashedLinesShape.swift in Sources */,
+				BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */,
 				DD408C702E6C736F00E615E5 /* PolygonShape.swift in Sources */,
 				DD408C712E6C736F00E615E5 /* DrawableObject.swift in Sources */,
 				DD408C722E6C736F00E615E5 /* ExportPayload.swift in Sources */,
