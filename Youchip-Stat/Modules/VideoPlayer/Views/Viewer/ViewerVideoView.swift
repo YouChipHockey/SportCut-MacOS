@@ -139,6 +139,10 @@ struct ViewerVideoView: View {
                             DrawingOverlay(drawingState: drawingState)
                                 .allowsHitTesting(drawingState.isDrawingMode)
                         )
+                        .overlay(alignment: .bottom) {
+                            videoOverlayText()
+                                .padding(.bottom, 40)
+                        }
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "video.slash")
@@ -400,6 +404,44 @@ struct ViewerVideoView: View {
         
         bezierPath.stroke()
     }
+    
+    @ViewBuilder
+    private func videoOverlayText() -> some View {
+        if let currentPlayingStamp = playlistManager.currentPlaylist.first {
+            let tagLibrary = TagLibraryManager.shared
+            
+            let stampID = currentPlayingStamp.stampID
+            let stamp = TimelineDataManager.shared.lines
+                .flatMap { $0.stamps }
+                .first { $0.id == stampID }
+            let tag = tagLibrary.allTags.first { $0.id == currentPlayingStamp.mainTagID }
+            let stampLabels = currentPlayingStamp.labelIDs.compactMap { labelID in
+                tagLibrary.allLabels.first(where: { $0.id == labelID })
+            }
+            let selectedLabelGroups: [OverlayLabelGroupItem] = Dictionary(grouping: stampLabels) { label in
+                tagLibrary.allLabelGroups.first(where: { $0.lables.contains(label.id) })
+            }
+            .compactMap { (group, labels) in
+                guard let group = group else { return nil }
+                return OverlayLabelGroupItem(group: group, selectedLabels: labels)
+            }
+            if let tag, let stamp {
+                let overlayItem = OverlayItem(tag: tag, stamp: stamp, selectedLabelGroups: selectedLabelGroups, start: .zero, duration: .zero)
+                let attributedString = NSAttributedString.attributedStringForTagInfo(overlayItem: overlayItem) ?? NSAttributedString(string: "")
+                Text(AttributedString(attributedString))
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(nil)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(
+                        Rectangle()
+                            .fill(.black.opacity(0.55))
+                )
+            }
+        }
+    }
+
 }
 
 struct DrawingOverlay: View {

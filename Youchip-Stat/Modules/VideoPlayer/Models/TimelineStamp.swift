@@ -57,3 +57,9 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         lhs.id == rhs.id
     }
 }
+
+extension Array where Element == TimelineStamp {
+    var sortedByStartTime: [TimelineStamp] {
+        self.sorted { $0.timeStartSeconds < $1.timeStartSeconds }
+    }
+}

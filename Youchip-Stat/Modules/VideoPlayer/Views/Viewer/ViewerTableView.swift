@@ -352,6 +352,7 @@ struct TableRowView: View {
         let tagGroup = TagLibraryManager.shared.findTagGroupForTag(stampWithLine.stamp.idTag)
         return OrganizerTag(
             stampID: stampWithLine.stamp.id,
+            mainTagID: stampWithLine.stamp.idTag,
             lineID: stampWithLine.line.id,
             tagName: stampWithLine.stamp.label,
             lineName: stampWithLine.line.name,
@@ -386,6 +387,7 @@ struct TableRowView: View {
                 let tagGroup = TagLibraryManager.shared.findTagGroupForTag(stampWithLine.stamp.idTag)
                 return OrganizerTag(
                     stampID: stampWithLine.stamp.id,
+                    mainTagID: stampWithLine.stamp.idTag,
                     lineID: stampWithLine.line.id,
                     tagName: stampWithLine.stamp.label,
                     lineName: stampWithLine.line.name,

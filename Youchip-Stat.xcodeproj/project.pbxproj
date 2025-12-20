@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */; };
+		BF67155E2EF363A000A71E47 /* OverlayItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF67155D2EF3639C00A71E47 /* OverlayItem.swift */; };
+		BF6715C02EF6E69700A71E47 /* NSAttributedString+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */; };
+		BF6715C22EF6EC9600A71E47 /* ExportHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6715C12EF6EC8E00A71E47 /* ExportHelper.swift */; };
 		BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFDA33492EEDBD9100358696 /* URLConstants.swift */; };
 		DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */; };
 		DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67E2DBAFB8A00CB2AE0 /* VideosViewModel.swift */; };
@@ -181,6 +184,9 @@
 /* Begin PBXFileReference section */
 		23DAB237503920889C6C4438 /* Pods-Youchip-Stat.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.debug.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.debug.xcconfig"; sourceTree = "<group>"; };
 		2EA66B918FEF070C401BD61D /* Pods-Youchip-Stat.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.release.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.release.xcconfig"; sourceTree = "<group>"; };
+		BF67155D2EF3639C00A71E47 /* OverlayItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayItem.swift; sourceTree = "<group>"; };
+		BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSAttributedString+Convenience.swift"; sourceTree = "<group>"; };
+		BF6715C12EF6EC8E00A71E47 /* ExportHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportHelper.swift; sourceTree = "<group>"; };
 		BFDA33492EEDBD9100358696 /* URLConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLConstants.swift; sourceTree = "<group>"; };
 		D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Youchip_Stat.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoMetadataModel.swift; sourceTree = "<group>"; };
@@ -414,6 +420,22 @@
 			path = Pods;
 			sourceTree = "<group>";
 		};
+		BF67155B2EF3638C00A71E47 /* Export */ = {
+			isa = PBXGroup;
+			children = (
+				BF67155C2EF3639900A71E47 /* Models */,
+			);
+			path = Export;
+			sourceTree = "<group>";
+		};
+		BF67155C2EF3639900A71E47 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				BF67155D2EF3639C00A71E47 /* OverlayItem.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		DD2A704C2D74C2CC00287BA8 /* Videos */ = {
 			isa = PBXGroup;
 			children = (
@@ -488,6 +510,7 @@
 		DD2A707D2D74E41400287BA8 /* VideoPlayer */ = {
 			isa = PBXGroup;
 			children = (
+				BF67155B2EF3638C00A71E47 /* Export */,
 				DDCA6B6D2DCA69A50025EF9E /* Helpers */,
 				DDCA6B5E2DCA674E0025EF9E /* Controllers */,
 				DDCA6B522DCA65750025EF9E /* Delegates */,
@@ -587,6 +610,7 @@
 		DD32C29F2D74A1C80052B5C6 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
+				BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */,
 				DDDB36352D78E16100A1111C /* Color.swift */,
 				DD32C2902D74A1C80052B5C6 /* Colors.swift */,
 				DD32C2912D74A1C80052B5C6 /* Date+Convenience.swift */,
@@ -783,6 +807,7 @@
 		DDCA6B6D2DCA69A50025EF9E /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
+				BF6715C12EF6EC8E00A71E47 /* ExportHelper.swift */,
 				DD5CF9C02E0464E0009CD51A /* MainFuncs.swift */,
 				DD5CF9BE2E046406009CD51A /* ImageSizePreferenceKey.swift */,
 				DDCA6B6E2DCA69AE0025EF9E /* CompatibilityButtonStyle.swift */,
@@ -1065,6 +1090,7 @@
 				DD5CF9F52E04687D009CD51A /* String+Conveniece.swift in Sources */,
 				DD32C28B2D74A1190052B5C6 /* AppDelegate.swift in Sources */,
 				DDCA6B512DCA65220025EF9E /* MarkupMode.swift in Sources */,
+				BF67155E2EF363A000A71E47 /* OverlayItem.swift in Sources */,
 				DD2A707A2D74E0AF00287BA8 /* VideoThumbnailView.swift in Sources */,
 				DD2A70782D74D79B00287BA8 /* FileOpenHelper.swift in Sources */,
 				DD5CF9E62E0467D6009CD51A /* LabelSelectionSheet.swift in Sources */,
@@ -1103,6 +1129,7 @@
 				DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */,
 				DD5CFA052E04694A009CD51A /* FieldMapSelectionWindowController.swift in Sources */,
 				DD408C6F2E6C736F00E615E5 /* DashedLinesShape.swift in Sources */,
+				BF6715C02EF6E69700A71E47 /* NSAttributedString+Convenience.swift in Sources */,
 				BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */,
 				DD408C702E6C736F00E615E5 /* PolygonShape.swift in Sources */,
 				DD408C712E6C736F00E615E5 /* DrawableObject.swift in Sources */,
@@ -1134,6 +1161,7 @@
 				DD408C8A2E6C736F00E615E5 /* ZoneBetweenObjectsCustomization.swift in Sources */,
 				DDCA6B542DCA657B0025EF9E /* CollectionWindowDelegate.swift in Sources */,
 				DDFB1A542DE5131F00175D97 /* SheetToolbarView.swift in Sources */,
+				BF6715C22EF6EC9600A71E47 /* ExportHelper.swift in Sources */,
 				DD2A705E2D74C66700287BA8 /* VideosActions.swift in Sources */,
 				DD5CF9BF2E046406009CD51A /* ImageSizePreferenceKey.swift in Sources */,
 				DD2A706B2D74D31600287BA8 /* VideosPreviewManager.swift in Sources */,

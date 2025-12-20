@@ -64,13 +64,13 @@ struct TagGroupsData: Codable {
     let tagGroups: [TagGroup]
 }
 
-struct Label: Codable, Identifiable {
+struct Label: Codable, Identifiable, Equatable, Hashable {
     let id: String
     let name: String
     let description: String
 }
 
-struct LabelGroupData: Codable, Identifiable {
+struct LabelGroupData: Codable, Identifiable, Hashable {
     var id: String
     var name: String
     var lables: [String]
@@ -106,11 +106,11 @@ enum CutsExportType {
 }
 
 struct ExportSegment {
+    let stamp: TimelineStamp
+    let tagName: String
     let timeRange: CMTimeRange
     let lineName: String?
-    let tagName: String
     let groupName: String?
-    let labels: [Label]?
     let labelGroupName: String?
     let selectedLabel: Label?
 }

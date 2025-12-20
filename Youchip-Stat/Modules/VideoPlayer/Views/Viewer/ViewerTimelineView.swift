@@ -288,6 +288,7 @@ struct ViewerTimelineView: View {
                 let tagGroup = TagLibraryManager.shared.findTagGroupForTag(stamp.idTag)
                 let organizerTag = OrganizerTag(
                     stampID: stamp.id,
+                    mainTagID: stamp.idTag,
                     lineID: line.id,
                     tagName: stamp.label,
                     lineName: line.name,
@@ -323,16 +324,15 @@ struct ViewerTimelineLineView: View {
             ForEach(line.stamps.filter { filter.matches(stamp: $0) }) { stamp in
                 let startX = (stamp.timeStartSeconds / videoManager.videoDuration) * widthMax
                 let width = (stamp.duration / videoManager.videoDuration) * widthMax
-                
-                        ViewerStampView(
-                            stamp: stamp,
-                            line: line,
-                            startX: startX,
-                            width: width,
-                            organizer: organizer,
-                            playlistManager: playlistManager,
-                            filter: filter
-                        )
+                ViewerStampView(
+                    stamp: stamp,
+                    line: line,
+                    startX: startX,
+                    width: width,
+                    organizer: organizer,
+                    playlistManager: playlistManager,
+                    filter: filter
+                )
             }
         }
         .frame(width: widthMax, height: 30)
@@ -412,6 +412,7 @@ struct ViewerStampView: View {
         let tagGroup = TagLibraryManager.shared.findTagGroupForTag(stamp.idTag)
         return OrganizerTag(
             stampID: stamp.id,
+            mainTagID: stamp.idTag,
             lineID: line.id,
             tagName: stamp.label,
             lineName: line.name,

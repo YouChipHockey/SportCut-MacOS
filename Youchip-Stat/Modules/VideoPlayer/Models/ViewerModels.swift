@@ -169,7 +169,8 @@ class TagOrganizer: ObservableObject {
 }
 
 struct OrganizerTag: Identifiable, Equatable, Codable {
-    let id: UUID
+    let id : UUID
+    let mainTagID: String
     let stampID: UUID
     let lineID: UUID
     let tagName: String
@@ -181,8 +182,9 @@ struct OrganizerTag: Identifiable, Equatable, Codable {
     let labelIDs: [String]
     let eventIDs: [String]
     
-    init(stampID: UUID, lineID: UUID, tagName: String, lineName: String, startTime: Double, duration: Double, color: String, tagGroupName: String? = nil, labelIDs: [String] = [], eventIDs: [String] = []) {
+    init(stampID: UUID, mainTagID: String, lineID: UUID, tagName: String, lineName: String, startTime: Double, duration: Double, color: String, tagGroupName: String? = nil, labelIDs: [String] = [], eventIDs: [String] = []) {
         self.id = UUID()
+        self.mainTagID = mainTagID
         self.stampID = stampID
         self.lineID = lineID
         self.tagName = tagName
