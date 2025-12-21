@@ -114,6 +114,7 @@
 "CollectionsButtonSaveChanges" = "Guardar Cambios";  // ^String.Titles.collectionsButtonSaveChanges
 "TimelineButtonDeleteTag" = "Eliminar Etiqueta";  // ^String.Titles.timelineButtonDeleteTag
 "TimelineButtonEditLabels" = "Editar Etiquetas";  // ^String.Titles.timelineButtonEditLabels
+"TimelineButtonEditTimeEvents" = "Editar eventos de tiempo";  // ^String.Titles.timelineButtonEditTimeEvents
 "TimelineButtonDeleteTimeline" = "Eliminar Línea de Tiempo";  // ^String.Titles.timelineButtonDeleteTimeline
 "FieldMapPickerLabelSelectTimelines" = "Seleccionar líneas de tiempo:";  // ^String.Titles.fieldMapPickerLabelSelectTimelines
 "FieldMapPickerNoTimelines" = "No hay líneas de tiempo disponibles con etiquetas posicionadas para esta colección";  // ^String.Titles.fieldMapPickerNoTimelines

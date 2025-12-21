@@ -146,6 +146,13 @@ class TimelineDataManager: ObservableObject {
         updateTimelines()
     }
     
+    func updateStampTimeEvents(lineID: UUID, stampID: UUID, newEvents: [String]) {
+        guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
+        guard let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }
+        lines[lineIndex].stamps[stampIndex].timeEvents = newEvents
+        updateTimelines()
+    }
+    
     func stampHasOverlaps(lineID: UUID, stampID: UUID) -> Bool {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }),
               let stamp = lines[lineIndex].stamps.first(where: { $0.id == stampID }) else {

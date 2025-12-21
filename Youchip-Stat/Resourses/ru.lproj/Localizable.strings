@@ -114,6 +114,7 @@
 "CollectionsButtonSaveChanges" = "Сохранить изменения";  // ^String.Titles.collectionsButtonSaveChanges
 "TimelineButtonDeleteTag" = "Удалить тег";  // ^String.Titles.timelineButtonDeleteTag
 "TimelineButtonEditLabels" = "Редактировать лейблы";  // ^String.Titles.timelineButtonEditLabels
+"TimelineButtonEditTimeEvents" = "Редактировать общие события";  // ^String.Titles.timelineButtonEditTimeEvents
 "TimelineButtonDeleteTimeline" = "Удалить таймлайн";  // ^String.Titles.timelineButtonDeleteTimeline
 "FieldMapPickerLabelSelectTimelines" = "Выберите таймлайны:";  // ^String.Titles.fieldMapPickerLabelSelectTimelines
 "FieldMapPickerNoTimelines" = "Нет доступных таймлайнов с тегами с позицией для данной коллекции";  // ^String.Titles.fieldMapPickerNoTimelines

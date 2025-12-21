@@ -114,6 +114,7 @@
 "CollectionsButtonSaveChanges" = "O'zgarishlarni saqlash";  // ^String.Titles.collectionsButtonSaveChanges
 "TimelineButtonDeleteTag" = "Tegni o'chirish";  // ^String.Titles.timelineButtonDeleteTag
 "TimelineButtonEditLabels" = "Yorliqlarni tahrirlash";  // ^String.Titles.timelineButtonEditLabels
+"TimelineButtonEditTimeEvents" = "Vaqt voqealarini tahrirlash";  // ^String.Titles.timelineButtonEditTimeEvents
 "TimelineButtonDeleteTimeline" = "Vaqt chiziqini o'chirish";  // ^String.Titles.timelineButtonDeleteTimeline
 "FieldMapPickerLabelSelectTimelines" = "Vaqt chiziqlarini tanlang:";  // ^String.Titles.fieldMapPickerLabelSelectTimelines
 "FieldMapPickerNoTimelines" = "Bu to'plam uchun pozitsiyali teglar bilan mavjud vaqt chiziqlari yo'q";  // ^String.Titles.fieldMapPickerNoTimelines

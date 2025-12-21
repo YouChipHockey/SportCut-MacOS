@@ -27,7 +27,8 @@ struct FullControlView: View {
     @State private var isDraggingSlider = false
     @State private var showAddLineSheet = false
     @State private var isExporting: Bool = false
-    @State private var showLabelEditSheet = false
+    @State private var stampItemsEditSheetType: StampEditSheetType? = nil
+    @State private var showStampItemsEditSheet = false
     @State private var showFieldMapVisualizationPicker = false
     @State private var editingStampLineID: UUID?
     @State private var editingStampID: UUID?
@@ -232,7 +233,16 @@ struct FullControlView: View {
                         onSelect: { timelineData.selectLine(line.id) },
                         onEditLabelsRequest: { stampID in
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                showLabelEditSheet = true
+                                stampItemsEditSheetType = .lables
+                                showStampItemsEditSheet = true
+                            }
+                            UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
+                            UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
+                        },
+                        onEditTimeEventsRequest: { stampID in
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                stampItemsEditSheetType = .timeEvents
+                                showStampItemsEditSheet = true
                             }
                             UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
                             UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
@@ -1483,8 +1493,10 @@ struct FullControlView: View {
                 timelineData.addLine(name: newLineName)
             }
         }
-        .sheet(isPresented: $showLabelEditSheet) {
-            LabelEditSheet(showLabelEditSheet: $showLabelEditSheet)
+        .sheet(isPresented: $showStampItemsEditSheet) {
+            if let stampItemsEditSheetType {
+                StampEditSheet(showStampEditSheet: $showStampItemsEditSheet, sheetType: stampItemsEditSheetType)
+            } 
         }
         .sheet(isPresented: $showExportModeSheet) {
             ExportModeSelectionSheet { mode in
@@ -1605,9 +1617,10 @@ struct FullControlView: View {
         }
     }
     
-    struct LabelEditSheet: View {
+    struct StampEditSheet: View {
         @ObservedObject var timelineData = TimelineDataManager.shared
-        @Binding var showLabelEditSheet: Bool
+        @Binding var showStampEditSheet: Bool
+        let sheetType: StampEditSheetType
         
         var body: some View {
             if let lineIDString = UserDefaults.standard.string(forKey: "editingStampLineID"),
@@ -1618,22 +1631,39 @@ struct FullControlView: View {
                 if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
                    let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) {
                     
-                    let currentLabels = timelineData.lines[lineIndex].stamps[stampIndex].labels
+                    let currentIds = switch sheetType {
+                    case .lables:
+                        timelineData.lines[lineIndex].stamps[stampIndex].labels
+                    case .timeEvents:
+                        timelineData.lines[lineIndex].stamps[stampIndex].timeEvents
+                    }
                     let stampName = timelineData.lines[lineIndex].stamps[stampIndex].label
                     let tagId = timelineData.lines[lineIndex].stamps[stampIndex].idTag
                     
                     if let tag = TagLibraryManager.shared.findTagById(tagId) {
-                        LabelSelectionSheet(
+                        StampItemsSelectionSheet(
+                            sheetType: sheetType,
                             stampName: stampName,
-                            initialLabels: currentLabels,
+                            initialIds: currentIds,
                             tag: tag,
                             tagLibrary: TagLibraryManager.shared,
                             isDop: true,
-                            onDone: { newLabels in
-                                timelineData.updateStampLabels(lineID: lineID,
-                                                               stampID: stampID,
-                                                               newLabels: newLabels)
-                                showLabelEditSheet = false
+                            onDone: { newIds in
+                                switch sheetType {
+                                case .lables:
+                                    timelineData.updateStampLabels(
+                                        lineID: lineID,
+                                        stampID: stampID,
+                                        newLabels: newIds
+                                    )
+                                case .timeEvents:
+                                    timelineData.updateStampTimeEvents(
+                                        lineID: lineID,
+                                        stampID: stampID,
+                                        newEvents: newIds
+                                    )
+                                }
+                                showStampEditSheet = false
                             }, onCancel: { return }
                         )
                     } else {
@@ -1648,15 +1678,16 @@ struct FullControlView: View {
         }
     }
     
+    
     func showMultiTagSelection(for label: Label) {
         multiTagSelectionItem = MultiSelectionItem(label: label)
     }
 
         
-        func showMultiLabelSelection(for tag: Tag) {
-            multiLabelSelectionItem = MultiSelectionItem(tag: tag)
-        }
-    
+    func showMultiLabelSelection(for tag: Tag) {
+        multiLabelSelectionItem = MultiSelectionItem(tag: tag)
+    }
+
     func uniqueEventsFromTimelines() -> [TimeEvent] {
         let eventIDs = Set(timelineData.lines.flatMap { line in
             line.stamps.flatMap { stamp in

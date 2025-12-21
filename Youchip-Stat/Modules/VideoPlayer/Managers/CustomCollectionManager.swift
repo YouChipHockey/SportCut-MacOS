@@ -21,6 +21,7 @@ class CustomCollectionManager: ObservableObject {
     @Published var collectionName: String = ^String.Titles.myCollection
     @Published var collectionID: String = UUID().uuidString
     @Published var isEditingExisting: Bool = false
+    @Published var allCollections: [StandardCollection] = []
     var originalName: String = ""
     
     init() {}
@@ -31,6 +32,7 @@ class CustomCollectionManager: ObservableObject {
         self.collectionName = bookmark.name
         self.collectionID = bookmark.id
         loadCollectionFromBookmarks(named: bookmark.name)
+        loadAllCollections()
     }
     
     func renameTagGroup(id: String, newName: String) {
@@ -571,6 +573,11 @@ class CustomCollectionManager: ObservableObject {
         } catch {
             return false
         }
+    }
+    
+    private func loadAllCollections() {
+        let allBookmarks = UserDefaults.standard.getCollectionBookmarks()
+        
     }
     
     func updateTagMapEnabled(id: String, mapEnabled: Bool) -> Bool {

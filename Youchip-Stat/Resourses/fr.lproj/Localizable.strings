@@ -114,6 +114,7 @@
 "CollectionsButtonSaveChanges" = "Enregistrer les modifications";  // ^String.Titles.collectionsButtonSaveChanges
 "TimelineButtonDeleteTag" = "Supprimer l'étiquette";  // ^String.Titles.timelineButtonDeleteTag
 "TimelineButtonEditLabels" = "Modifier les étiquettes";  // ^String.Titles.timelineButtonEditLabels
+"TimelineButtonEditTimeEvents" = "Modifier les événements temporels";  // ^String.Titles.timelineButtonEditTimeEvents
 "TimelineButtonDeleteTimeline" = "Supprimer la chronologie";  // ^String.Titles.timelineButtonDeleteTimeline
 "FieldMapPickerLabelSelectTimelines" = "Sélectionner les chronologies :";  // ^String.Titles.fieldMapPickerLabelSelectTimelines
 "FieldMapPickerNoTimelines" = "Aucune chronologie disponible avec des étiquettes positionnées pour cette collection";  // ^String.Titles.fieldMapPickerNoTimelines

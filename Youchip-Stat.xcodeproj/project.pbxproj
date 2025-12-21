@@ -11,6 +11,7 @@
 		BF67155E2EF363A000A71E47 /* OverlayItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF67155D2EF3639C00A71E47 /* OverlayItem.swift */; };
 		BF6715C02EF6E69700A71E47 /* NSAttributedString+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */; };
 		BF6715C22EF6EC9600A71E47 /* ExportHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6715C12EF6EC8E00A71E47 /* ExportHelper.swift */; };
+		BF6715C42EF7F3D900A71E47 /* StampEditSheetType.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6715C32EF7F3D200A71E47 /* StampEditSheetType.swift */; };
 		BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFDA33492EEDBD9100358696 /* URLConstants.swift */; };
 		DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */; };
 		DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67E2DBAFB8A00CB2AE0 /* VideosViewModel.swift */; };
@@ -117,7 +118,7 @@
 		DD5CF9DD2E04677F009CD51A /* TagLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9DC2E04677E009CD51A /* TagLibraryView.swift */; };
 		DD5CF9DF2E04679D009CD51A /* AddLineSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9DE2E04679B009CD51A /* AddLineSheet.swift */; };
 		DD5CF9E42E0467C3009CD51A /* EditTimelineNameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9E32E0467C2009CD51A /* EditTimelineNameSheet.swift */; };
-		DD5CF9E62E0467D6009CD51A /* LabelSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9E52E0467D6009CD51A /* LabelSelectionSheet.swift */; };
+		DD5CF9E62E0467D6009CD51A /* StampItemsSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9E52E0467D6009CD51A /* StampItemsSelectionSheet.swift */; };
 		DD5CF9E82E0467EB009CD51A /* ExportModeSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9E72E0467EA009CD51A /* ExportModeSelectionSheet.swift */; };
 		DD5CF9EA2E0467FA009CD51A /* TagSelectionSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9E92E0467FA009CD51A /* TagSelectionSheetView.swift */; };
 		DD5CF9EC2E04680E009CD51A /* StampLabelsOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5CF9EB2E04680D009CD51A /* StampLabelsOverlayView.swift */; };
@@ -187,6 +188,7 @@
 		BF67155D2EF3639C00A71E47 /* OverlayItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayItem.swift; sourceTree = "<group>"; };
 		BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSAttributedString+Convenience.swift"; sourceTree = "<group>"; };
 		BF6715C12EF6EC8E00A71E47 /* ExportHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportHelper.swift; sourceTree = "<group>"; };
+		BF6715C32EF7F3D200A71E47 /* StampEditSheetType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StampEditSheetType.swift; sourceTree = "<group>"; };
 		BFDA33492EEDBD9100358696 /* URLConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLConstants.swift; sourceTree = "<group>"; };
 		D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Youchip_Stat.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoMetadataModel.swift; sourceTree = "<group>"; };
@@ -300,7 +302,7 @@
 		DD5CF9DC2E04677E009CD51A /* TagLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagLibraryView.swift; sourceTree = "<group>"; };
 		DD5CF9DE2E04679B009CD51A /* AddLineSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddLineSheet.swift; sourceTree = "<group>"; };
 		DD5CF9E32E0467C2009CD51A /* EditTimelineNameSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTimelineNameSheet.swift; sourceTree = "<group>"; };
-		DD5CF9E52E0467D6009CD51A /* LabelSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelSelectionSheet.swift; sourceTree = "<group>"; };
+		DD5CF9E52E0467D6009CD51A /* StampItemsSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StampItemsSelectionSheet.swift; sourceTree = "<group>"; };
 		DD5CF9E72E0467EA009CD51A /* ExportModeSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportModeSelectionSheet.swift; sourceTree = "<group>"; };
 		DD5CF9E92E0467FA009CD51A /* TagSelectionSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagSelectionSheetView.swift; sourceTree = "<group>"; };
 		DD5CF9EB2E04680D009CD51A /* StampLabelsOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StampLabelsOverlayView.swift; sourceTree = "<group>"; };
@@ -709,7 +711,7 @@
 				DD5CF9E32E0467C2009CD51A /* EditTimelineNameSheet.swift */,
 				DD5CF9E72E0467EA009CD51A /* ExportModeSelectionSheet.swift */,
 				DD5CFA002E0468E1009CD51A /* EventSelectionSheetView.swift */,
-				DD5CF9E52E0467D6009CD51A /* LabelSelectionSheet.swift */,
+				DD5CF9E52E0467D6009CD51A /* StampItemsSelectionSheet.swift */,
 				DD5CF9E92E0467FA009CD51A /* TagSelectionSheetView.swift */,
 				DD5CF9DE2E04679B009CD51A /* AddLineSheet.swift */,
 			);
@@ -770,6 +772,7 @@
 		DDCA6B4D2DCA64E00025EF9E /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				BF6715C32EF7F3D200A71E47 /* StampEditSheetType.swift */,
 				DD3A137D2E81ED5200DA52AA /* CollectionExportModels.swift */,
 				DDCA6B652DCA68F70025EF9E /* TagFormData.swift */,
 				DDCA6B562DCA65C20025EF9E /* AnalyticsModels.swift */,
@@ -1093,7 +1096,7 @@
 				BF67155E2EF363A000A71E47 /* OverlayItem.swift in Sources */,
 				DD2A707A2D74E0AF00287BA8 /* VideoThumbnailView.swift in Sources */,
 				DD2A70782D74D79B00287BA8 /* FileOpenHelper.swift in Sources */,
-				DD5CF9E62E0467D6009CD51A /* LabelSelectionSheet.swift in Sources */,
+				DD5CF9E62E0467D6009CD51A /* StampItemsSelectionSheet.swift in Sources */,
 				DDFB1A482DE510E700175D97 /* EditorState.swift in Sources */,
 				DD5CF9CB2E0465D7009CD51A /* VideoPlayerManager.swift in Sources */,
 				DDA9C30C2E833EE700B5E3F3 /* ViewerModels.swift in Sources */,
@@ -1109,6 +1112,7 @@
 				DD5CF9E42E0467C3009CD51A /* EditTimelineNameSheet.swift in Sources */,
 				DD5CF9C52E046581009CD51A /* NSColor+Convenience.swift in Sources */,
 				DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */,
+				BF6715C42EF7F3D900A71E47 /* StampEditSheetType.swift in Sources */,
 				DD7F54AF2E9EAAB400E7D768 /* ProjectExportModel.swift in Sources */,
 				DD5CF9F32E04683C009CD51A /* LabelChip.swift in Sources */,
 				DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */,

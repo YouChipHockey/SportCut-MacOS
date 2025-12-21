@@ -832,9 +832,10 @@ struct TagLibraryView: View {
                 let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
                 
                 if hasLabels {
-                    LabelSelectionSheet(
+                    StampItemsSelectionSheet(
+                        sheetType: .lables,
                         stampName: tag.name,
-                        initialLabels: [],
+                        initialIds: [],
                         tag: tag,
                         tagLibrary: TagLibraryManager.shared,
                         onDone: { selectedLabels in
@@ -909,9 +910,10 @@ struct TagLibraryView: View {
                 let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
                 
                 if hasLabels {
-                    LabelSelectionSheet(
+                    StampItemsSelectionSheet(
+                        sheetType: .lables,
                         stampName: tag.name,
-                        initialLabels: [],
+                        initialIds: [],
                         tag: tag,
                         tagLibrary: TagLibraryManager.shared,
                         onDone: { selectedLabels in

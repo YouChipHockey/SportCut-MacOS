@@ -84,7 +84,7 @@ struct LabelsData: Codable {
     let labels: [Label]
 }
 
-struct TimeEvent: Codable, Identifiable {
+struct TimeEvent: Codable, Identifiable, Hashable {
     let id: String
     let name: String
 }

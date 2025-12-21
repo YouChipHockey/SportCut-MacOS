@@ -213,15 +213,18 @@ class TagLibraryManager: ObservableObject {
         allTimeEvents = Array(Dictionary(grouping: allTimeEvents, by: { $0.id }).values.compactMap { $0.first })
     }
     
-    func findOrCreateTimeEvent(id: String, name: String) -> TimeEvent {
+    func findOrCreateTimeEvent(id: String, name: String, shouldCreate: Bool = true) -> TimeEvent? {
         if let existingEvent = allTimeEvents.first(where: { $0.id == id }) {
             return existingEvent
-        } else {
+        } else if shouldCreate {
             let newEvent = TimeEvent(id: id, name: name)
             allTimeEvents.append(newEvent)
             return newEvent
+        } else {
+            return nil
         }
     }
+    
     
     func toggleTimeEvent(id: String) {
         if selectedTimeEvents.contains(id) {
@@ -268,15 +271,15 @@ class TagLibraryManager: ObservableObject {
         applyHotkeysFromCurrentCollection()
     }
     
-        func restoreDefaultData() {
-            if let first = standardCollections.first {
-                applyStandardCollection(named: first.name)
-            }
-            currentCollectionType = .standard
-            selectedTimeEvents.removeAll()
-            refreshGlobalPools()
+    func restoreDefaultData() {
+        if let first = standardCollections.first {
+            applyStandardCollection(named: first.name)
         }
-    
+        currentCollectionType = .standard
+        selectedTimeEvents.removeAll()
+        refreshGlobalPools()
+    }
+
     func applyHotkeysFromCurrentCollection() {
         HotKeyManager.shared.clearHotkeys()
         HotKeyManager.shared.registerHotkeys(from: tags, for: currentCollectionType)

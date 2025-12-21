@@ -114,6 +114,7 @@
 "CollectionsButtonSaveChanges" = "保存更改";  // ^String.Titles.collectionsButtonSaveChanges
 "TimelineButtonDeleteTag" = "删除标签";  // ^String.Titles.timelineButtonDeleteTag
 "TimelineButtonEditLabels" = "编辑标签";  // ^String.Titles.timelineButtonEditLabels
+"TimelineButtonEditTimeEvents" = "编辑时间事件";  // ^String.Titles.timelineButtonEditTimeEvents
 "TimelineButtonDeleteTimeline" = "删除时间线";  // ^String.Titles.timelineButtonDeleteTimeline
 "FieldMapPickerLabelSelectTimelines" = "选择时间线:";  // ^String.Titles.fieldMapPickerLabelSelectTimelines
 "FieldMapPickerNoTimelines" = "此集合没有带位置标签的可用时间线";  // ^String.Titles.fieldMapPickerNoTimelines

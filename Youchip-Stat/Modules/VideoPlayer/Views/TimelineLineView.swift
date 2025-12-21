@@ -22,6 +22,7 @@ struct TimelineLineView: View {
     let isSelected: Bool
     let onSelect: () -> Void
     let onEditLabelsRequest: (UUID) -> Void
+    let onEditTimeEventsRequest: (UUID) -> Void
     let onTagDragging: (CGFloat?) -> Void
     
     @ObservedObject var tagLibrary = TagLibraryManager.shared
@@ -451,6 +452,9 @@ struct TimelineLineView: View {
         }
         Button(^String.Titles.timelineButtonEditLabels) {
             onEditLabelsRequest(stamp.id)
+        }
+        Button(^String.Titles.timelineButtonEditTimeEvents) {
+            onEditTimeEventsRequest(stamp.id)
         }
     }
     

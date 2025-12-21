@@ -119,6 +119,7 @@ extension String {
         case collectionsButtonSaveChanges // ^String.Titles.collectionsButtonSaveChanges
         case timelineButtonDeleteTag // ^String.Titles.timelineButtonDeleteTag
         case timelineButtonEditLabels // ^String.Titles.timelineButtonEditLabels
+        case timelineButtonEditTimeEvents // ^String.Titles.timelineButtonTimeEvents
         case timelineButtonDeleteTimeline // ^String.Titles.timelineButtonDeleteTimeline
         case fieldMapPickerLabelSelectTimelines // ^String.Titles.fieldMapPickerLabelSelectTimelines
         case fieldMapPickerNoTimelines // ^String.Titles.fieldMapPickerNoTimelines
