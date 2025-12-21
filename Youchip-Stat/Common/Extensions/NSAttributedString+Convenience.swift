@@ -18,9 +18,10 @@ extension NSAttributedString {
         let tagGroupName = (tagLibrary.allTagGroups.first { $0.tags.contains(overlayItem.tag.id) }?.name ?? "Group").uppercased()
         let timeEvents = tagLibrary.allTimeEvents.filter { overlayItem.stamp.timeEvents.contains($0.id) }
         
-        let allTags: [(id: UUID, name: String)] = timelineManager.lines.flatMap { $0.stamps.sortedByStartTime.map { ($0.id, $0.label) } }
-        let tagsOfSingleType = allTags.filter { $0.name == tagName }
-        guard let tagIndex = tagsOfSingleType.firstIndex(where: { $0.id == overlayItem.stamp.id } ) else { return nil }
+        let allStamps: [TimelineStamp] = timelineManager.lines.flatMap { $0.stamps }.sortedByStartTime
+        let allStampsInfo: [(id: UUID, tagId: String, name: String)] = allStamps.map { ($0.id, $0.idTag, $0.label) }
+        let stampsOfSingleType = allStampsInfo.filter { $0.tagId == overlayItem.tag.id }
+        guard let tagIndex = stampsOfSingleType.firstIndex(where: { $0.id == overlayItem.stamp.id } ) else { return nil }
         
         let timeEventAttributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
