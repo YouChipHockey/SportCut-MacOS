@@ -10,9 +10,9 @@ import AVKit
 
 class ExportHelper: ObservableObject {
     
-    let videoManager = VideoPlayerManager.shared
-    let timelineData = TimelineDataManager.shared
-    let tagLibrary = TagLibraryManager.shared
+    private let videoManager = VideoPlayerManager.shared
+    private let timelineData = TimelineDataManager.shared
+    private let tagLibrary = TagLibraryManager.shared
     
     // MARK: Public Export Method
     
@@ -34,7 +34,7 @@ class ExportHelper: ObservableObject {
         
         if mode == .film {
             exportFilm(segments: segments, asset: asset, type: selectedType) { result in
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
                     switch result {
                     case .success(let outputURL):
                         let panel = NSSavePanel()
@@ -42,6 +42,9 @@ class ExportHelper: ObservableObject {
                         panel.nameFieldStringValue = outputURL.lastPathComponent
                         if panel.runModal() == .OK, let url = panel.url {
                             do {
+                                if FileManager.default.fileExists(atPath: url.path) == true {
+                                    try FileManager.default.removeItem(at: url)
+                                }
                                 try FileManager.default.copyItem(at: outputURL, to: url)
                                 print("\(^String.Titles.fullControlExportFilmSuccess) \(url)")
                                 completion(nil)
@@ -57,8 +60,8 @@ class ExportHelper: ObservableObject {
                 }
             }
         } else {
-            exportPlaylist(segments: segments, asset: asset, type: selectedType) { result in
-                DispatchQueue.main.async {
+            exportPlaylist(segments: segments, asset: asset, type: selectedType) { [weak self] result in
+                DispatchQueue.main.async { [weak self] in
                     switch result {
                     case .success(let zipURL):
                         let panel = NSSavePanel()
@@ -66,6 +69,9 @@ class ExportHelper: ObservableObject {
                         panel.nameFieldStringValue = "export_playlist.zip"
                         if panel.runModal() == .OK, let url = panel.url {
                             do {
+                                if FileManager.default.fileExists(atPath: url.path) == true {
+                                    try FileManager.default.removeItem(at: url)
+                                }
                                 try FileManager.default.copyItem(at: zipURL, to: url)
                                 completion(nil)
                             } catch {
@@ -189,7 +195,14 @@ class ExportHelper: ObservableObject {
         }
         
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        try? FileManager.default.removeItem(at: outputURL)
+        
+        do {
+            if FileManager.default.fileExists(atPath: outputURL.path) {
+                try FileManager.default.removeItem(at: outputURL)
+            }
+        } catch {
+            completion(.failure(error.localizedDescription))
+        }
         
         let overlayVideoComposition = videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
         
