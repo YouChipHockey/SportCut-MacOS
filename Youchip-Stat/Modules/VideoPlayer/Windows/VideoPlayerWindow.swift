@@ -67,19 +67,24 @@ struct VideoPlayerWindow: View {
     
     private func videoPlayerView(geometry: GeometryProxy, player: AVPlayer) -> some View {
         ZStack {
-            if videoScale == 1.0 {
-                VideoPlayer(player: player)
-                    .scaleEffect(videoScale)
-                    .offset(videoOffset)
-                    .gesture(videoGestures(geometry: geometry))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            } else {
-                CustomVideoPlayer(player: player)
-                    .scaleEffect(videoScale)
-                    .offset(videoOffset)
-                    .gesture(videoGestures(geometry: geometry))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
+//            if videoScale == 1.0 {
+//                VideoPlayer(player: player)
+//                    .scaleEffect(videoScale)
+//                    .offset(videoOffset)
+//                    .gesture(videoGestures(geometry: geometry))
+//                    .clipShape(RoundedRectangle(cornerRadius: 12))
+//            } else {
+//                CustomVideoPlayer(player: player)
+//                    .scaleEffect(videoScale)
+//                    .offset(videoOffset)
+//                    .gesture(videoGestures(geometry: geometry))
+//                    .clipShape(RoundedRectangle(cornerRadius: 12))
+//            }
+            VideoPlayer(player: player)
+                .scaleEffect(videoScale)
+                .offset(videoOffset)
+                .gesture(videoGestures(geometry: geometry))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .overlay(overlayControls)
     }
