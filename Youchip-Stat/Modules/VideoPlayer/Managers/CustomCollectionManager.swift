@@ -361,7 +361,9 @@ class CustomCollectionManager: ObservableObject {
             if !isEditingExisting {
                 isEditingExisting = true
             }
-            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+            }
             
             for change in changedTagIDs {
                 NotificationCenter.default.post(

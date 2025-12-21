@@ -34,7 +34,7 @@ class ExportHelper: ObservableObject {
         
         if mode == .film {
             exportFilm(segments: segments, asset: asset, type: selectedType) { result in
-                DispatchQueue.main.async { [weak self] in
+                DispatchQueue.main.async {
                     switch result {
                     case .success(let outputURL):
                         let panel = NSSavePanel()
@@ -60,8 +60,8 @@ class ExportHelper: ObservableObject {
                 }
             }
         } else {
-            exportPlaylist(segments: segments, asset: asset, type: selectedType) { [weak self] result in
-                DispatchQueue.main.async { [weak self] in
+            exportPlaylist(segments: segments, asset: asset, type: selectedType) { result in
+                DispatchQueue.main.async {
                     switch result {
                     case .success(let zipURL):
                         let panel = NSSavePanel()

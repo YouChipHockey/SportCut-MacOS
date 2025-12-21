@@ -258,7 +258,9 @@ class HotKeyManager: ObservableObject {
     }
     
     private func selectTag(_ tag: Tag) {
-        NotificationCenter.default.post(name: .showLabelSheet, object: tag)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .showLabelSheet, object: tag)
+        }
     }
     
     func enableLabelHotkeyMode() {
