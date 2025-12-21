@@ -357,7 +357,7 @@
 "StandardCollections" = "Standart to'plamlar";
 "FullControlButtonExportLabels" = "Yorliqlar bo'yicha eksport";
 "CollectionsTagIsInterval" = "Interval teg";  // ^String.Titles.collectionsTagIsInterval
-"CollectionsTagIsIntervalHelp" = "Agar yoqilgan bo'lsa, teg davomiyligi avtomatik ravishda aniqlanadi va qo'lda o'zgartirib bo'lmaydi.";  // ^String.Titles.collectionsTagIsIntervalHelp
+"CollectionsTagIsIntervalHelp" = "Teg (epizod) uzunligini qoʻlda oʻrnatish uchun foydalaniladi. Tegni bir marta bosish yozishni boshlaydi, yana bosish esa yozishni tugatadi.";  // ^String.Titles.collectionsTagIsIntervalHelp
 "Video" = "Video"; // ^String.Titles.video
 "ExportReports" = "Eksport va hisobotlar"; // ^String.Titles.exportReports
 "Tools" = "Asboblar"; // ^String.Titles.tools

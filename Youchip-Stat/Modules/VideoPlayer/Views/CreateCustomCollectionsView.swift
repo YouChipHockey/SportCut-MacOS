@@ -1979,7 +1979,7 @@ struct CreateCustomCollectionsView: View {
                     )
                 }
                 
-                if !tagFormData.isInterval {
+                if true/*!tagFormData.isInterval*/ {
                     VStack(alignment: .leading, spacing: 16) {
                         Text(^String.Titles.timeSettings)
                             .font(.headline)
@@ -2938,7 +2938,7 @@ struct CreateCustomCollectionsView: View {
                         )
                     }
                     
-                    if !tagFormData.isInterval {
+                    if true/*!tagFormData.isInterval*/ {
                         VStack(alignment: .leading, spacing: 16) {
                             Text(^String.Titles.timeSettings)
                                 .font(.headline)
@@ -3028,12 +3028,6 @@ struct CreateCustomCollectionsView: View {
                                 
                                 Toggle("", isOn: $tagFormData.isInterval)
                                     .toggleStyle(SwitchToggleStyle(tint: .blue))
-                                    .onChange(of: tagFormData.isInterval) { newValue in
-                                        if newValue {
-                                            tagFormData.defaultTimeBefore = 0
-                                            tagFormData.defaultTimeAfter = 0
-                                        }
-                                    }
                             }
                             .padding(16)
                             .background(

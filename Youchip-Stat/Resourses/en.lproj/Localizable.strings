@@ -357,7 +357,7 @@
 "StandardCollections" = "Standard Collections";
 "FullControlButtonExportLabels" = "Export by Labels";
 "CollectionsTagIsInterval" = "Interval Tag";  // ^String.Titles.collectionsTagIsInterval
-"CollectionsTagIsIntervalHelp" = "If enabled, tag duration is determined automatically and cannot be changed manually.";  // ^String.Titles.collectionsTagIsIntervalHelp
+"CollectionsTagIsIntervalHelp" = "Used to manually set the length of a tag (episode). Clicking the tag once starts recording, clicking it again ends recording.";  // ^String.Titles.collectionsTagIsIntervalHelp
 "Video" = "Video"; // ^String.Titles.video
 "ExportReports" = "Export & Reports"; // ^String.Titles.exportReports
 "Tools" = "Tools"; // ^String.Titles.tools

@@ -141,7 +141,7 @@ struct ViewerVideoView: View {
                         )
                         .overlay(alignment: .bottom) {
                             videoOverlayText()
-                                .padding(.bottom, 40)
+                                .padding(.bottom, 45)
                         }
                 } else {
                     VStack(spacing: 12) {

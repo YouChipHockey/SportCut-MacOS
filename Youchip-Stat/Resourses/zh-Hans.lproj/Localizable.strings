@@ -357,7 +357,7 @@
 "StandardCollections" = "标准集合";
 "FullControlButtonExportLabels" = "按标签导出";
 "CollectionsTagIsInterval" = "间隔标签";  // ^String.Titles.collectionsTagIsInterval
-"CollectionsTagIsIntervalHelp" = "如果启用，标签持续时间将自动确定且无法手动更改。";  // ^String.Titles.collectionsTagIsIntervalHelp
+"CollectionsTagIsIntervalHelp" = "用于手动设置标签（剧集）的长度。单击标签一次开始录制，再次单击结束录制。";  // ^String.Titles.collectionsTagIsIntervalHelp
 "Video" = "视频"; // ^String.Titles.video
 "ExportReports" = "导出和报告"; // ^String.Titles.exportReports
 "Tools" = "工具"; // ^String.Titles.tools

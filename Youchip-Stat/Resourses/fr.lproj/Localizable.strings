@@ -357,7 +357,7 @@
 "StandardCollections" = "Collections standardes";
 "FullControlButtonExportLabels" = "Exporter par étiquettes";
 "CollectionsTagIsInterval" = "Étiquette d'intervalle";  // ^String.Titles.collectionsTagIsInterval
-"CollectionsTagIsIntervalHelp" = "Si activé, la durée de l'étiquette est déterminée automatiquement et ne peut pas être modifiée manuellement.";  // ^String.Titles.collectionsTagIsIntervalHelp
+"CollectionsTagIsIntervalHelp" = "Permet de définir manuellement la durée d'un épisode. Un clic sur l'épisode lance l'enregistrement, un deuxième clic l'arrête.";  // ^String.Titles.collectionsTagIsIntervalHelp
 "Video" = "Vidéo"; // ^String.Titles.video
 "ExportReports" = "Exportation et rapports"; // ^String.Titles.exportReports
 "Tools" = "Outils"; // ^String.Titles.tools

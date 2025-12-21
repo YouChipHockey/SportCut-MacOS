@@ -356,7 +356,7 @@
 "StandardCollections" = "Стандарные Коллекции";
 "FullControlButtonExportLabels" = "Экспорт по лейблам";
 "CollectionsTagIsInterval" = "Интервальный тег";  // ^String.Titles.collectionsTagIsInterval
-"CollectionsTagIsIntervalHelp" = "Если включено, длительность тега определяется автоматически и не может быть изменена вручную.";  // ^String.Titles.collectionsTagIsIntervalHelp
+"CollectionsTagIsIntervalHelp" = "Используется, чтобы вручную задать длину тега (эпизода). Первое нажатие на тег — старт, повторное нажатие — конец записи тега.";  // ^String.Titles.collectionsTagIsIntervalHelp
 
 "Video" = "Видео"; // ^String.Titles.video
 "ExportReports" = "Экспорт & Отчеты"; // ^String.Titles.exportReports
