@@ -129,12 +129,16 @@ class HotKeyManager: ObservableObject {
     }
     
     private func handleHotkey(_ event: NSEvent) -> Bool {
-        guard ActiveWindowManager.shared.isAllowedWindowActive() else {
+        guard ActiveWindowManager.shared.isAllowedWindowActive() || ActiveWindowManager.shared.isViewerWindowActive() else {
             return false
         }
         
         if event.keyCode == 49 {
-            VideoPlayerManager.shared.togglePlayPause()
+            if let viewerWindow = WindowsManager.shared.viewerWindow {
+                NotificationCenter.default.post(name: .toggleViewerPlayer, object: nil)
+            } else {
+                VideoPlayerManager.shared.togglePlayPause()
+            }
             return true
         }
         

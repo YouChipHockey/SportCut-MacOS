@@ -183,11 +183,16 @@ struct ViewerVideoView: View {
             }
         }
         .onChange(of: playlistManager.isPlaying) { isPlaying in
-            if isPlaying && !playlistManager.currentPlaylist.isEmpty {
-                createCompositionFromPlaylist()
-            } else if !isPlaying {
+            if isPlaying {
+                player?.play()
+            } else {
                 player?.pause()
             }
+//            if isPlaying && !playlistManager.currentPlaylist.isEmpty {
+//                createCompositionFromPlaylist()
+//            } else if !isPlaying {
+//                player?.pause()
+//            }
         }
     }
     

@@ -12,6 +12,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let playSingleTag = Notification.Name("playSingleTag")
+    static let toggleViewerPlayer = Notification.Name("toggleViewerPlayer")
     static let stopViewerPlayer = Notification.Name("stopViewerPlayer")
 }
 
@@ -393,11 +394,28 @@ class VideoPlaylistManager: ObservableObject {
     
     private var player: AVPlayer?
     private var timeObserver: Any?
+    private var startViewerPlayerObserver: Any?
+    
+    init() {
+        startViewerPlayerObserver = NotificationCenter.default.addObserver(
+            forName: .toggleViewerPlayer,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.togglePlayback()
+        }
+    }
+    
+    deinit {
+        if let startViewerPlayerObserver {
+            NotificationCenter.default.removeObserver(startViewerPlayerObserver)
+        }
+    }
     
     func setPlaylist(_ tags: [OrganizerTag]) {
         currentPlaylist = tags
         currentIndex = 0
-        stopPlayback()
+        isPlaying = false
     }
     
     func playPlaylist() {
@@ -407,11 +425,10 @@ class VideoPlaylistManager: ObservableObject {
     
     func stopPlayback() {
         isPlaying = false
-        player?.pause()
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
-            timeObserver = nil
-        }
+    }
+    
+    func togglePlayback() {
+        isPlaying.toggle()
     }
     
     func playSingleTag(_ tag: OrganizerTag) {

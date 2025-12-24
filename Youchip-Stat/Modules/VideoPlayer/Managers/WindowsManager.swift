@@ -342,4 +342,8 @@ class ActiveWindowManager {
         
         return false
     }
+    
+    func isViewerWindowActive() -> Bool {
+        return currentActiveWindow?.windowController == WindowsManager.shared.viewerWindow
+    }
 }
