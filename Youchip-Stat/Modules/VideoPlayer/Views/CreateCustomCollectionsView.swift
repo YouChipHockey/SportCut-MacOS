@@ -2097,12 +2097,6 @@ struct CreateCustomCollectionsView: View {
                             
                             Toggle("", isOn: $tagFormData.isInterval)
                                 .toggleStyle(SwitchToggleStyle(tint: .blue))
-                                .onChange(of: tagFormData.isInterval) { newValue in
-                                    if newValue {
-                                        tagFormData.defaultTimeBefore = 0
-                                        tagFormData.defaultTimeAfter = 0
-                                    }
-                                }
                         }
                         .padding(16)
                         .background(
