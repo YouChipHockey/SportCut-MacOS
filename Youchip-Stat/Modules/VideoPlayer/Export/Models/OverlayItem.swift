@@ -13,6 +13,7 @@ struct OverlayItem {
     let selectedLabelGroups: [OverlayLabelGroupItem]
     let start: CMTime
     let duration: CMTime
+    let videoSize: CGSize?
 }
 
 struct OverlayLabelGroupItem: Hashable {

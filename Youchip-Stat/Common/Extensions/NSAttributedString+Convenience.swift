@@ -23,26 +23,32 @@ extension NSAttributedString {
         let stampsOfSingleType = allStampsInfo.filter { $0.tagId == overlayItem.tag.id }
         guard let tagIndex = stampsOfSingleType.firstIndex(where: { $0.id == overlayItem.stamp.id } ) else { return nil }
         
+        let fontSize: CGFloat
+        if let videoSize = overlayItem.videoSize {
+            let baseHeight: CGFloat = 360
+            let baseFontSize: CGFloat = 13
+            fontSize = (videoSize.height / baseHeight) * baseFontSize
+        } else {
+            fontSize = 13
+        }
         let timeEventAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: NSColor.systemOrange
         ]
         let tagNameAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: NSColor.systemGreen
         ]
         let labelGroupNameAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: NSColor.white
         ]
         let labelNameAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13, weight: .regular),
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .regular),
             .foregroundColor: NSColor.white
         ]
         
-        var tagGroupAndNameString = tagIndex == 0 ? "\(tagName)" : "\(tagName)_\(tagIndex)"
-        tagGroupAndNameString = tagGroupName + ": " + tagGroupAndNameString
-        tagGroupAndNameString += timeEvents.isEmpty ? "" : ", "
+        let tagGroupAndNameString = "\(tagGroupName): \(tagName)_\(tagIndex+1)" + (timeEvents.isEmpty ? "" : ", ")
         let timeEventsString = timeEvents.enumerated().map { index, event in
             event.name + (index < timeEvents.count - 1 ? ", " : "")
         }.joined() + "\n"

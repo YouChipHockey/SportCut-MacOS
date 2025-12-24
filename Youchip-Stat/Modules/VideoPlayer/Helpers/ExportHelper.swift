@@ -142,13 +142,17 @@ class ExportHelper: ObservableObject {
                 return
             }
             
+            let transform = videoTrack.preferredTransform
+            let naturalSize = videoTrack.naturalSize.applying(transform)
+            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
             if let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag }) {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
                     selectedLabelGroups: labelGroupItem(for: segment),
                     start: currentTime - segment.timeRange.duration,
-                    duration: segment.timeRange.duration
+                    duration: segment.timeRange.duration,
+                    videoSize: videoSize
                 )
                 overlayItems.append(overlayItem)
             }
@@ -330,6 +334,9 @@ class ExportHelper: ObservableObject {
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try? FileManager.default.removeItem(at: clipOutputURL)
             
+            let transform = videoTrack.preferredTransform
+            let naturalSize = videoTrack.naturalSize.applying(transform)
+            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
             let overlayVideoComposition: AVVideoComposition?
             if let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag }) {
                 let overlayItem = OverlayItem(
@@ -337,7 +344,8 @@ class ExportHelper: ObservableObject {
                     stamp: segment.stamp,
                     selectedLabelGroups: labelGroupItem(for: segment),
                     start: .zero,
-                    duration: segment.timeRange.duration
+                    duration: segment.timeRange.duration,
+                    videoSize: videoSize
                 )
                 overlayVideoComposition = videoCompositionWithTextOverlay(overlayItem: overlayItem, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
             } else {

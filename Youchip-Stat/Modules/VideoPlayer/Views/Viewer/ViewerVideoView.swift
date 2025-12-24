@@ -426,7 +426,7 @@ struct ViewerVideoView: View {
                 return OverlayLabelGroupItem(group: group, selectedLabels: labels)
             }
             if let tag, let stamp {
-                let overlayItem = OverlayItem(tag: tag, stamp: stamp, selectedLabelGroups: selectedLabelGroups, start: .zero, duration: .zero)
+                let overlayItem = OverlayItem(tag: tag, stamp: stamp, selectedLabelGroups: selectedLabelGroups, start: .zero, duration: .zero, videoSize: nil)
                 let attributedString = NSAttributedString.attributedStringForTagInfo(overlayItem: overlayItem) ?? NSAttributedString(string: "")
                 Text(AttributedString(attributedString))
                     .multilineTextAlignment(.leading)
