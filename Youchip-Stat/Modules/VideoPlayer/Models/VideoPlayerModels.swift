@@ -237,7 +237,7 @@ struct ColorOption {
     let hex: String
 }
 
-struct CollectionBookmark: Codable, Hashable {
+struct CollectionBookmark: Codable, Hashable, Equatable {
     let id: String
     let name: String
     let tagGroupsBookmark: Data
@@ -295,9 +295,6 @@ struct CollectionBookmark: Codable, Hashable {
         hasher.combine(id)
     }
     
-    static func == (lhs: CollectionBookmark, rhs: CollectionBookmark) -> Bool {
-        return lhs.id == rhs.id
-    }
 }
 
 struct StampDragInfo: Codable {
