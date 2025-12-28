@@ -8,8 +8,10 @@
 import Foundation
 
 extension UserDefaults {
-    private enum Keys {
+    enum Keys {
         static let collections = "savedCollections"
+        static let lastSelectedCollection = "lastSelectedCollection"
+
     }
     
     func saveCollectionBookmark(_ bookmark: CollectionBookmark) {

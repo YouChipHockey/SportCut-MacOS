@@ -47,9 +47,7 @@ class TagLibraryManager: ObservableObject {
     
     private init() {
         loadBaseCollections()
-        if let first = standardCollections.first {
-            applyStandardCollection(named: first.name)
-        }
+        applyDefaultCollection()
         
         NotificationCenter.default.addObserver(
             self,
@@ -159,6 +157,7 @@ class TagLibraryManager: ObservableObject {
     
     func applyStandardCollection(named name: String) {
         guard let collection = standardCollections.first(where: { $0.name == name }) else { return }
+        UserDefaults.standard.set(name, forKey: UserDefaults.Keys.lastSelectedCollection)
         tags = collection.tags
         tagGroups = collection.tagGroups
         labelGroups = collection.labelGroups
@@ -272,9 +271,7 @@ class TagLibraryManager: ObservableObject {
     }
     
     func restoreDefaultData() {
-        if let first = standardCollections.first {
-            applyStandardCollection(named: first.name)
-        }
+        applyDefaultCollection()
         currentCollectionType = .standard
         selectedTimeEvents.removeAll()
         refreshGlobalPools()
@@ -283,5 +280,28 @@ class TagLibraryManager: ObservableObject {
     func applyHotkeysFromCurrentCollection() {
         HotKeyManager.shared.clearHotkeys()
         HotKeyManager.shared.registerHotkeys(from: tags, for: currentCollectionType)
+    }
+    
+    func applyDefaultCollection() {
+        let lastSelectedCollectionName = UserDefaults.standard.string(forKey: UserDefaults.Keys.lastSelectedCollection)
+        let collectionManager = CustomCollectionManager()
+        if let lastSelectedCollectionName, collectionManager.loadCollectionFromBookmarks(named: lastSelectedCollectionName) {
+            tags = collectionManager.tags
+            tagGroups = collectionManager.tagGroups
+            labelGroups = collectionManager.labelGroups
+            labels = collectionManager.labels
+            timeEvents = collectionManager.timeEvents
+            selectedTimeEvents.removeAll()
+            currentCollectionType = .user(name: lastSelectedCollectionName)
+            HotKeyManager.shared.clearHotkeys()
+            HotKeyManager.shared.registerHotkeys(from: tags, for: .user(name: lastSelectedCollectionName))
+            selectedStandardCollectionName = lastSelectedCollectionName
+        } else if let standardCollection =
+                    standardCollections.first(where: { $0.name == lastSelectedCollectionName }) ??
+                    standardCollections.first
+        {
+            applyStandardCollection(named: standardCollection.name)
+            selectedStandardCollectionName = standardCollection.name
+        }
     }
 }
