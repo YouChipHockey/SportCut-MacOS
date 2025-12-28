@@ -204,8 +204,15 @@ class TagLibraryManager: ObservableObject {
                 allTimeEvents.append(contentsOf: collectionManager.timeEvents)
             }
         }
+        for collection in standardCollections {
+            allTags.append(contentsOf: collection.tags)
+            allTagGroups.append(contentsOf: collection.tagGroups)
+            allLabelGroups.append(contentsOf: collection.labelGroups)
+            allLabels.append(contentsOf: collection.labels)
+            allTimeEvents.append(contentsOf: collection.timeEvents)
+        }
         
-        allTags = Array(Dictionary(grouping: allTags, by: { $0.id }).values.compactMap { $0.first })
+        allTags = Array(Dictionary(grouping: allTags, by: { $0.id }).values.compactMap { $0.first }) 
         allTagGroups = Array(Dictionary(grouping: allTagGroups, by: { $0.id }).values.compactMap { $0.first })
         allLabelGroups = Array(Dictionary(grouping: allLabelGroups, by: { $0.id }).values.compactMap { $0.first })
         allLabels = Array(Dictionary(grouping: allLabels, by: { $0.id }).values.compactMap { $0.first })
