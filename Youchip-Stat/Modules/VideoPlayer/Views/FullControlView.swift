@@ -24,7 +24,6 @@ struct FullControlView: View {
     @State private var showMarkupModeToggle = false
     
     @State private var sliderValue: Double = 0.0
-    @State private var isDraggingSlider = false
     @State private var showAddLineSheet = false
     @State private var isExporting: Bool = false
     @State private var stampItemsEditSheetType: StampEditSheetType? = nil
@@ -189,6 +188,7 @@ struct FullControlView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+
     }
     
     private func formatTimeForHover(_ time: Double) -> String {
@@ -256,7 +256,9 @@ struct FullControlView: View {
                     .frame(height: 30)
                     .id("timeline-\(line.id)")
                 }
+                
             }
+            .padding(.bottom, 15) // for scroll indicator to not overlap timelines
             
             let timeOffsetToPixels = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
             Rectangle()
