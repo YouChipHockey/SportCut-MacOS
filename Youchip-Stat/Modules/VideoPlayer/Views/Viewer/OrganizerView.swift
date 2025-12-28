@@ -600,7 +600,7 @@ struct OrganizerView: View {
                 }
             }
             
-            fileName = "\(nameParts.joined(separator: "_")).mp4"
+            fileName = "\(nameParts.joined(separator: "_"))_\(index+1).mp4"
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try? FileManager.default.removeItem(at: clipOutputURL)
             
