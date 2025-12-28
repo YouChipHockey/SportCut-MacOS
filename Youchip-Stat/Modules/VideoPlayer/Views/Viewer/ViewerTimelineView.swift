@@ -251,6 +251,7 @@ struct ViewerTimelineView: View {
                                 }
                             }
                             .frame(width: gridWidth)
+                            .padding(.bottom, 15) // for bottom scroll indicator to not overlap with timeline
                         }
                     }
                 }
