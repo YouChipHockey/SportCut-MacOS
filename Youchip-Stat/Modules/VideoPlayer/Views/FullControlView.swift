@@ -265,11 +265,7 @@ struct FullControlView: View {
                 .fill(Color.red)
                 .frame(width: 2)
                 .offset(x: tagEdgePosition ?? timeOffsetToPixels)
-        }
-        .frame(width: gridWidth)
-        .contentShape(Rectangle())
-        .coordinateSpace(name: "timelineSpace")
-        .background(
+            
             TimelineMouseTracker(
                 duration: duration,
                 gridWidth: gridWidth,
@@ -283,7 +279,10 @@ struct FullControlView: View {
                     )
                 }
             )
-        )
+            .allowsHitTesting(false)
+        }
+        .frame(width: gridWidth)
+        .coordinateSpace(name: "timelineSpace")
     }
     
     @ViewBuilder
