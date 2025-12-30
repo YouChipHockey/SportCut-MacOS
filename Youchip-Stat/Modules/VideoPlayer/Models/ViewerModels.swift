@@ -22,8 +22,13 @@ class PlaylistManager: ObservableObject {
             savePlaylists()
         }
     }
-    @Published var currentPlaylist: SavedPlaylist?
+    @Published var currentPlaylistId: UUID?
     @Published var currentTags: [OrganizerTag] = []
+    
+    var currentPlaylist: SavedPlaylist? {
+        guard let currentPlaylistId else { return nil }
+        return playlists.first(where: { $0.id == currentPlaylistId })
+    }
     
     private let videoID: String
     private var playlistsKey: String {
@@ -42,7 +47,7 @@ class PlaylistManager: ObservableObject {
     }
     
     func createNewPlaylist() {
-        currentPlaylist = nil
+        currentPlaylistId = nil
         currentTags.removeAll()
     }
     
@@ -57,7 +62,7 @@ class PlaylistManager: ObservableObject {
         )
         
         playlists.append(newPlaylist)
-        currentPlaylist = newPlaylist
+        currentPlaylistId = newPlaylist.id
     }
     
     func updateCurrentPlaylist() {
@@ -72,12 +77,12 @@ class PlaylistManager: ObservableObject {
         
         if let index = playlists.firstIndex(where: { $0.id == current.id }) {
             playlists[index] = updatedPlaylist
-            currentPlaylist = updatedPlaylist
+            currentPlaylistId = updatedPlaylist.id
         }
     }
     
     func loadPlaylist(_ playlist: SavedPlaylist) {
-        currentPlaylist = playlist
+        currentPlaylistId = playlist.id
         currentTags = playlist.tags
     }
     
@@ -106,7 +111,7 @@ class PlaylistManager: ObservableObject {
     
     func clear() {
         currentTags.removeAll()
-        currentPlaylist = nil
+        currentPlaylistId = nil
         NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
     }
     
@@ -129,11 +134,15 @@ class PlaylistManager: ObservableObject {
         }
     }
 
+    func renamePlaylist(withId id: UUID, newName: String) {
+        guard var playlistIndex = playlists.firstIndex(where: { $0.id == id }) else { return }
+        playlists[playlistIndex].updateName(newName)
+    }
 }
 
 struct SavedPlaylist: Identifiable, Codable {
     let id: UUID
-    let name: String
+    var name: String
     let tags: [OrganizerTag]
     let createdAt: Date
     
@@ -143,6 +152,10 @@ struct SavedPlaylist: Identifiable, Codable {
     
     var duration: Double {
         return tags.reduce(0) { $0 + $1.duration }
+    }
+    
+    mutating func updateName(_ name: String) {
+        self.name = name
     }
 }
 

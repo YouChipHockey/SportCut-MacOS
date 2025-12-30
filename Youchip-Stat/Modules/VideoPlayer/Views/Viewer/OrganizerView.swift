@@ -14,9 +14,11 @@ struct OrganizerView: View {
     @State private var draggedItem: OrganizerTag?
     @State private var showSavePlaylistSheet = false
     @State private var showPlaylistMenu = false
+    @State private var showRenameSheet = false
     @State private var isExporting = false
     @State private var showDeleteAlert = false
     @State private var playlistToDelete: SavedPlaylist?
+    @State private var renamingPlaylistId: UUID?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -28,6 +30,15 @@ struct OrganizerView: View {
         }
         .sheet(isPresented: $showSavePlaylistSheet) {
             SavePlaylistSheet(playlistManager: playlistManager)
+        }
+        .sheet(isPresented: $showRenameSheet) {
+            RenamePlaylistSheet(onCancel: {
+                showRenameSheet = false
+            }, onRename: { newName in
+                guard let renamingPlaylistId else { return }
+                showRenameSheet = false
+                playlistManager.renamePlaylist(withId: renamingPlaylistId, newName: newName)
+            })
         }
         .alert(^String.Titles.deletePlaylistQuestion, isPresented: $showDeleteAlert) {
             Button(^String.Titles.cancelButtonTitle, role: .cancel) {
@@ -82,6 +93,11 @@ struct OrganizerView: View {
             
             ForEach(playlistManager.playlists) { playlist in
                 Menu {
+                    Button(^String.Titles.renameButtonTitle) {
+                        showRenameSheet = true
+                        renamingPlaylistId = playlist.id
+                    }
+                    
                     Button(^String.Titles.load) {
                         playlistManager.loadPlaylist(playlist)
                         showPlaylistMenu = false
@@ -182,6 +198,7 @@ struct OrganizerView: View {
             .help(^String.Titles.exportPlaylist)
         }
     }
+
     
     @ViewBuilder
     private var playlistControlsView: some View {
