@@ -19,22 +19,22 @@ struct RenamePlaylistSheet: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Переименовать плейлист")
+            Text(^String.Titles.renamePlaylist)
                 .font(.headline)
             
             VStack(alignment: .leading, spacing: 12) {
-                Text("Введите новое имя:")
-                TextField("Новое имя", text: $playlistName)
+                Text(^String.Titles.enterName)
+                TextField(^String.Titles.newName, text: $playlistName)
                     .textFieldStyle(.roundedBorder)
             }
             .frame(minWidth: 300)
             
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.cancel) {
                     onCancel()
                 }
                 Spacer()
-                Button("Переименовать") {
+                Button(^String.Titles.rename) {
                     onRename(playlistName)
                 }
                 .keyboardShortcut(.defaultAction)

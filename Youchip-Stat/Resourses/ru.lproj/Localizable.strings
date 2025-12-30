@@ -617,3 +617,6 @@
 "ExportCollectionTitle" = "Экспорт коллекции"; // ^String.Titles.exportCollectionTitle
 "SelectCollectionSaveLocation" = "Выберите место для сохранения коллекции"; // ^String.Titles.selectCollectionSaveLocation
 "TimestampsCount" = "%d таймстемпов"; // ^String.Titles.timestampsCount
+"RenamePlaylist" = "Переименовать плейлист"; // ^String.Titles.renamePlaylist
+"NewName" = "Новое имя:"; // ^String.Titles.newName
+"Rename" = "Переименовать"; // ^String.Titles.rename

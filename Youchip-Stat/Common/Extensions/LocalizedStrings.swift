@@ -618,6 +618,9 @@ extension String {
         case exportCollectionTitle
         case selectCollectionSaveLocation
         case timestampsCount
+        case renamePlaylist
+        case newName
+        case rename
     }
     
 }

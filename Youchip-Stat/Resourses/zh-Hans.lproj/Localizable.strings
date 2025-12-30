@@ -617,3 +617,6 @@
 "ExportCollectionTitle" = "导出集合"; // ^String.Titles.exportCollectionTitle
 "SelectCollectionSaveLocation" = "选择保存集合的位置"; // ^String.Titles.selectCollectionSaveLocation
 "TimestampsCount" = "%d 个时间戳"; // ^String.Titles.timestampsCount
+"RenamePlaylist" = "重命名播放列表";
+"NewName" = "新名称：";
+"Rename" = "重命名";

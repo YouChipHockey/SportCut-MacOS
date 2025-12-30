@@ -617,3 +617,6 @@
 "ExportCollectionTitle" = "Export collection"; // ^String.Titles.exportCollectionTitle
 "SelectCollectionSaveLocation" = "Select location to save collection"; // ^String.Titles.selectCollectionSaveLocation
 "TimestampsCount" = "%d timestamps"; // ^String.Titles.timestampsCount
+"RenamePlaylist" = "Rename playlist";
+"NewName" = "New name:";
+"Rename" = "Rename";

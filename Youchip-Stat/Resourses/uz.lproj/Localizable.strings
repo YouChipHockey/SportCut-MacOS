@@ -617,3 +617,6 @@
 "ExportCollectionTitle" = "To'plamni eksport qilish"; // ^String.Titles.exportCollectionTitle
 "SelectCollectionSaveLocation" = "To'plamni saqlash uchun joyni tanlang"; // ^String.Titles.selectCollectionSaveLocation
 "TimestampsCount" = "%d vaqt belgilari"; // ^String.Titles.timestampsCount
+"RenamePlaylist" = "Pleylist nomini o‘zgartirish";
+"NewName" = "Yangi nom:";
+"Rename" = "Nomini o‘zgartirish";
