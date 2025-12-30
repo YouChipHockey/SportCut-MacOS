@@ -378,16 +378,17 @@ struct ViewerTimelineLineView: View {
                             }
                         }
                     )
-                    .overlay(
-                        edgeHandlesView(
-                            stamp: stamp,
-                            isSelected: isSelected,
-                            stampWidth: stampWidth,
-                            totalDuration: totalDuration,
-                            widthMax: widthMax
-                        )
-                        .position(x: stampX + stampWidth / 2, y: 15)
-                    )
+                    // stamps stretching will be implemented soon, but now is not used
+//                    .overlay(
+//                        edgeHandlesView(
+//                            stamp: stamp,
+//                            isSelected: isSelected,
+//                            stampWidth: stampWidth,
+//                            totalDuration: totalDuration,
+//                            widthMax: widthMax
+//                        )
+//                        .position(x: stampX + stampWidth / 2, y: 15)
+//                    )
                 }
             }
             .frame(width: widthMax, height: 30)
