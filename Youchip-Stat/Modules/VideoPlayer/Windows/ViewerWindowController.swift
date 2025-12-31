@@ -48,6 +48,7 @@ class ViewerWindowController: NSWindowController {
 extension ViewerWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
+        NotificationCenter.default.post(name: .closeViewerWindow, object: nil)
     }
     
     func windowDidBecomeKey(_ notification: Notification) {

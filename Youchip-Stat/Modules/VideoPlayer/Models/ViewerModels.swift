@@ -14,6 +14,7 @@ extension Notification.Name {
     static let playSingleTag = Notification.Name("playSingleTag")
     static let toggleViewerPlayer = Notification.Name("toggleViewerPlayer")
     static let stopViewerPlayer = Notification.Name("stopViewerPlayer")
+    static let closeViewerWindow = Notification.Name("closeViewerWindow")
 }
 
 class PlaylistManager: ObservableObject {
