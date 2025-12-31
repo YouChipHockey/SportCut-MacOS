@@ -1023,9 +1023,10 @@ struct TagLibraryView: View {
             }
         }
         NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
+            let currentSelectedUserCollectionId = userCollections.first { $0.name == self.lastSelectedCollectionName}?.id
             loadUserCollections()
-            if self.isUserCollectionActive, let lastSelectedCollectionName,
-               let updatedCollection = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == lastSelectedCollectionName }) {
+            if self.isUserCollectionActive, let currentSelectedUserCollectionId,
+               let updatedCollection = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.id == currentSelectedUserCollectionId }) {
                 self.lastSelectedCollectionName = updatedCollection.name
                 self.loadUserCollection(updatedCollection)
             }
