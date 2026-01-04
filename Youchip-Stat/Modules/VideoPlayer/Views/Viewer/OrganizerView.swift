@@ -562,7 +562,7 @@ struct OrganizerView: View {
             }
         }
         
-        let fileName = "playlist_film.mp4"
+        let fileName = "\(playlistManager.currentPlaylist?.name ?? ^String.Titles.newPlaylist).mp4"
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: outputURL)
         
@@ -630,21 +630,16 @@ struct OrganizerView: View {
             }
             
             let fileName: String
-            var nameParts: [String] = []
-            
-            nameParts.append(segment.tagName)
-            
-            if !segment.groupName.isEmpty {
-                nameParts.append(segment.groupName)
+            let groupName = segment.groupName
+            let stampLabels = segment.labels
+            let tagName = segment.tagName
+            if !stampLabels.isEmpty {
+                let labelsString = stampLabels.map { $0.name }.joined(separator: "_")
+                fileName = "\(groupName)_\(tagName)_\(labelsString)_\(index + 1).mp4"
+            } else {
+                fileName = "\(groupName)_\(tagName)_\(index + 1).mp4"
             }
             
-            if !segment.labels.isEmpty {
-                for label in segment.labels {
-                    nameParts.append(label.name)
-                }
-            }
-            
-            fileName = "\(nameParts.joined(separator: "_"))_\(index+1).mp4"
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try? FileManager.default.removeItem(at: clipOutputURL)
             
