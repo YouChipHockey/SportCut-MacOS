@@ -11,6 +11,7 @@ import AVFoundation
 struct OrganizerView: View {
     @ObservedObject var playlistManager: PlaylistManager
     @ObservedObject var videoPlaylistManager: VideoPlaylistManager
+    @State private var exportHelper = ExportHelper()
     @State private var draggedItem: OrganizerTag?
     @State private var showSavePlaylistSheet = false
     @State private var showPlaylistMenu = false
@@ -472,6 +473,8 @@ struct OrganizerView: View {
                 ExportSegmentOrganaizer(
                     timeRange: CMTimeRange(start: start, duration: duration),
                     tagName: tag.tagName,
+                    tagId: tag.mainTagID,
+                    stampId: tag.stampID,
                     groupName: tag.tagGroupName ?? "",
                     labels: labels.isEmpty ? [] : labels,
                 )
@@ -524,6 +527,7 @@ struct OrganizerView: View {
             compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
         }
         
+        var overlayItems: [OverlayItem] = []
         var currentTime = CMTime.zero
         for segment in segments {
             do {
@@ -536,15 +540,38 @@ struct OrganizerView: View {
                 completion(.failure(error))
                 return
             }
+            
+            let transform = videoTrack.preferredTransform
+            let naturalSize = videoTrack.naturalSize.applying(transform)
+            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
+            let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
+            let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
+            let labelIds = segment.labels.map(\.id)
+            if let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }),
+               let stamp
+            {
+                let overlayItem = OverlayItem(
+                    tag: tag,
+                    stamp: stamp,
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
+                    start: currentTime - segment.timeRange.duration,
+                    duration: segment.timeRange.duration,
+                    videoSize: videoSize
+                )
+                overlayItems.append(overlayItem)
+            }
         }
         
         let fileName = "playlist_film.mp4"
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: outputURL)
         
+        let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
+        
         let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
         exportSession?.outputURL = outputURL
         exportSession?.outputFileType = .mp4
+        exportSession?.videoComposition = overlayVideoComposition
         exportSession?.exportAsynchronously {
             if exportSession?.status == .completed {
                 completion(.success(outputURL))
@@ -621,9 +648,34 @@ struct OrganizerView: View {
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try? FileManager.default.removeItem(at: clipOutputURL)
             
+            let transform = videoTrack.preferredTransform
+            let naturalSize = videoTrack.naturalSize.applying(transform)
+            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
+            let overlayVideoComposition: AVVideoComposition?
+            let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
+            let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
+            let labelIds = segment.labels.map(\.id)
+            if let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }),
+               let stamp
+            {
+                let overlayItem = OverlayItem(
+                    tag: tag,
+                    stamp: stamp,
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
+                    start: .zero,
+                    duration: segment.timeRange.duration,
+                    videoSize: videoSize
+                )
+                overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItem: overlayItem, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
+            } else {
+                overlayVideoComposition = nil
+            }
+            
+            
             let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
             exportSession?.outputURL = clipOutputURL
             exportSession?.outputFileType = .mp4
+            exportSession?.videoComposition = overlayVideoComposition
             
             exportSession?.exportAsynchronously {
                 if exportSession?.status == .completed {

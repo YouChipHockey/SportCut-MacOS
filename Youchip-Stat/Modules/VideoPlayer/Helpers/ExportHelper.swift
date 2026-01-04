@@ -149,13 +149,14 @@ class ExportHelper: ObservableObject {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
-                    selectedLabelGroups: labelGroupItem(for: segment),
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labels),
                     start: currentTime - segment.timeRange.duration,
                     duration: segment.timeRange.duration,
                     videoSize: videoSize
                 )
                 overlayItems.append(overlayItem)
             }
+            
         }
         
         // Проверяем, что в композицию были добавлены сегменты
@@ -342,7 +343,7 @@ class ExportHelper: ObservableObject {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
-                    selectedLabelGroups: labelGroupItem(for: segment),
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labels),
                     start: .zero,
                     duration: segment.timeRange.duration,
                     videoSize: videoSize
@@ -381,23 +382,6 @@ class ExportHelper: ObservableObject {
     
     
     // MARK: - Helpers
-    
-    private func labelGroupItem(for segment: ExportSegment) -> [OverlayLabelGroupItem] {
-        var selectedLabelGroups: [OverlayLabelGroupItem] = []
-        let stampLabels = segment.stamp.labels.compactMap { labelID in
-            tagLibrary.allLabels.first(where: { $0.id == labelID })
-        }
-        stampLabels.forEach { label in
-            guard let labelGroup = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(label.id) }) else { return }
-            if let index = selectedLabelGroups.firstIndex(where: { $0.group.id == labelGroup.id }) {
-                selectedLabelGroups[index].selectedLabels.append(label)
-            } else {
-                let groupItem = OverlayLabelGroupItem(group: labelGroup, selectedLabels: [label])
-                selectedLabelGroups.append(groupItem)
-            }
-        }
-        return selectedLabelGroups
-    }
     
     private func compressFiles(urls: [URL], completion: @escaping (Result<URL, Error>) -> Void) {
         do {
@@ -715,7 +699,7 @@ class ExportHelper: ObservableObject {
         return result
     }
     
-    private func videoCompositionWithTextOverlay(
+    func videoCompositionWithTextOverlay(
         overlayItems: [OverlayItem],
         videoTrack: AVAssetTrack,
         compositionVideoTrack: AVMutableCompositionTrack,
@@ -818,7 +802,7 @@ class ExportHelper: ObservableObject {
         return videoComposition
     }
     
-    private func videoCompositionWithTextOverlay(
+    func videoCompositionWithTextOverlay(
         overlayItem: OverlayItem,
         videoTrack: AVAssetTrack,
         compositionVideoTrack: AVMutableCompositionTrack,

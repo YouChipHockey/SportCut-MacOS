@@ -118,6 +118,8 @@ struct ExportSegment {
 struct ExportSegmentOrganaizer {
     let timeRange: CMTimeRange
     let tagName: String
+    let tagId: String
+    let stampId: UUID
     let groupName: String
     let labels: [Label]
 }
