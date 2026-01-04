@@ -27,7 +27,6 @@ struct FullControlView: View {
     @State private var showAddLineSheet = false
     @State private var isExporting: Bool = false
     @State private var stampItemsEditSheetType: StampEditSheetType? = nil
-    @State private var showStampItemsEditSheet = false
     @State private var showFieldMapVisualizationPicker = false
     @State private var editingStampLineID: UUID?
     @State private var editingStampID: UUID?
@@ -232,20 +231,18 @@ struct FullControlView: View {
                         isSelected: (line.id == timelineData.selectedLineID),
                         onSelect: { timelineData.selectLine(line.id) },
                         onEditLabelsRequest: { stampID in
+                            UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
+                            UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 stampItemsEditSheetType = .lables
-                                showStampItemsEditSheet = true
                             }
-                            UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
-                            UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
                         },
                         onEditTimeEventsRequest: { stampID in
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                stampItemsEditSheetType = .timeEvents
-                                showStampItemsEditSheet = true
-                            }
                             UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
                             UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                stampItemsEditSheetType = .timeEvents
+                            }
                         },
                         onTagDragging: { tagEdgePosition in
                             self.tagEdgePosition = tagEdgePosition
@@ -1494,10 +1491,8 @@ struct FullControlView: View {
                 timelineData.addLine(name: newLineName)
             }
         }
-        .sheet(isPresented: $showStampItemsEditSheet) {
-            if let stampItemsEditSheetType {
-                StampEditSheet(showStampEditSheet: $showStampItemsEditSheet, sheetType: stampItemsEditSheetType)
-            } 
+        .sheet(item: $stampItemsEditSheetType) { sheetType in
+            StampEditSheet(sheetType: sheetType)
         }
         .sheet(isPresented: $showExportModeSheet) {
             ExportModeSelectionSheet { mode in
@@ -1620,7 +1615,6 @@ struct FullControlView: View {
     
     struct StampEditSheet: View {
         @ObservedObject var timelineData = TimelineDataManager.shared
-        @Binding var showStampEditSheet: Bool
         let sheetType: StampEditSheetType
         
         var body: some View {
@@ -1664,7 +1658,6 @@ struct FullControlView: View {
                                         newEvents: newIds
                                     )
                                 }
-                                showStampEditSheet = false
                             }, onCancel: { return }
                         )
                     } else {
