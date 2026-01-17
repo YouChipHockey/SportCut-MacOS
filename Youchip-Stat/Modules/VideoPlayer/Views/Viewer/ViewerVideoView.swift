@@ -13,6 +13,7 @@ struct ViewerVideoView: View {
     @ObservedObject var playlistManager: VideoPlaylistManager
     @ObservedObject var organizer: PlaylistManager
     @StateObject private var drawingState = DrawingState()
+    @StateObject private var overlayViewModel = PlaylistOverlayViewModel()
     @State private var player: AVPlayer?
     @State private var currentComposition: AVComposition?
     @State private var isPlayerReady = false
@@ -174,6 +175,7 @@ struct ViewerVideoView: View {
             setupNotifications()
         }
         .onDisappear {
+            overlayViewModel.detach(from: player)
             cleanupPlayer()
             removeNotifications()
         }
@@ -240,6 +242,7 @@ struct ViewerVideoView: View {
         }
         
         var currentTime = CMTime.zero
+        var compositionSegments: [CompositionSegment] = []
         
         for tag in playlistManager.currentPlaylist {
             let startTime = CMTime(seconds: tag.startTime, preferredTimescale: 600)
@@ -251,6 +254,8 @@ struct ViewerVideoView: View {
                 if let compAudio = compAudioTrack, let aTrack = audioTrack {
                     try compAudio.insertTimeRange(timeRange, of: aTrack, at: currentTime)
                 }
+                let compositionRange = CMTimeRange(start: currentTime, duration: duration)
+                compositionSegments.append(.init(compositionRange: compositionRange, tag: tag))
                 currentTime = currentTime + duration
             } catch {
                 return
@@ -260,6 +265,10 @@ struct ViewerVideoView: View {
         currentComposition = composition
         let playerItem = AVPlayerItem(asset: composition)
         player?.replaceCurrentItem(with: playerItem)
+        
+        overlayViewModel.updateSegments(compositionSegments)
+        overlayViewModel.attach(to: player)
+        
         updateVideoSize(from: originalAsset)
         player?.play()
         playlistManager.isPlaying = true
@@ -412,7 +421,7 @@ struct ViewerVideoView: View {
     
     @ViewBuilder
     private func videoOverlayText() -> some View {
-        if let currentPlayingStamp = playlistManager.currentPlaylist.first {
+        if let currentPlayingStamp = overlayViewModel.currentTag {
             let tagLibrary = TagLibraryManager.shared
             
             let stampID = currentPlayingStamp.stampID
