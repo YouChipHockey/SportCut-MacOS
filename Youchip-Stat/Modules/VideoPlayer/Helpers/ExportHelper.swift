@@ -768,6 +768,7 @@ class ExportHelper: ObservableObject {
                 width: textMaxWidth,
                 height: overlayHeight - padding * 2
             )
+            textLayer.displayIfNeeded()
             parentLayer.addSublayer(textLayer)
             
             // Animations
@@ -870,6 +871,7 @@ class ExportHelper: ObservableObject {
             width: textMaxWidth,
             height: overlayHeight - padding * 2
         )
+        textLayer.displayIfNeeded()
         parentLayer.addSublayer(textLayer)
         
         videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
