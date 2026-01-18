@@ -11,7 +11,7 @@ import AVFoundation
 struct OrganizerView: View {
     @ObservedObject var playlistManager: PlaylistManager
     @ObservedObject var videoPlaylistManager: VideoPlaylistManager
-    @State private var exportHelper = ExportHelper()
+    @StateObject private var exportHelper = ExportHelper()
     @State private var draggedItem: OrganizerTag?
     @State private var showSavePlaylistSheet = false
     @State private var showPlaylistMenu = false
@@ -312,16 +312,13 @@ struct OrganizerView: View {
     @ViewBuilder
     private var exportOverlayView: some View {
         if isExporting {
-            VStack {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle())
-                Text(^String.Titles.exporting)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-            .background(Color.black.opacity(0.7))
-            .cornerRadius(8)
+            CircularPercentProgressView(progress: Double(exportHelper.progress))
+                .frame(width: 80, height: 80)
+                .padding(30)
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(12)
+                .shadow(radius: 20)
+                .transition(.opacity)
         }
     }
     
@@ -389,6 +386,7 @@ struct OrganizerView: View {
     }
     
     private func exportPlaylist(mode: ViewerExportMode) {
+        exportHelper.resetValues()
         guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
             return
         }
@@ -569,6 +567,8 @@ struct OrganizerView: View {
         let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
         
         let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
+        exportHelper.startProgressTimer(exportSession: exportSession)
+        
         exportSession?.outputURL = outputURL
         exportSession?.outputFileType = .mp4
         exportSession?.videoComposition = overlayVideoComposition
@@ -578,6 +578,7 @@ struct OrganizerView: View {
             } else {
                 completion(.failure(exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])))
             }
+            exportHelper.stopProgressTimer()
         }
     }
     
@@ -678,6 +679,8 @@ struct OrganizerView: View {
                 } else {
                     exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
+                
+                exportHelper.processSegment(segmentsCount: segments.count)
                 group.leave()
             }
         }

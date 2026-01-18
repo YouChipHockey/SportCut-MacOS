@@ -22,9 +22,7 @@ class ExportHelper: ObservableObject {
     // MARK: Public Export Method
     
     func performExport(selectedExportType: CutsExportType?, mode: ExportMode, completion: @escaping (Error?) -> Void) {
-        progress = 0
-        processedSegments = 0
-        
+        resetValues()
         guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
             completion(NSError.getErrorWithDescription("Asset not found"))
             return
@@ -94,6 +92,51 @@ class ExportHelper: ObservableObject {
                 }
             }
         }
+    }
+    
+    
+    // MARK: - startProgressTimer
+    
+    func startProgressTimer(exportSession: AVAssetExportSession?) {
+        guard let exportSession else { return }
+        
+        exportProgressTimer?.cancel()
+
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(100))
+        timer.setEventHandler { [weak self, weak exportSession] in
+            guard let self, let exportSession else { return }
+            
+            self.progress = switch exportSession.status {
+            case .completed:
+                1
+            default:
+                exportSession.progress
+            }
+        }
+        exportProgressTimer = timer
+        timer.resume()
+    }
+    
+    // MARK: - stopProgressTimer
+    func stopProgressTimer() {
+        DispatchQueue.main.async { [weak self] in
+            self?.exportProgressTimer?.cancel()
+            self?.exportProgressTimer = nil
+        }
+    }
+    
+    func processSegment(segmentsCount: Int) {
+        processedSegments += 1
+        DispatchQueue.main.async { [weak self] in
+            guard let welf = self else { return }
+            welf.progress = Float(welf.processedSegments) / Float(segmentsCount)
+        }
+    }
+    
+    func resetValues() {
+        progress = 0
+        processedSegments = 0
     }
     
     // MARK: - Export Film
@@ -378,12 +421,7 @@ class ExportHelper: ObservableObject {
                 } else {
                     exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
-                
-                self?.processedSegments += 1
-                DispatchQueue.main.async { [weak self] in
-                    guard let welf = self else { return }
-                    welf.progress = Float(welf.processedSegments) / Float(segments.count)
-                }
+                self?.processSegment(segmentsCount: segments.count)
                 group.leave()
             }
         }
@@ -718,37 +756,7 @@ class ExportHelper: ObservableObject {
         result.sort { $0.timeRange.start.seconds < $1.timeRange.start.seconds }
         return result
     }
-    
-    // MARK: - startProgressTimer
-    
-    private func startProgressTimer(exportSession: AVAssetExportSession?) {
-        guard let exportSession else { return }
-        
-        exportProgressTimer?.cancel()
 
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now(), repeating: .milliseconds(100))
-        timer.setEventHandler { [weak self, weak exportSession] in
-            guard let self, let exportSession else { return }
-            
-            self.progress = switch exportSession.status {
-            case .completed:
-                1
-            default:
-                exportSession.progress
-            }
-        }
-        exportProgressTimer = timer
-        timer.resume()
-    }
-    
-    // MARK: - stopProgressTimer
-    private func stopProgressTimer() {
-        DispatchQueue.main.async { [weak self] in
-            self?.exportProgressTimer?.cancel()
-            self?.exportProgressTimer = nil
-        }
-    }
     
     // MARK: - Create Overlay
     func videoCompositionWithTextOverlay(
