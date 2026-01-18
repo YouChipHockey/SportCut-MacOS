@@ -14,9 +14,17 @@ class ExportHelper: ObservableObject {
     private let timelineData = TimelineDataManager.shared
     private let tagLibrary = TagLibraryManager.shared
     
+    private var exportProgressTimer: DispatchSourceTimer?
+    private var processedSegments: Int = 0
+    
+    @Published var progress: Float = 0
+    
     // MARK: Public Export Method
     
     func performExport(selectedExportType: CutsExportType?, mode: ExportMode, completion: @escaping (Error?) -> Void) {
+        progress = 0
+        processedSegments = 0
+        
         guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
             completion(NSError.getErrorWithDescription("Asset not found"))
             return
@@ -215,12 +223,17 @@ class ExportHelper: ObservableObject {
         exportSession?.outputURL = outputURL
         exportSession?.outputFileType = .mp4
         exportSession?.videoComposition = overlayVideoComposition
-        exportSession?.exportAsynchronously {
+        
+        startProgressTimer(exportSession: exportSession)
+        
+        exportSession?.exportAsynchronously { [weak self] in
             if exportSession?.status == .completed {
                 completion(.success(outputURL))
             } else {
                 completion(.failure(exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])))
             }
+            
+            self?.stopProgressTimer()
         }
     }
     
@@ -359,23 +372,30 @@ class ExportHelper: ObservableObject {
             exportSession?.outputFileType = .mp4
             exportSession?.videoComposition = overlayVideoComposition
             
-            exportSession?.exportAsynchronously {
+            exportSession?.exportAsynchronously { [weak self] in
                 if exportSession?.status == .completed {
                     exportedURLs.append(clipOutputURL)
                 } else {
                     exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
+                
+                self?.processedSegments += 1
+                DispatchQueue.main.async { [weak self] in
+                    guard let welf = self else { return }
+                    welf.progress = Float(welf.processedSegments) / Float(segments.count)
+                }
                 group.leave()
             }
         }
         
-        group.notify(queue: .main) {
+        group.notify(queue: .main) { [weak self] in
+            self?.progress = 1
             if let error = exportError {
                 completion(.failure(error))
             } else if exportedURLs.isEmpty {
                 completion(.failure(NSError(domain: "Export", code: -3, userInfo: [NSLocalizedDescriptionKey: "No valid segments were exported"])))
             } else {
-                self.compressFiles(urls: exportedURLs, completion: completion)
+                self?.compressFiles(urls: exportedURLs, completion: completion)
             }
         }
     }
@@ -699,6 +719,38 @@ class ExportHelper: ObservableObject {
         return result
     }
     
+    // MARK: - startProgressTimer
+    
+    private func startProgressTimer(exportSession: AVAssetExportSession?) {
+        guard let exportSession else { return }
+        
+        exportProgressTimer?.cancel()
+
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(100))
+        timer.setEventHandler { [weak self, weak exportSession] in
+            guard let self, let exportSession else { return }
+            
+            self.progress = switch exportSession.status {
+            case .completed:
+                1
+            default:
+                exportSession.progress
+            }
+        }
+        exportProgressTimer = timer
+        timer.resume()
+    }
+    
+    // MARK: - stopProgressTimer
+    private func stopProgressTimer() {
+        DispatchQueue.main.async { [weak self] in
+            self?.exportProgressTimer?.cancel()
+            self?.exportProgressTimer = nil
+        }
+    }
+    
+    // MARK: - Create Overlay
     func videoCompositionWithTextOverlay(
         overlayItems: [OverlayItem],
         videoTrack: AVAssetTrack,

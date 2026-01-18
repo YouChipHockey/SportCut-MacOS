@@ -19,6 +19,7 @@ struct FullControlView: View {
     @ObservedObject var timelineData = TimelineDataManager.shared
     @ObservedObject var focusManager = FocusStateManager.shared
     @ObservedObject var hotkeyManager = HotKeyManager.shared
+    @StateObject var exportHelper = ExportHelper()
     
     @State private var markupMode: MarkupMode = MarkupMode.current
     @State private var showMarkupModeToggle = false
@@ -1429,26 +1430,17 @@ struct FullControlView: View {
             .padding(.horizontal)
             .padding(.top, 12)
             .frame(minWidth: 800, minHeight: 300)
-            .overlay(
-                Group {
-                    if isExporting {
-                        VStack {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
-                                .scaleEffect(1.5)
-                            Text(^String.Titles.exporting)
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding(.top, 8)
-                        }
+            .overlay {
+                if isExporting {
+                    CircularPercentProgressView(progress: Double(exportHelper.progress))
+                        .frame(width: 80, height: 80)
                         .padding(30)
                         .background(Color.black.opacity(0.8))
                         .cornerRadius(12)
                         .shadow(radius: 20)
                         .transition(.opacity)
-                    }
                 }
-            )
+            }
             .onAppear {
                 parentWindowHeight = geo.size.height
                 setupKeyboardShortcuts()
@@ -1497,7 +1489,6 @@ struct FullControlView: View {
         .sheet(isPresented: $showExportModeSheet) {
             ExportModeSelectionSheet { mode in
                 isExporting = true
-                let exportHelper = ExportHelper()
                 exportHelper.performExport(selectedExportType: selectedExportType, mode: mode) { error in
                     isExporting = false
                     showExportModeSheet = false
