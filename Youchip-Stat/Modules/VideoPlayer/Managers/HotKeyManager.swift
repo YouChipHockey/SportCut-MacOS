@@ -133,9 +133,10 @@ class HotKeyManager: ObservableObject {
         guard ActiveWindowManager.shared.isAllowedWindowActive() || isViewerWindowActive else {
             return false
         }
+        let isViewerMode = WindowsManager.shared.viewerWindow != nil && isViewerWindowActive
         
         if event.keyCode == 49 {
-            if let viewerWindow = WindowsManager.shared.viewerWindow, isViewerWindowActive {
+             if isViewerMode {
                 NotificationCenter.default.post(name: .toggleViewerPlayer, object: nil)
             } else {
                 VideoPlayerManager.shared.togglePlayPause()
@@ -146,10 +147,18 @@ class HotKeyManager: ObservableObject {
         if event.modifierFlags.contains(.shift) {
             switch event.keyCode {
             case 123:
-                VideoPlayerManager.shared.seek(by: -3)
+                if isViewerMode {
+                    NotificationCenter.default.post(name: .seekViewerPlayerBackward, object: nil)
+                } else {
+                    VideoPlayerManager.shared.seek(by: -3)
+                }
                 return true
             case 124:
-                VideoPlayerManager.shared.seek(by: 3)
+                if isViewerMode {
+                    NotificationCenter.default.post(name: .seekViewerPlayerForward, object: nil)
+                } else {
+                    VideoPlayerManager.shared.seek(by: 3)
+                }
                 return true
             default:
                 break

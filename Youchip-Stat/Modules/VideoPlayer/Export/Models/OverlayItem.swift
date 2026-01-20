@@ -38,3 +38,10 @@ struct OverlayLabelGroupItem: Hashable {
         return selectedLabelGroups
     }
 }
+
+extension Array where Element == OverlayLabelGroupItem {
+    
+    var sortedByGroupName: [OverlayLabelGroupItem] {
+        self.sorted { $0.group.name < $1.group.name }
+    }
+}

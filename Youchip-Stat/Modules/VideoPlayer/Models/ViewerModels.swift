@@ -17,6 +17,8 @@ extension Notification.Name {
     static let stopViewerPlayer = Notification.Name("stopViewerPlayer")
     static let closeViewerWindow = Notification.Name("closeViewerWindow")
     static let createPlaylistComposition = Notification.Name("createPlaylistComposition")
+    static let seekViewerPlayerForward = Notification.Name("seekViewerPlayerForward")
+    static let seekViewerPlayerBackward = Notification.Name("seekViewerPlayerBackward")
 }
 
 class PlaylistManager: ObservableObject {
@@ -420,6 +422,8 @@ class VideoPlaylistManager: ObservableObject {
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var startViewerPlayerObserver: Any?
+    private var seekForwardPlayerObserver: Any?
+    private var seekBackwardPlayerObserver: Any?
     private var cancellables = Set<AnyCancellable>()
     
     init() {
@@ -430,11 +434,31 @@ class VideoPlaylistManager: ObservableObject {
         ) { [weak self] _ in
             self?.togglePlayback()
         }
+        seekForwardPlayerObserver = NotificationCenter.default.addObserver(
+            forName: .seekViewerPlayerForward,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.seek(by: 3)
+        }
+        seekBackwardPlayerObserver = NotificationCenter.default.addObserver(
+            forName: .seekViewerPlayerBackward,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.seek(by: -3)
+        }
     }
     
     deinit {
         if let startViewerPlayerObserver {
             NotificationCenter.default.removeObserver(startViewerPlayerObserver)
+        }
+        if let seekForwardPlayerObserver {
+            NotificationCenter.default.removeObserver(seekForwardPlayerObserver)
+        }
+        if let seekBackwardPlayerObserver {
+            NotificationCenter.default.removeObserver(seekBackwardPlayerObserver)
         }
     }
     

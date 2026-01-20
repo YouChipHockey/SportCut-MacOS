@@ -57,7 +57,7 @@ extension NSAttributedString {
         let timeEventsAttributedstring = NSAttributedString(string: timeEventsString, attributes: timeEventAttributes)
         let descriptionAttributedString = NSMutableAttributedString()
         
-        overlayItem.selectedLabelGroups.forEach { labelGroupItem in
+        overlayItem.selectedLabelGroups.sortedByGroupName.forEach { labelGroupItem in
             let labelGroupNameAttributedString = NSAttributedString(string: labelGroupItem.group.name.uppercased() + ": ", attributes: labelGroupNameAttributes)
             descriptionAttributedString.append(labelGroupNameAttributedString)
             
