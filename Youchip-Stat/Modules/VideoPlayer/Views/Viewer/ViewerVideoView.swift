@@ -39,11 +39,7 @@ struct ViewerVideoView: View {
                 
                 HStack(spacing: 8) {
                     Button(action: {
-                        if playlistManager.isPlaying {
-                            player?.pause()
-                            playlistManager.isPlaying = false
-                        }
-                        
+                        playlistManager.playVideo(false)
                         drawingState.showDrawingMenu.toggle()
                     }) {
                         Image(systemName: drawingState.showDrawingMenu ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
@@ -94,8 +90,7 @@ struct ViewerVideoView: View {
                 
                 if playlistManager.isPlaying {
                     Button(action: {
-                        player?.pause()
-                        playlistManager.isPlaying = false
+                        playlistManager.playVideo(false)
                     }) {
                         Image(systemName: "pause.circle.fill")
                             .font(.system(size: 20))
@@ -184,22 +179,11 @@ struct ViewerVideoView: View {
                 createCompositionFromPlaylist()
             }
         }
-        .onChange(of: playlistManager.isPlaying) { isPlaying in
-            if isPlaying {
-                player?.play()
-            } else {
-                player?.pause()
-            }
-//            if isPlaying && !playlistManager.currentPlaylist.isEmpty {
-//                createCompositionFromPlaylist()
-//            } else if !isPlaying {
-//                player?.pause()
-//            }
-        }
     }
     
     private func setupPlayer() {
         player = AVPlayer()
+        playlistManager.setPlayer(player)
         isPlayerReady = true
     }
     
@@ -208,8 +192,9 @@ struct ViewerVideoView: View {
             player?.removeTimeObserver(observer)
             timeObserver = nil
         }
-        player?.pause()
+        playlistManager.playVideo(false)
         player = nil
+        playlistManager.setPlayer(player)
         playlistManager.stopPlayback()
     }
     
@@ -270,8 +255,7 @@ struct ViewerVideoView: View {
         overlayViewModel.attach(to: player)
         
         updateVideoSize(from: originalAsset)
-        player?.play()
-        playlistManager.isPlaying = true
+        playlistManager.playVideo(true)
     }
     
     private func updateVideoSize(from asset: AVAsset) {
@@ -331,14 +315,12 @@ struct ViewerVideoView: View {
             player?.removeTimeObserver(observer)
             timeObserver = nil
         }
-        player?.pause()
         player?.replaceCurrentItem(with: nil)
         playlistManager.stopPlayback()
     }
     
     private func saveScreenshot() {
-        player?.pause()
-        playlistManager.isPlaying = false
+        playlistManager.playVideo(false)
         
         guard let player = player else { return }
         

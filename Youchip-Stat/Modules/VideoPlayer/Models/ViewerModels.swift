@@ -9,6 +9,7 @@ import Foundation
 import AVFoundation
 import UniformTypeIdentifiers
 import SwiftUI
+import Combine
 
 extension Notification.Name {
     static let playSingleTag = Notification.Name("playSingleTag")
@@ -404,11 +405,13 @@ class TimelineFilter: ObservableObject {
 class VideoPlaylistManager: ObservableObject {
     @Published var currentPlaylist: [OrganizerTag] = []
     @Published var currentIndex: Int = 0
-    @Published var isPlaying: Bool = false
+    @Published private(set) var isPlaying: Bool = false
+    @Published private(set) var playbackSpeed: Double = 1.0
     
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var startViewerPlayerObserver: Any?
+    private var cancellables = Set<AnyCancellable>()
     
     init() {
         startViewerPlayerObserver = NotificationCenter.default.addObserver(
@@ -426,31 +429,78 @@ class VideoPlaylistManager: ObservableObject {
         }
     }
     
+    func playVideo(_ play: Bool, changePlayerStatus: Bool = true) {
+        guard isPlaying != play else { return }
+        isPlaying = play
+        if play {
+            player?.rate = Float(playbackSpeed)
+        }
+        guard changePlayerStatus else { return }
+        if play {
+            player?.play()
+        } else {
+            player?.pause()
+        }
+    }
+    
+    func setPlayer(_ player: AVPlayer?) {
+        self.player = player
+        if player == nil {
+            cancellables.removeAll()
+        } else {
+            observePlayerState()
+        }
+    }
+    
     func setPlaylist(_ tags: [OrganizerTag]) {
         currentPlaylist = tags
         currentIndex = 0
-        isPlaying = false
+        playVideo(false)
     }
     
     func playPlaylist() {
         guard !currentPlaylist.isEmpty else { return }
-        isPlaying = true
+        playVideo(true)
     }
     
     func stopPlayback() {
-        isPlaying = false
+        playVideo(false)
     }
     
     func togglePlayback() {
-        isPlaying.toggle()
+        playVideo(!isPlaying)
+    }
+    
+    func seek(by seconds: Double) {
+        guard let player else { return }
+        let actualCurrentTime = player.currentTime().seconds
+        let seekToTime = actualCurrentTime + seconds
+
+        let cmTime = CMTime(seconds: seekToTime, preferredTimescale: 600)
+        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+
+    }
+    func changePlaybackSpeed(to speed: Double) {
+        playbackSpeed = speed
+        player?.rate = Float(speed)
     }
     
     func playSingleTag(_ tag: OrganizerTag) {
         currentPlaylist = [tag]
         currentIndex = 0
-        isPlaying = true
         
         NotificationCenter.default.post(name: .playSingleTag, object: tag)
     }
+    
+    private func observePlayerState() {
+        guard let player else { return }
+        
+        player.publisher(for: \.timeControlStatus)
+            .sink { [weak self] status in
+                self?.playVideo(status == .playing, changePlayerStatus: false)
+            }
+            .store(in: &cancellables)
+    }
+
 }
 

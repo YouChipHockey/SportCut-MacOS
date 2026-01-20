@@ -15,6 +15,7 @@
 		BF6A3B952F042AFD006AEBB0 /* RenamePlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6A3B942F042AFD006AEBB0 /* RenamePlaylistSheet.swift */; };
 		BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFDA33492EEDBD9100358696 /* URLConstants.swift */; };
 		BFFEC8772F1D32AF00464BF0 /* CircularPercentProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFFEC8762F1D32AF00464BF0 /* CircularPercentProgressView.swift */; };
+		BFFEC8F92F1EBEE500464BF0 /* VideoControlPanelActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFFEC8F82F1EBEE500464BF0 /* VideoControlPanelActions.swift */; };
 		DD1BF67B2DBAF32700CB2AE0 /* VideoMetadataModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */; };
 		DD1BF67F2DBAFB8A00CB2AE0 /* VideosViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1BF67E2DBAFB8A00CB2AE0 /* VideosViewModel.swift */; };
 		DD1DAEE32E81E65E00850FAC /* ReportWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1DAEE22E81E65E00850FAC /* ReportWindow.swift */; };
@@ -194,6 +195,7 @@
 		BF6A3B942F042AFD006AEBB0 /* RenamePlaylistSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenamePlaylistSheet.swift; sourceTree = "<group>"; };
 		BFDA33492EEDBD9100358696 /* URLConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLConstants.swift; sourceTree = "<group>"; };
 		BFFEC8762F1D32AF00464BF0 /* CircularPercentProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularPercentProgressView.swift; sourceTree = "<group>"; };
+		BFFEC8F82F1EBEE500464BF0 /* VideoControlPanelActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoControlPanelActions.swift; sourceTree = "<group>"; };
 		D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Youchip_Stat.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoMetadataModel.swift; sourceTree = "<group>"; };
 		DD1BF67E2DBAFB8A00CB2AE0 /* VideosViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideosViewModel.swift; sourceTree = "<group>"; };
@@ -849,6 +851,7 @@
 		DDD52CBC2DAEE7F50038158E /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				BFFEC8F82F1EBEE500464BF0 /* VideoControlPanelActions.swift */,
 				DD5CF9F12E046839009CD51A /* Chips */,
 				DD5CF9E22E0467BD009CD51A /* Sheets */,
 				DD7E17CA2DF7448F00342214 /* FieldMapConfigurationView.swift */,
@@ -1198,6 +1201,7 @@
 				DD5CF9F92E04689B009CD51A /* FocusAwareTextField.swift in Sources */,
 				DD32C2A62D74A1C80052B5C6 /* Fonts.swift in Sources */,
 				DD32C2A72D74A1C80052B5C6 /* SKProduct+Convenience.swift in Sources */,
+				BFFEC8F92F1EBEE500464BF0 /* VideoControlPanelActions.swift in Sources */,
 				DDFB1A562DE521D300175D97 /* ScreenshotsWindowController.swift in Sources */,
 				DD3A137E2E81ED5200DA52AA /* CollectionExportModels.swift in Sources */,
 				DD5CF9B92E04628C009CD51A /* TagOnMap.swift in Sources */,

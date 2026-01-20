@@ -26,6 +26,22 @@ struct ViewerTimelineView: View {
                 Text(^String.Titles.timelines)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
+                // MARK: HERE TO ADD
+                VideoControlPanelView(
+                    width: 2000,
+                    playbackSpeed: playlistManager.playbackSpeed,
+                    forViewerMode: true,
+                    actions: .init(
+                        seekBackward10: { playlistManager.seek(by: -10) },
+                        seekBackward5: { playlistManager.seek(by: -5) },
+                        togglePlayPause: { playlistManager.togglePlayback() },
+                        seekForward5: { playlistManager.seek(by: 5) },
+                        seekForward10: { playlistManager.seek(by: 10) },
+                        changeSpeed: { playlistManager.changePlaybackSpeed(to: $0) }
+                    )
+                )
+                .fixedSize(horizontal: true, vertical: false)
+                
                 
                 Spacer()
                 
