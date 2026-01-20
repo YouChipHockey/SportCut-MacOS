@@ -16,6 +16,7 @@ extension Notification.Name {
     static let toggleViewerPlayer = Notification.Name("toggleViewerPlayer")
     static let stopViewerPlayer = Notification.Name("stopViewerPlayer")
     static let closeViewerWindow = Notification.Name("closeViewerWindow")
+    static let createPlaylistComposition = Notification.Name("createPlaylistComposition")
 }
 
 class PlaylistManager: ObservableObject {
@@ -403,10 +404,18 @@ class TimelineFilter: ObservableObject {
 }
 
 class VideoPlaylistManager: ObservableObject {
-    @Published var currentPlaylist: [OrganizerTag] = []
+    @Published var currentPlaylist: [OrganizerTag] = [] {
+        didSet {
+            if isPlaying {
+                createCompositionFromPlaylist()
+            }
+        }
+    }
     @Published var currentIndex: Int = 0
     @Published private(set) var isPlaying: Bool = false
     @Published private(set) var playbackSpeed: Double = 1.0
+    @Published private(set) var currentComposition: AVMutableComposition?
+    private(set) var compositionSegments: [CompositionSegment] = []
     
     private var player: AVPlayer?
     private var timeObserver: Any?
@@ -455,12 +464,8 @@ class VideoPlaylistManager: ObservableObject {
     func setPlaylist(_ tags: [OrganizerTag]) {
         currentPlaylist = tags
         currentIndex = 0
+        player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         playVideo(false)
-    }
-    
-    func playPlaylist() {
-        guard !currentPlaylist.isEmpty else { return }
-        playVideo(true)
     }
     
     func stopPlayback() {
@@ -500,6 +505,55 @@ class VideoPlaylistManager: ObservableObject {
                 self?.playVideo(status == .playing, changePlayerStatus: false)
             }
             .store(in: &cancellables)
+    }
+    
+    func createCompositionFromPlaylist() {
+        guard let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset else {
+            return
+        }
+        
+        let composition = AVMutableComposition()
+        
+        guard let videoTrack = originalAsset.tracks(withMediaType: .video).first,
+              let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            return
+        }
+        
+        let audioTrack = originalAsset.tracks(withMediaType: .audio).first
+        var compAudioTrack: AVMutableCompositionTrack? = nil
+        if let audioTrack = audioTrack {
+            compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        }
+        
+        var currentTime = CMTime.zero
+        var compositionSegments: [CompositionSegment] = []
+        
+        for tag in currentPlaylist {
+            let startTime = CMTime(seconds: tag.startTime, preferredTimescale: 600)
+            let duration = CMTime(seconds: tag.duration, preferredTimescale: 600)
+            let timeRange = CMTimeRange(start: startTime, duration: duration)
+            
+            do {
+                try compVideoTrack.insertTimeRange(timeRange, of: videoTrack, at: currentTime)
+                if let compAudio = compAudioTrack, let aTrack = audioTrack {
+                    try compAudio.insertTimeRange(timeRange, of: aTrack, at: currentTime)
+                }
+                let compositionRange = CMTimeRange(start: currentTime, duration: duration)
+                compositionSegments.append(.init(compositionRange: compositionRange, tag: tag))
+                currentTime = currentTime + duration
+            } catch {
+                return
+            }
+        }
+        
+        self.compositionSegments = compositionSegments
+        currentComposition = composition
+        let playerItem = AVPlayerItem(asset: composition)
+        player?.replaceCurrentItem(with: playerItem)
+        playVideo(true)
+        NotificationCenter.default.post(
+            name: .createPlaylistComposition,
+            object: nil)
     }
 
 }

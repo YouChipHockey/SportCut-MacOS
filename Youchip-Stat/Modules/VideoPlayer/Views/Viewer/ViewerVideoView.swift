@@ -58,7 +58,6 @@ struct ViewerVideoView: View {
                                 
                                 if !organizer.currentTags.isEmpty && !playlistManager.isPlaying {
                                     playlistManager.setPlaylist(organizer.currentTags)
-                                    playlistManager.playPlaylist()
                                     playCurrentPlaylist()
                                 }
                             }
@@ -101,13 +100,7 @@ struct ViewerVideoView: View {
                     Button(action: {
                         if organizer.currentTags.isEmpty {
                         } else {
-                            drawingState.clearDrawing()
-                            drawingState.isDrawingMode = false
-                            drawingState.showDrawingMenu = false
-                            
-                            playlistManager.setPlaylist(organizer.currentTags)
-                            playlistManager.playPlaylist()
-                            playCurrentPlaylist()
+                            playlistManager.playVideo(!playlistManager.isPlaying)
                         }
                     }) {
                         Image(systemName: "play.circle.fill")
@@ -174,9 +167,17 @@ struct ViewerVideoView: View {
             cleanupPlayer()
             removeNotifications()
         }
-        .onChange(of: playlistManager.currentPlaylist) { _ in
-            if playlistManager.isPlaying {
-                createCompositionFromPlaylist()
+        .onChange(of: playlistManager.currentComposition) { _ in
+            currentComposition = playlistManager.currentComposition
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .createPlaylistComposition)) { _ in
+            overlayViewModel.updateSegments(playlistManager.compositionSegments)
+            overlayViewModel.attach(to: player)
+            drawingState.clearDrawing()
+            drawingState.isDrawingMode = false
+            drawingState.showDrawingMenu = false
+            if let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset {
+                updateVideoSize(from: originalAsset)
             }
         }
     }
@@ -200,62 +201,12 @@ struct ViewerVideoView: View {
     
     private func playCurrentPlaylist() {
         guard !playlistManager.currentPlaylist.isEmpty else { return }
-        createCompositionFromPlaylist()
+        playlistManager.createCompositionFromPlaylist()
     }
     
     private func playSingleTag(_ tag: OrganizerTag) {
         playlistManager.setPlaylist([tag])
-        createCompositionFromPlaylist()
-    }
-    
-    private func createCompositionFromPlaylist() {
-        guard let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset else {
-            return
-        }
-        
-        let composition = AVMutableComposition()
-        
-        guard let videoTrack = originalAsset.tracks(withMediaType: .video).first,
-              let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            return
-        }
-        
-        let audioTrack = originalAsset.tracks(withMediaType: .audio).first
-        var compAudioTrack: AVMutableCompositionTrack? = nil
-        if let audioTrack = audioTrack {
-            compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-        }
-        
-        var currentTime = CMTime.zero
-        var compositionSegments: [CompositionSegment] = []
-        
-        for tag in playlistManager.currentPlaylist {
-            let startTime = CMTime(seconds: tag.startTime, preferredTimescale: 600)
-            let duration = CMTime(seconds: tag.duration, preferredTimescale: 600)
-            let timeRange = CMTimeRange(start: startTime, duration: duration)
-            
-            do {
-                try compVideoTrack.insertTimeRange(timeRange, of: videoTrack, at: currentTime)
-                if let compAudio = compAudioTrack, let aTrack = audioTrack {
-                    try compAudio.insertTimeRange(timeRange, of: aTrack, at: currentTime)
-                }
-                let compositionRange = CMTimeRange(start: currentTime, duration: duration)
-                compositionSegments.append(.init(compositionRange: compositionRange, tag: tag))
-                currentTime = currentTime + duration
-            } catch {
-                return
-            }
-        }
-        
-        currentComposition = composition
-        let playerItem = AVPlayerItem(asset: composition)
-        player?.replaceCurrentItem(with: playerItem)
-        
-        overlayViewModel.updateSegments(compositionSegments)
-        overlayViewModel.attach(to: player)
-        
-        updateVideoSize(from: originalAsset)
-        playlistManager.playVideo(true)
+        playlistManager.createCompositionFromPlaylist()
     }
     
     private func updateVideoSize(from asset: AVAsset) {

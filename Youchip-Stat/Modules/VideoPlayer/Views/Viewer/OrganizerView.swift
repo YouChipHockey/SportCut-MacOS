@@ -206,8 +206,12 @@ struct OrganizerView: View {
         if !playlistManager.currentTags.isEmpty {
             HStack(spacing: 8) {
                 Button(action: {
-                    videoPlaylistManager.setPlaylist(playlistManager.currentTags)
-                    videoPlaylistManager.playPlaylist()
+                    if videoPlaylistManager.isPlaying {
+                        videoPlaylistManager.playVideo(false)
+                    } else {
+                        videoPlaylistManager.setPlaylist(playlistManager.currentTags)
+                        videoPlaylistManager.createCompositionFromPlaylist()
+                    }
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: videoPlaylistManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
