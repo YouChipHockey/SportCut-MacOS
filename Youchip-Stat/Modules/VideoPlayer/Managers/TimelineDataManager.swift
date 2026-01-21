@@ -199,6 +199,7 @@ class TimelineDataManager: ObservableObject {
     
     @objc private func handleTagUpdated(_ notification: Notification) {
         guard let tagId = notification.userInfo?["tagId"] as? String else { return }
+        let newName = notification.userInfo?["newName"] as? String
         
         var updated = false
         
@@ -207,16 +208,13 @@ class TimelineDataManager: ObservableObject {
         for lineIndex in 0..<lines.count {
             for stampIndex in 0..<lines[lineIndex].stamps.count {
                 if lines[lineIndex].stamps[stampIndex].idTag == tagId {
-                    lines[lineIndex].stamps[stampIndex].label = updatedTag.name
+                    lines[lineIndex].stamps[stampIndex].label = newName ?? updatedTag.name
                     updated = true
                 }
             }
             
             if lines[lineIndex].tagIdForMode == tagId {
-                if lines[lineIndex].name == lines[lineIndex].tagIdForMode {
-                    lines[lineIndex].name = updatedTag.name
-                }
-                
+                lines[lineIndex].name = newName ?? updatedTag.name
                 updated = true
             }
         }

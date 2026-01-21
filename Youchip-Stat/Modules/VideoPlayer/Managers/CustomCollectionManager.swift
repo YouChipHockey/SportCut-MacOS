@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 class CustomCollectionManager: ObservableObject {
     
-    var changedTagIds: [String] = []
+    var changedTags: [(id: String, newName: String)] = []
     @Published var playField: PlayField?
     @Published var tagGroups: [TagGroup] = []
     @Published var tags: [Tag] = []
@@ -365,14 +365,14 @@ class CustomCollectionManager: ObservableObject {
                 NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
             }
             
-            for tagId in changedTagIds {
+            for tag in changedTags {
                 NotificationCenter.default.post(
                     name: .tagUpdated,
                     object: nil,
-                    userInfo: ["tagId": tagId]
+                    userInfo: ["tagId": tag.id, "newName": tag.newName]
                 )
             }
-            changedTagIds.removeAll()
+            changedTags.removeAll()
             
             return true
         } catch {
@@ -846,8 +846,8 @@ class CustomCollectionManager: ObservableObject {
         if let index = tags.firstIndex(where: { $0.id == id }) {
             let originalTag = tags[index]
             
-            if !changedTagIds.contains(id) {
-                changedTagIds.append(id)
+            if !changedTags.contains(where: { $0.id == id}) {
+                changedTags.append((id, name))
             }
             
             tags[index] = Tag(
