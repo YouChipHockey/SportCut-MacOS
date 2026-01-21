@@ -198,26 +198,21 @@ class TimelineDataManager: ObservableObject {
     }
     
     @objc private func handleTagUpdated(_ notification: Notification) {
-        guard let originalID = notification.userInfo?["originalID"] as? String,
-              let newID = notification.userInfo?["newID"] as? String else {
-            return
-        }
+        guard let tagId = notification.userInfo?["tagId"] as? String else { return }
         
         var updated = false
         
-        guard let updatedTag = TagLibraryManager.shared.findTagById(newID) else { return }
+        guard let updatedTag = TagLibraryManager.shared.findTagById(tagId) else { return }
         
         for lineIndex in 0..<lines.count {
             for stampIndex in 0..<lines[lineIndex].stamps.count {
-                if lines[lineIndex].stamps[stampIndex].idTag == originalID {
-                    lines[lineIndex].stamps[stampIndex].idTag = newID
+                if lines[lineIndex].stamps[stampIndex].idTag == tagId {
                     lines[lineIndex].stamps[stampIndex].label = updatedTag.name
                     updated = true
                 }
             }
             
-            if lines[lineIndex].tagIdForMode == originalID {
-                lines[lineIndex].tagIdForMode = newID
+            if lines[lineIndex].tagIdForMode == tagId {
                 if lines[lineIndex].name == lines[lineIndex].tagIdForMode {
                     lines[lineIndex].name = updatedTag.name
                 }

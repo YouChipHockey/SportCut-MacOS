@@ -241,15 +241,12 @@ class TagLibraryManager: ObservableObject {
     }
     
     @objc private func handleTagUpdated(_ notification: Notification) {
-        guard let originalID = notification.userInfo?["originalID"] as? String,
-              let newID = notification.userInfo?["newID"] as? String else {
-            return
-        }
+        guard let tagId = notification.userInfo?["tagId"] as? String else { return }
         
         for i in 0..<allTagGroups.count {
-            if let tagIndex = allTagGroups[i].tags.firstIndex(where: { $0 == originalID }) {
+            if let tagIndex = allTagGroups[i].tags.firstIndex(where: { $0 == tagId }) {
                 var updatedTags = allTagGroups[i].tags
-                updatedTags[tagIndex] = newID
+                updatedTags[tagIndex] = tagId
                 allTagGroups[i] = TagGroup(
                     id: allTagGroups[i].id,
                     name: allTagGroups[i].name,

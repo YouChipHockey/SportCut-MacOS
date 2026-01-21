@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 class CustomCollectionManager: ObservableObject {
     
-    var changedTagIDs: [(oldID: String, newID: String)] = []
+    var changedTagIds: [String] = []
     @Published var playField: PlayField?
     @Published var tagGroups: [TagGroup] = []
     @Published var tags: [Tag] = []
@@ -365,14 +365,14 @@ class CustomCollectionManager: ObservableObject {
                 NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
             }
             
-            for change in changedTagIDs {
+            for tagId in changedTagIds {
                 NotificationCenter.default.post(
                     name: .tagUpdated,
                     object: nil,
-                    userInfo: ["originalID": change.oldID, "newID": change.newID]
+                    userInfo: ["tagId": tagId]
                 )
             }
-            changedTagIDs.removeAll()
+            changedTagIds.removeAll()
             
             return true
         } catch {
@@ -843,17 +843,15 @@ class CustomCollectionManager: ObservableObject {
             return false
         }
         
-        let newTagID = UUID().uuidString
-        
         if let index = tags.firstIndex(where: { $0.id == id }) {
             let originalTag = tags[index]
             
-            if !changedTagIDs.contains(where: { $0.oldID == id }) {
-                changedTagIDs.append((oldID: id, newID: newTagID))
+            if !changedTagIds.contains(id) {
+                changedTagIds.append(id)
             }
             
             tags[index] = Tag(
-                id: newTagID,
+                id: id,
                 primaryID: primaryID,
                 name: name,
                 description: description,
@@ -871,7 +869,7 @@ class CustomCollectionManager: ObservableObject {
             for i in 0..<tagGroups.count {
                 if let tagIndex = tagGroups[i].tags.firstIndex(where: { $0 == id }) {
                     var updatedTags = tagGroups[i].tags
-                    updatedTags[tagIndex] = newTagID
+                    updatedTags[tagIndex] = id // maybe not needed (remove)
                     tagGroups[i] = TagGroup(
                         id: tagGroups[i].id,
                         name: tagGroups[i].name,
