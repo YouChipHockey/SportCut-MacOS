@@ -17,6 +17,7 @@ class VideoPlayerManager: ObservableObject {
     @Published var player: AVPlayer?
     @Published var playbackSpeed: Double = 1.0
     @Published var currentTime: Double = 0.0
+    @Published var isResizingTag: Bool = false // Track if user is resizing a tag
     var videoDuration: Double {
         player?.currentItem?.duration.seconds ?? 0
     }

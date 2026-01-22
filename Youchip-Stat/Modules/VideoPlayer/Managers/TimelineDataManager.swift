@@ -10,6 +10,7 @@ import AVKit
 import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
+import UserNotifications
 
 class TimelineDataManager: ObservableObject {
     
@@ -17,6 +18,7 @@ class TimelineDataManager: ObservableObject {
     @Published var lines: [TimelineLine] = []
     @Published var selectedLineID: UUID? = nil
     @Published var selectedStampID: UUID? = nil
+    @Published var unlinkedScreenshotPopups: [UnlinkedScreenshotPopup] = []
     var currentBookmark: Data?
     
     init() {
@@ -43,10 +45,58 @@ class TimelineDataManager: ObservableObject {
     }
     func removeStamp(lineID: UUID, stampID: UUID) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
+        
+        let line = lines[lineIndex]
+        
+        // Проверяем, является ли это таймлайном рисунков
+        let isDrawingsTimeline = line.name.lowercased().contains("рисунок") ||
+                                 line.name.lowercased().contains("рисунки") ||
+                                 line.name.lowercased().contains("скриншот") ||
+                                 line.name.lowercased().contains("screenshot") ||
+                                 line.name.lowercased().contains("drawing")
+        
+        // Если это таймлайн рисунков, удаляем файл скриншота
+        if isDrawingsTimeline {
+            if let stamp = line.stamps.first(where: { $0.id == stampID }) {
+                deleteScreenshotFile(screenshotName: stamp.label)
+            }
+        }
+        
         lines[lineIndex].stamps.removeAll(where: { $0.id == stampID })
         updateTimelines()
         
         NotificationCenter.default.post(name: .stampCountsChanged, object: nil)
+    }
+    
+    private func deleteScreenshotFile(screenshotName: String) {
+        guard let currentBookmark = currentBookmark,
+              let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.bookmark == currentBookmark }) else {
+            print("❌ Не найден filesFile для удаления скриншота")
+            return
+        }
+        
+        let screenshotsFolder = filesFile.screenshotsFolder
+        let imageFileName = screenshotName.hasSuffix(".png") ? screenshotName : "\(screenshotName).png"
+        let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
+        let jsonURL = screenshotsFolder.appendingPathComponent("\(screenshotName).json")
+        
+        // Удаляем файлы
+        do {
+            if FileManager.default.fileExists(atPath: imageURL.path) {
+                try FileManager.default.removeItem(at: imageURL)
+                print("✅ Удален файл изображения: \(imageFileName)")
+            }
+            
+            if FileManager.default.fileExists(atPath: jsonURL.path) {
+                try FileManager.default.removeItem(at: jsonURL)
+                print("✅ Удален файл метаданных: \(screenshotName).json")
+            }
+            
+            // Удаляем из менеджера скриншотов
+            ScreenshotsMetadataManager.shared.removeScreenshot(screenshotName: screenshotName)
+        } catch {
+            print("❌ Ошибка удаления файлов скриншота: \(error.localizedDescription)")
+        }
     }
     
     func addLine(name: String) {
@@ -183,6 +233,9 @@ class TimelineDataManager: ObservableObject {
         
         lines[lineIndex].stamps[stampIndex] = stamp
         updateTimelines()
+        
+        // Check if any screenshots need to be unlinked due to time range change
+        checkAndUnlinkScreenshotsOutsideStamp(stampID: stampID, newStart: stamp.timeStartSeconds, newEnd: stamp.timeFinishSeconds)
     }
     
     func updateTimelines() {
@@ -234,4 +287,73 @@ class TimelineDataManager: ObservableObject {
         updateTimelines()
     }
     
+    private func checkAndUnlinkScreenshotsOutsideStamp(stampID: UUID, newStart: Double, newEnd: Double) {
+        let screenshots = ScreenshotsMetadataManager.shared.screenshots
+        
+        // Find the stamp to get its name
+        var stampName: String = "тега"
+        for line in lines {
+            if let stamp = line.stamps.first(where: { $0.id == stampID }) {
+                if let tag = TagLibraryManager.shared.findTagById(stamp.idTag) {
+                    stampName = tag.name
+                } else {
+                    stampName = stamp.label
+                }
+                break
+            }
+        }
+        
+        for screenshot in screenshots {
+            // Check if this screenshot is linked to the modified stamp
+            guard screenshot.relatedStampIds.contains(stampID) else {
+                continue
+            }
+            
+            // Check if screenshot's videoTime is still within the stamp's time range
+            let screenshotTime = screenshot.videoTime
+            if screenshotTime < newStart || screenshotTime > newEnd {
+                // Screenshot is now outside the stamp range, unlink it
+                var updatedStampIds = screenshot.relatedStampIds
+                updatedStampIds.removeAll { $0 == stampID }
+                
+                // Update the screenshot metadata
+                ScreenshotsMetadataManager.shared.updateScreenshotRelatedStamps(
+                    screenshotName: screenshot.screenshotName,
+                    relatedStampIds: updatedStampIds
+                )
+                
+                // Create popup for this unlinked screenshot
+                let message = "Рисунок '\(screenshot.screenshotName)' отвязался от тега '\(stampName)' из-за изменения его длины"
+                let popup = UnlinkedScreenshotPopup(
+                    id: UUID(),
+                    screenshotName: screenshot.screenshotName,
+                    tagName: stampName,
+                    message: message
+                )
+                
+                DispatchQueue.main.async {
+                    self.unlinkedScreenshotPopups.append(popup)
+                    
+                    // Auto-dismiss after 5 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                        self.unlinkedScreenshotPopups.removeAll { $0.id == popup.id }
+                    }
+                }
+            }
+        }
+    }
+    
+    func dismissPopup(id: UUID) {
+        unlinkedScreenshotPopups.removeAll { $0.id == id }
+    }
+    
+}
+
+// MARK: - Unlinked Screenshot Popup Model
+
+struct UnlinkedScreenshotPopup: Identifiable {
+    let id: UUID
+    let screenshotName: String
+    let tagName: String
+    let message: String
 }

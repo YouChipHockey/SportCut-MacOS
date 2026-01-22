@@ -14,4 +14,7 @@ extension NSNotification.Name {
     static let markupModeChanged = NSNotification.Name("markupModeChanged")
     static let stampCountsChanged = NSNotification.Name("stampCountsChanged")
     static let timelineStampHoverChanged = NSNotification.Name("timelineStampHoverChanged")
+    static let editorModeChanged = NSNotification.Name("editorModeChanged")
+    static let screenshotDisplayChanged = NSNotification.Name("screenshotDisplayChanged")
+    static let textBoxEditingChanged = NSNotification.Name("textBoxEditingChanged")
 }

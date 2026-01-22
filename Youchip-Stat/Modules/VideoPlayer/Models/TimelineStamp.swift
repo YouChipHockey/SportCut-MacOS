@@ -48,7 +48,6 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         self.position = position
         self.isActiveForMapView = isActiveForMapView
         
-        // to ensure backward compatibility with old stamps
         self.timeStartSeconds = timeStartSeconds
         self.timeFinishSeconds = timeFinishSeconds
     }

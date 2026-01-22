@@ -48,6 +48,7 @@ struct TagLibraryView: View {
     
     @State private var refreshID = UUID()
     @State private var windowWidth: CGFloat = 0
+    @State private var isEditorModeActive = false
     
     struct ActiveIntervalTag: Identifiable {
         let id: String
@@ -667,6 +668,7 @@ struct TagLibraryView: View {
             }
             
             FlexibleTimeEventGrid(events: tagLibrary.timeEvents, tagLibrary: tagLibrary, onEventTap: { event in
+                guard !isEditorModeActive else { return }
                 withAnimation(.easeInOut(duration: 0.2)) {
                     tagLibrary.toggleTimeEvent(id: event.id)
                 }
@@ -1068,6 +1070,11 @@ struct TagLibraryView: View {
                 self.updateTagCounts()
             }
         }
+        NotificationCenter.default.addObserver(forName: .editorModeChanged, object: nil, queue: .main) { notification in
+            if let isActive = notification.object as? Bool {
+                self.isEditorModeActive = isActive
+            }
+        }
     }
     
     
@@ -1078,6 +1085,7 @@ struct TagLibraryView: View {
         NotificationCenter.default.removeObserver(self, name: .showLabelSheet, object: nil)
         NotificationCenter.default.removeObserver(self, name: .markupModeChanged, object: nil)
         NotificationCenter.default.removeObserver(self, name: .stampCountsChanged, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .editorModeChanged, object: nil)
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {
@@ -1132,6 +1140,9 @@ struct TagLibraryView: View {
     }
     
     private func handleTagButtonTap(tag: Tag) {
+        // Блокируем добавление тегов в режиме редактирования
+        guard !isEditorModeActive else { return }
+        
         if tag.isInterval ?? false {
             if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                 let activeTag = activeIntervalTags[index]

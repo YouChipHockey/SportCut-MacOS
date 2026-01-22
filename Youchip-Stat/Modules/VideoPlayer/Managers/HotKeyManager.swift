@@ -25,6 +25,8 @@ class HotKeyManager: ObservableObject {
     @Published var isLabelHotkeyMode = false
     @Published var blockedSheetActive = false
     private var activeCollection: TagCollection = .standard
+    private var isEditorModeActive = false
+    private var isEditingTextBox = false
     
     private init() {
         setupKeyboardMonitoring()
@@ -75,6 +77,20 @@ class HotKeyManager: ObservableObject {
             name: .collectionEditorClosed,
             object: nil
         )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(editorModeChanged),
+            name: .editorModeChanged,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(textBoxEditingChanged),
+            name: .textBoxEditingChanged,
+            object: nil
+        )
     }
     
     @objc private func collectionEditorOpened() {
@@ -83,6 +99,18 @@ class HotKeyManager: ObservableObject {
     
     @objc private func collectionEditorClosed() {
         isEnabled = true
+    }
+    
+    @objc private func editorModeChanged(_ notification: Notification) {
+        if let isActive = notification.object as? Bool {
+            isEditorModeActive = isActive
+        }
+    }
+    
+    @objc private func textBoxEditingChanged(_ notification: Notification) {
+        if let isEditing = notification.object as? Bool {
+            isEditingTextBox = isEditing
+        }
     }
     
     deinit {
@@ -134,17 +162,43 @@ class HotKeyManager: ObservableObject {
         }
         
         if event.keyCode == 49 {
-            VideoPlayerManager.shared.togglePlayPause()
+            // Don't handle space if editing text box
+            if isEditingTextBox {
+                return false
+            }
+            
+            if isEditorModeActive {
+                NotificationCenter.default.post(name: .editorModeChanged, object: false)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    VideoPlayerManager.shared.togglePlayPause()
+                }
+            } else {
+                VideoPlayerManager.shared.togglePlayPause()
+            }
             return true
         }
         
         if event.modifierFlags.contains(.shift) {
             switch event.keyCode {
             case 123:
-                VideoPlayerManager.shared.seek(by: -3)
+                if isEditorModeActive {
+                    NotificationCenter.default.post(name: .editorModeChanged, object: false)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        VideoPlayerManager.shared.seek(by: -3)
+                    }
+                } else {
+                    VideoPlayerManager.shared.seek(by: -3)
+                }
                 return true
             case 124:
-                VideoPlayerManager.shared.seek(by: 3)
+                if isEditorModeActive {
+                    NotificationCenter.default.post(name: .editorModeChanged, object: false)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        VideoPlayerManager.shared.seek(by: 3)
+                    }
+                } else {
+                    VideoPlayerManager.shared.seek(by: 3)
+                }
                 return true
             default:
                 break

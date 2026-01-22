@@ -7,9 +7,9 @@
     <key>SUEnableDownloaderService</key>
     <true/>
     <key>SUFeedURL</key>
-    <string>https://razmetka.youchip.pro/api/updates/macos/appcast.xml</string>
+    <string>https://github.com/YouChipHockey/SportCut-MacOS/blob/main/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>your_previous_generated_public_Key</string>
+    <string>bU5CF9nDmmOeajW0M1szvoPfmtG+XMUB9DFfufiUllY=</string>
 	<key>ATSApplicationFontsPath</key>
 	<string>Fonts</string>
 	<key>CFBundleDevelopmentRegion</key>

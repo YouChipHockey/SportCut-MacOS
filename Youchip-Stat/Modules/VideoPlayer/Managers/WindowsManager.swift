@@ -15,6 +15,24 @@ class WindowsManager: NSObject {
     var currentVideoId = ""
     static let shared = WindowsManager()
     
+    private func ensureScreenshotsTimelineExists() {
+        let timelineData = TimelineDataManager.shared
+        let screenshotsID = ScreenshotConstants.screenshotsTimelineID
+        
+        if let existingLine = timelineData.lines.first(where: { $0.id == screenshotsID }) {
+            if let index = timelineData.lines.firstIndex(where: { $0.id == screenshotsID }), index != 0 {
+                let line = timelineData.lines.remove(at: index)
+                timelineData.lines.insert(line, at: 0)
+                timelineData.updateTimelines()
+            }
+            return
+        }
+        
+        let screenshotsLine = TimelineLine(id: screenshotsID, name: "Рисунки", stamps: [], tagIdForMode: "")
+        timelineData.lines.insert(screenshotsLine, at: 0)
+        timelineData.updateTimelines()
+    }
+    
     var videoWindow: VideoPlayerWindowController?
     var controlWindow: FullControlWindowController?
     var tagLibraryWindow: TagLibraryWindowController?
@@ -49,6 +67,8 @@ class WindowsManager: NSObject {
         tagLibraryWindow?.close()
         analyticsWindow?.close()
         screenshotsWindow?.close()
+        
+        ScreenshotsMetadataManager.shared.clearScreenshots()
         
         VideoPlayerManager.shared.deleteVideo()
         isClosing = true
@@ -188,6 +208,9 @@ class WindowsManager: NSObject {
             TimelineDataManager.shared.lines = filesFile.videoData.timelines
             TimelineDataManager.shared.selectedLineID = nil
         }
+        
+        ensureScreenshotsTimelineExists()
+        ScreenshotsMetadataManager.shared.loadScreenshots(from: filesFile.screenshotsFolder)
         
         VideoPlayerManager.shared.loadVideo(from: file)
         

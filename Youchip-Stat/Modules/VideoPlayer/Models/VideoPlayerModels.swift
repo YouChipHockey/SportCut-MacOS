@@ -5,8 +5,6 @@
 //  Created by Сергей Бекезин on 28.04.2025.
 //
 
-// MARK: - Модели данных
-
 import SwiftUI
 import AVKit
 import Cocoa
@@ -103,6 +101,7 @@ enum CutsExportType {
     case label(selectedLabel: Label) 
     case tagWithLabels(selectedTag: Tag, selectedLabels: [Label])
     case labelWithTags(selectedLabel: Label, selectedTags: [Tag])
+    case screenshots
 }
 
 struct ExportSegment {
@@ -113,6 +112,7 @@ struct ExportSegment {
     let labels: [Label]?
     let labelGroupName: String?
     let selectedLabel: Label?
+    let stampId: UUID? // ID of the stamp this segment was created from
 }
 
 struct ExportSegmentOrganaizer {
