@@ -620,3 +620,29 @@
 "RenamePlaylist" = "Rename playlist";
 "NewName" = "New name:";
 "Rename" = "Rename";
+
+// Video Download from URL
+"AddVideoFromURL" = "Add from URL"; // ^String.Titles.addVideoFromURL
+"DownloadVideoFromURL" = "Download Video from URL"; // ^String.Titles.downloadVideoFromURL
+"DownloadVideoFromURLDescription" = "Paste a video URL, select quality and format for download"; // ^String.Titles.downloadVideoFromURLDescription
+"VideoURL" = "Video URL"; // ^String.Titles.videoURL
+"EnterVideoURL" = "Paste video URL"; // ^String.Titles.enterVideoURL
+"VideoFormat" = "Video Format"; // ^String.Titles.videoFormat
+"FetchingVideoInfo" = "Fetching video information..."; // ^String.Titles.fetchingVideoInfo
+"VideoTitle" = "Video Title"; // ^String.Titles.videoTitle
+"SelectQuality" = "Select Quality"; // ^String.Titles.selectQuality
+"DownloadingVideo" = "Downloading Video..."; // ^String.Titles.downloadingVideo
+"VideoDownloaded" = "Video Downloaded Successfully"; // ^String.Titles.videoDownloaded
+"VideoDownloadedDescription" = "Video saved to Downloads folder. Continue to add it to your project"; // ^String.Titles.videoDownloadedDescription
+"FetchFormats" = "Fetch Information"; // ^String.Titles.fetchFormats
+"DownloadButtonTitle" = "Download"; // ^String.Titles.downloadButtonTitle
+"TryAgain" = "Try Again"; // ^String.Titles.tryAgain
+"UseServerVideoName" = "Use video name from server"; // ^String.Titles.useServerVideoName
+"UseServerVideoNameDescription" = "Skip team/score input and use server video name"; // ^String.Titles.useServerVideoNameDescription// Downloads Folder Permissions
+"SelectDownloadsFolderMessage" = "Access to the Downloads folder is required to save videos. Please select the Downloads folder in the next dialog."; // ^String.Titles.selectDownloadsFolderMessage
+"GrantAccessButtonTitle" = "Grant Access"; // ^String.Titles.grantAccessButtonTitle
+"DownloadsFolderAccessRequired" = "Downloads Folder Access Required"; // ^String.Titles.downloadsFolderAccessRequired
+"DownloadsFolderAccessDescription" = "The app needs access to the Downloads folder to save videos"; // ^String.Titles.downloadsFolderAccessDescription
+"OpenSystemSettings" = "Open System Settings"; // ^String.Titles.openSystemSettings
+"DownloadsFolderAccessGranted" = "Downloads folder access granted"; // ^String.Titles.downloadsFolderAccessGranted
+"CheckPermissions" = "Check Permissions"; // ^String.Titles.checkPermissions

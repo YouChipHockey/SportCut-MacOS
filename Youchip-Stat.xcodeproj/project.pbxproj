@@ -173,6 +173,8 @@
 		DDD123C72E10984F00116F7D /* AiReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD123C62E10984E00116F7D /* AiReportSheet.swift */; };
 		DDD52CBA2DAEE7F50038158E /* WindowsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD52CB82DAEE7F50038158E /* WindowsManager.swift */; };
 		DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDD60A952D7A5D7E0097600D /* AVKit.framework */; };
+		DDD6C9B72F22503300DEFD31 /* VideoDownloadFromURLView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD6C9B62F22503300DEFD31 /* VideoDownloadFromURLView.swift */; };
+		DDD6C9B92F22503E00DEFD31 /* VideoDownloadModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD6C9B82F22503E00DEFD31 /* VideoDownloadModel.swift */; };
 		DDDB36362D78E16500A1111C /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDB36352D78E16100A1111C /* Color.swift */; };
 		DDFB1A482DE510E700175D97 /* EditorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A412DE510E700175D97 /* EditorState.swift */; };
 		DDFB1A492DE510E700175D97 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFB1A452DE510E700175D97 /* EditorView.swift */; };
@@ -362,6 +364,8 @@
 		DDD123C62E10984E00116F7D /* AiReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiReportSheet.swift; sourceTree = "<group>"; };
 		DDD52CB82DAEE7F50038158E /* WindowsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowsManager.swift; sourceTree = "<group>"; };
 		DDD60A952D7A5D7E0097600D /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
+		DDD6C9B62F22503300DEFD31 /* VideoDownloadFromURLView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoDownloadFromURLView.swift; sourceTree = "<group>"; };
+		DDD6C9B82F22503E00DEFD31 /* VideoDownloadModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoDownloadModel.swift; sourceTree = "<group>"; };
 		DDDB36352D78E16100A1111C /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
 		DDFB1A3F2DE510E700175D97 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
 		DDFB1A412DE510E700175D97 /* EditorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorState.swift; sourceTree = "<group>"; };
@@ -468,6 +472,7 @@
 			children = (
 				DD2A70792D74E08300287BA8 /* VideoThumbnailView.swift */,
 				DD7F54AC2E9EAAAD00E7D768 /* ProjectImportView.swift */,
+				DDD6C9B62F22503300DEFD31 /* VideoDownloadFromURLView.swift */,
 				DD2A706F2D74D5C300287BA8 /* VideosView.swift */,
 			);
 			path = Views;
@@ -487,6 +492,7 @@
 				DD1BF67A2DBAF32700CB2AE0 /* VideoMetadataModel.swift */,
 				DD2A705D2D74C65D00287BA8 /* VideosActions.swift */,
 				DD7F54AE2E9EAAB400E7D768 /* ProjectExportModel.swift */,
+				DDD6C9B82F22503E00DEFD31 /* VideoDownloadModel.swift */,
 				DD2A70532D74C31600287BA8 /* VideosState.swift */,
 			);
 			path = Models;
@@ -1182,6 +1188,7 @@
 				DD408C882E6C736F00E615E5 /* TemplateListItem.swift in Sources */,
 				DD408C892E6C736F00E615E5 /* TemplateView.swift in Sources */,
 				DD408C8A2E6C736F00E615E5 /* ZoneBetweenObjectsCustomization.swift in Sources */,
+				DDD6C9B92F22503E00DEFD31 /* VideoDownloadModel.swift in Sources */,
 				DDCA6B542DCA657B0025EF9E /* CollectionWindowDelegate.swift in Sources */,
 				DDFB1A542DE5131F00175D97 /* SheetToolbarView.swift in Sources */,
 				BF6715C22EF6EC9600A71E47 /* ExportHelper.swift in Sources */,
@@ -1226,6 +1233,7 @@
 				DDCA6B6A2DCA69340025EF9E /* NSApplication + Convenience.swift in Sources */,
 				DD5CF9FD2E0468C1009CD51A /* TimeGridView.swift in Sources */,
 				DD32C2A92D74A1C80052B5C6 /* View+Alerts.swift in Sources */,
+				DDD6C9B72F22503300DEFD31 /* VideoDownloadFromURLView.swift in Sources */,
 				DDCA6B732DCA69E10025EF9E /* CreateCustomCollectionsView.swift in Sources */,
 				DD32C2AA2D74A1C80052B5C6 /* Images.swift in Sources */,
 				DD5CF9FF2E0468D0009CD51A /* TimelineTimestampsHeaderView.swift in Sources */,
@@ -1417,8 +1425,20 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Youchip-Stat/Preview Content\"";
 				DEVELOPMENT_TEAM = BPGFW7N6KZ;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",

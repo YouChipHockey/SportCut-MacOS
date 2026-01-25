@@ -620,3 +620,29 @@
 "RenamePlaylist" = "Переименовать плейлист"; // ^String.Titles.renamePlaylist
 "NewName" = "Новое имя:"; // ^String.Titles.newName
 "Rename" = "Переименовать"; // ^String.Titles.rename
+
+// Video Download from URL
+"AddVideoFromURL" = "Добавить из интернета"; // ^String.Titles.addVideoFromURL
+"DownloadVideoFromURL" = "Загрузка видео из интернета"; // ^String.Titles.downloadVideoFromURL
+"DownloadVideoFromURLDescription" = "Вставьте ссылку на видео, выберите качество и формат для загрузки"; // ^String.Titles.downloadVideoFromURLDescription
+"VideoURL" = "Ссылка на видео"; // ^String.Titles.videoURL
+"EnterVideoURL" = "Вставьте ссылку на видео"; // ^String.Titles.enterVideoURL
+"VideoFormat" = "Формат видео"; // ^String.Titles.videoFormat
+"FetchingVideoInfo" = "Получение информации о видео..."; // ^String.Titles.fetchingVideoInfo
+"VideoTitle" = "Название видео"; // ^String.Titles.videoTitle
+"SelectQuality" = "Выберите качество"; // ^String.Titles.selectQuality
+"DownloadingVideo" = "Загрузка видео..."; // ^String.Titles.downloadingVideo
+"VideoDownloaded" = "Видео успешно загружено"; // ^String.Titles.videoDownloaded
+"VideoDownloadedDescription" = "Видео сохранено в папку Загрузки. Продолжите, чтобы добавить его в проект"; // ^String.Titles.videoDownloadedDescription
+"FetchFormats" = "Получить информацию"; // ^String.Titles.fetchFormats
+"DownloadButtonTitle" = "Скачать"; // ^String.Titles.downloadButtonTitle
+"TryAgain" = "Попробовать снова"; // ^String.Titles.tryAgain
+"UseServerVideoName" = "Использовать название видео с сервера"; // ^String.Titles.useServerVideoName
+"UseServerVideoNameDescription" = "Пропустить ввод команд/счета и использовать название с сервера"; // ^String.Titles.useServerVideoNameDescription// Downloads Folder Permissions
+"SelectDownloadsFolderMessage" = "Для сохранения видео необходим доступ к папке Загрузки. Пожалуйста, выберите папку Загрузки в следующем диалоге."; // ^String.Titles.selectDownloadsFolderMessage
+"GrantAccessButtonTitle" = "Разрешить доступ"; // ^String.Titles.grantAccessButtonTitle
+"DownloadsFolderAccessRequired" = "Требуется доступ к папке Загрузки"; // ^String.Titles.downloadsFolderAccessRequired
+"DownloadsFolderAccessDescription" = "Приложению необходим доступ к папке Загрузки для сохранения видео"; // ^String.Titles.downloadsFolderAccessDescription
+"OpenSystemSettings" = "Открыть настройки"; // ^String.Titles.openSystemSettings
+"DownloadsFolderAccessGranted" = "Доступ к папке Загрузки предоставлен"; // ^String.Titles.downloadsFolderAccessGranted
+"CheckPermissions" = "Проверить разрешения"; // ^String.Titles.checkPermissions
