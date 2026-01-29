@@ -603,6 +603,8 @@
 "ShowNumber" = "Показать номер"; // ^String.Titles.showNumber
 "ZoneBetweenObjects" = "Зона между объектами"; // ^String.Titles.zoneBetweenObjects
 "LineBetweenObjects" = "Линия между объектами"; // ^String.Titles.lineBetweenObjects
+"LineWithArrow" = "Линия со стрелкой"; // ^String.Titles.lineWithArrow
+"CurvedArrow" = "Закругленная стрелка"; // ^String.Titles.curvedArrow
 "ObjectHighlight" = "Выделение объекта"; // ^String.Titles.objectHighlight
 "SimpleZone" = "Обычная зона"; // ^String.Titles.simpleZone
 "TestCollection" = "Тестовая коллекция"; // ^String.Titles.testCollection

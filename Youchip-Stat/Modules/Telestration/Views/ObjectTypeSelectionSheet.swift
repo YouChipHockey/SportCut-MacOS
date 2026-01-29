@@ -64,6 +64,10 @@ struct ObjectCustomizationSheet: View {
                         ZoneBetweenObjectsCustomization(viewModel: viewModel)
                     case .lineBetweenObjects:
                         LineBetweenObjectsCustomization(viewModel: viewModel)
+                    case .lineWithArrow:
+                        LineBetweenObjectsCustomization(viewModel: viewModel)
+                    case .curvedArrow:
+                        CurvedArrowCustomization(viewModel: viewModel)
                     case .objectHighlight:
                         ObjectHighlightCustomization(viewModel: viewModel)
                     case .simpleZone:

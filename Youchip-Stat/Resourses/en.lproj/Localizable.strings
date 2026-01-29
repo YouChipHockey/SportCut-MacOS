@@ -603,6 +603,8 @@
 "ShowNumber" = "Show number"; // ^String.Titles.showNumber
 "ZoneBetweenObjects" = "Zone between objects"; // ^String.Titles.zoneBetweenObjects
 "LineBetweenObjects" = "Line between objects"; // ^String.Titles.lineBetweenObjects
+"LineWithArrow" = "Line with arrow"; // ^String.Titles.lineWithArrow
+"CurvedArrow" = "Curved arrow"; // ^String.Titles.curvedArrow
 "ObjectHighlight" = "Object highlight"; // ^String.Titles.objectHighlight
 "SimpleZone" = "Simple zone"; // ^String.Titles.simpleZone
 "TestCollection" = "Test collection"; // ^String.Titles.testCollection

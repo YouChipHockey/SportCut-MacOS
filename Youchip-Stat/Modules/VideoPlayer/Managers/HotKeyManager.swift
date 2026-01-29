@@ -140,9 +140,8 @@ class HotKeyManager: ObservableObject {
             guard let self = self,
                   self.isEnabled,
                   !self.blockedSheetActive,
+                  !self.isEditorModeActive,
                   !FocusStateManager.shared.isAnyTextFieldFocused else {
-                if FocusStateManager.shared.isAnyTextFieldFocused {
-                }
                 return event
             }
             return self.handleHotkey(event) ? nil : event

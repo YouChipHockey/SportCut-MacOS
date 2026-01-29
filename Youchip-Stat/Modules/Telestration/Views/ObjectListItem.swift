@@ -56,6 +56,20 @@ struct ObjectListItem: View {
                         Circle()
                             .fill(object.vertexColor)
                             .frame(width: 12, height: 12)
+                    case .lineWithArrow:
+                        Circle()
+                            .fill(object.edgeColor)
+                            .frame(width: 12, height: 12)
+                        Circle()
+                            .fill(object.vertexColor)
+                            .frame(width: 12, height: 12)
+                    case .curvedArrow:
+                        Circle()
+                            .fill(object.edgeColor)
+                            .frame(width: 12, height: 12)
+                        Circle()
+                            .fill(object.vertexColor)
+                            .frame(width: 12, height: 12)
                     case .objectHighlight:
                         Circle()
                             .fill(object.edgeColor)
@@ -88,9 +102,9 @@ struct ObjectListItem: View {
             
             Divider()
             
-                                            Button(^String.Titles.delete, role: .destructive) {
-                                 viewModel.deleteObject(object)
-                             }
+            Button(^String.Titles.delete, role: .destructive) {
+                viewModel.deleteObject(object)
+            }
                              
                              if object.type != .objectHighlight && object.positions.count >= 4 && object.positions.count <= 8 {
                                  Divider()

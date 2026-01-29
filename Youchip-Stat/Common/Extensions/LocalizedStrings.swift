@@ -604,6 +604,8 @@ extension String {
         case showNumber
         case zoneBetweenObjects
         case lineBetweenObjects
+        case lineWithArrow
+        case curvedArrow
         case objectHighlight
         case simpleZone
         case testCollection

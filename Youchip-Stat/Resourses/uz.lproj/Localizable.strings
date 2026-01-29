@@ -603,6 +603,8 @@
 "ShowNumber" = "Raqamni ko'rsatish"; // ^String.Titles.showNumber
 "ZoneBetweenObjects" = "Obyektlar orasidagi zona"; // ^String.Titles.zoneBetweenObjects
 "LineBetweenObjects" = "Obyektlar orasidagi chiziq"; // ^String.Titles.lineBetweenObjects
+"LineWithArrow" = "Line with arrow"; // ^String.Titles.lineWithArrow
+"CurvedArrow" = "Egri o'q"; // ^String.Titles.curvedArrow
 "ObjectHighlight" = "Obyektni ta'kidlash"; // ^String.Titles.objectHighlight
 "SimpleZone" = "Oddiy zona"; // ^String.Titles.simpleZone
 "TestCollection" = "Test to'plam"; // ^String.Titles.testCollection

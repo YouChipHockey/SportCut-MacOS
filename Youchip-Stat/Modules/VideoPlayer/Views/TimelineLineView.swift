@@ -461,8 +461,28 @@ struct TimelineLineView: View {
                 timelineData.selectStamp(stampID: nil)
             }
         }
-        Button(^String.Titles.timelineButtonEditLabels) {
-            onEditLabelsRequest(stamp.id)
+        
+        // Проверяем, является ли это тегом рисунка (скриншота)
+        // Тег должен:
+        // 1. Быть связан со скриншотом (через relatedStampIds)
+        // 2. Находиться на специальном таймлайне для рисунков
+        // 3. Иметь имя, совпадающее с именем скриншота
+        let isDrawingsTimeline = line.name.lowercased().contains("рисунок") ||
+                                 line.name.lowercased().contains("рисунки") ||
+                                 line.name.lowercased().contains("скриншот") ||
+                                 line.name.lowercased().contains("screenshot") ||
+                                 line.name.lowercased().contains("drawing")
+        
+        let isScreenshotTag = isDrawingsTimeline && ScreenshotsMetadataManager.shared.screenshots.contains { screenshot in
+            screenshot.relatedStampIds.contains(stamp.id) &&
+            screenshot.screenshotName == stamp.label
+        }
+        
+        // Показываем кнопку редактирования лейблов только если это не тег рисунка
+        if !isScreenshotTag {
+            Button(^String.Titles.timelineButtonEditLabels) {
+                onEditLabelsRequest(stamp.id)
+            }
         }
     }
     

@@ -603,6 +603,8 @@
 "ShowNumber" = "显示编号"; // ^String.Titles.showNumber
 "ZoneBetweenObjects" = "对象之间的区域"; // ^String.Titles.zoneBetweenObjects
 "LineBetweenObjects" = "对象之间的线"; // ^String.Titles.lineBetweenObjects
+"LineWithArrow" = "Line with arrow"; // ^String.Titles.lineWithArrow
+"CurvedArrow" = "弯曲箭头"; // ^String.Titles.curvedArrow
 "ObjectHighlight" = "对象高亮"; // ^String.Titles.objectHighlight
 "SimpleZone" = "简单区域"; // ^String.Titles.simpleZone
 "TestCollection" = "测试集合"; // ^String.Titles.testCollection

@@ -52,7 +52,16 @@ final class PolygonEditorViewModel: ObservableObject {
         case .objectHighlight:
             tempVertices = [imageSpacePoint]
             finishCreatingObject()
-        case .zoneBetweenObjects, .simpleZone, .lineBetweenObjects:
+        case .curvedArrow:
+            if tempVertices.isEmpty {
+                // Первая точка
+                tempVertices.append(imageSpacePoint)
+            } else if tempVertices.count == 1 {
+                // Вторая точка - автоматически создаем объект (только 2 точки, контрольная точка вычисляется на основе curveHeight)
+                tempVertices.append(imageSpacePoint)
+                finishCreatingObject()
+            }
+        case .zoneBetweenObjects, .simpleZone, .lineBetweenObjects, .lineWithArrow:
             tempVertices.append(imageSpacePoint)
         }
     }
@@ -68,6 +77,7 @@ final class PolygonEditorViewModel: ObservableObject {
         case .objectHighlight:
             newObject.radius = 30
             newObject.glowColor = .white
+            newObject.glowOpacity = currentCustomization.glowOpacity
         default:
             newObject.edgeColor = .red
             newObject.vertexColor = .red
@@ -91,6 +101,14 @@ final class PolygonEditorViewModel: ObservableObject {
         object.lineStyle = currentCustomization.lineStyle
         object.glowColor = currentCustomization.glowColor
         object.radius = currentCustomization.radius
+        if object.type == .objectHighlight {
+            object.glowOpacity = currentCustomization.glowOpacity
+        }
+        
+        // Для закругленной стрелки сохраняем curveHeight
+        if object.type == .curvedArrow {
+            object.curveHeight = currentCustomization.curveHeight
+        }
         
         objects.append(object)
         nextObjectNumber += 1
@@ -298,6 +316,10 @@ final class PolygonEditorViewModel: ObservableObject {
             drawZoneBetweenObjects(object)
         case .lineBetweenObjects:
             drawLineBetweenObjects(object)
+        case .lineWithArrow:
+            drawLineWithArrow(object)
+        case .curvedArrow:
+            drawCurvedArrow(object)
         case .objectHighlight:
             drawObjectHighlight(object)
         case .simpleZone:
@@ -375,6 +397,181 @@ final class PolygonEditorViewModel: ObservableObject {
         }
     }
     
+    private func drawLineWithArrow(_ object: DrawableObject) {
+        guard object.positions.count >= 2 else { return }
+        
+        let path = NSBezierPath()
+        
+        // Рисуем линию через все точки
+        for i in 0..<(object.positions.count - 1) {
+            let current = object.positions[i]
+            let next = object.positions[i + 1]
+            
+            path.move(to: NSPoint(x: current.x, y: current.y))
+            path.line(to: NSPoint(x: next.x, y: next.y))
+        }
+        
+        NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
+        path.lineWidth = 2
+        
+        if object.lineStyle == .dashed {
+            path.setLineDash([5, 5], count: 2, phase: 0)
+        }
+        path.stroke()
+        
+        // Рисуем стрелку на последней точке
+        let lastPoint = object.positions[object.positions.count - 1]
+        let secondLastPoint = object.positions[object.positions.count - 2]
+        
+        // Вычисляем направление стрелки
+        let dx = lastPoint.x - secondLastPoint.x
+        let dy = lastPoint.y - secondLastPoint.y
+        let angle = atan2(dy, dx)
+        
+        // Размер стрелки
+        let arrowLength: CGFloat = 15
+        let arrowWidth: CGFloat = 10
+        
+        // Создаем путь стрелки
+        let arrowPath = NSBezierPath()
+        let arrowTip = NSPoint(x: lastPoint.x, y: lastPoint.y)
+        let arrowPoint1 = NSPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle + .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle + .pi / 2)
+        )
+        let arrowPoint2 = NSPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle - .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle - .pi / 2)
+        )
+        
+        arrowPath.move(to: arrowTip)
+        arrowPath.line(to: arrowPoint1)
+        arrowPath.line(to: arrowPoint2)
+        arrowPath.close()
+        
+        NSColor(object.edgeColor).setFill()
+        arrowPath.fill()
+        NSColor(object.edgeColor).setStroke()
+        arrowPath.lineWidth = 2
+        arrowPath.stroke()
+        
+        // Вершины (кроме последней, так как там стрелка)
+        for position in object.positions.dropLast() {
+            let rect = NSRect(x: position.x - 15, y: position.y - 15, width: 30, height: 30)
+            NSColor(object.vertexColor).setFill()
+            NSBezierPath(ovalIn: rect).fill()
+
+            NSColor.white.setStroke()
+            let b = NSBezierPath(ovalIn: rect)
+            b.lineWidth = 2
+            b.stroke()
+        }
+    }
+    
+    // Вычисляем контрольную точку на основе curveHeight
+    private func computeControlPoint(start: CGPoint, end: CGPoint, curveHeight: CGFloat) -> CGPoint {
+        let midX = (start.x + end.x) / 2
+        let midY = (start.y + end.y) / 2
+        
+        // Вычисляем перпендикулярный вектор к линии
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = sqrt(dx * dx + dy * dy)
+        
+        if length == 0 {
+            return CGPoint(x: midX, y: midY)
+        }
+        
+        // Перпендикулярный вектор (повернутый на 90 градусов)
+        let perpX = -dy / length
+        let perpY = dx / length
+        
+        // Контрольная точка смещена перпендикулярно на curveHeight
+        return CGPoint(
+            x: midX + perpX * curveHeight,
+            y: midY + perpY * curveHeight
+        )
+    }
+    
+    private func drawCurvedArrow(_ object: DrawableObject) {
+        guard object.positions.count >= 2 else { return }
+        
+        let startPoint = object.positions[0]
+        let endPoint = object.positions[1]
+        
+        // Вычисляем контрольную точку на основе curveHeight
+        let controlPoint = computeControlPoint(
+            start: startPoint,
+            end: endPoint,
+            curveHeight: object.curveHeight
+        )
+        
+        // Рисуем квадратичную кривую Bezier
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: startPoint.x, y: startPoint.y))
+        path.curve(to: NSPoint(x: endPoint.x, y: endPoint.y),
+                   controlPoint1: NSPoint(x: controlPoint.x, y: controlPoint.y),
+                   controlPoint2: NSPoint(x: controlPoint.x, y: controlPoint.y))
+        
+        NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
+        path.lineWidth = 2
+        
+        if object.lineStyle == .dashed {
+            path.setLineDash([5, 5], count: 2, phase: 0)
+        }
+        path.stroke()
+        
+        // Вычисляем направление стрелки в конечной точке кривой
+        let t: CGFloat = 0.95
+        let curvePoint = CGPoint(
+            x: pow(1-t, 2) * startPoint.x + 2 * (1-t) * t * controlPoint.x + pow(t, 2) * endPoint.x,
+            y: pow(1-t, 2) * startPoint.y + 2 * (1-t) * t * controlPoint.y + pow(t, 2) * endPoint.y
+        )
+        
+        // Вычисляем направление стрелки
+        let dx = endPoint.x - curvePoint.x
+        let dy = endPoint.y - curvePoint.y
+        let angle = atan2(dy, dx)
+        
+        // Размер стрелки
+        let arrowLength: CGFloat = 15
+        let arrowWidth: CGFloat = 10
+        
+        // Создаем путь стрелки
+        let arrowPath = NSBezierPath()
+        let arrowTip = NSPoint(x: endPoint.x, y: endPoint.y)
+        let arrowPoint1 = NSPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle + .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle + .pi / 2)
+        )
+        let arrowPoint2 = NSPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle - .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle - .pi / 2)
+        )
+        
+        arrowPath.move(to: arrowTip)
+        arrowPath.line(to: arrowPoint1)
+        arrowPath.line(to: arrowPoint2)
+        arrowPath.close()
+        
+        NSColor(object.edgeColor).setFill()
+        arrowPath.fill()
+        NSColor(object.edgeColor).setStroke()
+        arrowPath.lineWidth = 2
+        arrowPath.stroke()
+        
+        // Показываем только начальную точку (конечная точка скрыта, так как там стрелка)
+        let vertexSize: CGFloat = 10
+        let rect = NSRect(x: startPoint.x - vertexSize/2, y: startPoint.y - vertexSize/2, width: vertexSize, height: vertexSize)
+        NSColor(object.vertexColor).setFill()
+        NSBezierPath(ovalIn: rect).fill()
+        
+        NSColor.white.setStroke()
+        let b = NSBezierPath(ovalIn: rect)
+        b.lineWidth = 2
+        b.stroke()
+    }
+    
     private func drawObjectHighlight(_ object: DrawableObject) {
         guard let position = object.positions.first else { return }
         
@@ -387,10 +584,11 @@ final class PolygonEditorViewModel: ObservableObject {
         
         let columnPath = NSBezierPath(rect: columnRect)
         
+        let o = CGFloat(object.glowOpacity)
         let columnGradient = NSGradient(colors: [
-            NSColor(object.glowColor).withAlphaComponent(0.9),
-            NSColor(object.glowColor).withAlphaComponent(0.6),
-            NSColor(object.glowColor).withAlphaComponent(0.3),
+            NSColor(object.glowColor).withAlphaComponent(0.9 * o),
+            NSColor(object.glowColor).withAlphaComponent(0.6 * o),
+            NSColor(object.glowColor).withAlphaComponent(0.3 * o),
             NSColor.clear
         ])
         
@@ -399,7 +597,7 @@ final class PolygonEditorViewModel: ObservableObject {
         for i in 1...3 {
             let blurRect = columnRect.insetBy(dx: -CGFloat(i), dy: 0)
             let blurPath = NSBezierPath(rect: blurRect)
-            NSColor(object.glowColor).withAlphaComponent(0.1 / CGFloat(i)).setFill()
+            NSColor(object.glowColor).withAlphaComponent(0.1 / CGFloat(i) * o).setFill()
             blurPath.fill()
         }
         
@@ -413,14 +611,14 @@ final class PolygonEditorViewModel: ObservableObject {
         let ovalPath = NSBezierPath(ovalIn: ovalRect)
         
         let ovalGradient = NSGradient(colors: [
-            NSColor(object.edgeColor).withAlphaComponent(0.8),
-            NSColor(object.edgeColor).withAlphaComponent(0.6),
-            NSColor(object.edgeColor).withAlphaComponent(0.4)
+            NSColor(object.edgeColor).withAlphaComponent(0.8 * o),
+            NSColor(object.edgeColor).withAlphaComponent(0.6 * o),
+            NSColor(object.edgeColor).withAlphaComponent(0.4 * o)
         ])
         
         ovalGradient?.draw(in: ovalPath, relativeCenterPosition: NSPoint(x: 0, y: 0))
         
-        NSColor(object.edgeColor).setStroke()
+        NSColor(object.edgeColor).withAlphaComponent(o).setStroke()
         ovalPath.lineWidth = 2
         ovalPath.stroke()
     }

@@ -22,6 +22,10 @@ struct ObjectView: View {
                 ZoneBetweenObjectsView(object: object, viewModel: viewModel, geometry: geometry)
             case .lineBetweenObjects:
                 LineBetweenObjectsView(object: object, viewModel: viewModel, geometry: geometry)
+            case .lineWithArrow:
+                LineWithArrowView(object: object, viewModel: viewModel, geometry: geometry)
+            case .curvedArrow:
+                CurvedArrowView(object: object, viewModel: viewModel, geometry: geometry)
             case .objectHighlight:
                 ObjectHighlightView(object: object, viewModel: viewModel, geometry: geometry)
             case .simpleZone:

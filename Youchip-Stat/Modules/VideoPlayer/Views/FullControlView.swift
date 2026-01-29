@@ -3780,4 +3780,3 @@ struct UnlinkedScreenshotPopupView: View {
         }
     }
 }
-

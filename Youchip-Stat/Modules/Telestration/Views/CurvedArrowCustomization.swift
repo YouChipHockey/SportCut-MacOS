@@ -1,28 +1,28 @@
 //
-//  SimpleZoneCustomization.swift
+//  CurvedArrowCustomization.swift
 //  Youchip-Stat
 //
-//  Created by Сергей Бекезин on 9/6/25.
+//  Created by Сергей Бекезин on 1/26/26.
 //
 
 import SwiftUI
 
-struct SimpleZoneCustomization: View {
+struct CurvedArrowCustomization: View {
     @ObservedObject var viewModel: PolygonEditorViewModel
     
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                Text(^String.Titles.edgeColor)
+                Text(^String.Titles.lineColor)
                 Spacer()
                 ColorPicker("", selection: $viewModel.currentCustomization.edgeColor)
                     .frame(width: 40, height: 30)
             }
             
             HStack {
-                Text(^String.Titles.fillColor)
+                Text(^String.Titles.vertexColor)
                 Spacer()
-                ColorPicker("", selection: $viewModel.currentCustomization.fillColor)
+                ColorPicker("", selection: $viewModel.currentCustomization.vertexColor)
                     .frame(width: 40, height: 30)
             }
             
@@ -35,6 +35,20 @@ struct SimpleZoneCustomization: View {
                 }
                 .pickerStyle(MenuPickerStyle())
                 .frame(width: 120)
+            }
+            
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Высота центра параболы")
+                    .font(.subheadline)
+                
+                HStack {
+                    Slider(value: $viewModel.currentCustomization.curveHeight, in: -300...300)
+                    Text("\(Int(viewModel.currentCustomization.curveHeight))")
+                        .frame(width: 50)
+                        .font(.caption)
+                }
             }
         }
     }

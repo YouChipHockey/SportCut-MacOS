@@ -26,9 +26,8 @@ struct LineBetweenObjectsCustomization: View {
                     .frame(width: 40, height: 30)
             }
             
-            HStack {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(^String.Titles.lineType)
-                Spacer()
                 Picker("", selection: $viewModel.currentCustomization.lineStyle) {
                     ForEach(LineStyle.allCases, id: \.self) { style in
                         Text(style.displayName).tag(style)

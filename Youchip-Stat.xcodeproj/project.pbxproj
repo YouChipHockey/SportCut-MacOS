@@ -139,22 +139,16 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		DD8971AA2E420A6A00DD2AB8 /* BaseCollections */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = BaseCollections;
 			sourceTree = "<group>";
 		};
 		DDAAF3732EE820000037060D /* Modules */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = Modules;
 			sourceTree = "<group>";
 		};
 		DDFB1A352DE510CF00175D97 /* web/dist */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = web/dist;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -466,9 +460,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

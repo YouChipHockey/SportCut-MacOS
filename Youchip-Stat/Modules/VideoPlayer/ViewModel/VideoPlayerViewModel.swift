@@ -43,11 +43,14 @@ enum VideoPlayerAction {
     case updateEditorDisplayDuration(Double)
     
     // Window Management
-    case saveWindowHeight(CGFloat)
-    case restoreWindowHeight
-    
+    case saveWindowFrame(CGRect)
+    case restoreWindowFrame
+
     // Screenshot Display Control
     case hideScreenshotAndResume
+    
+    // Telestration
+    case addTelestrationObject(DrawableObject)
 }
 
 // MARK: - Video Player ViewModel
@@ -253,6 +256,29 @@ class VideoPlayerViewModel: ObservableObject {
             handleSaveEditor()
             
         case let .selectEditorTool(tool):
+            // Сбрасываем телестрацию при переключении инструмента
+            if tool != .telestration && (state.editorDrawingState.isCreatingTelestrationObject || state.editorDrawingState.pendingTelestrationObject != nil) {
+                state.editorDrawingState.cancelTelestrationObjectCreation()
+            }
+            // Сбрасываем создание фигуры при переключении инструмента
+            if tool != .shapes && (state.editorDrawingState.isCreatingShape || state.editorDrawingState.pendingShape != nil) {
+                state.editorDrawingState.cancelShapeCreation()
+            }
+            // Сбрасываем создание текстового бокса при переключении инструмента
+            if tool != .textBox && (state.editorDrawingState.isCreatingTextBox || state.editorDrawingState.pendingTextBox != nil) {
+                state.editorDrawingState.cancelTextBoxCreation()
+            }
+            // Сбрасываем выделение фигуры, текстового бокса и телестрации при переключении инструмента
+            let previousTool = state.editorDrawingState.currentTool
+            if tool != previousTool {
+                state.editorDrawingState.selectedShapeId = nil
+                state.editorDrawingState.selectedTextBoxId = nil
+                state.editorDrawingState.selectedTelestrationObjectId = nil
+            }
+            // Если переключаемся с pencil/arrow на другой инструмент, завершаем текущий путь
+            if (previousTool == .pencil || previousTool == .arrow) && tool != .pencil && tool != .arrow {
+                state.editorDrawingState.finishPath()
+            }
             state.editorDrawingState.currentTool = tool
             
         case let .updateEditorName(name):
@@ -270,14 +296,19 @@ class VideoPlayerViewModel: ObservableObject {
         case let .updateEditorDisplayDuration(duration):
             state.editorDisplayDuration = duration
             
-        case let .saveWindowHeight(height):
-            state.savedWindowHeight = height
+        case let .saveWindowFrame(frame):
+            state.savedWindowFrame = frame
             
-        case .restoreWindowHeight:
-            handleRestoreWindowHeight()
+        case .restoreWindowFrame:
+            handleRestoreWindowFrame()
             
         case .hideScreenshotAndResume:
             hideScreenshotOverlay(resumePlayback: true)
+            
+        case let .addTelestrationObject(object):
+            // Объект уже добавлен в массив telestrationObjects в confirmTelestrationObjectCreation
+            // Здесь ничего не делаем, так как объект уже в состоянии
+            break
         }
     }
     
@@ -511,6 +542,7 @@ class VideoPlayerViewModel: ObservableObject {
             state.isEditorMode = true
             state.editorScreenshotName = "Screenshot_\(Date().timeIntervalSince1970)"
             state.editorDrawingState.clearDrawing()
+            state.editorDrawingState.currentTool = .pencil // Всегда выбираем карандаш при открытии редактора
             
             state.editorScreenshotVideoTime = CMTimeGetSeconds(currentTime)
             NotificationCenter.default.post(name: .editorModeChanged, object: true)
@@ -523,6 +555,26 @@ class VideoPlayerViewModel: ObservableObject {
     // MARK: - Editor Mode
     
     private func handleCancelEditor() {
+        // Сбрасываем все pending объекты перед выходом
+        if state.editorDrawingState.pendingShape != nil {
+            state.editorDrawingState.cancelShapeCreation()
+        }
+        if state.editorDrawingState.pendingTelestrationObject != nil {
+            state.editorDrawingState.cancelTelestrationObjectCreation()
+        }
+        if state.editorDrawingState.pendingTextBox != nil {
+            state.editorDrawingState.cancelTextBoxCreation()
+        }
+        if state.editorDrawingState.isCreatingTelestrationObject {
+            state.editorDrawingState.cancelTelestrationObjectCreation()
+        }
+        if state.editorDrawingState.isCreatingShape {
+            state.editorDrawingState.cancelShapeCreation()
+        }
+        if state.editorDrawingState.isCreatingTextBox {
+            state.editorDrawingState.cancelTextBoxCreation()
+        }
+        
         state.isEditorMode = false
         state.editorScreenshotName = ""
         state.editorSaveAsTag = false
@@ -530,6 +582,8 @@ class VideoPlayerViewModel: ObservableObject {
         state.editorDrawingState.clearDrawing()
         state.editorScreenshotVideoTime = 0.0
         state.showTagSelectionSheet = false
+        // Сбрасываем инструмент на карандаш при выходе из режима редактирования
+        state.editorDrawingState.currentTool = .pencil
         
         NotificationCenter.default.post(name: .editorModeChanged, object: false)
     }
@@ -569,6 +623,26 @@ class VideoPlayerViewModel: ObservableObject {
             )
             
             ScreenshotsMetadataManager.shared.loadScreenshots(from: screenshotsFolder)
+        }
+        
+        // Сбрасываем все pending объекты перед выходом
+        if state.editorDrawingState.pendingShape != nil {
+            state.editorDrawingState.cancelShapeCreation()
+        }
+        if state.editorDrawingState.pendingTelestrationObject != nil {
+            state.editorDrawingState.cancelTelestrationObjectCreation()
+        }
+        if state.editorDrawingState.pendingTextBox != nil {
+            state.editorDrawingState.cancelTextBoxCreation()
+        }
+        if state.editorDrawingState.isCreatingTelestrationObject {
+            state.editorDrawingState.cancelTelestrationObjectCreation()
+        }
+        if state.editorDrawingState.isCreatingShape {
+            state.editorDrawingState.cancelShapeCreation()
+        }
+        if state.editorDrawingState.isCreatingTextBox {
+            state.editorDrawingState.cancelTextBoxCreation()
         }
         
         handleCancelEditor()
@@ -618,6 +692,26 @@ class VideoPlayerViewModel: ObservableObject {
         
         // Close the tag selection sheet
         state.showTagSelectionSheet = false
+        
+        // Сбрасываем все pending объекты перед выходом
+        if state.editorDrawingState.pendingShape != nil {
+            state.editorDrawingState.cancelShapeCreation()
+        }
+        if state.editorDrawingState.pendingTelestrationObject != nil {
+            state.editorDrawingState.cancelTelestrationObjectCreation()
+        }
+        if state.editorDrawingState.pendingTextBox != nil {
+            state.editorDrawingState.cancelTextBoxCreation()
+        }
+        if state.editorDrawingState.isCreatingTelestrationObject {
+            state.editorDrawingState.cancelTelestrationObjectCreation()
+        }
+        if state.editorDrawingState.isCreatingShape {
+            state.editorDrawingState.cancelShapeCreation()
+        }
+        if state.editorDrawingState.isCreatingTextBox {
+            state.editorDrawingState.cancelTextBoxCreation()
+        }
         
         handleCancelEditor()
     }
@@ -755,11 +849,28 @@ class VideoPlayerViewModel: ObservableObject {
         
         finalImage.lockFocus()
         baseImage.draw(in: NSRect(origin: .zero, size: size))
+        
+        // Рисуем пути
         for path in drawingState.completedPaths {
             drawPathOnImage(path, in: NSRect(origin: .zero, size: size), viewSize: drawingState.viewSize)
         }
         if !drawingState.currentPath.points.isEmpty {
             drawPathOnImage(drawingState.currentPath, in: NSRect(origin: .zero, size: size), viewSize: drawingState.viewSize)
+        }
+        
+        // Рисуем объекты телестрации
+        for object in drawingState.telestrationObjects {
+            drawTelestrationObjectOnImage(object, in: NSRect(origin: .zero, size: size), viewSize: drawingState.viewSize)
+        }
+        
+        // Рисуем фигуры
+        for shape in drawingState.shapes {
+            drawShapeOnImage(shape, in: NSRect(origin: .zero, size: size), viewSize: drawingState.viewSize)
+        }
+        
+        // Рисуем текстовые боксы
+        for textBox in drawingState.textBoxes {
+            drawTextBoxOnImage(textBox, in: NSRect(origin: .zero, size: size), viewSize: drawingState.viewSize)
         }
         
         finalImage.unlockFocus()
@@ -773,21 +884,23 @@ class VideoPlayerViewModel: ObservableObject {
         
         let scaleX = viewSize.width > 0 ? rect.width / viewSize.width : 1.0
         let scaleY = viewSize.height > 0 ? rect.height / viewSize.height : 1.0
+        let scale = max(scaleX, scaleY)
         
         let scaledX = path.points[0].x * scaleX
         let scaledY = path.points[0].y * scaleY
         let flippedFirstPoint = CGPoint(x: scaledX, y: rect.height - scaledY)
         bezierPath.move(to: flippedFirstPoint)
         
+        var scaledPoints: [CGPoint] = [flippedFirstPoint]
         for point in path.points.dropFirst() {
             let scaledX = point.x * scaleX
             let scaledY = point.y * scaleY
             let flippedPoint = CGPoint(x: scaledX, y: rect.height - scaledY)
             bezierPath.line(to: flippedPoint)
+            scaledPoints.append(flippedPoint)
         }
         
         NSColor(path.color).setStroke()
-        let scale = max(scaleX, scaleY)
         bezierPath.lineWidth = path.lineWidth * scale
         bezierPath.lineCapStyle = .round
         bezierPath.lineJoinStyle = .round
@@ -798,28 +911,88 @@ class VideoPlayerViewModel: ObservableObject {
         }
         
         bezierPath.stroke()
+        
+        // Рисуем стрелочку на конце пути, если нужно
+        if path.hasArrow && scaledPoints.count >= 2 {
+            drawArrowHeadOnImage(path: path, scaledPoints: scaledPoints, scale: scale, in: rect)
+        }
+    }
+    
+    private func drawArrowHeadOnImage(path: EditorDrawingPath, scaledPoints: [CGPoint], scale: CGFloat, in rect: NSRect) {
+        guard scaledPoints.count >= 2 else { return }
+        
+        let lastPoint = scaledPoints[scaledPoints.count - 1]
+        
+        // Используем несколько последних точек для более стабильного направления
+        // Берем больше точек для более плавного направления (15-20 точек или минимум 10)
+        let pointsToUse = min(20, max(10, scaledPoints.count))
+        let startIndex = max(0, scaledPoints.count - pointsToUse)
+        let referencePoint = scaledPoints[startIndex]
+        
+        // Вычисляем направление стрелки на основе более длинного сегмента
+        let dx = lastPoint.x - referencePoint.x
+        let dy = lastPoint.y - referencePoint.y
+        
+        // Если сегмент слишком короткий, используем среднее направление по нескольким последним точкам
+        let distance = sqrt(dx * dx + dy * dy)
+        let angle: CGFloat
+        if distance < 30 * scale {
+            // Для коротких сегментов усредняем направление по последним 5-7 точкам
+            let avgPoints = min(7, max(3, scaledPoints.count))
+            var sumDx: CGFloat = 0
+            var sumDy: CGFloat = 0
+            for i in max(1, scaledPoints.count - avgPoints)..<scaledPoints.count {
+                let prevPoint = scaledPoints[i - 1]
+                let currPoint = scaledPoints[i]
+                sumDx += currPoint.x - prevPoint.x
+                sumDy += currPoint.y - prevPoint.y
+            }
+            angle = atan2(sumDy, sumDx)
+        } else {
+            angle = atan2(dy, dx)
+        }
+        
+        // Размер стрелки зависит от ширины линии
+        let arrowLength = path.lineWidth * scale * 3
+        let arrowWidth = path.lineWidth * scale * 2
+        
+        // Создаем путь стрелки
+        let arrowPath = NSBezierPath()
+        let arrowTip = lastPoint
+        
+        // Вычисляем точки стрелки
+        let arrowPoint1 = CGPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle + .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle + .pi / 2)
+        )
+        let arrowPoint2 = CGPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle - .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle - .pi / 2)
+        )
+        
+        arrowPath.move(to: arrowTip)
+        arrowPath.line(to: arrowPoint1)
+        arrowPath.line(to: arrowPoint2)
+        arrowPath.close()
+        
+        // Рисуем стрелку
+        NSColor(path.color).setFill()
+        arrowPath.fill()
+        NSColor(path.color).setStroke()
+        arrowPath.lineWidth = path.lineWidth * scale
+        arrowPath.stroke()
     }
     
     // MARK: - Window Management
     
-    private func handleRestoreWindowHeight() {
-        guard let savedHeight = state.savedWindowHeight else { return }
+    private func handleRestoreWindowFrame() {
+        guard let savedFrame = state.savedWindowFrame else { return }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            guard let window = NSApplication.shared.windows.first(where: { 
-                $0.contentViewController?.view.window == $0 && 
-                $0.title == ^String.Titles.video
-            }) else { return }
+            guard let window = WindowsManager.shared.videoWindow?.window else { return }
             
-            let currentFrame = window.frame
-            let newFrame = NSRect(
-                x: currentFrame.origin.x,
-                y: currentFrame.origin.y + (currentFrame.height - savedHeight),
-                width: currentFrame.width,
-                height: savedHeight
-            )
-            window.setFrame(newFrame, display: true, animate: false)
-            self?.state.savedWindowHeight = nil
+            window.setFrame(NSRect(x: savedFrame.origin.x, y: savedFrame.origin.y, width: savedFrame.width, height: savedFrame.height), display: true, animate: false)
+            self?.state.savedWindowFrame = nil
         }
     }
     
@@ -850,6 +1023,609 @@ class VideoPlayerViewModel: ObservableObject {
         window.setContentSize(NSScreen.main?.frame.size ?? NSSize(width: 1200, height: 800))
         window.center()
         window.makeKeyAndOrderFront(nil)
+    }
+    
+    // MARK: - Telestration
+    
+    private func drawTelestrationObjectOnImage(_ object: DrawableObject, in rect: NSRect, viewSize: CGSize) {
+        // Convert view coordinates to image coordinates
+        let scaleX = rect.width / viewSize.width
+        let scaleY = rect.height / viewSize.height
+        let scale = max(scaleX, scaleY) // Используем максимальный масштаб для сохранения пропорций
+        
+        var scaledObject = object
+        scaledObject.positions = object.positions.map { point in
+            // Инвертируем Y координату для правильной конвертации (SwiftUI -> Core Graphics)
+            // В SwiftUI Y идет сверху вниз, в Core Graphics - снизу вверх
+            // Инвертируем относительно rect.height, а не viewSize.height
+            CGPoint(x: point.x * scaleX, y: rect.height - (point.y * scaleY))
+        }
+        
+        // Масштабируем радиус для objectHighlight
+        if object.type == .objectHighlight {
+            scaledObject.radius = object.radius * scale
+        }
+        
+        switch scaledObject.type {
+        case .zoneBetweenObjects:
+            drawZoneBetweenObjectsOnImage(scaledObject, scale: scale)
+        case .lineBetweenObjects:
+            drawLineBetweenObjectsOnImage(scaledObject, scale: scale)
+        case .lineWithArrow:
+            drawLineWithArrowOnImage(scaledObject, scale: scale)
+        case .curvedArrow:
+            drawCurvedArrowOnImage(scaledObject, scale: scale)
+        case .objectHighlight:
+            drawObjectHighlightOnImage(scaledObject)
+        case .simpleZone:
+            drawSimpleZoneOnImage(scaledObject, scale: scale)
+        }
+    }
+    
+    private func drawZoneBetweenObjectsOnImage(_ object: DrawableObject, scale: CGFloat) {
+        guard object.positions.count >= 3 else { return }
+        
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: object.positions[0].x, y: object.positions[0].y))
+        for position in object.positions.dropFirst() {
+            path.line(to: NSPoint(x: position.x, y: position.y))
+        }
+        path.close()
+        
+        NSColor(object.fillColor).withAlphaComponent(0.3).setFill()
+        path.fill()
+        
+        NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
+        path.lineWidth = 2 * scale
+        
+        if object.lineStyle == .dashed {
+            path.setLineDash([5 * scale, 5 * scale], count: 2, phase: 0)
+        }
+        path.stroke()
+        
+        // Вершины (масштабируем размер вершин)
+        let vertexSize: CGFloat = 10 * scale // В SwiftUI используется 10, масштабируем
+        for position in object.positions {
+            let rect = NSRect(x: position.x - vertexSize/2, y: position.y - vertexSize/2, width: vertexSize, height: vertexSize)
+            NSColor(object.vertexColor).setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            
+            NSColor.white.setStroke()
+            let b = NSBezierPath(ovalIn: rect)
+            b.lineWidth = 1 * scale
+            b.stroke()
+        }
+    }
+    
+    private func drawLineBetweenObjectsOnImage(_ object: DrawableObject, scale: CGFloat) {
+        guard object.positions.count >= 2 else { return }
+        
+        let path = NSBezierPath()
+        
+        for i in 0..<(object.positions.count - 1) {
+            let current = object.positions[i]
+            let next = object.positions[i + 1]
+            
+            path.move(to: NSPoint(x: current.x, y: current.y))
+            path.line(to: NSPoint(x: next.x, y: next.y))
+        }
+        
+        NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
+        path.lineWidth = 2 * scale
+        
+        if object.lineStyle == .dashed {
+            path.setLineDash([5 * scale, 5 * scale], count: 2, phase: 0)
+        }
+        path.stroke()
+        
+        // Вершины (масштабируем размер вершин)
+        let vertexSize: CGFloat = 10 * scale // В SwiftUI используется 10, масштабируем
+        for position in object.positions {
+            let rect = NSRect(x: position.x - vertexSize/2, y: position.y - vertexSize/2, width: vertexSize, height: vertexSize)
+            NSColor(object.vertexColor).setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            
+            NSColor.white.setStroke()
+            let b = NSBezierPath(ovalIn: rect)
+            b.lineWidth = 1 * scale
+            b.stroke()
+        }
+    }
+    
+    private func drawLineWithArrowOnImage(_ object: DrawableObject, scale: CGFloat) {
+        guard object.positions.count >= 2 else { return }
+        
+        let path = NSBezierPath()
+        
+        // Рисуем линию до последней точки
+        for i in 0..<(object.positions.count - 1) {
+            let current = object.positions[i]
+            let next = object.positions[i + 1]
+            
+            path.move(to: NSPoint(x: current.x, y: current.y))
+            path.line(to: NSPoint(x: next.x, y: next.y))
+        }
+        
+        NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
+        path.lineWidth = 2 * scale
+        
+        if object.lineStyle == .dashed {
+            path.setLineDash([5 * scale, 5 * scale], count: 2, phase: 0)
+        }
+        path.stroke()
+        
+        // Рисуем стрелку на последней точке
+        let lastPoint = object.positions[object.positions.count - 1]
+        let secondLastPoint = object.positions[object.positions.count - 2]
+        
+        // Вычисляем направление стрелки
+        let dx = lastPoint.x - secondLastPoint.x
+        let dy = lastPoint.y - secondLastPoint.y
+        let angle = atan2(dy, dx)
+        
+        // Размер стрелки (масштабируем)
+        let arrowLength: CGFloat = 15 * scale
+        let arrowWidth: CGFloat = 10 * scale
+        
+        // Создаем путь стрелки
+        let arrowPath = NSBezierPath()
+        let arrowTip = NSPoint(x: lastPoint.x, y: lastPoint.y)
+        let arrowPoint1 = NSPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle + .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle + .pi / 2)
+        )
+        let arrowPoint2 = NSPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle - .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle - .pi / 2)
+        )
+        
+        arrowPath.move(to: arrowTip)
+        arrowPath.line(to: arrowPoint1)
+        arrowPath.line(to: arrowPoint2)
+        arrowPath.close()
+        
+        NSColor(object.edgeColor).setFill()
+        arrowPath.fill()
+        NSColor(object.edgeColor).setStroke()
+        arrowPath.lineWidth = 2 * scale
+        arrowPath.stroke()
+        
+        // Вершины (кроме последней, так как там стрелка)
+        let vertexSize: CGFloat = 10 * scale
+        for position in object.positions.dropLast() {
+            let rect = NSRect(x: position.x - vertexSize/2, y: position.y - vertexSize/2, width: vertexSize, height: vertexSize)
+            NSColor(object.vertexColor).setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            
+            NSColor.white.setStroke()
+            let b = NSBezierPath(ovalIn: rect)
+            b.lineWidth = 1 * scale
+            b.stroke()
+        }
+    }
+    
+    // Вычисляем контрольную точку на основе curveHeight
+    private func computeControlPointForCurvedArrow(start: CGPoint, end: CGPoint, curveHeight: CGFloat) -> CGPoint {
+        let midX = (start.x + end.x) / 2
+        let midY = (start.y + end.y) / 2
+        
+        // Вычисляем перпендикулярный вектор к линии
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = sqrt(dx * dx + dy * dy)
+        
+        if length == 0 {
+            return CGPoint(x: midX, y: midY)
+        }
+        
+        // Перпендикулярный вектор (повернутый на 90 градусов)
+        let perpX = -dy / length
+        let perpY = dx / length
+        
+        // Контрольная точка смещена перпендикулярно на curveHeight
+        return CGPoint(
+            x: midX + perpX * curveHeight,
+            y: midY + perpY * curveHeight
+        )
+    }
+    
+    private func drawCurvedArrowOnImage(_ object: DrawableObject, scale: CGFloat) {
+        guard object.positions.count >= 2 else { return }
+        
+        let startPoint = object.positions[0]
+        let endPoint = object.positions[1]
+        
+        // Вычисляем контрольную точку на основе curveHeight
+        // При сохранении инвертируем curveHeight для компенсации зеркалирования
+        let controlPoint = computeControlPointForCurvedArrow(
+            start: startPoint,
+            end: endPoint,
+            curveHeight: -object.curveHeight
+        )
+        
+        // Рисуем квадратичную кривую Bezier
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: startPoint.x, y: startPoint.y))
+        path.curve(to: NSPoint(x: endPoint.x, y: endPoint.y),
+                   controlPoint1: NSPoint(x: controlPoint.x, y: controlPoint.y),
+                   controlPoint2: NSPoint(x: controlPoint.x, y: controlPoint.y))
+        
+        NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
+        path.lineWidth = 2 * scale
+        
+        if object.lineStyle == .dashed {
+            path.setLineDash([5 * scale, 5 * scale], count: 2, phase: 0)
+        }
+        path.stroke()
+        
+        // Вычисляем направление стрелки в конечной точке кривой
+        let t: CGFloat = 0.95
+        let curvePoint = CGPoint(
+            x: pow(1-t, 2) * startPoint.x + 2 * (1-t) * t * controlPoint.x + pow(t, 2) * endPoint.x,
+            y: pow(1-t, 2) * startPoint.y + 2 * (1-t) * t * controlPoint.y + pow(t, 2) * endPoint.y
+        )
+        
+        // Вычисляем направление стрелки
+        let dx = endPoint.x - curvePoint.x
+        let dy = endPoint.y - curvePoint.y
+        let angle = atan2(dy, dx)
+        
+        // Размер стрелки
+        let arrowLength: CGFloat = 15 * scale
+        let arrowWidth: CGFloat = 10 * scale
+        
+        // Создаем путь стрелки
+        let arrowPath = NSBezierPath()
+        let arrowTip = NSPoint(x: endPoint.x, y: endPoint.y)
+        let arrowPoint1 = NSPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle + .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle + .pi / 2)
+        )
+        let arrowPoint2 = NSPoint(
+            x: arrowTip.x - arrowLength * cos(angle) + arrowWidth * cos(angle - .pi / 2),
+            y: arrowTip.y - arrowLength * sin(angle) + arrowWidth * sin(angle - .pi / 2)
+        )
+        
+        arrowPath.move(to: arrowTip)
+        arrowPath.line(to: arrowPoint1)
+        arrowPath.line(to: arrowPoint2)
+        arrowPath.close()
+        
+        NSColor(object.edgeColor).setFill()
+        arrowPath.fill()
+        NSColor(object.edgeColor).setStroke()
+        arrowPath.lineWidth = 2 * scale
+        arrowPath.stroke()
+        
+        // Показываем только начальную точку (конечная точка скрыта, так как там стрелка)
+        let vertexSize: CGFloat = 10 * scale
+        let rect = NSRect(x: startPoint.x - vertexSize/2, y: startPoint.y - vertexSize/2, width: vertexSize, height: vertexSize)
+        NSColor(object.vertexColor).setFill()
+        NSBezierPath(ovalIn: rect).fill()
+        
+        NSColor.white.setStroke()
+        let b = NSBezierPath(ovalIn: rect)
+        b.lineWidth = 1 * scale
+        b.stroke()
+    }
+    
+    private func drawObjectHighlightOnImage(_ object: DrawableObject) {
+        guard let position = object.positions.first else { return }
+        
+        // Применяем отражение по вертикали относительно низа объекта (position.y)
+        // position.y - это низ объекта, нужно отразить относительно этой точки
+        var reflectionTransform = AffineTransform()
+        reflectionTransform.translate(x: position.x, y: position.y)
+        reflectionTransform.scale(x: 1.0, y: -1.0) // Отражение по вертикали
+        reflectionTransform.translate(x: -position.x, y: -position.y)
+        
+        // Прямоугольник снизу вверх (y начинается снизу)
+        let columnRect = NSRect(
+            x: position.x - object.radius / 2,
+            y: position.y - object.radius * 2,
+            width: object.radius,
+            height: object.radius * 2
+        )
+        
+        var columnPath = NSBezierPath(rect: columnRect)
+        columnPath.transform(using: reflectionTransform)
+        
+        let o = CGFloat(object.glowOpacity)
+        let columnGradient = NSGradient(colors: [
+            NSColor(object.glowColor).withAlphaComponent(0.9 * o),
+            NSColor(object.glowColor).withAlphaComponent(0.6 * o),
+            NSColor(object.glowColor).withAlphaComponent(0.3 * o),
+            NSColor.clear
+        ])
+        
+        // Градиент снизу вверх (angle: 90)
+        columnGradient?.draw(in: columnPath, angle: 90)
+        
+        for i in 1...3 {
+            let blurRect = columnRect.insetBy(dx: -CGFloat(i), dy: 0)
+            var blurPath = NSBezierPath(rect: blurRect)
+            blurPath.transform(using: reflectionTransform)
+            NSColor(object.glowColor).withAlphaComponent(0.1 / CGFloat(i) * o).setFill()
+            blurPath.fill()
+        }
+        
+        // Овал (центр в позиции клика)
+        let ovalRect = NSRect(
+            x: position.x - object.radius/2,
+            y: position.y - (object.radius * 0.6)/2,
+            width: object.radius,
+            height: object.radius * 0.6
+        )
+        
+        var ovalPath = NSBezierPath(ovalIn: ovalRect)
+        ovalPath.transform(using: reflectionTransform)
+        
+        // Создаем путь для нижней половины эллипса
+        var bottomHalfPath = NSBezierPath()
+        let centerX = ovalRect.midX
+        let centerY = ovalRect.midY
+        let radiusX = ovalRect.width / 2
+        let radiusY = ovalRect.height / 2
+        
+        // Создаем нижнюю половину эллипса через точки
+        let steps = 20
+        var firstPoint = true
+        for i in 0...steps {
+            let angle = CGFloat.pi * CGFloat(i) / CGFloat(steps) // от π до 0
+            let x = centerX + radiusX * cos(angle)
+            let y = centerY + radiusY * sin(angle)
+            if firstPoint {
+                bottomHalfPath.move(to: NSPoint(x: x, y: y))
+                firstPoint = false
+            } else {
+                bottomHalfPath.line(to: NSPoint(x: x, y: y))
+            }
+        }
+        // Закрываем путь прямой линией
+        bottomHalfPath.line(to: NSPoint(x: centerX + radiusX, y: centerY))
+        bottomHalfPath.close()
+        bottomHalfPath.transform(using: reflectionTransform)
+        
+        // Заливаем только нижнюю половину овала
+        NSColor(object.glowColor).withAlphaComponent(0.8 * o).setFill()
+        bottomHalfPath.fill()
+        
+        // Рисуем обводку всего овала
+        NSColor(object.glowColor).withAlphaComponent(0.8 * o).setStroke()
+        ovalPath.lineWidth = 1
+        ovalPath.stroke()
+    }
+    
+    private func drawSimpleZoneOnImage(_ object: DrawableObject, scale: CGFloat) {
+        guard object.positions.count >= 3 else { return }
+        
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: object.positions[0].x, y: object.positions[0].y))
+        for position in object.positions.dropFirst() {
+            path.line(to: NSPoint(x: position.x, y: position.y))
+        }
+        path.close()
+        
+        NSColor(object.fillColor).withAlphaComponent(0.3).setFill()
+        path.fill()
+        
+        NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
+        path.lineWidth = 2 * scale
+        
+        if object.lineStyle == .dashed {
+            path.setLineDash([5 * scale, 5 * scale], count: 2, phase: 0)
+        }
+        path.stroke()
+        
+        // В простой зоне нет вершин после нажатия done
+    }
+    
+    // MARK: - Shapes Drawing on Image
+    
+    private func drawShapeOnImage(_ shape: EditorShape, in rect: NSRect, viewSize: CGSize) {
+        // Convert view coordinates to image coordinates
+        let scaleX = rect.width / viewSize.width
+        let scaleY = rect.height / viewSize.height
+        
+        // Инвертируем Y координату для правильной конвертации (SwiftUI -> Core Graphics)
+        // В SwiftUI Y идет сверху вниз, в Core Graphics - снизу вверх
+        let flippedY = rect.height - (shape.position.y * scaleY)
+        let scaledX = shape.position.x * scaleX
+        
+        // Масштабируем размер
+        let scaledSize = CGSize(
+            width: shape.size.width * scaleX,
+            height: shape.size.height * scaleY
+        )
+        
+        // Создаем путь фигуры относительно центра (0, 0)
+        var path = createShapePathOnImage(type: shape.type, size: scaledSize)
+        
+        // Применяем трансформации: поворот вокруг центра фигуры, затем перемещение
+        let rotationRadians = shape.rotation * .pi / 180
+        let transform = CGAffineTransform(translationX: scaledX, y: flippedY)
+            .rotated(by: rotationRadians)
+        
+        // Применяем трансформацию к пути
+        let affineTransform = AffineTransform(
+            m11: transform.a, m12: transform.b,
+            m21: transform.c, m22: transform.d,
+            tX: transform.tx, tY: transform.ty
+        )
+        path.transform(using: affineTransform)
+        
+        // Применяем отражение по обеим осям относительно центра фигуры в её финальной позиции
+        // Это компенсирует зеркалирование при сохранении
+        var finalReflection = AffineTransform()
+        finalReflection.translate(x: scaledX, y: flippedY)
+        finalReflection.scale(x: 1.0, y: -1.0) // Отражение по обеим осям
+        finalReflection.translate(x: -scaledX, y: -flippedY)
+        path.transform(using: finalReflection)
+        
+        // Заливка
+        NSColor(shape.fillColor).setFill()
+        path.fill()
+        
+        // Обводка
+        NSColor(shape.strokeColor).setStroke()
+        path.lineWidth = shape.strokeWidth * scaleX
+        if shape.lineStyle == .dashed {
+            path.setLineDash([5 * scaleX, 5 * scaleX], count: 2, phase: 0)
+        }
+        path.stroke()
+    }
+    
+    private func createShapePathOnImage(type: ShapeType, size: CGSize) -> NSBezierPath {
+        let halfWidth = size.width / 2
+        let halfHeight = size.height / 2
+        let path = NSBezierPath()
+        
+        switch type {
+        case .triangle:
+            path.move(to: NSPoint(x: 0, y: -halfHeight))
+            path.line(to: NSPoint(x: -halfWidth, y: halfHeight))
+            path.line(to: NSPoint(x: halfWidth, y: halfHeight))
+            path.close()
+            
+        case .square:
+            path.appendRect(NSRect(x: -halfWidth, y: -halfHeight, width: size.width, height: size.height))
+            
+        case .rectangle:
+            path.appendRect(NSRect(x: -halfWidth, y: -halfHeight, width: size.width, height: size.height))
+            
+        case .circle:
+            path.appendOval(in: NSRect(x: -halfWidth, y: -halfHeight, width: size.width, height: size.height))
+            
+        case .star:
+            let points = 5
+            let outerRadius = min(halfWidth, halfHeight)
+            let innerRadius = outerRadius * 0.4
+            for i in 0..<points * 2 {
+                let angle = Double(i) * .pi / Double(points)
+                let radius = i % 2 == 0 ? outerRadius : innerRadius
+                let x = CGFloat(cos(angle)) * radius
+                let y = CGFloat(sin(angle)) * radius
+                if i == 0 {
+                    path.move(to: NSPoint(x: x, y: y))
+                } else {
+                    path.line(to: NSPoint(x: x, y: y))
+                }
+            }
+            path.close()
+            
+        case .hexagon:
+            let radius = min(halfWidth, halfHeight)
+            for i in 0..<6 {
+                let angle = Double(i) * .pi / 3.0
+                let x = CGFloat(cos(angle)) * radius
+                let y = CGFloat(sin(angle)) * radius
+                if i == 0 {
+                    path.move(to: NSPoint(x: x, y: y))
+                } else {
+                    path.line(to: NSPoint(x: x, y: y))
+                }
+            }
+            path.close()
+        }
+        
+        return path
+    }
+    
+    // MARK: - TextBox Drawing on Image
+    
+    private func drawTextBoxOnImage(_ textBox: EditorTextBox, in rect: NSRect, viewSize: CGSize) {
+        // Convert view coordinates to image coordinates
+        let scaleX = rect.width / viewSize.width
+        let scaleY = rect.height / viewSize.height
+        
+        // Инвертируем Y координату для правильной конвертации (SwiftUI -> Core Graphics)
+        // В SwiftUI Y идет сверху вниз, в Core Graphics - снизу вверх
+        let flippedY = rect.height - (textBox.position.y * scaleY)
+        let scaledX = textBox.position.x * scaleX
+        
+        // Масштабируем размер
+        let scaledSize = CGSize(
+            width: textBox.size.width * scaleX,
+            height: textBox.size.height * scaleY
+        )
+        
+        // Создаем прямоугольник относительно центра (0, 0)
+        let textBoxRect = NSRect(
+            x: -scaledSize.width / 2,
+            y: -scaledSize.height / 2,
+            width: scaledSize.width,
+            height: scaledSize.height
+        )
+        
+        // Создаем путь прямоугольника
+        var path = NSBezierPath(rect: textBoxRect)
+        
+        // Применяем трансформации: поворот вокруг центра фигуры, затем перемещение
+        let rotationRadians = textBox.rotation * .pi / 180
+        let transform = CGAffineTransform(translationX: scaledX, y: flippedY)
+            .rotated(by: rotationRadians)
+        
+        // Применяем трансформацию к пути
+        let affineTransform = AffineTransform(
+            m11: transform.a, m12: transform.b,
+            m21: transform.c, m22: transform.d,
+            tX: transform.tx, tY: transform.ty
+        )
+        path.transform(using: affineTransform)
+        
+        // Применяем отражение по вертикали относительно центра текстового бокса в его финальной позиции
+        // Это компенсирует зеркалирование при сохранении (1 в 1 как в drawShapeOnImage)
+        var finalReflection = AffineTransform()
+        finalReflection.translate(x: scaledX, y: flippedY)
+        finalReflection.scale(x: 1.0, y: -1.0) // Отражение по вертикали
+        finalReflection.translate(x: -scaledX, y: -flippedY)
+        path.transform(using: finalReflection)
+        
+        // Рисуем фон
+        if textBox.backgroundColor != .clear {
+            NSColor(textBox.backgroundColor).setFill()
+            path.fill()
+        }
+        
+        // Рисуем границу
+        NSColor(textBox.borderColor).setStroke()
+        path.lineWidth = textBox.borderWidth * max(scaleX, scaleY)
+        path.stroke()
+        
+        // Рисуем текст в том же контексте, с теми же трансформациями, что и прямоугольник
+        guard !textBox.text.isEmpty else { return }
+        
+        let textRect = textBoxRect.insetBy(dx: 5 * max(scaleX, scaleY), dy: 5 * max(scaleX, scaleY))
+        let font = NSFont(name: textBox.fontName, size: textBox.fontSize * max(scaleX, scaleY)) ?? NSFont.systemFont(ofSize: textBox.fontSize * max(scaleX, scaleY))
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        paragraphStyle.lineBreakMode = .byWordWrapping
+        let textAttributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor(textBox.textColor),
+            .paragraphStyle: paragraphStyle
+        ]
+        let attributedString = NSAttributedString(string: textBox.text, attributes: textAttributes)
+        
+        NSGraphicsContext.current?.saveGraphicsState()
+        
+        // Применяем те же трансформации, что и для пути: сначала отражение, затем перемещение+поворот
+        // (порядок concat: Ref * (T*R), чтобы точка в локальных координатах попала в Reflect*(T*R)*p)
+        let finalReflectionNS = NSAffineTransform()
+        finalReflectionNS.translateX(by: scaledX, yBy: flippedY)
+        finalReflectionNS.scaleX(by: 1.0, yBy: 1.0)
+        finalReflectionNS.translateX(by: -scaledX, yBy: -flippedY)
+        finalReflectionNS.concat()
+        
+        let textTransform = NSAffineTransform()
+        textTransform.translateX(by: scaledX, yBy: flippedY)
+        textTransform.rotate(byRadians: rotationRadians)
+        textTransform.concat()
+        
+        // Рисуем текст прямо в контексте (без промежуточного NSImage)
+        attributedString.draw(in: textRect)
+        
+        NSGraphicsContext.current?.restoreGraphicsState()
     }
 }
 

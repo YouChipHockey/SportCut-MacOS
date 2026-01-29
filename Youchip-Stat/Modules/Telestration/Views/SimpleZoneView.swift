@@ -28,6 +28,7 @@ struct SimpleZoneView: View {
                             ))
                     )
             }
+            // В простой зоне нет вершин после нажатия done
         }
     }
 }

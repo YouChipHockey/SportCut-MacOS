@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVKit
+import AppKit
 
 // MARK: - Video Player View
 
@@ -57,15 +58,14 @@ struct VideoPlayerView: View {
     private func handleEditorModeChange(isEditor: Bool) {
         if isEditor {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                guard let window = NSApplication.shared.windows.first(where: { 
-                    $0.contentViewController?.view.window == $0 && 
-                    $0.title == ^String.Titles.video
-                }) else { return }
+                guard let window = WindowsManager.shared.videoWindow?.window else { return }
                 
-                viewModel.action.send(.saveWindowHeight(window.frame.height))
+                viewModel.action.send(.saveWindowFrame(CGRect(origin: window.frame.origin, size: window.frame.size)))
+                let targetFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
+                window.setFrame(targetFrame, display: true, animate: true)
             }
         } else {
-            viewModel.action.send(.restoreWindowHeight)
+            viewModel.action.send(.restoreWindowFrame)
         }
     }
     
@@ -137,9 +137,7 @@ struct VideoPlayerView: View {
                 
                 Divider()
                 
-                EditorSettingsPanel(
-                    drawingState: viewModel.state.editorDrawingState
-                )
+                EditorSettingsPanel(drawingState: viewModel.state.editorDrawingState)
             }
         }
     }

@@ -85,29 +85,73 @@ struct PolygonEditorView: View {
                             }
                             
                             if let objectType = viewModel.currentObjectType {
-                                Group {
-                                    switch objectType {
-                                    case .zoneBetweenObjects, .simpleZone:
-                                        if viewModel.tempVertices.count >= 3 {
-                                            PolygonShape(points: viewModel.tempVertices.map { viewModel.viewPoint(fromImagePoint: $0, in: geometry.size) })
-                                                .fill(Color.red.opacity(0.2))
-                                                .overlay(
-                                                    PolygonShape(points: viewModel.tempVertices.map { viewModel.viewPoint(fromImagePoint: $0, in: geometry.size) })
-                                                        .stroke(Color.red, lineWidth: 2)
-                                                )
-                                        } else {
-                                            EmptyView()
-                                        }
-                                    case .lineBetweenObjects:
-                                        if viewModel.tempVertices.count >= 2 {
-                                            DashedLinesShape(points: viewModel.tempVertices.map { viewModel.viewPoint(fromImagePoint: $0, in: geometry.size) })
-                                                .stroke(Color.red, style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
-                                        } else {
-                                            EmptyView()
-                                        }
-                                    case .objectHighlight:
+                                switch objectType {
+                                case .zoneBetweenObjects, .simpleZone:
+                                    if viewModel.tempVertices.count >= 3 {
+                                        PolygonShape(points: viewModel.tempVertices.map { viewModel.viewPoint(fromImagePoint: $0, in: geometry.size) })
+                                            .fill(Color.red.opacity(0.2))
+                                            .overlay(
+                                                PolygonShape(points: viewModel.tempVertices.map { viewModel.viewPoint(fromImagePoint: $0, in: geometry.size) })
+                                                    .stroke(Color.red, lineWidth: 2)
+                                            )
+                                    } else {
                                         EmptyView()
                                     }
+                                case .lineBetweenObjects:
+                                    if viewModel.tempVertices.count >= 2 {
+                                        DashedLinesShape(points: viewModel.tempVertices.map { viewModel.viewPoint(fromImagePoint: $0, in: geometry.size) })
+                                            .stroke(Color.red, style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                                    } else {
+                                        EmptyView()
+                                    }
+                                case .lineWithArrow:
+                                    if viewModel.tempVertices.count >= 2 {
+                                        DashedLinesShape(points: viewModel.tempVertices.map { viewModel.viewPoint(fromImagePoint: $0, in: geometry.size) })
+                                            .stroke(Color.red, style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                                    } else {
+                                        EmptyView()
+                                    }
+                                case .curvedArrow:
+                                    if viewModel.tempVertices.count >= 2 {
+                                        let startPoint = viewModel.tempVertices[0]
+                                        let endPoint = viewModel.tempVertices[1]
+                                        
+                                        // Вычисляем контрольную точку на основе curveHeight
+                                        let midX = (startPoint.x + endPoint.x) / 2
+                                        let midY = (startPoint.y + endPoint.y) / 2
+                                        let dx = endPoint.x - startPoint.x
+                                        let dy = endPoint.y - startPoint.y
+                                        let length = sqrt(dx * dx + dy * dy)
+                                        
+                                        let controlPoint: CGPoint = {
+                                            if length > 0 {
+                                                let perpX = -dy / length
+                                                let perpY = dx / length
+                                                return CGPoint(
+                                                    x: midX + perpX * viewModel.currentCustomization.curveHeight,
+                                                    y: midY + perpY * viewModel.currentCustomization.curveHeight
+                                                )
+                                            } else {
+                                                return CGPoint(x: midX, y: midY)
+                                            }
+                                        }()
+                                        
+                                        let startPointView = viewModel.viewPoint(fromImagePoint: startPoint, in: geometry.size)
+                                        let endPointView = viewModel.viewPoint(fromImagePoint: endPoint, in: geometry.size)
+                                        let controlPointView = viewModel.viewPoint(fromImagePoint: controlPoint, in: geometry.size)
+                                        
+                                        ZStack {
+                                            CurvedArrowShape(startPoint: startPointView, endPoint: endPointView, controlPoint: controlPointView)
+                                                .stroke(Color.red, style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                                            
+                                            CurvedArrowHeadShape(startPoint: startPointView, endPoint: endPointView, controlPoint: controlPointView)
+                                                .fill(Color.red)
+                                        }
+                                    } else {
+                                        EmptyView()
+                                    }
+                                case .objectHighlight:
+                                    EmptyView()
                                 }
                             }
                         }

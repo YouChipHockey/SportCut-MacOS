@@ -24,9 +24,9 @@ struct ObjectHighlightView: View {
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                object.glowColor.opacity(0.9),
-                                object.glowColor.opacity(0.6),
-                                object.glowColor.opacity(0.3),
+                                object.glowColor.opacity(0.9 * object.glowOpacity),
+                                object.glowColor.opacity(0.6 * object.glowOpacity),
+                                object.glowColor.opacity(0.3 * object.glowOpacity),
                                 Color.clear
                             ]),
                             startPoint: .bottom,
@@ -41,9 +41,9 @@ struct ObjectHighlightView: View {
                     .fill(
                         RadialGradient(
                             gradient: Gradient(colors: [
-                                object.edgeColor.opacity(0.8),
-                                object.edgeColor.opacity(0.6),
-                                object.edgeColor.opacity(0.4)
+                                object.edgeColor.opacity(0.8 * object.glowOpacity),
+                                object.edgeColor.opacity(0.6 * object.glowOpacity),
+                                object.edgeColor.opacity(0.4 * object.glowOpacity)
                             ]),
                             center: .center,
                             startRadius: 0,
@@ -52,7 +52,7 @@ struct ObjectHighlightView: View {
                     )
                     .overlay(
                         Ellipse()
-                            .stroke(object.edgeColor, lineWidth: 2)
+                            .stroke(object.edgeColor.opacity(object.glowOpacity), lineWidth: 2)
                     )
                     .frame(width: object.radius, height: object.radius * 0.6)
                     .position(viewPosition)
