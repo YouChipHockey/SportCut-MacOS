@@ -22,6 +22,7 @@ struct TimelineLineView: View {
     let isSelected: Bool
     let onSelect: () -> Void
     let onEditLabelsRequest: (UUID) -> Void
+    let onEditTimeEventsRequest: (UUID) -> Void
     let onTagDragging: (CGFloat?) -> Void
     
     @ObservedObject var tagLibrary = TagLibraryManager.shared
@@ -292,6 +293,8 @@ struct TimelineLineView: View {
     private func leftEdgeDragGesture(stamp: TimelineStamp, totalDuration: Double, widthMax: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                let minWidth: CGFloat = 30
+                
                 if resizingStampID != stamp.id {
                     resizingStampID = stamp.id
                     resizingEdge = .left
@@ -305,11 +308,11 @@ struct TimelineLineView: View {
                     // Исходные геометрия
                     let baseDuration = originalEndTime - originalStartTime
                     let baseDurationRatio = baseDuration / totalDuration
-                    visualWidth = max(baseDurationRatio * widthMax, 10)
+                    visualWidth = max(baseDurationRatio * widthMax, minWidth)
                     
                     let baseStartRatio = originalStartTime / totalDuration
                     visualOffsetX = baseStartRatio * widthMax
-                    maxVisualOffsetX = (visualOffsetX ?? 0) + (visualWidth ?? 0) - 10
+                    maxVisualOffsetX = (visualOffsetX ?? 0) + (visualWidth ?? 0) - minWidth
                 }
                 
                 let deltaX = value.translation.width
@@ -318,7 +321,7 @@ struct TimelineLineView: View {
                 
                 // Сдвигаем левый край: offset увеличивается, ширина уменьшается
                 let newOffsetX = baseOffsetX + deltaX
-                let newWidth = max(baseWidth - deltaX, 10)
+                let newWidth = max(baseWidth - deltaX, minWidth)
                 
                 if newOffsetX < 0 || newOffsetX > maxVisualOffsetX ?? 0 {
                     return
@@ -367,6 +370,8 @@ struct TimelineLineView: View {
     private func rightEdgeDragGesture(stamp: TimelineStamp, totalDuration: Double, widthMax: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                let minWidth: CGFloat = 30
+                
                 if resizingStampID != stamp.id {
                     resizingStampID = stamp.id
                     resizingEdge = .right
@@ -383,12 +388,12 @@ struct TimelineLineView: View {
                     // Запомнить исходную ширину в пикселях
                     let baseDuration = originalEndTime - originalStartTime
                     let baseDurationRatio = baseDuration / totalDuration
-                    visualWidth = max(baseDurationRatio * widthMax, 10)
+                    visualWidth = max(baseDurationRatio * widthMax, minWidth)
                 }
                 
                 // Меняем ширину напрямую на deltaX
                 let baseWidth = visualWidth ?? 0
-                let newWidth = max(baseWidth + value.translation.width, 10) // минимум 10px
+                let newWidth = max(baseWidth + value.translation.width, minWidth) 
                 if let visualOffsetX, visualOffsetX + newWidth > widthMax {
                     return
                 }
@@ -483,6 +488,9 @@ struct TimelineLineView: View {
             Button(^String.Titles.timelineButtonEditLabels) {
                 onEditLabelsRequest(stamp.id)
             }
+        }
+        Button(^String.Titles.timelineButtonEditTimeEvents) {
+            onEditTimeEventsRequest(stamp.id)
         }
     }
     

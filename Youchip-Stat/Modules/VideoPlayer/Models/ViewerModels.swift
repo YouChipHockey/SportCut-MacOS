@@ -9,10 +9,16 @@ import Foundation
 import AVFoundation
 import UniformTypeIdentifiers
 import SwiftUI
+import Combine
 
 extension Notification.Name {
     static let playSingleTag = Notification.Name("playSingleTag")
+    static let toggleViewerPlayer = Notification.Name("toggleViewerPlayer")
     static let stopViewerPlayer = Notification.Name("stopViewerPlayer")
+    static let closeViewerWindow = Notification.Name("closeViewerWindow")
+    static let createPlaylistComposition = Notification.Name("createPlaylistComposition")
+    static let seekViewerPlayerForward = Notification.Name("seekViewerPlayerForward")
+    static let seekViewerPlayerBackward = Notification.Name("seekViewerPlayerBackward")
 }
 
 class PlaylistManager: ObservableObject {
@@ -21,8 +27,13 @@ class PlaylistManager: ObservableObject {
             savePlaylists()
         }
     }
-    @Published var currentPlaylist: SavedPlaylist?
+    @Published var currentPlaylistId: UUID?
     @Published var currentTags: [OrganizerTag] = []
+    
+    var currentPlaylist: SavedPlaylist? {
+        guard let currentPlaylistId else { return nil }
+        return playlists.first(where: { $0.id == currentPlaylistId })
+    }
     
     private let videoID: String
     private var playlistsKey: String {
@@ -41,7 +52,7 @@ class PlaylistManager: ObservableObject {
     }
     
     func createNewPlaylist() {
-        currentPlaylist = nil
+        currentPlaylistId = nil
         currentTags.removeAll()
     }
     
@@ -56,7 +67,7 @@ class PlaylistManager: ObservableObject {
         )
         
         playlists.append(newPlaylist)
-        currentPlaylist = newPlaylist
+        currentPlaylistId = newPlaylist.id
     }
     
     func updateCurrentPlaylist() {
@@ -71,12 +82,12 @@ class PlaylistManager: ObservableObject {
         
         if let index = playlists.firstIndex(where: { $0.id == current.id }) {
             playlists[index] = updatedPlaylist
-            currentPlaylist = updatedPlaylist
+            currentPlaylistId = updatedPlaylist.id
         }
     }
     
     func loadPlaylist(_ playlist: SavedPlaylist) {
-        currentPlaylist = playlist
+        currentPlaylistId = playlist.id
         currentTags = playlist.tags
     }
     
@@ -105,7 +116,7 @@ class PlaylistManager: ObservableObject {
     
     func clear() {
         currentTags.removeAll()
-        currentPlaylist = nil
+        currentPlaylistId = nil
         NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
     }
     
@@ -128,11 +139,15 @@ class PlaylistManager: ObservableObject {
         }
     }
 
+    func renamePlaylist(withId id: UUID, newName: String) {
+        guard var playlistIndex = playlists.firstIndex(where: { $0.id == id }) else { return }
+        playlists[playlistIndex].updateName(newName)
+    }
 }
 
 struct SavedPlaylist: Identifiable, Codable {
     let id: UUID
-    let name: String
+    var name: String
     let tags: [OrganizerTag]
     let createdAt: Date
     
@@ -142,6 +157,10 @@ struct SavedPlaylist: Identifiable, Codable {
     
     var duration: Double {
         return tags.reduce(0) { $0 + $1.duration }
+    }
+    
+    mutating func updateName(_ name: String) {
+        self.name = name
     }
 }
 
@@ -169,7 +188,8 @@ class TagOrganizer: ObservableObject {
 }
 
 struct OrganizerTag: Identifiable, Equatable, Codable {
-    let id: UUID
+    let id : UUID
+    let mainTagID: String
     let stampID: UUID
     let lineID: UUID
     let tagName: String
@@ -181,8 +201,9 @@ struct OrganizerTag: Identifiable, Equatable, Codable {
     let labelIDs: [String]
     let eventIDs: [String]
     
-    init(stampID: UUID, lineID: UUID, tagName: String, lineName: String, startTime: Double, duration: Double, color: String, tagGroupName: String? = nil, labelIDs: [String] = [], eventIDs: [String] = []) {
+    init(stampID: UUID, mainTagID: String, lineID: UUID, tagName: String, lineName: String, startTime: Double, duration: Double, color: String, tagGroupName: String? = nil, labelIDs: [String] = [], eventIDs: [String] = []) {
         self.id = UUID()
+        self.mainTagID = mainTagID
         self.stampID = stampID
         self.lineID = lineID
         self.tagName = tagName
@@ -385,39 +406,179 @@ class TimelineFilter: ObservableObject {
 }
 
 class VideoPlaylistManager: ObservableObject {
-    @Published var currentPlaylist: [OrganizerTag] = []
+    @Published var currentPlaylist: [OrganizerTag] = [] {
+        didSet {
+            if isPlaying {
+                createCompositionFromPlaylist()
+            }
+        }
+    }
     @Published var currentIndex: Int = 0
-    @Published var isPlaying: Bool = false
+    @Published private(set) var isPlaying: Bool = false
+    @Published private(set) var playbackSpeed: Double = 1.0
+    @Published private(set) var currentComposition: AVMutableComposition?
+    private(set) var compositionSegments: [CompositionSegment] = []
     
     private var player: AVPlayer?
     private var timeObserver: Any?
+    private var startViewerPlayerObserver: Any?
+    private var seekForwardPlayerObserver: Any?
+    private var seekBackwardPlayerObserver: Any?
+    private var cancellables = Set<AnyCancellable>()
+    
+    init() {
+        startViewerPlayerObserver = NotificationCenter.default.addObserver(
+            forName: .toggleViewerPlayer,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.togglePlayback()
+        }
+        seekForwardPlayerObserver = NotificationCenter.default.addObserver(
+            forName: .seekViewerPlayerForward,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.seek(by: 3)
+        }
+        seekBackwardPlayerObserver = NotificationCenter.default.addObserver(
+            forName: .seekViewerPlayerBackward,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.seek(by: -3)
+        }
+    }
+    
+    deinit {
+        if let startViewerPlayerObserver {
+            NotificationCenter.default.removeObserver(startViewerPlayerObserver)
+        }
+        if let seekForwardPlayerObserver {
+            NotificationCenter.default.removeObserver(seekForwardPlayerObserver)
+        }
+        if let seekBackwardPlayerObserver {
+            NotificationCenter.default.removeObserver(seekBackwardPlayerObserver)
+        }
+    }
+    
+    func playVideo(_ play: Bool, changePlayerStatus: Bool = true) {
+        guard isPlaying != play else { return }
+        isPlaying = play
+        if play {
+            player?.rate = Float(playbackSpeed)
+        }
+        guard changePlayerStatus else { return }
+        if play {
+            player?.play()
+        } else {
+            player?.pause()
+        }
+    }
+    
+    func setPlayer(_ player: AVPlayer?) {
+        self.player = player
+        if player == nil {
+            cancellables.removeAll()
+        } else {
+            observePlayerState()
+        }
+    }
     
     func setPlaylist(_ tags: [OrganizerTag]) {
         currentPlaylist = tags
         currentIndex = 0
-        stopPlayback()
-    }
-    
-    func playPlaylist() {
-        guard !currentPlaylist.isEmpty else { return }
-        isPlaying = true
+        player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+        playVideo(false)
     }
     
     func stopPlayback() {
-        isPlaying = false
-        player?.pause()
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
-            timeObserver = nil
-        }
+        playVideo(false)
+    }
+    
+    func togglePlayback() {
+        playVideo(!isPlaying)
+    }
+    
+    func seek(by seconds: Double) {
+        guard let player else { return }
+        let actualCurrentTime = player.currentTime().seconds
+        let seekToTime = actualCurrentTime + seconds
+
+        let cmTime = CMTime(seconds: seekToTime, preferredTimescale: 600)
+        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+
+    }
+    func changePlaybackSpeed(to speed: Double) {
+        playbackSpeed = speed
+        player?.rate = Float(speed)
     }
     
     func playSingleTag(_ tag: OrganizerTag) {
         currentPlaylist = [tag]
         currentIndex = 0
-        isPlaying = true
         
         NotificationCenter.default.post(name: .playSingleTag, object: tag)
     }
+    
+    private func observePlayerState() {
+        guard let player else { return }
+        
+        player.publisher(for: \.timeControlStatus)
+            .sink { [weak self] status in
+                self?.playVideo(status == .playing, changePlayerStatus: false)
+            }
+            .store(in: &cancellables)
+    }
+    
+    func createCompositionFromPlaylist() {
+        guard let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset else {
+            return
+        }
+        
+        let composition = AVMutableComposition()
+        
+        guard let videoTrack = originalAsset.tracks(withMediaType: .video).first,
+              let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            return
+        }
+        
+        let audioTrack = originalAsset.tracks(withMediaType: .audio).first
+        var compAudioTrack: AVMutableCompositionTrack? = nil
+        if let audioTrack = audioTrack {
+            compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        }
+        
+        var currentTime = CMTime.zero
+        var compositionSegments: [CompositionSegment] = []
+        
+        for tag in currentPlaylist {
+            let startTime = CMTime(seconds: tag.startTime, preferredTimescale: 600)
+            let duration = CMTime(seconds: tag.duration, preferredTimescale: 600)
+            let timeRange = CMTimeRange(start: startTime, duration: duration)
+            
+            do {
+                try compVideoTrack.insertTimeRange(timeRange, of: videoTrack, at: currentTime)
+                if let compAudio = compAudioTrack, let aTrack = audioTrack {
+                    try compAudio.insertTimeRange(timeRange, of: aTrack, at: currentTime)
+                }
+                let compositionRange = CMTimeRange(start: currentTime, duration: duration)
+                compositionSegments.append(.init(compositionRange: compositionRange, tag: tag))
+                currentTime = currentTime + duration
+            } catch {
+                return
+            }
+        }
+        
+        self.compositionSegments = compositionSegments
+        currentComposition = composition
+        let playerItem = AVPlayerItem(asset: composition)
+        player?.replaceCurrentItem(with: playerItem)
+        playVideo(true)
+        NotificationCenter.default.post(
+            name: .createPlaylistComposition,
+            object: nil)
+    }
+
 }
 

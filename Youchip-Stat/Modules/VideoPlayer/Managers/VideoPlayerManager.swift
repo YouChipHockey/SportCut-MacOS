@@ -10,6 +10,7 @@ import AVKit
 import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
+import Combine
 
 class VideoPlayerManager: ObservableObject {
     
@@ -24,11 +25,13 @@ class VideoPlayerManager: ObservableObject {
         player?.currentItem?.duration.seconds ?? 0
     }
     private var timeObserverToken: Any?
+    private var cancellables = Set<AnyCancellable>()
     
     func loadVideo(from url: URL) {
         player = AVPlayer(url: url)
         player?.play()
         startTimeObserver()
+        observePlayerState()
     }
     func seek(to time: Double) {
         guard let player = player else { return }
@@ -53,6 +56,7 @@ class VideoPlayerManager: ObservableObject {
         player = nil
         currentTime = 0.0
         playbackSpeed = 1.0
+        cancellables.removeAll()
     }
     private func startTimeObserver() {
         guard let player = player else { return }
@@ -66,7 +70,7 @@ class VideoPlayerManager: ObservableObject {
         if player.timeControlStatus == .playing {
             player.pause()
         } else {
-            player.play()
+            player.rate = Float(playbackSpeed)
         }
     }
     func seek(by seconds: Double) {
@@ -91,5 +95,23 @@ class VideoPlayerManager: ObservableObject {
     
     func getCurrentVideoURL() -> URL? {
         return player?.currentItem?.asset as? AVURLAsset != nil ? (player?.currentItem?.asset as? AVURLAsset)?.url : nil
+    }
+    
+    // MARK: - Helpers
+    
+    private func observePlayerState() {
+        guard let player else { return }
+        
+        player.publisher(for: \.timeControlStatus)
+            .sink { [weak self] status in
+                guard let welf = self else { return }
+
+                if status == .playing {
+                    if player.rate != Float(welf.playbackSpeed) {
+                        player.rate = Float(welf.playbackSpeed)
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 }

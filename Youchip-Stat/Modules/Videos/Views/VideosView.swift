@@ -112,6 +112,10 @@ struct VideosView: View {
                 ProjectImportView(viewModel: viewModel, projectData: projectData)
             }
         }
+        .sheet(isPresented: $viewModel.state.showDownloadFromURLSheet) {
+            VideoDownloadFromURLView()
+                .environmentObject(viewModel)
+        }
         .alert(^String.Titles.videoUnavailable, isPresented: $viewModel.state.showRebindAlert) {
             Button(^String.Titles.cancelButtonTitle, role: .cancel) {
                 viewModel.state.fileToRebind = nil
@@ -171,6 +175,30 @@ struct VideosView: View {
                     )
                     .cornerRadius(8)
                     .shadow(color: .blue.opacity(0.3), radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Button(action: {
+                    viewModel.action.send(.showDownloadFromURLSheet)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "link")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(^String.Titles.addVideoFromURL)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(8)
+                    .shadow(color: .green.opacity(0.3), radius: 2, x: 0, y: 1)
                 }
                 .buttonStyle(PlainButtonStyle())
             }

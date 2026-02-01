@@ -49,6 +49,17 @@ class WindowsManager: NSObject {
     
     private var collectionWindowDelegate: CollectionWindowDelegate?
     
+    override init() {
+        super.init()
+        NotificationCenter.default.addObserver(
+            forName: .closeViewerWindow,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.viewerWindow = nil
+        }
+    }
+    
     func closeAll() {
         videoWindow?.window?.delegate = nil
         controlWindow?.window?.delegate = nil
@@ -340,6 +351,7 @@ class ActiveWindowManager {
             name: NSWindow.didResignKeyNotification,
             object: nil
         )
+        
     }
     
     @objc private func windowDidBecomeKey(_ notification: Notification) {
@@ -370,5 +382,9 @@ class ActiveWindowManager {
         }
         
         return false
+    }
+    
+    func isViewerWindowActive() -> Bool {
+        return currentActiveWindow?.windowController == WindowsManager.shared.viewerWindow
     }
 }

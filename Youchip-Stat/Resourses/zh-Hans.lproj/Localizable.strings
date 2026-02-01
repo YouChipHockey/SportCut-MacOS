@@ -114,6 +114,7 @@
 "CollectionsButtonSaveChanges" = "保存更改";  // ^String.Titles.collectionsButtonSaveChanges
 "TimelineButtonDeleteTag" = "删除标签";  // ^String.Titles.timelineButtonDeleteTag
 "TimelineButtonEditLabels" = "编辑标签";  // ^String.Titles.timelineButtonEditLabels
+"TimelineButtonEditTimeEvents" = "编辑时间事件";  // ^String.Titles.timelineButtonEditTimeEvents
 "TimelineButtonDeleteTimeline" = "删除时间线";  // ^String.Titles.timelineButtonDeleteTimeline
 "FieldMapPickerLabelSelectTimelines" = "选择时间线:";  // ^String.Titles.fieldMapPickerLabelSelectTimelines
 "FieldMapPickerNoTimelines" = "此集合没有带位置标签的可用时间线";  // ^String.Titles.fieldMapPickerNoTimelines
@@ -356,7 +357,7 @@
 "StandardCollections" = "标准集合";
 "FullControlButtonExportLabels" = "按标签导出";
 "CollectionsTagIsInterval" = "间隔标签";  // ^String.Titles.collectionsTagIsInterval
-"CollectionsTagIsIntervalHelp" = "如果启用，标签持续时间将自动确定且无法手动更改。";  // ^String.Titles.collectionsTagIsIntervalHelp
+"CollectionsTagIsIntervalHelp" = "用于手动设置标签（剧集）的长度。单击标签一次开始录制，再次单击结束录制。";  // ^String.Titles.collectionsTagIsIntervalHelp
 "Video" = "视频"; // ^String.Titles.video
 "ExportReports" = "导出和报告"; // ^String.Titles.exportReports
 "Tools" = "工具"; // ^String.Titles.tools
@@ -620,3 +621,6 @@
 "ExportCollectionTitle" = "导出集合"; // ^String.Titles.exportCollectionTitle
 "SelectCollectionSaveLocation" = "选择保存集合的位置"; // ^String.Titles.selectCollectionSaveLocation
 "TimestampsCount" = "%d 个时间戳"; // ^String.Titles.timestampsCount
+"RenamePlaylist" = "重命名播放列表";
+"NewName" = "新名称：";
+"Rename" = "重命名";

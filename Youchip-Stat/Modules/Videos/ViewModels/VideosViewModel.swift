@@ -25,6 +25,7 @@ class VideosViewModel: ObservableObject {
     private let fileOpenHelper = FileOpenHelper.shared
     private let cloudFilesHelper = AppCloudFilesHelper()
     private let projectExportManager = ProjectExportManager.shared
+    private let downloadManager = VideoDownloadManager.shared
     
     private let maxFreeVideos = 3
     private let addedVideosCountKey = "added_videos_count"
@@ -283,6 +284,68 @@ class VideosViewModel: ObservableObject {
                 }
             } else {
                 self.action.send(.showError(error: "Не удалось создать проект"))
+            }
+            
+        case .showDownloadFromURLSheet:
+            state.showDownloadFromURLSheet = true
+            
+        case .fetchVideoFormats(let urlString, let ext):
+            Task {
+                do {
+                    try await downloadManager.fetchFormats(for: urlString, ext: ext)
+                } catch {
+                    await MainActor.run {
+                        downloadManager.downloadState = .error(message: error.localizedDescription)
+                    }
+                }
+            }
+            
+        case .downloadVideoFromURL(let quality):
+            if !canAddMoreVideos() {
+                self.action.send(.showError(error: ^String.Titles.videoUploadLimitReached))
+                return
+            }
+            
+            Task {
+                do {
+                    let url = try await downloadManager.downloadVideo(
+                        quality: quality,
+                        filename: downloadManager.suggestedFilename
+                    )
+                    
+                    await MainActor.run {
+                        state.downloadedVideoURL = url
+                    }
+                } catch {
+                    await MainActor.run {
+                        downloadManager.downloadState = .error(message: error.localizedDescription)
+                    }
+                }
+            }
+            
+        case .cancelVideoDownload:
+            downloadManager.cancelDownload()
+            
+        case .addDownloadedVideoWithServerName(let url, let serverTitle):
+            let fileName = serverTitle ?? "Video_\(Date().timeIntervalSince1970)"
+            guard let filesFile = filesManager.importFile(url: url, newName: fileName) else {
+                self.action.send(.showError(error: ^String.Titles.alertsFileErrorTitle))
+                return
+            }
+            
+            var file = filesFile
+            guard let fileUrl = file.url else { return }
+            
+            if !authManager.isAuthValid {
+                incrementAddedVideosCount()
+            }
+            
+            filesPreviewManager.saveThumbnail(for: fileUrl) {
+                file.updateDateOpened()
+                DispatchQueue.main.async { [weak self] in
+                    self?.logVideoOpenEvent(id: file.videoData.id)
+                    WindowsManager.shared.openVideo(id: file.videoData.id)
+                }
             }
         }
     }

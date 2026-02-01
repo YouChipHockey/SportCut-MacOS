@@ -24,7 +24,7 @@ struct TagLibraryView: View {
     @State private var hoveredTagID: String? = nil
     @State private var showUserCollectionsMenu = false
     @State private var userCollections: [CollectionBookmark] = []
-    @State private var selectedUserCollection: CollectionBookmark? = nil
+    @State private var lastSelectedCollectionName: String? = nil
     @State private var isUserCollectionActive = false
     @State private var defaultTagGroups: [TagGroup] = []
     @State private var defaultTags: [Tag] = []
@@ -76,10 +76,10 @@ struct TagLibraryView: View {
     }
     
     func restoreDefaultData() {
-        if let selectedName = tagLibrary.selectedStandardCollectionName {
-            tagLibrary.applyStandardCollection(named: selectedName)
-        } else {
-            tagLibrary.restoreDefaultData()
+        tagLibrary.applyDefaultCollection()
+        if let collectionBookmarkName = userCollections.first(where: { $0.name == tagLibrary.selectedStandardCollectionName })?.name ?? tagLibrary.standardCollections.first(where: { $0.name == tagLibrary.selectedStandardCollectionName })?.name {
+            lastSelectedCollectionName = collectionBookmarkName
+            isUserCollectionActive = !tagLibrary.standardCollections.contains { $0.name == collectionBookmarkName }
         }
         hotkeyManager.registerHotkeys(from: tagLibrary.tags, for: .standard)
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
@@ -199,13 +199,13 @@ struct TagLibraryView: View {
     private var collectionTitleView: some View {
         HStack {
             Text(isUserCollectionActive ?
-                 "\(^String.Titles.customCollection) \(selectedUserCollection?.name ?? "")" :
+                 "\(^String.Titles.customCollection) \(lastSelectedCollectionName ?? "")" :
                     ^String.Titles.tagGroups)
             .font(.headline)
             .minimumScaleFactor(0.5)
             .lineLimit(1)
             
-            if isUserCollectionActive && selectedUserCollection != nil {
+            if isUserCollectionActive && lastSelectedCollectionName != nil {
                 collectionActionButtons
             }
         }
@@ -214,8 +214,8 @@ struct TagLibraryView: View {
     private var collectionActionButtons: some View {
         HStack(spacing: 8) {
             Button(action: {
-                guard let collection = selectedUserCollection else { return }
-                WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: collection)
+                guard let collectionBookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == lastSelectedCollectionName}) else { return }
+                WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: collectionBookmark)
             }) {
                 Image(systemName: "pencil.circle")
                     .foregroundColor(.blue)
@@ -224,7 +224,8 @@ struct TagLibraryView: View {
             .help(^String.Titles.editCollection)
             
             Button(action: {
-                collectionToDelete = selectedUserCollection
+                guard let collectionBookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == lastSelectedCollectionName}) else { return }
+                collectionToDelete = collectionBookmark
                 showDeleteAlert = true
             }) {
                 Image(systemName: "trash.circle")
@@ -284,7 +285,7 @@ struct TagLibraryView: View {
         Button(action: {
             guard activeIntervalTags.isEmpty else { return }
             isUserCollectionActive = false
-            selectedUserCollection = nil
+            lastSelectedCollectionName = collection.name
             tagLibrary.applyStandardCollection(named: collection.name)
             DispatchQueue.main.async {
                 self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
@@ -319,11 +320,11 @@ struct TagLibraryView: View {
     }
     
     private func customCollectionChip(collection: CollectionBookmark) -> some View {
-        let isSelected = isUserCollectionActive && selectedUserCollection?.name == collection.name
+        let isSelected = isUserCollectionActive && lastSelectedCollectionName == collection.name
         
         return Button(action: {
             guard activeIntervalTags.isEmpty else { return }
-            selectedUserCollection = collection
+            lastSelectedCollectionName = collection.name
             isUserCollectionActive = true
             loadUserCollection(collection)
         }) {
@@ -387,7 +388,7 @@ struct TagLibraryView: View {
             ForEach(tagLibrary.standardCollections, id: \.name) { collection in
                 Button(action: {
                     isUserCollectionActive = false
-                    selectedUserCollection = nil
+                    lastSelectedCollectionName = collection.name
                     tagLibrary.applyStandardCollection(named: collection.name)
                     DispatchQueue.main.async {
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
@@ -423,11 +424,13 @@ struct TagLibraryView: View {
     private var standardCollectionButton: some View {
         Button(action: {
             isUserCollectionActive = false
-            selectedUserCollection = nil
-            if let selectedName = tagLibrary.selectedStandardCollectionName {
-                tagLibrary.applyStandardCollection(named: selectedName)
-            } else if let firstCollection = tagLibrary.standardCollections.first {
-                tagLibrary.applyStandardCollection(named: firstCollection.name)
+            if let collectionName =
+                tagLibrary.selectedStandardCollectionName
+                ??
+                tagLibrary.standardCollections.first?.name
+            {
+                tagLibrary.applyStandardCollection(named: collectionName)
+                lastSelectedCollectionName = collectionName
             }
             DispatchQueue.main.async {
                 self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
@@ -460,14 +463,14 @@ struct TagLibraryView: View {
     private func userCollectionRow(for collection: CollectionBookmark) -> some View {
         HStack {
             Button(action: {
-                selectedUserCollection = collection
+                lastSelectedCollectionName = collection.name
                 isUserCollectionActive = true
                 loadUserCollection(collection)
             }) {
                 HStack {
                     Text(collection.name)
                     Spacer()
-                    if isUserCollectionActive && selectedUserCollection?.name == collection.name {
+                    if isUserCollectionActive && lastSelectedCollectionName == collection.name {
                         Image(systemName: "checkmark")
                     }
                 }
@@ -552,11 +555,13 @@ struct TagLibraryView: View {
             
             Button(action: {
                 isUserCollectionActive = false
-                selectedUserCollection = nil
-                if let selectedName = tagLibrary.selectedStandardCollectionName {
-                    tagLibrary.applyStandardCollection(named: selectedName)
-                } else if let firstCollection = tagLibrary.standardCollections.first {
-                    tagLibrary.applyStandardCollection(named: firstCollection.name)
+                if let collectionName =
+                    tagLibrary.selectedStandardCollectionName
+                    ??
+                    tagLibrary.standardCollections.first?.name
+                {
+                    tagLibrary.applyStandardCollection(named: collectionName)
+                    lastSelectedCollectionName = collectionName
                 }
                 DispatchQueue.main.async {
                     self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
@@ -605,7 +610,7 @@ struct TagLibraryView: View {
     private func legacyCollectionRow(for collection: CollectionBookmark) -> some View {
         HStack {
             Button(action: {
-                selectedUserCollection = collection
+                lastSelectedCollectionName = collection.name
                 isUserCollectionActive = true
                 loadUserCollection(collection)
                 showCollectionsList = false
@@ -615,7 +620,7 @@ struct TagLibraryView: View {
             }
             .buttonStyle(.borderless)
             .padding(5)
-            .background(isUserCollectionActive && selectedUserCollection?.name == collection.name
+            .background(isUserCollectionActive && lastSelectedCollectionName == collection.name
                         ? Color.blue.opacity(0.1) : Color.clear)
             .cornerRadius(4)
             .disabled(!activeIntervalTags.isEmpty)
@@ -834,9 +839,10 @@ struct TagLibraryView: View {
                 let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
                 
                 if hasLabels {
-                    LabelSelectionSheet(
+                    StampItemsSelectionSheet(
+                        sheetType: .lables,
                         stampName: tag.name,
-                        initialLabels: [],
+                        initialIds: [],
                         tag: tag,
                         tagLibrary: TagLibraryManager.shared,
                         onDone: { selectedLabels in
@@ -911,9 +917,10 @@ struct TagLibraryView: View {
                 let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
                 
                 if hasLabels {
-                    LabelSelectionSheet(
+                    StampItemsSelectionSheet(
+                        sheetType: .lables,
                         stampName: tag.name,
-                        initialLabels: [],
+                        initialIds: [],
                         tag: tag,
                         tagLibrary: TagLibraryManager.shared,
                         onDone: { selectedLabels in
@@ -1018,10 +1025,11 @@ struct TagLibraryView: View {
             }
         }
         NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
+            let currentSelectedUserCollectionId = userCollections.first { $0.name == self.lastSelectedCollectionName}?.id
             loadUserCollections()
-            if self.isUserCollectionActive, let currentCollection = self.selectedUserCollection,
-               let updatedCollection = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == currentCollection.name }) {
-                self.selectedUserCollection = updatedCollection
+            if self.isUserCollectionActive, let currentSelectedUserCollectionId,
+               let updatedCollection = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.id == currentSelectedUserCollectionId }) {
+                self.lastSelectedCollectionName = updatedCollection.name
                 self.loadUserCollection(updatedCollection)
             }
         }
@@ -1100,6 +1108,7 @@ struct TagLibraryView: View {
             tagLibrary.currentCollectionType = .user(name: collection.name)
             HotKeyManager.shared.clearHotkeys()
             HotKeyManager.shared.registerHotkeys(from: collectionManager.tags, for: .user(name: collection.name))
+            UserDefaults.standard.set(collection.name, forKey: UserDefaults.Keys.lastSelectedCollection)
         } else {
             tagLibrary.tags = []
             tagLibrary.tagGroups = []
@@ -1122,15 +1131,20 @@ struct TagLibraryView: View {
     private func deleteCollection(_ collection: CollectionBookmark) {
         UserDefaults.standard.removeCollectionBookmark(named: collection.name)
         
-        let collectionsFolder = URL.appDocumentsDirectory
-            .appendingPathComponent("YouChip-Stat/Collections/\(collection.name)", isDirectory: true)
-            .fixedFile()
+        let collectionFolderUrlString = URLConstants.getCollecitonFolderStringUrl(with: collection.id)
+        let collectionFolderUrl = URL.appDocumentsDirectory
+            .appendingPathComponent(collectionFolderUrlString, isDirectory: true)
         
-        try? FileManager.default.removeItem(at: collectionsFolder)
+        do {
+            try FileManager.default.removeItem(at: collectionFolderUrl)
+        } catch {
+            print("ERROR REMOVING FILE: \(error)")
+        }
+
         
-        if isUserCollectionActive && selectedUserCollection?.name == collection.name {
+        if isUserCollectionActive && lastSelectedCollectionName == collection.name {
             isUserCollectionActive = false
-            selectedUserCollection = nil
+            lastSelectedCollectionName = nil
             restoreDefaultData()
         }
         

@@ -11,12 +11,15 @@ import AVFoundation
 struct OrganizerView: View {
     @ObservedObject var playlistManager: PlaylistManager
     @ObservedObject var videoPlaylistManager: VideoPlaylistManager
+    @StateObject private var exportHelper = ExportHelper()
     @State private var draggedItem: OrganizerTag?
     @State private var showSavePlaylistSheet = false
     @State private var showPlaylistMenu = false
+    @State private var showRenameSheet = false
     @State private var isExporting = false
     @State private var showDeleteAlert = false
     @State private var playlistToDelete: SavedPlaylist?
+    @State private var renamingPlaylistId: UUID?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -28,6 +31,15 @@ struct OrganizerView: View {
         }
         .sheet(isPresented: $showSavePlaylistSheet) {
             SavePlaylistSheet(playlistManager: playlistManager)
+        }
+        .sheet(isPresented: $showRenameSheet) {
+            RenamePlaylistSheet(onCancel: {
+                showRenameSheet = false
+            }, onRename: { newName in
+                guard let renamingPlaylistId else { return }
+                showRenameSheet = false
+                playlistManager.renamePlaylist(withId: renamingPlaylistId, newName: newName)
+            })
         }
         .alert(^String.Titles.deletePlaylistQuestion, isPresented: $showDeleteAlert) {
             Button(^String.Titles.cancelButtonTitle, role: .cancel) {
@@ -82,6 +94,11 @@ struct OrganizerView: View {
             
             ForEach(playlistManager.playlists) { playlist in
                 Menu {
+                    Button(^String.Titles.renameButtonTitle) {
+                        showRenameSheet = true
+                        renamingPlaylistId = playlist.id
+                    }
+                    
                     Button(^String.Titles.load) {
                         playlistManager.loadPlaylist(playlist)
                         showPlaylistMenu = false
@@ -182,14 +199,19 @@ struct OrganizerView: View {
             .help(^String.Titles.exportPlaylist)
         }
     }
+
     
     @ViewBuilder
     private var playlistControlsView: some View {
         if !playlistManager.currentTags.isEmpty {
             HStack(spacing: 8) {
                 Button(action: {
-                    videoPlaylistManager.setPlaylist(playlistManager.currentTags)
-                    videoPlaylistManager.playPlaylist()
+                    if videoPlaylistManager.isPlaying {
+                        videoPlaylistManager.playVideo(false)
+                    } else {
+                        videoPlaylistManager.setPlaylist(playlistManager.currentTags)
+                        videoPlaylistManager.createCompositionFromPlaylist()
+                    }
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: videoPlaylistManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
@@ -294,16 +316,13 @@ struct OrganizerView: View {
     @ViewBuilder
     private var exportOverlayView: some View {
         if isExporting {
-            VStack {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle())
-                Text(^String.Titles.exporting)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-            .background(Color.black.opacity(0.7))
-            .cornerRadius(8)
+            CircularPercentProgressView(progress: Double(exportHelper.progress))
+                .frame(width: 80, height: 80)
+                .padding(30)
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(12)
+                .shadow(radius: 20)
+                .transition(.opacity)
         }
     }
     
@@ -371,6 +390,7 @@ struct OrganizerView: View {
     }
     
     private func exportPlaylist(mode: ViewerExportMode) {
+        exportHelper.resetValues()
         guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
             return
         }
@@ -455,6 +475,8 @@ struct OrganizerView: View {
                 ExportSegmentOrganaizer(
                     timeRange: CMTimeRange(start: start, duration: duration),
                     tagName: tag.tagName,
+                    tagId: tag.mainTagID,
+                    stampId: tag.stampID,
                     groupName: tag.tagGroupName ?? "",
                     labels: labels.isEmpty ? [] : labels,
                 )
@@ -507,6 +529,7 @@ struct OrganizerView: View {
             compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
         }
         
+        var overlayItems: [OverlayItem] = []
         var currentTime = CMTime.zero
         for segment in segments {
             do {
@@ -519,21 +542,47 @@ struct OrganizerView: View {
                 completion(.failure(error))
                 return
             }
+            
+            let transform = videoTrack.preferredTransform
+            let naturalSize = videoTrack.naturalSize.applying(transform)
+            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
+            let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
+            let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
+            let labelIds = segment.labels.map(\.id)
+            if let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }),
+               let stamp
+            {
+                let overlayItem = OverlayItem(
+                    tag: tag,
+                    stamp: stamp,
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
+                    start: currentTime - segment.timeRange.duration,
+                    duration: segment.timeRange.duration,
+                    videoSize: videoSize
+                )
+                overlayItems.append(overlayItem)
+            }
         }
         
-        let fileName = "playlist_film.mp4"
+        let fileName = "\(playlistManager.currentPlaylist?.name ?? ^String.Titles.newPlaylist).mp4"
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: outputURL)
         
+        let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
+        
         let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
+        exportHelper.startProgressTimer(exportSession: exportSession)
+        
         exportSession?.outputURL = outputURL
         exportSession?.outputFileType = .mp4
+        exportSession?.videoComposition = overlayVideoComposition
         exportSession?.exportAsynchronously {
             if exportSession?.status == .completed {
                 completion(.success(outputURL))
             } else {
                 completion(.failure(exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])))
             }
+            exportHelper.stopProgressTimer()
         }
     }
     
@@ -586,27 +635,47 @@ struct OrganizerView: View {
             }
             
             let fileName: String
-            var nameParts: [String] = []
-            
-            nameParts.append(segment.tagName)
-            
-            if !segment.groupName.isEmpty {
-                nameParts.append(segment.groupName)
+            let groupName = segment.groupName
+            let stampLabels = segment.labels
+            let tagName = segment.tagName
+            if !stampLabels.isEmpty {
+                let labelsString = stampLabels.map { $0.name }.joined(separator: "_")
+                fileName = "\(groupName)_\(tagName)_\(labelsString)_\(index + 1).mp4"
+            } else {
+                fileName = "\(groupName)_\(tagName)_\(index + 1).mp4"
             }
             
-            if !segment.labels.isEmpty {
-                for label in segment.labels {
-                    nameParts.append(label.name)
-                }
-            }
-            
-            fileName = "\(nameParts.joined(separator: "_")).mp4"
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try? FileManager.default.removeItem(at: clipOutputURL)
+            
+            let transform = videoTrack.preferredTransform
+            let naturalSize = videoTrack.naturalSize.applying(transform)
+            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
+            let overlayVideoComposition: AVVideoComposition?
+            let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
+            let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
+            let labelIds = segment.labels.map(\.id)
+            if let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }),
+               let stamp
+            {
+                let overlayItem = OverlayItem(
+                    tag: tag,
+                    stamp: stamp,
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
+                    start: .zero,
+                    duration: segment.timeRange.duration,
+                    videoSize: videoSize
+                )
+                overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItem: overlayItem, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
+            } else {
+                overlayVideoComposition = nil
+            }
+            
             
             let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
             exportSession?.outputURL = clipOutputURL
             exportSession?.outputFileType = .mp4
+            exportSession?.videoComposition = overlayVideoComposition
             
             exportSession?.exportAsynchronously {
                 if exportSession?.status == .completed {
@@ -614,6 +683,8 @@ struct OrganizerView: View {
                 } else {
                     exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
+                
+                exportHelper.processSegment(segmentsCount: segments.count)
                 group.leave()
             }
         }

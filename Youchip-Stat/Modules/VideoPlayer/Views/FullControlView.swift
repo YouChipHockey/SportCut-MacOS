@@ -19,15 +19,15 @@ struct FullControlView: View {
     @ObservedObject var timelineData = TimelineDataManager.shared
     @ObservedObject var focusManager = FocusStateManager.shared
     @ObservedObject var hotkeyManager = HotKeyManager.shared
+    @StateObject var exportHelper = ExportHelper()
     
     @State private var markupMode: MarkupMode = MarkupMode.current
     @State private var showMarkupModeToggle = false
     
     @State private var sliderValue: Double = 0.0
-    @State private var isDraggingSlider = false
     @State private var showAddLineSheet = false
     @State private var isExporting: Bool = false
-    @State private var showLabelEditSheet = false
+    @State private var stampItemsEditSheetType: StampEditSheetType? = nil
     @State private var showFieldMapVisualizationPicker = false
     @State private var editingStampLineID: UUID?
     @State private var editingStampID: UUID?
@@ -110,1030 +110,9 @@ struct FullControlView: View {
     @State private var hoveredStampInfo: String? = nil
     @State private var isHoveringOnPopup = false
 
-    private func correctTimeRange(startSeconds: Double, durationSeconds: Double, maxVideoDuration: Double) -> (start: Double, duration: Double)? {
-        var correctedStart = startSeconds
-        var correctedDuration = durationSeconds
-        if correctedStart < 0 {
-            correctedStart = 0
-        }
-        let endSeconds = correctedStart + correctedDuration
-        if endSeconds > maxVideoDuration {
-            let newDuration = maxVideoDuration - correctedStart
-            if newDuration > 0 {
-                correctedDuration = newDuration
-            } else {
-                return nil
-            }
-        }
-        
-        guard correctedDuration > 0 else {
-            return nil
-        }
-        
-        return (correctedStart, correctedDuration)
-    }
-    
-    func getSegmentsForExport(type: CutsExportType) -> [ExportSegment] {
-        var result: [ExportSegment] = []
-        let tagLibrary = TagLibraryManager.shared
-        
-        let maxVideoDuration = max(1.0, videoManager.videoDuration)
-        
-        switch type {
-        case .currentTimeline:
-            if let lineID = timelineData.selectedLineID,
-               let line = timelineData.lines.first(where: { $0.id == lineID }) {
-                for stamp in line.stamps {
-                    guard let correctedTime = correctTimeRange(
-                        startSeconds: stamp.timeStartSeconds,
-                        durationSeconds: stamp.duration,
-                        maxVideoDuration: maxVideoDuration
-                    ) else {
-                        continue
-                    }
-                    
-                    let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
-                    let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
-                    let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
-                    
-                    result.append(
-                        ExportSegment(
-                            timeRange: CMTimeRange(start: start, duration: duration),
-                            lineName: line.name,
-                            tagName: stamp.label,
-                            groupName: possibleGroup?.name,
-                            labels: nil,
-                            labelGroupName: nil,
-                            selectedLabel: nil,
-                            stampId: stamp.id
-                        )
-                    )
-                }
-            }
-        case .allTimelines:
-            for line in timelineData.lines {
-                for stamp in line.stamps {
-                    guard let correctedTime = correctTimeRange(
-                        startSeconds: stamp.timeStartSeconds,
-                        durationSeconds: stamp.duration,
-                        maxVideoDuration: maxVideoDuration
-                    ) else {
-                        continue
-                    }
-                    
-                    let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
-                    let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
-                    let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
-                    let labels = stamp.labels.compactMap { labelID in
-                        tagLibrary.findLabelById(labelID)?.name
-                    }
-                    let tagNameWithLabels = labels.isEmpty ? stamp.label : "\(stamp.label)(\(labels.joined(separator: "_")))"
-                    
-                    
-                    result.append(
-                        ExportSegment(
-                            timeRange: CMTimeRange(start: start, duration: duration),
-                            lineName: line.name,
-                            tagName: tagNameWithLabels,
-                            groupName: possibleGroup?.name,
-                            labels: nil,
-                            labelGroupName: nil,
-                            selectedLabel: nil,
-                            stampId: stamp.id
-                        )
-                    )
-                }
-            }
-        case .tag(let selectedTag):
-            let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(selectedTag.id) })
-            
-            for line in timelineData.lines {
-                for stamp in line.stamps {
-                    guard stamp.idTag == selectedTag.id else {
-                        continue
-                    }
-                    
-                    guard let correctedTime = correctTimeRange(
-                        startSeconds: stamp.timeStartSeconds,
-                        durationSeconds: stamp.duration,
-                        maxVideoDuration: maxVideoDuration
-                    ) else {
-                        continue
-                    }
-                    
-                    let segmentRatio = correctedTime.duration / maxVideoDuration
-                    if correctedTime.start < 0.1 && segmentRatio > 0.99 {
-                        print("Пропущен сегмент тега '\(stamp.label)' в getSegmentsForExport: покрывает \(segmentRatio * 100)% видео")
-                        continue
-                    }
-                    
-                    if correctedTime.duration < 0.1 {
-                        print("Пропущен слишком короткий сегмент тега '\(stamp.label)': duration=\(correctedTime.duration)")
-                        continue
-                    }
-                    
-                    let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
-                    let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
-                    result.append(
-                        ExportSegment(
-                            timeRange: CMTimeRange(start: start, duration: duration),
-                            lineName: line.name,
-                            tagName: stamp.label,
-                            groupName: possibleGroup?.name,
-                            labels: nil,
-                            labelGroupName: nil,
-                            selectedLabel: nil,
-                            stampId: stamp.id
-                        )
-                    )
-                }
-            }
-        case .timeEvent(let selectedEvent):
-            for line in timelineData.lines {
-                for stamp in line.stamps {
-                    if stamp.timeEvents.contains(selectedEvent.id) {
-                        guard let correctedTime = correctTimeRange(
-                            startSeconds: stamp.timeStartSeconds,
-                            durationSeconds: stamp.duration,
-                            maxVideoDuration: maxVideoDuration
-                        ) else {
-                            continue
-                        }
-                        
-                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
-                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
-                        let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
-                        
-                        result.append(
-                            ExportSegment(
-                                timeRange: CMTimeRange(start: start, duration: duration),
-                                lineName: line.name,
-                                tagName: stamp.label,
-                                groupName: possibleGroup?.name,
-                                labels: nil,
-                                labelGroupName: nil,
-                                selectedLabel: nil,
-                                stampId: stamp.id
-                            )
-                        )
-                    }
-                }
-            }
-        case .label(let selectedLabel):
-            var labelGroupName: String? = nil
-            for group in tagLibrary.allLabelGroups {
-                if group.lables.contains(selectedLabel.id) {
-                    labelGroupName = group.name
-                    break
-                }
-            }
-            
-            for line in timelineData.lines {
-                for stamp in line.stamps {
-                    if stamp.labels.contains(selectedLabel.id) {
-                        guard let correctedTime = correctTimeRange(
-                            startSeconds: stamp.timeStartSeconds,
-                            durationSeconds: stamp.duration,
-                            maxVideoDuration: maxVideoDuration
-                        ) else {
-                            continue
-                        }
-                        
-                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
-                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
-                        let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
-                        
-                        result.append(
-                            ExportSegment(
-                                timeRange: CMTimeRange(start: start, duration: duration),
-                                lineName: line.name,
-                                tagName: stamp.label,
-                                groupName: possibleGroup?.name,
-                                labels: nil,
-                                labelGroupName: labelGroupName,
-                                selectedLabel: selectedLabel,
-                                stampId: stamp.id
-                            )
-                        )
-                    }
-                }
-            }
-            
-        case .tagWithLabels(let selectedTag, let selectedLabels):
-            let labelIDs = Set(selectedLabels.map { $0.id })
-            for line in timelineData.lines {
-                for stamp in line.stamps {
-                    if stamp.idTag == selectedTag.id && !Set(stamp.labels).isDisjoint(with: labelIDs) {
-                        guard let correctedTime = correctTimeRange(
-                            startSeconds: stamp.timeStartSeconds,
-                            durationSeconds: stamp.duration,
-                            maxVideoDuration: maxVideoDuration
-                        ) else {
-                            continue
-                        }
-                        
-                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
-                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
-                        let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
-                        
-                        let stampLabels = stamp.labels.compactMap { labelID in
-                            selectedLabels.first(where: { $0.id == labelID })
-                        }
-                        
-                        result.append(
-                            ExportSegment(
-                                timeRange: CMTimeRange(start: start, duration: duration),
-                                lineName: line.name,
-                                tagName: stamp.label,
-                                groupName: possibleGroup?.name,
-                                labels: stampLabels.isEmpty ? nil : stampLabels,
-                                labelGroupName: nil,
-                                selectedLabel: nil,
-                                stampId: stamp.id
-                            )
-                        )
-                    }
-                }
-            }
-            
-        case .labelWithTags(let selectedLabel, let selectedTags):
-            var labelGroupName: String? = nil
-            for group in tagLibrary.allLabelGroups {
-                if group.lables.contains(selectedLabel.id) {
-                    labelGroupName = group.name
-                    break
-                }
-            }
-            
-            let tagIDs = Set(selectedTags.map { $0.id })
-            for line in timelineData.lines {
-                for stamp in line.stamps {
-                    if stamp.labels.contains(selectedLabel.id) && tagIDs.contains(stamp.idTag) {
-                        guard let correctedTime = correctTimeRange(
-                            startSeconds: stamp.timeStartSeconds,
-                            durationSeconds: stamp.duration,
-                            maxVideoDuration: maxVideoDuration
-                        ) else {
-                            continue
-                        }
-                        
-                        let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
-                        let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
-                        let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
-                        
-                        result.append(
-                            ExportSegment(
-                                timeRange: CMTimeRange(start: start, duration: duration),
-                                lineName: line.name,
-                                tagName: stamp.label,
-                                groupName: possibleGroup?.name,
-                                labels: nil,
-                                labelGroupName: labelGroupName,
-                                selectedLabel: selectedLabel,
-                                stampId: stamp.id
-                            )
-                        )
-                    }
-                }
-            }
-        case .screenshots:
-            break
-        }
-        
-        result.sort { $0.timeRange.start.seconds < $1.timeRange.start.seconds }
-        return result
-    }
-    
-    func exportFilm(segments: [ExportSegment], asset: AVAsset, type: CutsExportType, withScreenshots: Bool = false, completion: @escaping (Result<URL, Error>) -> Void) {
-        if segments.isEmpty {
-            completion(.failure(NSError(domain: "Export", code: -1, userInfo: [NSLocalizedDescriptionKey: "No segments to export"])))
-            return
-        }
-        
-        let composition = AVMutableComposition()
-        
-        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
-            completion(.failure(NSError(domain: "Export", code: 0, userInfo: [NSLocalizedDescriptionKey: "Video track not found"])))
-            return
-        }
-        let audioTrack = asset.tracks(withMediaType: .audio).first
-        
-        let videoDuration = CMTimeGetSeconds(asset.duration)
-        
-        guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            completion(.failure(NSError(domain: "Export", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])))
-            return
-        }
-        var compAudioTrack: AVMutableCompositionTrack? = nil
-        if audioTrack != nil {
-            compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-        }
-        
-        var currentTime = CMTime.zero
-        
-        for segment in segments {
-            let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
-            let segmentDuration = CMTimeGetSeconds(segment.timeRange.duration)
-            let segmentEnd = segmentStart + segmentDuration
-            
-            if segmentStart < 0.1 && segmentEnd > videoDuration * 0.99 {
-                print("Пропущен сегмент, который равен всему видео: start=\(segmentStart), duration=\(segmentDuration), videoDuration=\(videoDuration)")
-                continue
-            }
-            
-            if withScreenshots {
-                let screenshots = getScreenshotsInSegment(segment)
-                if !screenshots.isEmpty {
-                    currentTime = insertScreenshotsIntoComposition(
-                        composition: composition,
-                        videoTrack: videoTrack,
-                        audioTrack: audioTrack,
-                        segment: segment,
-                        screenshots: screenshots,
-                        startTime: currentTime
-                    )
-                    continue
-                }
-            }
-            
-            do {
-                try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: currentTime)
-                if let compAudio = compAudioTrack, let aTrack = audioTrack {
-                    try compAudio.insertTimeRange(segment.timeRange, of: aTrack, at: currentTime)
-                }
-                currentTime = currentTime + segment.timeRange.duration
-            } catch {
-                completion(.failure(error))
-                return
-            }
-        }
-        
-        if currentTime == CMTime.zero {
-            completion(.failure(NSError(domain: "Export", code: -2, userInfo: [NSLocalizedDescriptionKey: "No valid segments to export"])))
-            return
-        }
-        
-        let fileName: String
-        switch type {
-        case .currentTimeline:
-            if let lineName = segments.first?.lineName {
-                fileName = "\(lineName)\(^String.Titles.fullControlFileTimelineFile)"
-            } else {
-                fileName = "timeline\(^String.Titles.fullControlFileTimelineFile)"
-            }
-        case .tag(let selectedTag):
-            let groupName = segments.first?.groupName ?? "group"
-            fileName = "\(groupName)_\(selectedTag.name)\(^String.Titles.fullControlFileTimelineFile)"
-        case .timeEvent(let selectedEvent):
-            let tagName = segments.first?.tagName ?? "tag"
-            fileName = "\(selectedEvent.name)_\(tagName)\(^String.Titles.fullControlFileTimelineFile)"
-        case .allTimelines:
-            if let firstSegment = segments.first {
-                let groupName = firstSegment.groupName ?? "group"
-                let tagName = firstSegment.tagName
-                fileName = "\(groupName)_\(tagName)\(^String.Titles.fullControlFileTimelineFile)"
-            } else {
-                fileName = ^String.Titles.fullControlFileAllTimelinesFile
-            }
-        case .label(let selectedLabel):
-            fileName = "\(selectedLabel.name)\(^String.Titles.fullControlFileTimelineFile)"
-            
-        case .tagWithLabels(let selectedTag, let selectedLabels):
-            let labelsString = selectedLabels.map { $0.name }.joined(separator: "_")
-            fileName = "\(selectedTag.name)_\(labelsString)\(^String.Titles.fullControlFileTimelineFile)"
-            
-        case .labelWithTags(let selectedLabel, let selectedTags):
-            let tagsString = selectedTags.map { $0.name }.joined(separator: "_")
-            fileName = "\(selectedLabel.name)_\(tagsString)\(^String.Titles.fullControlFileTimelineFile)"
-        case .screenshots:
-            fileName = "screenshots.mp4"
-        }
-        
-        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        try? FileManager.default.removeItem(at: outputURL)
-        
-        let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
-        exportSession?.outputURL = outputURL
-        exportSession?.outputFileType = .mp4
-        exportSession?.exportAsynchronously {
-            if exportSession?.status == .completed {
-                completion(.success(outputURL))
-            } else {
-                completion(.failure(exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])))
-            }
-        }
-    }
-    
-    func exportPlaylist(segments: [ExportSegment],
-                        asset: AVAsset,
-                        type: CutsExportType,
-                        withScreenshots: Bool = false,
-                        completion: @escaping (Result<URL, Error>) -> Void)
-    {
-        
-        if segments.isEmpty {
-            completion(.failure(NSError(domain: "Export", code: -1, userInfo: [NSLocalizedDescriptionKey: "No segments to export"])))
-            return
-        }
-        
-        var exportedURLs: [URL] = []
-        let group = DispatchGroup()
-        var exportError: Error? = nil
-        
-        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
-            completion(.failure(NSError(domain: "Export", code: 0, userInfo: [NSLocalizedDescriptionKey: "Video track not found"])))
-            return
-        }
-        let audioTrack = asset.tracks(withMediaType: .audio).first
-        
-        let videoDuration = CMTimeGetSeconds(asset.duration)
-        
-        for (index, segment) in segments.enumerated() {
-            
-            let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
-            let segmentDuration = CMTimeGetSeconds(segment.timeRange.duration)
-            let segmentEnd = segmentStart + segmentDuration
-            
-            if segmentStart < 0.1 && segmentEnd > videoDuration * 0.99 {
-                print("Пропущен сегмент в плейлисте, который равен всему видео: start=\(segmentStart), duration=\(segmentDuration), videoDuration=\(videoDuration)")
-                continue
-            }
-            
-            group.enter()
-            
-            let composition = AVMutableComposition()
-            guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video,
-                                                                   preferredTrackID: kCMPersistentTrackID_Invalid)
-            else {
-                exportError = NSError(domain: "Export", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])
-                group.leave()
-                continue
-            }
-            var compAudioTrack: AVMutableCompositionTrack? = nil
-            if let aTrack = audioTrack {
-                compAudioTrack = composition.addMutableTrack(withMediaType: .audio,
-                                                             preferredTrackID: kCMPersistentTrackID_Invalid)
-            }
-            
-            if withScreenshots {
-                let screenshots = getScreenshotsInSegment(segment)
-                if !screenshots.isEmpty {
-                    _ = insertScreenshotsIntoComposition(
-                        composition: composition,
-                        videoTrack: videoTrack,
-                        audioTrack: audioTrack,
-                        segment: segment,
-                        screenshots: screenshots,
-                        startTime: .zero
-                    )
-                } else {
-                    do {
-                        try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: .zero)
-                        if let compAudio = compAudioTrack, let aTrack = audioTrack {
-                            try compAudio.insertTimeRange(segment.timeRange, of: aTrack, at: .zero)
-                        }
-                    } catch {
-                        exportError = error
-                        group.leave()
-                        continue
-                    }
-                }
-            } else {
-                do {
-                    try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: .zero)
-                    if let compAudio = compAudioTrack, let aTrack = audioTrack {
-                        try compAudio.insertTimeRange(segment.timeRange, of: aTrack, at: .zero)
-                    }
-                } catch {
-                    exportError = error
-                    group.leave()
-                    continue
-                }
-            }
-            let fileName: String
-            
-            switch type {
-            case .currentTimeline:
-                let lineName = segment.lineName ?? ^String.Titles.fullControlFileTimeline
-                fileName = "\(lineName)_\(segment.tagName)_\(index + 1).mp4"
-                
-            case .allTimelines:
-                let lineName = segment.lineName ?? ^String.Titles.fullControlFileTimeline
-                let groupName = segment.groupName ?? "group"
-                let tagName = segment.tagName
-                fileName = "\(lineName)_\(groupName)_\(tagName)_\(index + 1).mp4"
-                
-            case .tag(let selectedTag):
-                let groupName = segment.groupName ?? "group"
-                fileName = "\(groupName)_\(selectedTag.name)_\(index + 1).mp4"
-                
-            case .timeEvent(let selectedEvent):
-                fileName = "\(selectedEvent.name)_\(segment.tagName)_\(index + 1).mp4"
-            case .label(let selectedLabel):
-                let labelGroupName = segment.labelGroupName ?? "Labels"
-                fileName = "\(labelGroupName)_\(selectedLabel.name)_\(segment.tagName)_\(index + 1).mp4"
-                
-            case .tagWithLabels(let selectedTag, let selectedLabels):
-                let groupName = segment.groupName ?? "group"
-                if let stampLabels = segment.labels, !stampLabels.isEmpty {
-                    let labelsString = stampLabels.map { $0.name }.joined(separator: "_")
-                    fileName = "\(groupName)_\(selectedTag.name)_\(labelsString)_\(index + 1).mp4"
-                } else {
-                    fileName = "\(groupName)_\(selectedTag.name)_\(index + 1).mp4"
-                }
-                
-            case .labelWithTags(let selectedLabel, let selectedTags):
-                let labelGroupName = segment.labelGroupName ?? "Labels"
-                fileName = "\(labelGroupName)_\(selectedLabel.name)_\(segment.tagName)_\(index + 1).mp4"
-            case .screenshots:
-                fileName = "screenshot_\(index + 1).png"
-            }
-            
-            let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try? FileManager.default.removeItem(at: clipOutputURL)
-            
-            let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
-            exportSession?.outputURL = clipOutputURL
-            exportSession?.outputFileType = .mp4
-            
-            exportSession?.exportAsynchronously {
-                if exportSession?.status == .completed {
-                    exportedURLs.append(clipOutputURL)
-                } else {
-                    exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
-                }
-                group.leave()
-            }
-        }
-        
-        group.notify(queue: .main) {
-            if let error = exportError {
-                completion(.failure(error))
-            } else if exportedURLs.isEmpty {
-                completion(.failure(NSError(domain: "Export", code: -3, userInfo: [NSLocalizedDescriptionKey: "No valid segments were exported"])))
-            } else {
-                compressFiles(urls: exportedURLs, completion: completion)
-            }
-        }
-    }
-    
     @State private var isLoading = false
     @State private var availableTags: [Tag] = []
     @State private var availableLabels: [Label] = []
-    
-    func getScreenshotsInSegment(_ segment: ExportSegment) -> [ScreenshotMetadata] {
-        let screenshots = ScreenshotsMetadataManager.shared.screenshots
-        let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
-        let segmentEnd = segmentStart + CMTimeGetSeconds(segment.timeRange.duration)
-        
-        // Filter screenshots that are in the time range
-        let screenshotsInTimeRange = screenshots.filter { screenshot in
-            screenshot.videoTime >= segmentStart && screenshot.videoTime <= segmentEnd
-        }
-        
-        // If segment has a stampId, only include screenshots that are related to that stamp
-        if let stampId = segment.stampId {
-            return screenshotsInTimeRange.filter { screenshot in
-                screenshot.relatedStampIds.contains(stampId)
-            }
-        }
-        
-        // If no stampId, return all screenshots in time range (backward compatibility)
-        return screenshotsInTimeRange
-    }
-    
-    func insertScreenshotsIntoComposition(composition: AVMutableComposition, 
-                                         videoTrack: AVAssetTrack,
-                                         audioTrack: AVAssetTrack?,
-                                         segment: ExportSegment,
-                                         screenshots: [ScreenshotMetadata],
-                                         startTime: CMTime) -> CMTime {
-        guard let compVideoTrack = composition.tracks(withMediaType: .video).first,
-              let filesFile = getCurrentFile() else {
-            return startTime
-        }
-        
-        let screenshotsFolder = filesFile.screenshotsFolder
-        let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
-        var currentTime = startTime
-        var lastVideoTime = segmentStart
-        
-        let sortedScreenshots = screenshots.sorted(by: { $0.videoTime < $1.videoTime })
-        
-        for screenshot in sortedScreenshots {
-            let screenshotTimeInSegment = screenshot.videoTime
-            
-            if screenshotTimeInSegment > lastVideoTime {
-                let videoDuration = screenshotTimeInSegment - lastVideoTime
-                let videoRange = CMTimeRange(
-                    start: CMTime(seconds: lastVideoTime, preferredTimescale: 600),
-                    duration: CMTime(seconds: videoDuration, preferredTimescale: 600)
-                )
-                
-                do {
-                    try compVideoTrack.insertTimeRange(videoRange, of: videoTrack, at: currentTime)
-                    if let compAudioTrack = composition.tracks(withMediaType: .audio).first,
-                       let aTrack = audioTrack {
-                        try compAudioTrack.insertTimeRange(videoRange, of: aTrack, at: currentTime)
-                    }
-                    currentTime = CMTimeAdd(currentTime, videoRange.duration)
-                } catch {
-                    print("Error inserting video before screenshot: \(error)")
-                }
-            }
-            
-            let imageFileName = screenshot.screenshotName.hasSuffix(".png") ? screenshot.screenshotName : "\(screenshot.screenshotName).png"
-            let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
-            
-            if let image = NSImage(contentsOf: imageURL) {
-                let group = DispatchGroup()
-                group.enter()
-                var screenshotVideoURL: URL?
-                
-                // Используем displayDuration из метаданных скриншота
-                let displayDuration = screenshot.displayDuration
-                print("📸 Экспорт скриншота '\(screenshot.screenshotName)' с длительностью \(displayDuration) секунд")
-                
-                createVideoFromImage(image, duration: displayDuration) { result in
-                    if case .success(let url) = result {
-                        screenshotVideoURL = url
-                    }
-                    group.leave()
-                }
-                
-                group.wait()
-                
-                if let videoURL = screenshotVideoURL,
-                   let screenshotAsset = try? AVURLAsset(url: videoURL),
-                   let screenshotVideoTrack = screenshotAsset.tracks(withMediaType: .video).first {
-                    do {
-                        try compVideoTrack.insertTimeRange(
-                            CMTimeRange(start: .zero, duration: screenshotAsset.duration),
-                            of: screenshotVideoTrack,
-                            at: currentTime
-                        )
-                        currentTime = CMTimeAdd(currentTime, screenshotAsset.duration)
-                        try? FileManager.default.removeItem(at: videoURL)
-                    } catch {
-                        print("Error inserting screenshot video: \(error)")
-                    }
-                }
-            }
-            
-            lastVideoTime = screenshotTimeInSegment
-        }
-        
-        let segmentEnd = segmentStart + CMTimeGetSeconds(segment.timeRange.duration)
-        if lastVideoTime < segmentEnd {
-            let remainingDuration = segmentEnd - lastVideoTime
-            let videoRange = CMTimeRange(
-                start: CMTime(seconds: lastVideoTime, preferredTimescale: 600),
-                duration: CMTime(seconds: remainingDuration, preferredTimescale: 600)
-            )
-            
-            do {
-                try compVideoTrack.insertTimeRange(videoRange, of: videoTrack, at: currentTime)
-                if let compAudioTrack = composition.tracks(withMediaType: .audio).first,
-                   let aTrack = audioTrack {
-                    try compAudioTrack.insertTimeRange(videoRange, of: aTrack, at: currentTime)
-                }
-                currentTime = CMTimeAdd(currentTime, videoRange.duration)
-            } catch {
-                print("Error inserting remaining video: \(error)")
-            }
-        }
-        
-        return currentTime
-    }
-    
-    func createVideoFromImage(_ image: NSImage, duration: Double = 3.0, completion: @escaping (Result<URL, Error>) -> Void) {
-        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("screenshot_\(UUID().uuidString).mp4")
-        try? FileManager.default.removeItem(at: outputURL)
-        
-        let fps: Double = 30.0
-        let totalFrames = Int(ceil(duration * fps))
-        print("🎬 createVideoFromImage: создание видео длительностью \(duration) секунд, \(totalFrames) кадров")
-        
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            completion(.failure(NSError(domain: "ImageConversion", code: 0, userInfo: [NSLocalizedDescriptionKey: "Could not convert image to CGImage"])))
-            return
-        }
-        
-        let videoWriter: AVAssetWriter
-        do {
-            videoWriter = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
-        } catch {
-            completion(.failure(error))
-            return
-        }
-        
-        let videoSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: cgImage.width,
-            AVVideoHeightKey: cgImage.height
-        ]
-        
-        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
-        writerInput.expectsMediaDataInRealTime = false
-        
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-            assetWriterInput: writerInput,
-            sourcePixelBufferAttributes: [
-                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
-                kCVPixelBufferWidthKey as String: cgImage.width,
-                kCVPixelBufferHeightKey as String: cgImage.height
-            ]
-        )
-        
-        videoWriter.add(writerInput)
-        videoWriter.startWriting()
-        videoWriter.startSession(atSourceTime: .zero)
-        
-        let queue = DispatchQueue(label: "com.youchip.videoCreation", qos: .userInitiated)
-        
-        writerInput.requestMediaDataWhenReady(on: queue) {
-            var frameCount = 0
-            var success = true
-            
-            while frameCount < totalFrames {
-                // Ждём, пока writerInput будет готов принять данные
-                while !writerInput.isReadyForMoreMediaData {
-                    if videoWriter.status == .failed {
-                        success = false
-                        break
-                    }
-                    Thread.sleep(forTimeInterval: 0.01)
-                }
-                
-                if !success {
-                    break
-                }
-                
-                let presentationTime = CMTime(seconds: Double(frameCount) / fps, preferredTimescale: 600)
-                
-                var pixelBuffer: CVPixelBuffer?
-                
-                // Создаём pixel buffer вручную, если pool недоступен
-                if let pixelBufferPool = adaptor.pixelBufferPool {
-                    CVPixelBufferPoolCreatePixelBuffer(nil, pixelBufferPool, &pixelBuffer)
-                } else {
-                    let options: [String: Any] = [
-                        kCVPixelBufferCGImageCompatibilityKey as String: true,
-                        kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
-                        kCVPixelBufferWidthKey as String: cgImage.width,
-                        kCVPixelBufferHeightKey as String: cgImage.height,
-                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB
-                    ]
-                    CVPixelBufferCreate(kCFAllocatorDefault, cgImage.width, cgImage.height, kCVPixelFormatType_32ARGB, options as CFDictionary, &pixelBuffer)
-                }
-                
-                if let pixelBuffer = pixelBuffer {
-                    CVPixelBufferLockBaseAddress(pixelBuffer, [])
-                    let pixelData = CVPixelBufferGetBaseAddress(pixelBuffer)
-                    
-                    let rgbColorSpace = CGColorSpaceCreateDeviceRGB()
-                    if let context = CGContext(
-                        data: pixelData,
-                        width: cgImage.width,
-                        height: cgImage.height,
-                        bitsPerComponent: 8,
-                        bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
-                        space: rgbColorSpace,
-                        bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
-                    ) {
-                        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
-                    }
-                    
-                    CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-                    
-                    if !adaptor.append(pixelBuffer, withPresentationTime: presentationTime) {
-                        print("⚠️ Не удалось добавить кадр \(frameCount) в видео")
-                        success = false
-                        break
-                    }
-                }
-                
-                frameCount += 1
-            }
-            
-            print("✅ Записано \(frameCount) кадров из \(totalFrames)")
-            
-            writerInput.markAsFinished()
-            videoWriter.finishWriting {
-                if videoWriter.status == .completed {
-                    print("✅ Видео успешно создано: \(outputURL.lastPathComponent), длительность: \(duration)с")
-                    completion(.success(outputURL))
-                } else if let error = videoWriter.error {
-                    print("❌ Ошибка создания видео: \(error.localizedDescription)")
-                    completion(.failure(error))
-                } else {
-                    print("❌ Неизвестная ошибка создания видео, статус: \(videoWriter.status.rawValue)")
-                    completion(.failure(NSError(domain: "VideoCreation", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown error creating video from image, status: \(videoWriter.status.rawValue)"])))
-                }
-            }
-        }
-    }
-    
-    func compressFiles(urls: [URL], completion: @escaping (Result<URL, Error>) -> Void) {
-        let zipURL = FileManager.default.temporaryDirectory.appendingPathComponent("export_playlist.zip")
-        try? FileManager.default.removeItem(at: zipURL)
-        
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-        
-        var arguments = ["-j", zipURL.path]
-        for fileURL in urls {
-            arguments.append(fileURL.path)
-        }
-        process.arguments = arguments
-        
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            if process.terminationStatus == 0 {
-                completion(.success(zipURL))
-            } else {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let errorMessage = String(data: data, encoding: .utf8) ?? ^String.Titles.unknownError
-                let error = NSError(domain: "ZIPError", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errorMessage])
-                completion(.failure(error))
-            }
-        } catch {
-            completion(.failure(error))
-        }
-    }
-    
-    func exportScreenshots(completion: @escaping (Result<URL, Error>) -> Void) {
-        let screenshots = ScreenshotsMetadataManager.shared.screenshots
-        
-        if screenshots.isEmpty {
-            completion(.failure(NSError(domain: "Export", code: -1, userInfo: [NSLocalizedDescriptionKey: "Нет скриншотов для экспорта"])))
-            return
-        }
-        
-        guard let filesFile = getCurrentFile() else {
-            completion(.failure(NSError(domain: "Export", code: -2, userInfo: [NSLocalizedDescriptionKey: "Не найдены файлы проекта"])))
-            return
-        }
-        
-        let screenshotsFolder = filesFile.screenshotsFolder
-        var screenshotURLs: [URL] = []
-        
-        for screenshot in screenshots {
-            let imageFileName = screenshot.screenshotName.hasSuffix(".png") ? screenshot.screenshotName : "\(screenshot.screenshotName).png"
-            let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
-            
-            if FileManager.default.fileExists(atPath: imageURL.path) {
-                screenshotURLs.append(imageURL)
-            } else {
-                print("Screenshot not found: \(imageFileName)")
-            }
-        }
-        
-        if screenshotURLs.isEmpty {
-            completion(.failure(NSError(domain: "Export", code: -3, userInfo: [NSLocalizedDescriptionKey: "Не найдены файлы скриншотов"])))
-            return
-        }
-        
-        let zipURL = FileManager.default.temporaryDirectory.appendingPathComponent("screenshots.zip")
-        try? FileManager.default.removeItem(at: zipURL)
-        
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-        
-        var arguments = ["-j", zipURL.path]
-        for fileURL in screenshotURLs {
-            arguments.append(fileURL.path)
-        }
-        process.arguments = arguments
-        
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            if process.terminationStatus == 0 {
-                completion(.success(zipURL))
-            } else {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let errorMessage = String(data: data, encoding: .utf8) ?? ^String.Titles.unknownError
-                let error = NSError(domain: "ZIPError", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errorMessage])
-                completion(.failure(error))
-            }
-        } catch {
-            completion(.failure(error))
-        }
-    }
-    
-    func generateReport() {
-        
-    }
-    
-    func performExport(mode: ExportMode) {
-        guard let selectedType = selectedExportType else { return }
-        
-        if case .screenshots = selectedType {
-            isExporting = true
-            
-            exportScreenshots { result in
-                DispatchQueue.main.async {
-                    self.isExporting = false
-                    
-                    switch result {
-                    case .success(let zipURL):
-                        let panel = NSSavePanel()
-                        panel.allowedFileTypes = ["zip"]
-                        panel.nameFieldStringValue = "screenshots.zip"
-                        if panel.runModal() == .OK, let url = panel.url {
-                            do {
-                                try FileManager.default.copyItem(at: zipURL, to: url)
-                                print("Скриншоты успешно экспортированы: \(url)")
-                            } catch {
-                                self.errorMessage = "Ошибка сохранения скриншотов: \(error.localizedDescription)"
-                                self.showErrorAlert = true
-                            }
-                        }
-                    case .failure(let error):
-                        self.errorMessage = "Ошибка экспорта скриншотов: \(error.localizedDescription)"
-                        self.showErrorAlert = true
-                    }
-                }
-            }
-            return
-        }
-        
-        guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
-            errorMessage = "Asset not found"
-            showErrorAlert = true
-            return
-        }
-        
-        let segments = getSegmentsForExport(type: selectedType)
-        if segments.isEmpty {
-            errorMessage = ^String.Titles.fullControlExportNoSegments
-            showErrorAlert = true
-            return
-        }
-        
-        isExporting = true
-        
-        if mode == .film {
-            exportFilm(segments: segments, asset: asset, type: selectedType, withScreenshots: exportWithScreenshots) { result in
-                DispatchQueue.main.async {
-                    self.isExporting = false
-                    
-                    switch result {
-                    case .success(let outputURL):
-                        let panel = NSSavePanel()
-                        panel.allowedFileTypes = ["mp4"]
-                        panel.nameFieldStringValue = outputURL.lastPathComponent
-                        if panel.runModal() == .OK, let url = panel.url {
-                            do {
-                                try FileManager.default.copyItem(at: outputURL, to: url)
-                                print("\(^String.Titles.fullControlExportFilmSuccess) \(url)")
-                            } catch {
-                                self.errorMessage = "\(^String.Titles.fullControlExportFilmError): \(error.localizedDescription)"
-                                self.showErrorAlert = true
-                            }
-                        }
-                    case .failure(let error):
-                        self.errorMessage = "\(^String.Titles.fullControlExportFilmError): \(error.localizedDescription)"
-                        self.showErrorAlert = true
-                    }
-                }
-            }
-        } else {
-            exportPlaylist(segments: segments, asset: asset, type: selectedType, withScreenshots: exportWithScreenshots) { result in
-                DispatchQueue.main.async {
-                    self.isExporting = false
-                    
-                    switch result {
-                    case .success(let zipURL):
-                        let panel = NSSavePanel()
-                        panel.allowedFileTypes = ["zip"]
-                        panel.nameFieldStringValue = "export_playlist.zip"
-                        if panel.runModal() == .OK, let url = panel.url {
-                            do {
-                                try FileManager.default.copyItem(at: zipURL, to: url)
-                            } catch {
-                                self.errorMessage = "Ошибка сохранения плейлиста: \(error.localizedDescription)"
-                                self.showErrorAlert = true
-                            }
-                        }
-                    case .failure(let error):
-                        self.errorMessage = "Ошибка экспорта плейлиста: \(error.localizedDescription)"
-                        self.showErrorAlert = true
-                    }
-                }
-            }
-        }
-    }
     
     @State private var multiTagSelectionItem: MultiSelectionItem?
     @State private var multiLabelSelectionItem: MultiSelectionItem?
@@ -1230,6 +209,7 @@ struct FullControlView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+
     }
     
     private func formatTimeForHover(_ time: Double) -> String {
@@ -1273,11 +253,18 @@ struct FullControlView: View {
                         isSelected: (line.id == timelineData.selectedLineID),
                         onSelect: { timelineData.selectLine(line.id) },
                         onEditLabelsRequest: { stampID in
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                showLabelEditSheet = true
-                            }
                             UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
                             UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                stampItemsEditSheetType = .lables
+                            }
+                        },
+                        onEditTimeEventsRequest: { stampID in
+                            UserDefaults.standard.set(line.id.uuidString, forKey: "editingStampLineID")
+                            UserDefaults.standard.set(stampID.uuidString, forKey: "editingStampID")
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                stampItemsEditSheetType = .timeEvents
+                            }
                         },
                         onTagDragging: { tagEdgePosition in
                             self.tagEdgePosition = tagEdgePosition
@@ -1288,7 +275,9 @@ struct FullControlView: View {
                     .frame(height: 30)
                     .id("timeline-\(line.id)")
                 }
+                
             }
+            .padding(.bottom, 15) // for scroll indicator to not overlap timelines
             
             ScreenshotMarkersView(
                 duration: duration,
@@ -1301,11 +290,7 @@ struct FullControlView: View {
                 .fill(Color.red)
                 .frame(width: 2)
                 .offset(x: tagEdgePosition ?? timeOffsetToPixels)
-        }
-        .frame(width: gridWidth)
-        .contentShape(Rectangle())
-        .coordinateSpace(name: "timelineSpace")
-        .background(
+            
             TimelineMouseTracker(
                 duration: duration,
                 gridWidth: gridWidth,
@@ -1319,7 +304,10 @@ struct FullControlView: View {
                     )
                 }
             )
-        )
+            .allowsHitTesting(false)
+        }
+        .frame(width: gridWidth)
+        .coordinateSpace(name: "timelineSpace")
     }
     
     @ViewBuilder
@@ -1743,216 +731,19 @@ struct FullControlView: View {
         let isSmallScreen = width < 1700
         
         HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(^String.Titles.video)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                
-                if isSmallScreen {
-                    VStack(spacing: 4) {
-                        HStack(spacing: 8) {
-                            Button(action: { handleActionWithEditorCheck { videoManager.seek(by: -10) } }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "gobackward.10")
-                                        .font(.system(size: 12, weight: .medium))
-                                    Text("10s")
-                                        .font(.system(size: 10, weight: .medium))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.blue.opacity(0.1))
-                                .foregroundColor(.blue)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: { handleActionWithEditorCheck { videoManager.seek(by: -5) } }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "gobackward.5")
-                                        .font(.system(size: 12, weight: .medium))
-                                    Text("5s")
-                                        .font(.system(size: 10, weight: .medium))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.cyan.opacity(0.1))
-                                .foregroundColor(.cyan)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: { handleActionWithEditorCheck { videoManager.togglePlayPause() } }) {
-                                Image(systemName: "playpause")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .padding(6)
-                                    .background(Color.green.opacity(0.1))
-                                    .foregroundColor(.green)
-                                    .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: { handleActionWithEditorCheck { videoManager.seek(by: 5) } }) {
-                                HStack(spacing: 4) {
-                                    Text("5s")
-                                        .font(.system(size: 10, weight: .medium))
-                                    Image(systemName: "goforward.5")
-                                        .font(.system(size: 12, weight: .medium))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.cyan.opacity(0.1))
-                                .foregroundColor(.cyan)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: { handleActionWithEditorCheck { videoManager.seek(by: 10) } }) {
-                                HStack(spacing: 4) {
-                                    Text("10s")
-                                        .font(.system(size: 10, weight: .medium))
-                                    Image(systemName: "goforward.10")
-                                        .font(.system(size: 12, weight: .medium))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.blue.opacity(0.1))
-                                .foregroundColor(.blue)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                        
-                        HStack(spacing: 8) {
-                            Menu {
-                                ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0], id: \.self) { speed in
-                                    Button(String(format: "%.2fx", speed)) {
-                                        handleActionWithEditorCheck {
-                                            videoManager.changePlaybackSpeed(to: speed)
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "speedometer")
-                                        .font(.system(size: 12, weight: .medium))
-                                    Text("x\(String(format: "%.2f", videoManager.playbackSpeed))")
-                                        .font(.system(size: 10, weight: .medium))
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 8))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.orange.opacity(0.1))
-                                .foregroundColor(.orange)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            Spacer()
-                        }
-                    }
-                } else {
-                    HStack(spacing: 8) {
-                        Button(action: { handleActionWithEditorCheck { videoManager.seek(by: -10) } }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "gobackward.10")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text("10s")
-                                    .font(.system(size: 10, weight: .medium))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.blue.opacity(0.1))
-                            .foregroundColor(.blue)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Button(action: { handleActionWithEditorCheck { videoManager.seek(by: -5) } }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "gobackward.5")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text("5s")
-                                    .font(.system(size: 10, weight: .medium))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.cyan.opacity(0.1))
-                            .foregroundColor(.cyan)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Button(action: { handleActionWithEditorCheck { videoManager.togglePlayPause() } }) {
-                            Image(systemName: "playpause")
-                                .font(.system(size: 14, weight: .medium))
-                                .padding(6)
-                                .background(Color.green.opacity(0.1))
-                                .foregroundColor(.green)
-                                .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Button(action: { handleActionWithEditorCheck { videoManager.seek(by: 5) } }) {
-                            HStack(spacing: 4) {
-                                Text("5s")
-                                    .font(.system(size: 10, weight: .medium))
-                                Image(systemName: "goforward.5")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.cyan.opacity(0.1))
-                            .foregroundColor(.cyan)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Button(action: { handleActionWithEditorCheck { videoManager.seek(by: 10) } }) {
-                            HStack(spacing: 4) {
-                                Text("10s")
-                                    .font(.system(size: 10, weight: .medium))
-                                Image(systemName: "goforward.10")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.blue.opacity(0.1))
-                            .foregroundColor(.blue)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Menu {
-                            ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0], id: \.self) { speed in
-                                Button(String(format: "%.2fx", speed)) {
-                                    handleActionWithEditorCheck {
-                                        videoManager.changePlaybackSpeed(to: speed)
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "speedometer")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text("x\(String(format: "%.2f", videoManager.playbackSpeed))")
-                                    .font(.system(size: 10, weight: .medium))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 8))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.orange.opacity(0.1))
-                            .foregroundColor(.orange)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.gray.opacity(0.05))
-            .cornerRadius(8)
+            VideoControlPanelView(
+                width: width,
+                playbackSpeed: videoManager.playbackSpeed,
+                forViewerMode: false,
+                actions: .init(
+                    seekBackward10: { videoManager.seek(by: -10) },
+                    seekBackward5: { videoManager.seek(by: -5) },
+                    togglePlayPause: { videoManager.togglePlayPause() },
+                    seekForward5: { videoManager.seek(by: 5) },
+                    seekForward10: { videoManager.seek(by: 10) },
+                    changeSpeed: { videoManager.changePlaybackSpeed(to: $0) }
+                )
+            )
             
             VStack(alignment: .leading, spacing: 8) {
                 Text(^String.Titles.timelines)
@@ -2180,10 +971,6 @@ struct FullControlView: View {
                                 Button(^String.Titles.fullControlButtonExportEvents) {
                                     showEventSelectionSheet = true
                                 }
-                                Button("Экспорт картинок") {
-                                    selectedExportType = .screenshots
-                                    performExport(mode: .playlist)
-                                }
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "video")
@@ -2264,10 +1051,6 @@ struct FullControlView: View {
                             }
                             Button(^String.Titles.fullControlButtonExportEvents) {
                                 showEventSelectionSheet = true
-                            }
-                            Button("Экспорт картинок") {
-                                selectedExportType = .screenshots
-                                performExport(mode: .playlist)
                             }
                         } label: {
                             HStack(spacing: 4) {
@@ -2494,26 +1277,17 @@ struct FullControlView: View {
             .padding(.horizontal)
             .padding(.top, 12)
             .frame(minWidth: 800, minHeight: 300)
-            .overlay(
-                Group {
-                    if isExporting {
-                        VStack {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
-                                .scaleEffect(1.5)
-                            Text(^String.Titles.exporting)
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding(.top, 8)
-                        }
+            .overlay {
+                if isExporting {
+                    CircularPercentProgressView(progress: Double(exportHelper.progress))
+                        .frame(width: 80, height: 80)
                         .padding(30)
                         .background(Color.black.opacity(0.8))
                         .cornerRadius(12)
                         .shadow(radius: 20)
                         .transition(.opacity)
-                    }
                 }
-            )
+            }
             .onAppear {
                 parentWindowHeight = geo.size.height
                 setupKeyboardShortcuts()
@@ -2570,14 +1344,24 @@ struct FullControlView: View {
                 timelineData.addLine(name: newLineName)
             }
         }
-        .sheet(isPresented: $showLabelEditSheet) {
-            LabelEditSheet(showLabelEditSheet: $showLabelEditSheet)
+        .sheet(item: $stampItemsEditSheetType) { sheetType in
+            StampEditSheet(sheetType: sheetType)
         }
         .sheet(isPresented: $showExportModeSheet) {
-            ExportModeSelectionSheet(onSelect: { mode in
-                performExport(mode: mode)
-                showExportModeSheet = false
-            }, exportWithScreenshots: $exportWithScreenshots)
+            ExportModeSelectionSheet(
+                onSelect: { mode in
+                    isExporting = true
+                    exportHelper.performExport(selectedExportType: selectedExportType, mode: mode, withScreenshots: exportWithScreenshots) { error in
+                        isExporting = false
+                        showExportModeSheet = false
+                        if let error {
+                            showErrorAlert = true
+                            errorMessage = error.localizedDescription
+                        }
+                    }
+                },
+                exportWithScreenshots: $exportWithScreenshots
+            )
         }
         .sheet(isPresented: $showLabelSelectionSheet) {
             LabelSelectionSheetView(
@@ -2684,9 +1468,9 @@ struct FullControlView: View {
         }
     }
     
-    struct LabelEditSheet: View {
+    struct StampEditSheet: View {
         @ObservedObject var timelineData = TimelineDataManager.shared
-        @Binding var showLabelEditSheet: Bool
+        let sheetType: StampEditSheetType
         
         var body: some View {
             if let lineIDString = UserDefaults.standard.string(forKey: "editingStampLineID"),
@@ -2697,22 +1481,38 @@ struct FullControlView: View {
                 if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
                    let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) {
                     
-                    let currentLabels = timelineData.lines[lineIndex].stamps[stampIndex].labels
+                    let currentIds = switch sheetType {
+                    case .lables:
+                        timelineData.lines[lineIndex].stamps[stampIndex].labels
+                    case .timeEvents:
+                        timelineData.lines[lineIndex].stamps[stampIndex].timeEvents
+                    }
                     let stampName = timelineData.lines[lineIndex].stamps[stampIndex].label
                     let tagId = timelineData.lines[lineIndex].stamps[stampIndex].idTag
                     
                     if let tag = TagLibraryManager.shared.findTagById(tagId) {
-                        LabelSelectionSheet(
+                        StampItemsSelectionSheet(
+                            sheetType: sheetType,
                             stampName: stampName,
-                            initialLabels: currentLabels,
+                            initialIds: currentIds,
                             tag: tag,
                             tagLibrary: TagLibraryManager.shared,
                             isDop: true,
-                            onDone: { newLabels in
-                                timelineData.updateStampLabels(lineID: lineID,
-                                                               stampID: stampID,
-                                                               newLabels: newLabels)
-                                showLabelEditSheet = false
+                            onDone: { newIds in
+                                switch sheetType {
+                                case .lables:
+                                    timelineData.updateStampLabels(
+                                        lineID: lineID,
+                                        stampID: stampID,
+                                        newLabels: newIds
+                                    )
+                                case .timeEvents:
+                                    timelineData.updateStampTimeEvents(
+                                        lineID: lineID,
+                                        stampID: stampID,
+                                        newEvents: newIds
+                                    )
+                                }
                             }, onCancel: { return }
                         )
                     } else {
@@ -2727,15 +1527,16 @@ struct FullControlView: View {
         }
     }
     
+    
     func showMultiTagSelection(for label: Label) {
         multiTagSelectionItem = MultiSelectionItem(label: label)
     }
 
         
-        func showMultiLabelSelection(for tag: Tag) {
-            multiLabelSelectionItem = MultiSelectionItem(tag: tag)
-        }
-    
+    func showMultiLabelSelection(for tag: Tag) {
+        multiLabelSelectionItem = MultiSelectionItem(tag: tag)
+    }
+
     func uniqueEventsFromTimelines() -> [TimeEvent] {
         let eventIDs = Set(timelineData.lines.flatMap { line in
             line.stamps.flatMap { stamp in

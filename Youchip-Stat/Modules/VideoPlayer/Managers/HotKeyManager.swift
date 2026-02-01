@@ -164,9 +164,11 @@ class HotKeyManager: ObservableObject {
     }
     
     private func handleHotkey(_ event: NSEvent) -> Bool {
-        guard ActiveWindowManager.shared.isAllowedWindowActive() else {
+        let isViewerWindowActive = ActiveWindowManager.shared.isViewerWindowActive()
+        guard ActiveWindowManager.shared.isAllowedWindowActive() || isViewerWindowActive else {
             return false
         }
+        let isViewerMode = WindowsManager.shared.viewerWindow != nil && isViewerWindowActive
         
         if event.keyCode == 49 {
             // Don't handle space if editing text box
@@ -174,7 +176,9 @@ class HotKeyManager: ObservableObject {
                 return false
             }
             
-            if isEditorModeActive {
+            if isViewerMode {
+                NotificationCenter.default.post(name: .toggleViewerPlayer, object: nil)
+            } else if isEditorModeActive {
                 NotificationCenter.default.post(name: .editorModeChanged, object: false)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     VideoPlayerManager.shared.togglePlayPause()
@@ -188,7 +192,9 @@ class HotKeyManager: ObservableObject {
         if event.modifierFlags.contains(.shift) {
             switch event.keyCode {
             case 123:
-                if isEditorModeActive {
+                if isViewerMode {
+                    NotificationCenter.default.post(name: .seekViewerPlayerBackward, object: nil)
+                } else if isEditorModeActive {
                     NotificationCenter.default.post(name: .editorModeChanged, object: false)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         VideoPlayerManager.shared.seek(by: -3)
@@ -198,7 +204,9 @@ class HotKeyManager: ObservableObject {
                 }
                 return true
             case 124:
-                if isEditorModeActive {
+                if isViewerMode {
+                    NotificationCenter.default.post(name: .seekViewerPlayerForward, object: nil)
+                } else if isEditorModeActive {
                     NotificationCenter.default.post(name: .editorModeChanged, object: false)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         VideoPlayerManager.shared.seek(by: 3)
@@ -319,7 +327,9 @@ class HotKeyManager: ObservableObject {
     }
     
     private func selectTag(_ tag: Tag) {
-        NotificationCenter.default.post(name: .showLabelSheet, object: tag)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .showLabelSheet, object: tag)
+        }
     }
     
     func enableLabelHotkeyMode() {

@@ -114,6 +114,7 @@
 "CollectionsButtonSaveChanges" = "Enregistrer les modifications";  // ^String.Titles.collectionsButtonSaveChanges
 "TimelineButtonDeleteTag" = "Supprimer l'étiquette";  // ^String.Titles.timelineButtonDeleteTag
 "TimelineButtonEditLabels" = "Modifier les étiquettes";  // ^String.Titles.timelineButtonEditLabels
+"TimelineButtonEditTimeEvents" = "Modifier les événements temporels";  // ^String.Titles.timelineButtonEditTimeEvents
 "TimelineButtonDeleteTimeline" = "Supprimer la chronologie";  // ^String.Titles.timelineButtonDeleteTimeline
 "FieldMapPickerLabelSelectTimelines" = "Sélectionner les chronologies :";  // ^String.Titles.fieldMapPickerLabelSelectTimelines
 "FieldMapPickerNoTimelines" = "Aucune chronologie disponible avec des étiquettes positionnées pour cette collection";  // ^String.Titles.fieldMapPickerNoTimelines
@@ -356,7 +357,7 @@
 "StandardCollections" = "Collections standardes";
 "FullControlButtonExportLabels" = "Exporter par étiquettes";
 "CollectionsTagIsInterval" = "Étiquette d'intervalle";  // ^String.Titles.collectionsTagIsInterval
-"CollectionsTagIsIntervalHelp" = "Si activé, la durée de l'étiquette est déterminée automatiquement et ne peut pas être modifiée manuellement.";  // ^String.Titles.collectionsTagIsIntervalHelp
+"CollectionsTagIsIntervalHelp" = "Permet de définir manuellement la durée d'un épisode. Un clic sur l'épisode lance l'enregistrement, un deuxième clic l'arrête.";  // ^String.Titles.collectionsTagIsIntervalHelp
 "Video" = "Vidéo"; // ^String.Titles.video
 "ExportReports" = "Exportation et rapports"; // ^String.Titles.exportReports
 "Tools" = "Outils"; // ^String.Titles.tools
@@ -620,3 +621,6 @@
 "ExportCollectionTitle" = "Exporter la collection"; // ^String.Titles.exportCollectionTitle
 "SelectCollectionSaveLocation" = "Sélectionner l'emplacement pour enregistrer la collection"; // ^String.Titles.selectCollectionSaveLocation
 "TimestampsCount" = "%d horodatages"; // ^String.Titles.timestampsCount
+"RenamePlaylist" = "Renommer la playlist";
+"NewName" = "Nouveau nom :";
+"Rename" = "Renommer";

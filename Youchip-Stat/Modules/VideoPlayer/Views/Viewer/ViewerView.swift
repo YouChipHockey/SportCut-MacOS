@@ -63,7 +63,7 @@ struct ViewerView: View {
     
     private func setupViewer() {
         playlistManager.loadPlaylists()
-        playlistManager.currentPlaylist = nil
+        playlistManager.currentPlaylistId = nil
         playlistManager.clear()
         videoPlaylistManager.stopPlayback()
     }

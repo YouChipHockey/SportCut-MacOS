@@ -196,6 +196,13 @@ class TimelineDataManager: ObservableObject {
         updateTimelines()
     }
     
+    func updateStampTimeEvents(lineID: UUID, stampID: UUID, newEvents: [String]) {
+        guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
+        guard let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }
+        lines[lineIndex].stamps[stampIndex].timeEvents = newEvents
+        updateTimelines()
+    }
+    
     func stampHasOverlaps(lineID: UUID, stampID: UUID) -> Bool {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }),
               let stamp = lines[lineIndex].stamps.first(where: { $0.id == stampID }) else {
@@ -244,30 +251,23 @@ class TimelineDataManager: ObservableObject {
     }
     
     @objc private func handleTagUpdated(_ notification: Notification) {
-        guard let originalID = notification.userInfo?["originalID"] as? String,
-              let newID = notification.userInfo?["newID"] as? String else {
-            return
-        }
+        guard let tagId = notification.userInfo?["tagId"] as? String else { return }
+        let newName = notification.userInfo?["newName"] as? String
         
         var updated = false
         
-        guard let updatedTag = TagLibraryManager.shared.findTagById(newID) else { return }
+        guard let updatedTag = TagLibraryManager.shared.findTagById(tagId) else { return }
         
         for lineIndex in 0..<lines.count {
             for stampIndex in 0..<lines[lineIndex].stamps.count {
-                if lines[lineIndex].stamps[stampIndex].idTag == originalID {
-                    lines[lineIndex].stamps[stampIndex].idTag = newID
-                    lines[lineIndex].stamps[stampIndex].label = updatedTag.name
+                if lines[lineIndex].stamps[stampIndex].idTag == tagId {
+                    lines[lineIndex].stamps[stampIndex].label = newName ?? updatedTag.name
                     updated = true
                 }
             }
             
-            if lines[lineIndex].tagIdForMode == originalID {
-                lines[lineIndex].tagIdForMode = newID
-                if lines[lineIndex].name == lines[lineIndex].tagIdForMode {
-                    lines[lineIndex].name = updatedTag.name
-                }
-                
+            if lines[lineIndex].tagIdForMode == tagId {
+                lines[lineIndex].name = newName ?? updatedTag.name
                 updated = true
             }
         }

@@ -114,6 +114,7 @@
 "CollectionsButtonSaveChanges" = "O'zgarishlarni saqlash";  // ^String.Titles.collectionsButtonSaveChanges
 "TimelineButtonDeleteTag" = "Tegni o'chirish";  // ^String.Titles.timelineButtonDeleteTag
 "TimelineButtonEditLabels" = "Yorliqlarni tahrirlash";  // ^String.Titles.timelineButtonEditLabels
+"TimelineButtonEditTimeEvents" = "Vaqt voqealarini tahrirlash";  // ^String.Titles.timelineButtonEditTimeEvents
 "TimelineButtonDeleteTimeline" = "Vaqt chiziqini o'chirish";  // ^String.Titles.timelineButtonDeleteTimeline
 "FieldMapPickerLabelSelectTimelines" = "Vaqt chiziqlarini tanlang:";  // ^String.Titles.fieldMapPickerLabelSelectTimelines
 "FieldMapPickerNoTimelines" = "Bu to'plam uchun pozitsiyali teglar bilan mavjud vaqt chiziqlari yo'q";  // ^String.Titles.fieldMapPickerNoTimelines
@@ -356,7 +357,7 @@
 "StandardCollections" = "Standart to'plamlar";
 "FullControlButtonExportLabels" = "Yorliqlar bo'yicha eksport";
 "CollectionsTagIsInterval" = "Interval teg";  // ^String.Titles.collectionsTagIsInterval
-"CollectionsTagIsIntervalHelp" = "Agar yoqilgan bo'lsa, teg davomiyligi avtomatik ravishda aniqlanadi va qo'lda o'zgartirib bo'lmaydi.";  // ^String.Titles.collectionsTagIsIntervalHelp
+"CollectionsTagIsIntervalHelp" = "Teg (epizod) uzunligini qoʻlda oʻrnatish uchun foydalaniladi. Tegni bir marta bosish yozishni boshlaydi, yana bosish esa yozishni tugatadi.";  // ^String.Titles.collectionsTagIsIntervalHelp
 "Video" = "Video"; // ^String.Titles.video
 "ExportReports" = "Eksport va hisobotlar"; // ^String.Titles.exportReports
 "Tools" = "Asboblar"; // ^String.Titles.tools
@@ -620,3 +621,6 @@
 "ExportCollectionTitle" = "To'plamni eksport qilish"; // ^String.Titles.exportCollectionTitle
 "SelectCollectionSaveLocation" = "To'plamni saqlash uchun joyni tanlang"; // ^String.Titles.selectCollectionSaveLocation
 "TimestampsCount" = "%d vaqt belgilari"; // ^String.Titles.timestampsCount
+"RenamePlaylist" = "Pleylist nomini o‘zgartirish";
+"NewName" = "Yangi nom:";
+"Rename" = "Nomini o‘zgartirish";

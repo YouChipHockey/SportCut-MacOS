@@ -13,6 +13,7 @@ struct ViewerVideoView: View {
     @ObservedObject var playlistManager: VideoPlaylistManager
     @ObservedObject var organizer: PlaylistManager
     @StateObject private var drawingState = DrawingState()
+    @StateObject private var overlayViewModel = PlaylistOverlayViewModel()
     @State private var player: AVPlayer?
     @State private var currentComposition: AVComposition?
     @State private var isPlayerReady = false
@@ -38,11 +39,7 @@ struct ViewerVideoView: View {
                 
                 HStack(spacing: 8) {
                     Button(action: {
-                        if playlistManager.isPlaying {
-                            player?.pause()
-                            playlistManager.isPlaying = false
-                        }
-                        
+                        playlistManager.playVideo(false)
                         drawingState.showDrawingMenu.toggle()
                     }) {
                         Image(systemName: drawingState.showDrawingMenu ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
@@ -61,7 +58,6 @@ struct ViewerVideoView: View {
                                 
                                 if !organizer.currentTags.isEmpty && !playlistManager.isPlaying {
                                     playlistManager.setPlaylist(organizer.currentTags)
-                                    playlistManager.playPlaylist()
                                     playCurrentPlaylist()
                                 }
                             }
@@ -93,8 +89,7 @@ struct ViewerVideoView: View {
                 
                 if playlistManager.isPlaying {
                     Button(action: {
-                        player?.pause()
-                        playlistManager.isPlaying = false
+                        playlistManager.playVideo(false)
                     }) {
                         Image(systemName: "pause.circle.fill")
                             .font(.system(size: 20))
@@ -105,13 +100,7 @@ struct ViewerVideoView: View {
                     Button(action: {
                         if organizer.currentTags.isEmpty {
                         } else {
-                            drawingState.clearDrawing()
-                            drawingState.isDrawingMode = false
-                            drawingState.showDrawingMenu = false
-                            
-                            playlistManager.setPlaylist(organizer.currentTags)
-                            playlistManager.playPlaylist()
-                            playCurrentPlaylist()
+                            playlistManager.playVideo(!playlistManager.isPlaying)
                         }
                     }) {
                         Image(systemName: "play.circle.fill")
@@ -139,6 +128,10 @@ struct ViewerVideoView: View {
                             DrawingOverlay(drawingState: drawingState)
                                 .allowsHitTesting(drawingState.isDrawingMode)
                         )
+                        .overlay(alignment: .bottom) {
+                            videoOverlayText()
+                                .padding(.bottom, 45)
+                        }
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "video.slash")
@@ -170,25 +163,28 @@ struct ViewerVideoView: View {
             setupNotifications()
         }
         .onDisappear {
+            overlayViewModel.detach(from: player)
             cleanupPlayer()
             removeNotifications()
         }
-        .onChange(of: playlistManager.currentPlaylist) { _ in
-            if playlistManager.isPlaying {
-                createCompositionFromPlaylist()
-            }
+        .onChange(of: playlistManager.currentComposition) { _ in
+            currentComposition = playlistManager.currentComposition
         }
-        .onChange(of: playlistManager.isPlaying) { isPlaying in
-            if isPlaying && !playlistManager.currentPlaylist.isEmpty {
-                createCompositionFromPlaylist()
-            } else if !isPlaying {
-                player?.pause()
+        .onReceive(NotificationCenter.default.publisher(for: .createPlaylistComposition)) { _ in
+            overlayViewModel.updateSegments(playlistManager.compositionSegments)
+            overlayViewModel.attach(to: player)
+            drawingState.clearDrawing()
+            drawingState.isDrawingMode = false
+            drawingState.showDrawingMenu = false
+            if let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset {
+                updateVideoSize(from: originalAsset)
             }
         }
     }
     
     private func setupPlayer() {
         player = AVPlayer()
+        playlistManager.setPlayer(player)
         isPlayerReady = true
     }
     
@@ -197,63 +193,20 @@ struct ViewerVideoView: View {
             player?.removeTimeObserver(observer)
             timeObserver = nil
         }
-        player?.pause()
+        playlistManager.playVideo(false)
         player = nil
+        playlistManager.setPlayer(player)
         playlistManager.stopPlayback()
     }
     
     private func playCurrentPlaylist() {
         guard !playlistManager.currentPlaylist.isEmpty else { return }
-        createCompositionFromPlaylist()
+        playlistManager.createCompositionFromPlaylist()
     }
     
     private func playSingleTag(_ tag: OrganizerTag) {
         playlistManager.setPlaylist([tag])
-        createCompositionFromPlaylist()
-    }
-    
-    private func createCompositionFromPlaylist() {
-        guard let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset else {
-            return
-        }
-        
-        let composition = AVMutableComposition()
-        
-        guard let videoTrack = originalAsset.tracks(withMediaType: .video).first,
-              let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            return
-        }
-        
-        let audioTrack = originalAsset.tracks(withMediaType: .audio).first
-        var compAudioTrack: AVMutableCompositionTrack? = nil
-        if let audioTrack = audioTrack {
-            compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-        }
-        
-        var currentTime = CMTime.zero
-        
-        for tag in playlistManager.currentPlaylist {
-            let startTime = CMTime(seconds: tag.startTime, preferredTimescale: 600)
-            let duration = CMTime(seconds: tag.duration, preferredTimescale: 600)
-            let timeRange = CMTimeRange(start: startTime, duration: duration)
-            
-            do {
-                try compVideoTrack.insertTimeRange(timeRange, of: videoTrack, at: currentTime)
-                if let compAudio = compAudioTrack, let aTrack = audioTrack {
-                    try compAudio.insertTimeRange(timeRange, of: aTrack, at: currentTime)
-                }
-                currentTime = currentTime + duration
-            } catch {
-                return
-            }
-        }
-        
-        currentComposition = composition
-        let playerItem = AVPlayerItem(asset: composition)
-        player?.replaceCurrentItem(with: playerItem)
-        updateVideoSize(from: originalAsset)
-        player?.play()
-        playlistManager.isPlaying = true
+        playlistManager.createCompositionFromPlaylist()
     }
     
     private func updateVideoSize(from asset: AVAsset) {
@@ -313,14 +266,12 @@ struct ViewerVideoView: View {
             player?.removeTimeObserver(observer)
             timeObserver = nil
         }
-        player?.pause()
         player?.replaceCurrentItem(with: nil)
         playlistManager.stopPlayback()
     }
     
     private func saveScreenshot() {
-        player?.pause()
-        playlistManager.isPlaying = false
+        playlistManager.playVideo(false)
         
         guard let player = player else { return }
         
@@ -400,6 +351,44 @@ struct ViewerVideoView: View {
         
         bezierPath.stroke()
     }
+    
+    @ViewBuilder
+    private func videoOverlayText() -> some View {
+        if let currentPlayingStamp = overlayViewModel.currentTag {
+            let tagLibrary = TagLibraryManager.shared
+            
+            let stampID = currentPlayingStamp.stampID
+            let stamp = TimelineDataManager.shared.lines
+                .flatMap { $0.stamps }
+                .first { $0.id == stampID }
+            let tag = tagLibrary.allTags.first { $0.id == currentPlayingStamp.mainTagID }
+            let stampLabels = currentPlayingStamp.labelIDs.compactMap { labelID in
+                tagLibrary.allLabels.first(where: { $0.id == labelID })
+            }
+            let selectedLabelGroups: [OverlayLabelGroupItem] = Dictionary(grouping: stampLabels) { label in
+                tagLibrary.allLabelGroups.first(where: { $0.lables.contains(label.id) })
+            }
+            .compactMap { (group, labels) in
+                guard let group = group else { return nil }
+                return OverlayLabelGroupItem(group: group, selectedLabels: labels)
+            }
+            if let tag, let stamp {
+                let overlayItem = OverlayItem(tag: tag, stamp: stamp, selectedLabelGroups: selectedLabelGroups, start: .zero, duration: .zero, videoSize: nil)
+                let attributedString = NSAttributedString.attributedStringForTagInfo(overlayItem: overlayItem) ?? NSAttributedString(string: "")
+                Text(AttributedString(attributedString))
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(nil)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(
+                        Rectangle()
+                            .fill(.black.opacity(0.55))
+                )
+            }
+        }
+    }
+
 }
 
 struct DrawingOverlay: View {

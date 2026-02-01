@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 class CustomCollectionManager: ObservableObject {
     
-    var changedTagIDs: [(oldID: String, newID: String)] = []
+    var changedTags: [(id: String, newName: String)] = []
     @Published var playField: PlayField?
     @Published var tagGroups: [TagGroup] = []
     @Published var tags: [Tag] = []
@@ -19,8 +19,9 @@ class CustomCollectionManager: ObservableObject {
     @Published var labels: [Label] = []
     @Published var timeEvents: [TimeEvent] = []
     @Published var collectionName: String = ^String.Titles.myCollection
-    @Published var collectionID: UUID = UUID()
+    @Published var collectionID: String = UUID().uuidString
     @Published var isEditingExisting: Bool = false
+    @Published var allCollections: [StandardCollection] = []
     var originalName: String = ""
     
     init() {}
@@ -31,6 +32,7 @@ class CustomCollectionManager: ObservableObject {
         self.collectionName = bookmark.name
         self.collectionID = bookmark.id
         loadCollectionFromBookmarks(named: bookmark.name)
+        loadAllCollections()
     }
     
     func renameTagGroup(id: String, newName: String) {
@@ -283,10 +285,11 @@ class CustomCollectionManager: ObservableObject {
     }
     
     func saveCollectionToFiles() -> Bool {
+        collectionName = collectionName.trimmingCharacters(in: .whitespacesAndNewlines)
         if collectionName == originalName || collectionName.isEmpty {
             collectionName = originalName
         } else {
-            collectionName = ensureUniqueCollectionName(collectionName)
+            collectionName = ensureUniqueCollectionName(collectionName, collectionID: collectionID)
         }
         
         do {
@@ -296,21 +299,21 @@ class CustomCollectionManager: ObservableObject {
             let labelsData = LabelsData(labels: labels)
             let timeEventsData = TimeEventsData(events: timeEvents)
             
-            let fileManager = FileManager.default
-            let collectionsFolder = URL.appDocumentsDirectory
-                .appendingPathComponent("YouChip-Stat/Collections/\(collectionName)", isDirectory: true)
-                .fixedFile()
+            let urlString = URLConstants.getCollecitonFolderStringUrl(with: collectionID)
+            let collectionsFolderUrl = URL.appDocumentsDirectory
+                .appendingPathComponent(urlString, isDirectory: true)
             
-            if !fileManager.fileExists(atPath: collectionsFolder.path) {
-                try fileManager.createDirectory(at: collectionsFolder, withIntermediateDirectories: true)
+            let fileManager = FileManager.default
+            if !fileManager.fileExists(atPath: collectionsFolderUrl.path) {
+                try fileManager.createDirectory(at: collectionsFolderUrl, withIntermediateDirectories: true)
             }
             
-            let tagGroupsURL = collectionsFolder.appendingPathComponent("tagGroups.json")
-            let tagsURL = collectionsFolder.appendingPathComponent("tags.json")
-            let labelGroupsURL = collectionsFolder.appendingPathComponent("labelGroups.json")
-            let labelsURL = collectionsFolder.appendingPathComponent("labels.json")
-            let timeEventsURL = collectionsFolder.appendingPathComponent("timeEvents.json")
-            let playFieldURL = collectionsFolder.appendingPathComponent("playField.json")
+            let tagGroupsURL = collectionsFolderUrl.appendingPathComponent("tagGroups.json")
+            let tagsURL = collectionsFolderUrl.appendingPathComponent("tags.json")
+            let labelGroupsURL = collectionsFolderUrl.appendingPathComponent("labelGroups.json")
+            let labelsURL = collectionsFolderUrl.appendingPathComponent("labels.json")
+            let timeEventsURL = collectionsFolderUrl.appendingPathComponent("timeEvents.json")
+            let playFieldURL = collectionsFolderUrl.appendingPathComponent("playField.json")
             
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
@@ -358,25 +361,31 @@ class CustomCollectionManager: ObservableObject {
             if !isEditingExisting {
                 isEditingExisting = true
             }
-            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+            }
             
-            for change in changedTagIDs {
+            for tag in changedTags {
                 NotificationCenter.default.post(
                     name: .tagUpdated,
                     object: nil,
-                    userInfo: ["originalID": change.oldID, "newID": change.newID]
+                    userInfo: ["tagId": tag.id, "newName": tag.newName]
                 )
             }
-            changedTagIDs.removeAll()
+            changedTags.removeAll()
             
             return true
         } catch {
+            print("SAVE ERROR:", error.localizedDescription)
             return false
         }
     }
     
-    func ensureUniqueCollectionName(_ baseName: String) -> String {
-        let existingNames = UserDefaults.standard.getCollectionBookmarks().map { $0.name }
+    func ensureUniqueCollectionName(_ baseName: String, collectionID: String) -> String {
+        let existingNames = UserDefaults.standard
+            .getCollectionBookmarks()
+            .filter { $0.id != collectionID }
+            .map(\.name)
         if (isEditingExisting && baseName == originalName) || !existingNames.contains(baseName) {
             return baseName
         }
@@ -566,6 +575,11 @@ class CustomCollectionManager: ObservableObject {
         } catch {
             return false
         }
+    }
+    
+    private func loadAllCollections() {
+        let allBookmarks = UserDefaults.standard.getCollectionBookmarks()
+        
     }
     
     func updateTagMapEnabled(id: String, mapEnabled: Bool) -> Bool {
@@ -829,17 +843,15 @@ class CustomCollectionManager: ObservableObject {
             return false
         }
         
-        let newTagID = UUID().uuidString
-        
         if let index = tags.firstIndex(where: { $0.id == id }) {
             let originalTag = tags[index]
             
-            if !changedTagIDs.contains(where: { $0.oldID == id }) {
-                changedTagIDs.append((oldID: id, newID: newTagID))
+            if !changedTags.contains(where: { $0.id == id}) {
+                changedTags.append((id, name))
             }
             
             tags[index] = Tag(
-                id: newTagID,
+                id: id,
                 primaryID: primaryID,
                 name: name,
                 description: description,
@@ -857,7 +869,7 @@ class CustomCollectionManager: ObservableObject {
             for i in 0..<tagGroups.count {
                 if let tagIndex = tagGroups[i].tags.firstIndex(where: { $0 == id }) {
                     var updatedTags = tagGroups[i].tags
-                    updatedTags[tagIndex] = newTagID
+                    updatedTags[tagIndex] = id // maybe not needed (remove)
                     tagGroups[i] = TagGroup(
                         id: tagGroups[i].id,
                         name: tagGroups[i].name,

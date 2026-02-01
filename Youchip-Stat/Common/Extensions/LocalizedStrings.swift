@@ -119,6 +119,7 @@ extension String {
         case collectionsButtonSaveChanges // ^String.Titles.collectionsButtonSaveChanges
         case timelineButtonDeleteTag // ^String.Titles.timelineButtonDeleteTag
         case timelineButtonEditLabels // ^String.Titles.timelineButtonEditLabels
+        case timelineButtonEditTimeEvents // ^String.Titles.timelineButtonTimeEvents
         case timelineButtonDeleteTimeline // ^String.Titles.timelineButtonDeleteTimeline
         case fieldMapPickerLabelSelectTimelines // ^String.Titles.fieldMapPickerLabelSelectTimelines
         case fieldMapPickerNoTimelines // ^String.Titles.fieldMapPickerNoTimelines
@@ -621,6 +622,38 @@ extension String {
         case exportCollectionTitle
         case selectCollectionSaveLocation
         case timestampsCount
+        case renamePlaylist
+        case newName
+        case rename
+        
+        // Video Download from URL
+        case addVideoFromURL
+        case downloadVideoFromURL
+        case downloadVideoFromURLDescription
+        case videoURL
+        case enterVideoURL
+        case videoFormat
+        case fetchingVideoInfo
+        case videoTitle
+        case selectQuality
+        case downloadingVideo
+        case videoDownloaded
+        case videoDownloadedDescription
+        case fetchFormats
+        case downloadButtonTitle
+        case continueButtonTitle
+        case tryAgain
+        case useServerVideoName
+        case useServerVideoNameDescription
+        
+        // Downloads Folder Permissions
+        case selectDownloadsFolderMessage
+        case grantAccessButtonTitle
+        case downloadsFolderAccessRequired
+        case downloadsFolderAccessDescription
+        case openSystemSettings
+        case downloadsFolderAccessGranted
+        case checkPermissions
     }
     
 }

@@ -28,4 +28,8 @@ struct VideosState {
     var importedProjectData: ProjectImportModel? = nil
     var showVideoBindingSheet = false
     
+    // URL Download State
+    var showDownloadFromURLSheet: Bool = false
+    var downloadedVideoURL: URL? = nil
+    
 }

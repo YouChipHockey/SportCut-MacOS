@@ -562,6 +562,7 @@ struct CreateCustomCollectionsView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(selectedTimeEventID == event.id ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
         )
+        .contentShape(Rectangle())
         .onTapGesture {
             if !isEditingTimeEvent {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -1978,7 +1979,7 @@ struct CreateCustomCollectionsView: View {
                     )
                 }
                 
-                if !tagFormData.isInterval {
+                if true/*!tagFormData.isInterval*/ {
                     VStack(alignment: .leading, spacing: 16) {
                         Text(^String.Titles.timeSettings)
                             .font(.headline)
@@ -2096,12 +2097,6 @@ struct CreateCustomCollectionsView: View {
                             
                             Toggle("", isOn: $tagFormData.isInterval)
                                 .toggleStyle(SwitchToggleStyle(tint: .blue))
-                                .onChange(of: tagFormData.isInterval) { newValue in
-                                    if newValue {
-                                        tagFormData.defaultTimeBefore = 0
-                                        tagFormData.defaultTimeAfter = 0
-                                    }
-                                }
                         }
                         .padding(16)
                         .background(
@@ -2937,7 +2932,7 @@ struct CreateCustomCollectionsView: View {
                         )
                     }
                     
-                    if !tagFormData.isInterval {
+                    if true/*!tagFormData.isInterval*/ {
                         VStack(alignment: .leading, spacing: 16) {
                             Text(^String.Titles.timeSettings)
                                 .font(.headline)
@@ -3027,12 +3022,6 @@ struct CreateCustomCollectionsView: View {
                                 
                                 Toggle("", isOn: $tagFormData.isInterval)
                                     .toggleStyle(SwitchToggleStyle(tint: .blue))
-                                    .onChange(of: tagFormData.isInterval) { newValue in
-                                        if newValue {
-                                            tagFormData.defaultTimeBefore = 0
-                                            tagFormData.defaultTimeAfter = 0
-                                        }
-                                    }
                             }
                             .padding(16)
                             .background(

@@ -47,9 +47,7 @@ class TagLibraryManager: ObservableObject {
     
     private init() {
         loadBaseCollections()
-        if let first = standardCollections.first {
-            applyStandardCollection(named: first.name)
-        }
+        applyDefaultCollection()
         
         NotificationCenter.default.addObserver(
             self,
@@ -159,6 +157,7 @@ class TagLibraryManager: ObservableObject {
     
     func applyStandardCollection(named name: String) {
         guard let collection = standardCollections.first(where: { $0.name == name }) else { return }
+        UserDefaults.standard.set(name, forKey: UserDefaults.Keys.lastSelectedCollection)
         tags = collection.tags
         tagGroups = collection.tagGroups
         labelGroups = collection.labelGroups
@@ -205,23 +204,33 @@ class TagLibraryManager: ObservableObject {
                 allTimeEvents.append(contentsOf: collectionManager.timeEvents)
             }
         }
+        for collection in standardCollections {
+            allTags.append(contentsOf: collection.tags)
+            allTagGroups.append(contentsOf: collection.tagGroups)
+            allLabelGroups.append(contentsOf: collection.labelGroups)
+            allLabels.append(contentsOf: collection.labels)
+            allTimeEvents.append(contentsOf: collection.timeEvents)
+        }
         
-        allTags = Array(Dictionary(grouping: allTags, by: { $0.id }).values.compactMap { $0.first })
+        allTags = Array(Dictionary(grouping: allTags, by: { $0.id }).values.compactMap { $0.first }) 
         allTagGroups = Array(Dictionary(grouping: allTagGroups, by: { $0.id }).values.compactMap { $0.first })
         allLabelGroups = Array(Dictionary(grouping: allLabelGroups, by: { $0.id }).values.compactMap { $0.first })
         allLabels = Array(Dictionary(grouping: allLabels, by: { $0.id }).values.compactMap { $0.first })
         allTimeEvents = Array(Dictionary(grouping: allTimeEvents, by: { $0.id }).values.compactMap { $0.first })
     }
     
-    func findOrCreateTimeEvent(id: String, name: String) -> TimeEvent {
+    func findOrCreateTimeEvent(id: String, name: String, shouldCreate: Bool = true) -> TimeEvent? {
         if let existingEvent = allTimeEvents.first(where: { $0.id == id }) {
             return existingEvent
-        } else {
+        } else if shouldCreate {
             let newEvent = TimeEvent(id: id, name: name)
             allTimeEvents.append(newEvent)
             return newEvent
+        } else {
+            return nil
         }
     }
+    
     
     func toggleTimeEvent(id: String) {
         if selectedTimeEvents.contains(id) {
@@ -232,15 +241,12 @@ class TagLibraryManager: ObservableObject {
     }
     
     @objc private func handleTagUpdated(_ notification: Notification) {
-        guard let originalID = notification.userInfo?["originalID"] as? String,
-              let newID = notification.userInfo?["newID"] as? String else {
-            return
-        }
+        guard let tagId = notification.userInfo?["tagId"] as? String else { return }
         
         for i in 0..<allTagGroups.count {
-            if let tagIndex = allTagGroups[i].tags.firstIndex(where: { $0 == originalID }) {
+            if let tagIndex = allTagGroups[i].tags.firstIndex(where: { $0 == tagId }) {
                 var updatedTags = allTagGroups[i].tags
-                updatedTags[tagIndex] = newID
+                updatedTags[tagIndex] = tagId
                 allTagGroups[i] = TagGroup(
                     id: allTagGroups[i].id,
                     name: allTagGroups[i].name,
@@ -268,17 +274,38 @@ class TagLibraryManager: ObservableObject {
         applyHotkeysFromCurrentCollection()
     }
     
-        func restoreDefaultData() {
-            if let first = standardCollections.first {
-                applyStandardCollection(named: first.name)
-            }
-            currentCollectionType = .standard
-            selectedTimeEvents.removeAll()
-            refreshGlobalPools()
-        }
-    
+    func restoreDefaultData() {
+        applyDefaultCollection()
+        currentCollectionType = .standard
+        selectedTimeEvents.removeAll()
+        refreshGlobalPools()
+    }
+
     func applyHotkeysFromCurrentCollection() {
         HotKeyManager.shared.clearHotkeys()
         HotKeyManager.shared.registerHotkeys(from: tags, for: currentCollectionType)
+    }
+    
+    func applyDefaultCollection() {
+        let lastSelectedCollectionName = UserDefaults.standard.string(forKey: UserDefaults.Keys.lastSelectedCollection)
+        let collectionManager = CustomCollectionManager()
+        if let lastSelectedCollectionName, collectionManager.loadCollectionFromBookmarks(named: lastSelectedCollectionName) {
+            tags = collectionManager.tags
+            tagGroups = collectionManager.tagGroups
+            labelGroups = collectionManager.labelGroups
+            labels = collectionManager.labels
+            timeEvents = collectionManager.timeEvents
+            selectedTimeEvents.removeAll()
+            currentCollectionType = .user(name: lastSelectedCollectionName)
+            HotKeyManager.shared.clearHotkeys()
+            HotKeyManager.shared.registerHotkeys(from: tags, for: .user(name: lastSelectedCollectionName))
+            selectedStandardCollectionName = lastSelectedCollectionName
+        } else if let standardCollection =
+                    standardCollections.first(where: { $0.name == lastSelectedCollectionName }) ??
+                    standardCollections.first
+        {
+            applyStandardCollection(named: standardCollection.name)
+            selectedStandardCollectionName = standardCollection.name
+        }
     }
 }

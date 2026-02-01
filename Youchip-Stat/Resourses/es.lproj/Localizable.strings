@@ -114,6 +114,7 @@
 "CollectionsButtonSaveChanges" = "Guardar Cambios";  // ^String.Titles.collectionsButtonSaveChanges
 "TimelineButtonDeleteTag" = "Eliminar Etiqueta";  // ^String.Titles.timelineButtonDeleteTag
 "TimelineButtonEditLabels" = "Editar Etiquetas";  // ^String.Titles.timelineButtonEditLabels
+"TimelineButtonEditTimeEvents" = "Editar eventos de tiempo";  // ^String.Titles.timelineButtonEditTimeEvents
 "TimelineButtonDeleteTimeline" = "Eliminar Línea de Tiempo";  // ^String.Titles.timelineButtonDeleteTimeline
 "FieldMapPickerLabelSelectTimelines" = "Seleccionar líneas de tiempo:";  // ^String.Titles.fieldMapPickerLabelSelectTimelines
 "FieldMapPickerNoTimelines" = "No hay líneas de tiempo disponibles con etiquetas posicionadas para esta colección";  // ^String.Titles.fieldMapPickerNoTimelines
@@ -356,7 +357,7 @@
 "StandardCollections" = "Colecciones Estándar";
 "FullControlButtonExportLabels" = "Exportar por Etiquetas";
 "CollectionsTagIsInterval" = "Etiqueta de Intervalo";  // ^String.Titles.collectionsTagIsInterval
-"CollectionsTagIsIntervalHelp" = "Si está habilitado, la duración de la etiqueta se determina automáticamente y no se puede cambiar manualmente.";  // ^String.Titles.collectionsTagIsIntervalHelp
+"CollectionsTagIsIntervalHelp" = "Se utiliza para configurar manualmente la duración de una etiqueta (episodio). Al hacer clic en la etiqueta una vez, se inicia la grabación y al hacer clic de nuevo, se detiene.";  // ^String.Titles.collectionsTagIsIntervalHelp
 "Video" = "Video"; // ^String.Titles.video
 "ExportReports" = "Exportar y Reportes"; // ^String.Titles.exportReports
 "Tools" = "Herramientas"; // ^String.Titles.tools
@@ -620,3 +621,6 @@
 "ExportCollectionTitle" = "Exportar colección"; // ^String.Titles.exportCollectionTitle
 "SelectCollectionSaveLocation" = "Seleccionar ubicación para guardar la colección"; // ^String.Titles.selectCollectionSaveLocation
 "TimestampsCount" = "%d marcas de tiempo"; // ^String.Titles.timestampsCount
+"RenamePlaylist" = "Renombrar lista de reproducción";
+"NewName" = "Nuevo nombre:";
+"Rename" = "Renombrar";

@@ -62,13 +62,13 @@ struct TagGroupsData: Codable {
     let tagGroups: [TagGroup]
 }
 
-struct Label: Codable, Identifiable {
+struct Label: Codable, Identifiable, Equatable, Hashable {
     let id: String
     let name: String
     let description: String
 }
 
-struct LabelGroupData: Codable, Identifiable {
+struct LabelGroupData: Codable, Identifiable, Hashable {
     var id: String
     var name: String
     var lables: [String]
@@ -82,7 +82,7 @@ struct LabelsData: Codable {
     let labels: [Label]
 }
 
-struct TimeEvent: Codable, Identifiable {
+struct TimeEvent: Codable, Identifiable, Hashable {
     let id: String
     let name: String
 }
@@ -105,11 +105,11 @@ enum CutsExportType {
 }
 
 struct ExportSegment {
+    let stamp: TimelineStamp
+    let tagName: String
     let timeRange: CMTimeRange
     let lineName: String?
-    let tagName: String
     let groupName: String?
-    let labels: [Label]?
     let labelGroupName: String?
     let selectedLabel: Label?
     let stampId: UUID? // ID of the stamp this segment was created from
@@ -118,6 +118,8 @@ struct ExportSegment {
 struct ExportSegmentOrganaizer {
     let timeRange: CMTimeRange
     let tagName: String
+    let tagId: String
+    let stampId: UUID
     let groupName: String
     let labels: [Label]
 }
@@ -237,8 +239,8 @@ struct ColorOption {
     let hex: String
 }
 
-struct CollectionBookmark: Codable, Hashable {
-    let id: UUID
+struct CollectionBookmark: Codable, Hashable, Equatable {
+    let id: String
     let name: String
     let tagGroupsBookmark: Data
     let tagsBookmark: Data
@@ -248,7 +250,7 @@ struct CollectionBookmark: Codable, Hashable {
     let playFieldBookmark: Data?
     
     init(
-        id: UUID = UUID(),
+        id: String,
         name: String,
         tagGroupsBookmark: Data,
         tagsBookmark: Data,
@@ -281,8 +283,8 @@ struct CollectionBookmark: Codable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? name
         tagGroupsBookmark = try container.decode(Data.self, forKey: .tagGroupsBookmark)
         tagsBookmark = try container.decode(Data.self, forKey: .tagsBookmark)
         labelGroupsBookmark = try container.decode(Data.self, forKey: .labelGroupsBookmark)
@@ -295,9 +297,6 @@ struct CollectionBookmark: Codable, Hashable {
         hasher.combine(id)
     }
     
-    static func == (lhs: CollectionBookmark, rhs: CollectionBookmark) -> Bool {
-        return lhs.id == rhs.id
-    }
 }
 
 struct StampDragInfo: Codable {

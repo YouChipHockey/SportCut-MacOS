@@ -37,4 +37,11 @@ enum VideosActions {
     case bindVideoToProject(projectData: ProjectImportModel, videoURL: URL?)
     case createProjectFromImport(projectData: ProjectImportModel, videoBookmark: Data?)
     
+    // URL Download Actions
+    case showDownloadFromURLSheet
+    case fetchVideoFormats(urlString: String, ext: String)
+    case downloadVideoFromURL(quality: VideoQuality)
+    case cancelVideoDownload
+    case addDownloadedVideoWithServerName(url: URL, serverTitle: String?)
+    
 }
