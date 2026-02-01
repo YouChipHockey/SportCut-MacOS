@@ -137,8 +137,16 @@ class HotKeyManager: ObservableObject {
         removeMonitors()
         
         localMonitorForKeyEvents = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self,
-                  self.isEnabled,
+            guard let self = self else { return event }
+            // Когда в фокусе окно таймлайна или библиотеки тегов — пробел всегда play/pause (если хоткеи не заблокированы)
+            if event.keyCode == 49,
+               WindowsManager.shared.isControlOrTagLibraryWindowKey(),
+               self.isEnabled,
+               !self.blockedSheetActive {
+                VideoPlayerManager.shared.togglePlayPause()
+                return nil
+            }
+            guard self.isEnabled,
                   !self.blockedSheetActive,
                   !self.isEditorModeActive,
                   !FocusStateManager.shared.isAnyTextFieldFocused else {

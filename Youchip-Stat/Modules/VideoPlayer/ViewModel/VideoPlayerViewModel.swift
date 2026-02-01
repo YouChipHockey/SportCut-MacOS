@@ -274,6 +274,7 @@ class VideoPlayerViewModel: ObservableObject {
                 state.editorDrawingState.selectedShapeId = nil
                 state.editorDrawingState.selectedTextBoxId = nil
                 state.editorDrawingState.selectedTelestrationObjectId = nil
+                state.editorDrawingState.isAddingPointToTelestration = false
             }
             // Если переключаемся с pencil/arrow на другой инструмент, завершаем текущий путь
             if (previousTool == .pencil || previousTool == .arrow) && tool != .pencil && tool != .arrow {
@@ -716,15 +717,22 @@ class VideoPlayerViewModel: ObservableObject {
         handleCancelEditor()
     }
     
-    // Helper method to get intersecting stamps at current video time
+    // Helper method to get intersecting stamps at current video time (для кнопки «Сохранить на тег»).
+    // Не учитываем теги с таймлайна «Рисунки» и теги, у которых название совпадает с именем текущего рисунка.
     func getIntersectingStamps() -> [TimelineStamp] {
         let videoTime = state.editorScreenshotVideoTime
+        let screenshotName = state.editorScreenshotName.replacingOccurrences(of: ".png", with: "")
         var stamps: [TimelineStamp] = []
         
         let timelineData = TimelineDataManager.shared
         for line in timelineData.lines {
+            // Исключаем таймлайн «Рисунки»
+            if line.id == ScreenshotConstants.screenshotsTimelineID { continue }
             for stamp in line.stamps {
                 if videoTime >= stamp.timeStartSeconds && videoTime <= stamp.timeFinishSeconds {
+                    // Исключаем тег, если его название совпадает с именем рисунка
+                    let stampLabelNorm = stamp.label.replacingOccurrences(of: ".png", with: "")
+                    if stampLabelNorm == screenshotName { continue }
                     stamps.append(stamp)
                 }
             }
@@ -906,7 +914,9 @@ class VideoPlayerViewModel: ObservableObject {
         bezierPath.lineJoinStyle = .round
         
         if let dashPattern = path.lineStyle.dashPattern {
-            let scaledDashPattern = dashPattern.map { $0 * scale }
+            let baseLineWidth: CGFloat = 3
+            let widthScale = max(1, path.lineWidth / baseLineWidth)
+            let scaledDashPattern = dashPattern.map { $0 * scale * widthScale }
             bezierPath.setLineDash(scaledDashPattern, count: scaledDashPattern.count, phase: 0)
         }
         
@@ -1110,11 +1120,14 @@ class VideoPlayerViewModel: ObservableObject {
             path.line(to: NSPoint(x: next.x, y: next.y))
         }
         
+        let lineW = object.strokeWidth * scale
         NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
-        path.lineWidth = 2 * scale
+        path.lineWidth = lineW
         
         if object.lineStyle == .dashed {
-            path.setLineDash([5 * scale, 5 * scale], count: 2, phase: 0)
+            let baseLineWidth: CGFloat = 3.0
+            let dashScale = max(1, object.strokeWidth / baseLineWidth)
+            path.setLineDash([5 * scale * dashScale, 5 * scale * dashScale], count: 2, phase: 0)
         }
         path.stroke()
         
@@ -1135,6 +1148,7 @@ class VideoPlayerViewModel: ObservableObject {
     private func drawLineWithArrowOnImage(_ object: DrawableObject, scale: CGFloat) {
         guard object.positions.count >= 2 else { return }
         
+        let lineW = object.strokeWidth * scale
         let path = NSBezierPath()
         
         // Рисуем линию до последней точки
@@ -1147,14 +1161,16 @@ class VideoPlayerViewModel: ObservableObject {
         }
         
         NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
-        path.lineWidth = 2 * scale
+        path.lineWidth = lineW
         
         if object.lineStyle == .dashed {
-            path.setLineDash([5 * scale, 5 * scale], count: 2, phase: 0)
+            let baseLineWidth: CGFloat = 3.0
+            let dashScale = max(1, object.strokeWidth / baseLineWidth)
+            path.setLineDash([5 * scale * dashScale, 5 * scale * dashScale], count: 2, phase: 0)
         }
         path.stroke()
         
-        // Рисуем стрелку на последней точке
+        // Рисуем стрелку на последней точке (размер стрелки фиксированный при масштабе)
         let lastPoint = object.positions[object.positions.count - 1]
         let secondLastPoint = object.positions[object.positions.count - 2]
         
@@ -1163,7 +1179,7 @@ class VideoPlayerViewModel: ObservableObject {
         let dy = lastPoint.y - secondLastPoint.y
         let angle = atan2(dy, dx)
         
-        // Размер стрелки (масштабируем)
+        // Размер стрелки (фиксированный при масштабе, как в редакторе)
         let arrowLength: CGFloat = 15 * scale
         let arrowWidth: CGFloat = 10 * scale
         
@@ -1187,7 +1203,7 @@ class VideoPlayerViewModel: ObservableObject {
         NSColor(object.edgeColor).setFill()
         arrowPath.fill()
         NSColor(object.edgeColor).setStroke()
-        arrowPath.lineWidth = 2 * scale
+        arrowPath.lineWidth = lineW
         arrowPath.stroke()
         
         // Вершины (кроме последней, так как там стрелка)
@@ -1250,8 +1266,9 @@ class VideoPlayerViewModel: ObservableObject {
                    controlPoint1: NSPoint(x: controlPoint.x, y: controlPoint.y),
                    controlPoint2: NSPoint(x: controlPoint.x, y: controlPoint.y))
         
+        let lineW = object.strokeWidth * scale
         NSColor(object.edgeColor).withAlphaComponent(0.8).setStroke()
-        path.lineWidth = 2 * scale
+        path.lineWidth = lineW
         
         if object.lineStyle == .dashed {
             path.setLineDash([5 * scale, 5 * scale], count: 2, phase: 0)
@@ -1270,7 +1287,7 @@ class VideoPlayerViewModel: ObservableObject {
         let dy = endPoint.y - curvePoint.y
         let angle = atan2(dy, dx)
         
-        // Размер стрелки
+        // Размер стрелки фиксированный (не зависит от толщины линии)
         let arrowLength: CGFloat = 15 * scale
         let arrowWidth: CGFloat = 10 * scale
         
@@ -1294,7 +1311,7 @@ class VideoPlayerViewModel: ObservableObject {
         NSColor(object.edgeColor).setFill()
         arrowPath.fill()
         NSColor(object.edgeColor).setStroke()
-        arrowPath.lineWidth = 2 * scale
+        arrowPath.lineWidth = lineW
         arrowPath.stroke()
         
         // Показываем только начальную точку (конечная точка скрыта, так как там стрелка)
@@ -1463,7 +1480,7 @@ class VideoPlayerViewModel: ObservableObject {
         path.transform(using: finalReflection)
         
         // Заливка
-        NSColor(shape.fillColor).setFill()
+        NSColor(shape.fillColor).withAlphaComponent(CGFloat(shape.fillOpacity)).setFill()
         path.fill()
         
         // Обводка

@@ -78,6 +78,8 @@ class EditorDrawingState: ObservableObject {
     @Published var telestrationCustomization = ObjectCustomization()
     @Published var telestrationObjects: [DrawableObject] = []
     @Published var selectedTelestrationObjectId: UUID? = nil
+    /// Режим «Добавить точку»: следующий клик по холсту добавит точку к текущему объекту телестрации (зона/линия).
+    @Published var isAddingPointToTelestration: Bool = false
     var lastTelestrationDragStartPositions: [CGPoint]? = nil
     /// Индекс вершины при перетаскивании одной вершины; nil = перемещение всего объекта.
     var lastTelestrationDragVertexIndex: Int? = nil
@@ -281,6 +283,7 @@ class EditorDrawingState: ObservableObject {
         selectedTextBoxId = nil
         telestrationObjects.removeAll()
         selectedTelestrationObjectId = nil
+        isAddingPointToTelestration = false
         shapes.removeAll()
         selectedShapeId = nil
         initialViewSize = .zero
@@ -322,6 +325,7 @@ class EditorDrawingState: ObservableObject {
         telestrationVertices.removeAll()
         showingTelestrationTypeSelection = false
         selectedTelestrationObjectId = nil
+        isAddingPointToTelestration = false
     }
     
     func addTelestrationVertex(at point: CGPoint) {
@@ -366,12 +370,20 @@ class EditorDrawingState: ObservableObject {
             newObject.fillColor = telestrationCustomization.fillColor
         }
         newObject.lineStyle = telestrationCustomization.lineStyle
+        if objectType == .curvedArrow {
+            newObject.curveHeight = telestrationCustomization.curveHeight
+            newObject.strokeWidth = telestrationCustomization.strokeWidth
+        }
+        if objectType == .lineBetweenObjects || objectType == .lineWithArrow {
+            newObject.strokeWidth = telestrationCustomization.strokeWidth
+        }
         
         pendingTelestrationObject = newObject
         isCreatingTelestrationObject = false
         telestrationVertices.removeAll()
         currentTelestrationType = nil
         selectedTelestrationObjectId = nil
+        isAddingPointToTelestration = false
     }
     
     /// Применяет telestrationCustomization к pending-объекту или к выбранному объекту в telestrationObjects.
@@ -384,7 +396,13 @@ class EditorDrawingState: ObservableObject {
             object.glowColor = telestrationCustomization.glowColor
             object.radius = telestrationCustomization.radius
             if object.type == .objectHighlight { object.glowOpacity = telestrationCustomization.glowOpacity }
-            if object.type == .curvedArrow { object.curveHeight = telestrationCustomization.curveHeight }
+            if object.type == .curvedArrow {
+                object.curveHeight = telestrationCustomization.curveHeight
+                object.strokeWidth = telestrationCustomization.strokeWidth
+            }
+            if object.type == .lineBetweenObjects || object.type == .lineWithArrow {
+                object.strokeWidth = telestrationCustomization.strokeWidth
+            }
             pendingTelestrationObject = object
             return
         }
@@ -398,7 +416,13 @@ class EditorDrawingState: ObservableObject {
         object.glowColor = telestrationCustomization.glowColor
         object.radius = telestrationCustomization.radius
         if object.type == .objectHighlight { object.glowOpacity = telestrationCustomization.glowOpacity }
-        if object.type == .curvedArrow { object.curveHeight = telestrationCustomization.curveHeight }
+        if object.type == .curvedArrow {
+            object.curveHeight = telestrationCustomization.curveHeight
+            object.strokeWidth = telestrationCustomization.strokeWidth
+        }
+        if object.type == .lineBetweenObjects || object.type == .lineWithArrow {
+            object.strokeWidth = telestrationCustomization.strokeWidth
+        }
         telestrationObjects[idx] = object
     }
     
@@ -418,12 +442,14 @@ class EditorDrawingState: ObservableObject {
         telestrationCustomization.glowOpacity = object.glowOpacity
         telestrationCustomization.radius = object.radius
         telestrationCustomization.curveHeight = object.curveHeight
+        telestrationCustomization.strokeWidth = object.strokeWidth
     }
     
     func deleteSelectedTelestrationObject() {
         guard let id = selectedTelestrationObjectId else { return }
         telestrationObjects.removeAll { $0.id == id }
         selectedTelestrationObjectId = nil
+        isAddingPointToTelestration = false
     }
     
     func startMovingTelestrationObject(vertexIndex: Int? = nil) {
@@ -480,6 +506,66 @@ class EditorDrawingState: ObservableObject {
         lastTelestrationDragVertexIndex = nil
     }
     
+    /// Типы объектов телестрации, к которым можно добавлять точки (зоны и линии с вершинами).
+    private static let telestrationTypesSupportingAddPoint: Set<ObjectType> = [.zoneBetweenObjects, .lineBetweenObjects, .lineWithArrow, .simpleZone]
+    
+    /// Добавляет точку к текущему объекту телестрации (pending или выбранному). Точка вставляется на ближайший сегмент контура/линии.
+    func addPointToTelestrationObject(at point: CGPoint) -> Bool {
+        let closed: Bool
+        let positions: [CGPoint]
+        if var obj = pendingTelestrationObject {
+            guard Self.telestrationTypesSupportingAddPoint.contains(obj.type) else { return false }
+            closed = (obj.type == .zoneBetweenObjects || obj.type == .simpleZone)
+            positions = obj.positions
+            guard positions.count >= 2 else { return false }
+            let idx = Self.indexToInsertPoint(point, in: positions, closed: closed)
+            obj.positions.insert(point, at: idx)
+            pendingTelestrationObject = obj
+            return true
+        }
+        guard let id = selectedTelestrationObjectId,
+              let idxArr = telestrationObjects.firstIndex(where: { $0.id == id }) else { return false }
+        var obj = telestrationObjects[idxArr]
+        guard Self.telestrationTypesSupportingAddPoint.contains(obj.type) else { return false }
+        closed = (obj.type == .zoneBetweenObjects || obj.type == .simpleZone)
+        positions = obj.positions
+        guard positions.count >= 2 else { return false }
+        let insertIdx = Self.indexToInsertPoint(point, in: positions, closed: closed)
+        obj.positions.insert(point, at: insertIdx)
+        telestrationObjects[idxArr] = obj
+        return true
+    }
+    
+    /// Индекс, после которого вставить новую точку (вставка на ближайший сегмент).
+    private static func indexToInsertPoint(_ point: CGPoint, in positions: [CGPoint], closed: Bool) -> Int {
+        guard positions.count >= 2 else { return positions.count }
+        var bestIndex = 1
+        var bestD: CGFloat = .greatestFiniteMagnitude
+        let n = positions.count
+        for i in 0..<n {
+            let next = closed ? (i + 1) % n : i + 1
+            guard next < n || (closed && next == 0) else { continue }
+            let a = positions[i]
+            let b = positions[next]
+            let d = distanceFromPointToSegment(point, a, b)
+            if d < bestD {
+                bestD = d
+                bestIndex = i + 1
+            }
+        }
+        return bestIndex
+    }
+    
+    private static func distanceFromPointToSegment(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let abx = b.x - a.x, aby = b.y - a.y
+        let apx = p.x - a.x, apy = p.y - a.y
+        let abLenSq = abx * abx + aby * aby
+        if abLenSq == 0 { return hypot(apx, apy) }
+        let t = max(0, min(1, (apx * abx + apy * aby) / abLenSq))
+        let proj = CGPoint(x: a.x + t * abx, y: a.y + t * aby)
+        return hypot(p.x - proj.x, p.y - proj.y)
+    }
+    
     func confirmTelestrationObjectCreation() -> DrawableObject? {
         guard var object = pendingTelestrationObject else { return nil }
         
@@ -493,15 +579,21 @@ class EditorDrawingState: ObservableObject {
             object.glowOpacity = telestrationCustomization.glowOpacity
         }
         
-        // Для закругленной стрелки сохраняем curveHeight
+        // Для закругленной стрелки сохраняем curveHeight и толщину линии
         if object.type == .curvedArrow {
             object.curveHeight = telestrationCustomization.curveHeight
+            object.strokeWidth = telestrationCustomization.strokeWidth
+        }
+        // Для линии между объектами и линии со стрелкой — толщину линии
+        if object.type == .lineBetweenObjects || object.type == .lineWithArrow {
+            object.strokeWidth = telestrationCustomization.strokeWidth
         }
         
         telestrationObjects.append(object)
         
         pendingTelestrationObject = nil
         telestrationCustomization = ObjectCustomization()
+        isAddingPointToTelestration = false
         
         return object
     }
@@ -512,6 +604,7 @@ class EditorDrawingState: ObservableObject {
         telestrationVertices.removeAll()
         currentTelestrationType = nil
         telestrationCustomization = ObjectCustomization()
+        isAddingPointToTelestration = false
     }
     
     // MARK: - Shapes Methods
@@ -691,12 +784,15 @@ class EditorDrawingState: ObservableObject {
         pendingTextBox = textBox
     }
     
-    func updateSelectedShape(fillColor: Color? = nil, strokeColor: Color? = nil, strokeWidth: CGFloat? = nil, lineStyle: EditorLineStyle? = nil) {
+    func updateSelectedShape(fillColor: Color? = nil, fillOpacity: Double? = nil, strokeColor: Color? = nil, strokeWidth: CGFloat? = nil, lineStyle: EditorLineStyle? = nil) {
         guard let shapeId = selectedShapeId,
               let index = shapes.firstIndex(where: { $0.id == shapeId }) else { return }
         
         if let fillColor = fillColor {
             shapes[index].fillColor = fillColor
+        }
+        if let fillOpacity = fillOpacity {
+            shapes[index].fillOpacity = fillOpacity
         }
         if let strokeColor = strokeColor {
             shapes[index].strokeColor = strokeColor
@@ -831,6 +927,8 @@ struct EditorShape: Identifiable {
     var rotation: CGFloat = 0.0
     
     var fillColor: Color = .blue
+    /// Прозрачность заливки (0 — прозрачный фон, 1 — непрозрачный).
+    var fillOpacity: Double = 1.0
     var strokeColor: Color = .white
     var strokeWidth: CGFloat = 2.0
     var lineStyle: EditorLineStyle = .solid

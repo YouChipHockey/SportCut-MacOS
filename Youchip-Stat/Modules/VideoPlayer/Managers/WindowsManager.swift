@@ -273,6 +273,12 @@ class WindowsManager: NSObject {
         fieldMapWindow = nil
     }
     
+    /// Возвращает true, если ключевое окно — таймлайн (control) или библиотека тегов (tag library). Используется для пробела = play/pause.
+    func isControlOrTagLibraryWindowKey() -> Bool {
+        guard let keyWindow = NSApplication.shared.keyWindow else { return false }
+        return keyWindow === controlWindow?.window || keyWindow === tagLibraryWindow?.window
+    }
+    
     func showReportWindow(htmlString: String, teamName: String, opponentName: String) {
         let view = WebViewWrapper(htmlString: htmlString)
         let hostingController = NSHostingController(rootView: view)

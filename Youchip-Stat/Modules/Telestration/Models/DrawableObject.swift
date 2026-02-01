@@ -26,6 +26,7 @@ struct DrawableObject: Identifiable {
     var glowOpacity: Double = 0.5 // Прозрачность для «выделения объекта» (0.5 = 50%)
     var radius: CGFloat = 30
     var curveHeight: CGFloat = 0.0 // Высота центра параболы для закругленной стрелки
+    var strokeWidth: CGFloat = 2.0 // Толщина линии для закругленной стрелки
     
     init(number: Int, type: ObjectType) {
         self.number = number

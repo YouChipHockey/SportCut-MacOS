@@ -29,7 +29,16 @@ class VideoPlayerWindowController: NSWindowController, NSWindowDelegate {
         fatalError("init(coder:) has not been implemented")
     }
     
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if VideoPlayerManager.shared.isVideoPlayerInEditorMode {
+            NotificationCenter.default.post(name: .editorModeChanged, object: false)
+            return false
+        }
+        return true
+    }
+    
     func windowWillClose(_ notification: Notification) {
+        VideoPlayerManager.shared.isVideoPlayerInEditorMode = false
         ActiveWindowManager.shared.unregisterAllowedWindow(self)
         WindowsManager.shared.closeAll()
     }

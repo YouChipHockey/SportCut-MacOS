@@ -425,6 +425,8 @@
 "EdgeColor" = "Chegara rangi:"; // ^String.Titles.edgeColor
 "VertexColor" = "Uch rangi:"; // ^String.Titles.vertexColor
 "FillColor" = "To'ldirish rangi:"; // ^String.Titles.fillColor
+"TransparentBackground" = "Shaffof fon"; // ^String.Titles.transparentBackground
+"OpaqueBackground" = "Shaffof bo'lmagan fon"; // ^String.Titles.opaqueBackground
 "LineType" = "Chiziq turi:"; // ^String.Titles.lineType
 "ShowMisalignedVertices" = "Noto'g'ri joylashgan uchlarni ko'rsatish"; // ^String.Titles.showMisalignedVertices
 "WarningColor" = "Ogohlantirish rangi:"; // ^String.Titles.warningColor

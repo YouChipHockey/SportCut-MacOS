@@ -425,6 +425,8 @@
 "EdgeColor" = "Цвет граней:"; // ^String.Titles.edgeColor
 "VertexColor" = "Цвет вершин:"; // ^String.Titles.vertexColor
 "FillColor" = "Цвет заливки:"; // ^String.Titles.fillColor
+"TransparentBackground" = "Прозрачный фон"; // ^String.Titles.transparentBackground
+"OpaqueBackground" = "Непрозрачный фон"; // ^String.Titles.opaqueBackground
 "LineType" = "Тип линии:"; // ^String.Titles.lineType
 "ShowMisalignedVertices" = "Показывать неправильно расположенные вершины"; // ^String.Titles.showMisalignedVertices
 "WarningColor" = "Цвет предупреждения:"; // ^String.Titles.warningColor

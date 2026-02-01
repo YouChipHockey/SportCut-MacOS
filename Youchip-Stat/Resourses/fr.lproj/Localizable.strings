@@ -425,6 +425,8 @@
 "EdgeColor" = "Couleur des bords :"; // ^String.Titles.edgeColor
 "VertexColor" = "Couleur des sommets :"; // ^String.Titles.vertexColor
 "FillColor" = "Couleur de remplissage :"; // ^String.Titles.fillColor
+"TransparentBackground" = "Fond transparent"; // ^String.Titles.transparentBackground
+"OpaqueBackground" = "Fond opaque"; // ^String.Titles.opaqueBackground
 "LineType" = "Type de ligne :"; // ^String.Titles.lineType
 "ShowMisalignedVertices" = "Afficher les sommets mal alignés"; // ^String.Titles.showMisalignedVertices
 "WarningColor" = "Couleur d'avertissement :"; // ^String.Titles.warningColor

@@ -41,6 +41,7 @@ struct VideoPlayerView: View {
         )) {
             EditorTagSelectionSheet(
                 videoTime: viewModel.state.editorScreenshotVideoTime,
+                screenshotName: viewModel.state.editorScreenshotName,
                 onSave: { selectedStamps in
                     viewModel.action.send(.saveEditorWithTags(selectedStamps))
                 },
@@ -51,6 +52,7 @@ struct VideoPlayerView: View {
         }
         .frame(minWidth: 400, minHeight: 300)
         .onChange(of: viewModel.state.isEditorMode) { isEditor in
+            VideoPlayerManager.shared.isVideoPlayerInEditorMode = isEditor
             handleEditorModeChange(isEditor: isEditor)
         }
     }
@@ -95,7 +97,6 @@ struct VideoPlayerView: View {
     
     private var customNormalToolbar: some View {
         HStack(spacing: 12) {
-            telestrationButton
             editorButton
             
             Spacer()
@@ -529,6 +530,7 @@ struct CustomVideoPlayer: NSViewRepresentable {
 
 struct EditorTagSelectionSheet: View {
     let videoTime: Double
+    let screenshotName: String
     let onSave: ([TimelineStamp]) -> Void
     let onCancel: () -> Void
     
@@ -536,12 +538,17 @@ struct EditorTagSelectionSheet: View {
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @State private var selectedStamps: Set<UUID> = []
     
+    /// Пересекающиеся теги в этом моменте времени. Исключаем таймлайн «Рисунки» и теги с названием как у текущего рисунка.
     private var intersectingStamps: [TimelineStamp] {
+        let screenshotNameNorm = screenshotName.replacingOccurrences(of: ".png", with: "")
         var stamps: [TimelineStamp] = []
         
         for line in timelineData.lines {
+            if line.id == ScreenshotConstants.screenshotsTimelineID { continue }
             for stamp in line.stamps {
                 if videoTime >= stamp.timeStartSeconds && videoTime <= stamp.timeFinishSeconds {
+                    let stampLabelNorm = stamp.label.replacingOccurrences(of: ".png", with: "")
+                    if stampLabelNorm == screenshotNameNorm { continue }
                     stamps.append(stamp)
                 }
             }

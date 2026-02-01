@@ -18,6 +18,8 @@ class VideoPlayerManager: ObservableObject {
     @Published var playbackSpeed: Double = 1.0
     @Published var currentTime: Double = 0.0
     @Published var isResizingTag: Bool = false // Track if user is resizing a tag
+    /// Режим редактирования скриншота во вьюхе видео-окна (для обработки кнопки закрытия окна).
+    var isVideoPlayerInEditorMode: Bool = false
     var videoDuration: Double {
         player?.currentItem?.duration.seconds ?? 0
     }

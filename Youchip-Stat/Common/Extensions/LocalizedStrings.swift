@@ -431,6 +431,8 @@ extension String {
         case edgeColor
         case vertexColor
         case fillColor
+        case transparentBackground
+        case opaqueBackground
         case lineType
         case showMisalignedVertices
         case warningColor

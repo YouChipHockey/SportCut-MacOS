@@ -394,12 +394,14 @@ struct EditorSettingsPanel: View {
                 HStack(spacing: 8) {
                     Button(^String.Titles.cancel) {
                         drawingState.selectedTelestrationObjectId = nil
+                        drawingState.isAddingPointToTelestration = false
                     }
                     .buttonStyle(.plain)
                     .frame(maxWidth: .infinity)
                     
                     Button(^String.Titles.apply) {
                         drawingState.selectedTelestrationObjectId = nil
+                        drawingState.isAddingPointToTelestration = false
                     }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
@@ -426,11 +428,31 @@ struct EditorSettingsPanel: View {
                         set: { newColor in
                             if var updatedShape = drawingState.pendingShape {
                                 updatedShape.fillColor = newColor
+                                updatedShape.fillOpacity = 1
                                 drawingState.pendingShape = updatedShape
                             }
                         }
                     ))
                     .frame(width: 40, height: 30)
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(^String.Titles.transparentBackground) {
+                        if var updatedShape = drawingState.pendingShape {
+                            updatedShape.fillOpacity = 0
+                            drawingState.pendingShape = updatedShape
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+                    Button(^String.Titles.opaqueBackground) {
+                        if var updatedShape = drawingState.pendingShape {
+                            updatedShape.fillOpacity = 1
+                            drawingState.pendingShape = updatedShape
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
                 }
                 
                 Divider()
@@ -547,10 +569,23 @@ struct EditorSettingsPanel: View {
                     ColorPicker("", selection: Binding(
                         get: { shape.fillColor },
                         set: { newColor in
-                            drawingState.updateSelectedShape(fillColor: newColor)
+                            drawingState.updateSelectedShape(fillColor: newColor, fillOpacity: 1)
                         }
                     ))
                     .frame(width: 40, height: 30)
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(^String.Titles.transparentBackground) {
+                        drawingState.updateSelectedShape(fillOpacity: 0)
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+                    Button(^String.Titles.opaqueBackground) {
+                        drawingState.updateSelectedShape(fillOpacity: 1)
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
                 }
                 
                 Divider()
@@ -1105,6 +1140,7 @@ struct DrawingCanvasView: View {
                 drawingState.selectedTextBoxId = textBox.id
                 drawingState.selectedShapeId = nil
                 drawingState.selectedTelestrationObjectId = nil
+                drawingState.isAddingPointToTelestration = false
                 return
             }
         }
@@ -1153,6 +1189,7 @@ struct DrawingCanvasView: View {
             if shapeRect.contains(location) {
                 drawingState.selectedShapeId = shape.id
                 drawingState.selectedTelestrationObjectId = nil
+                drawingState.isAddingPointToTelestration = false
                 return
             }
         }
@@ -1170,6 +1207,7 @@ struct DrawingCanvasView: View {
             }
         }
         drawingState.selectedTelestrationObjectId = nil
+        drawingState.isAddingPointToTelestration = false
     }
     
     private func telestrationObjectContains(point: CGPoint, object: DrawableObject) -> Bool {
@@ -1462,6 +1500,7 @@ struct DrawingCanvasView: View {
                             if drawingState.selectedTelestrationObjectId != nil {
                                 drawingState.selectedTelestrationObjectId = nil
                             }
+                            drawingState.isAddingPointToTelestration = false
                         }
                     }
                 
@@ -1566,8 +1605,8 @@ struct DrawingCanvasView: View {
                                     isPending: false
                                 )
                             }
-                            // Перемещение объекта телестрации в настройке (после Done, до Apply) — без выделения. Вершина = тянуть вершину, ребро/внутренность = тянуть весь объект.
-                            else if let pendingObj = drawingState.pendingTelestrationObject {
+                            // Перемещение объекта телестрации в настройке (после Done, до Apply) — без выделения. Вершина = тянуть вершину, ребро/внутренность = тянуть весь объект. В режиме «Добавить точку» не начинаем перетаскивание.
+                            else if !drawingState.isAddingPointToTelestration, let pendingObj = drawingState.pendingTelestrationObject {
                                 let start = CGPoint(x: value.location.x - value.translation.width, y: value.location.y - value.translation.height)
                                 if isMovingTelestrationObject {
                                     drawingState.movePendingTelestrationObject(by: value.translation)
@@ -1580,8 +1619,8 @@ struct DrawingCanvasView: View {
                                     }
                                 }
                             }
-                            // Перемещение выбранного объекта телестрации (курсором). Вершина = тянуть вершину, ребро/внутренность = тянуть весь объект.
-                            else if drawingState.currentTool == .cursor,
+                            // Перемещение выбранного объекта телестрации (курсором). В режиме «Добавить точку» не начинаем перетаскивание.
+                            else if !drawingState.isAddingPointToTelestration, drawingState.currentTool == .cursor,
                                let id = drawingState.selectedTelestrationObjectId,
                                let obj = drawingState.telestrationObjects.first(where: { $0.id == id }) {
                                 let start = CGPoint(x: value.location.x - value.translation.width, y: value.location.y - value.translation.height)
@@ -1630,9 +1669,13 @@ struct DrawingCanvasView: View {
                                 drawingState.endMovingTelestrationObject()
                                 isMovingTelestrationObject = false
                             }
-                            // Клик (малое движение): режим ввода текстбокса — клик снаружи выходит из редактирования; двойной клик — ввод текста
+                            // Клик (малое движение): режим «Добавить точку» телестрации — клик по холсту добавляет вершину
                             let location = value.location
                             let isClick = value.translation.width < 5 && value.translation.height < 5
+                            if isClick, drawingState.isAddingPointToTelestration {
+                                _ = drawingState.addPointToTelestrationObject(at: location)
+                                return
+                            }
                             if isClick {
                                 if drawingState.isEditingTextBox {
                                     let edited = drawingState.pendingTextBox ?? drawingState.textBoxes.first(where: { $0.id == drawingState.selectedTextBoxId })
@@ -1736,8 +1779,11 @@ struct DrawingCanvasView: View {
             lineJoin: .round
         )
         
+        // Масштабируем паттерн прерывистой линии по толщине: у толстых линий длиннее штрихи и пробелы
         if let dashPattern = path.lineStyle.dashPattern {
-            strokeStyle.dash = dashPattern
+            let baseLineWidth: CGFloat = 3
+            let widthScale = max(1, path.lineWidth / baseLineWidth)
+            strokeStyle.dash = dashPattern.map { $0 * widthScale }
         }
         
         context.stroke(
@@ -1905,9 +1951,12 @@ struct DrawingCanvasView: View {
             path.addLine(to: object.positions[i + 1])
         }
         
-        var strokeStyle = StrokeStyle(lineWidth: 2)
+        let lineW = object.strokeWidth
+        var strokeStyle = StrokeStyle(lineWidth: lineW)
         if object.lineStyle == .dashed {
-            strokeStyle.dash = [5, 5]
+            let baseLineWidth: CGFloat = 3.0
+            let scale = max(1, lineW / baseLineWidth)
+            strokeStyle.dash = [5 * scale, 5 * scale]
         }
         context.stroke(path, with: .color(object.edgeColor.opacity(0.8)), style: strokeStyle)
         
@@ -1927,6 +1976,7 @@ struct DrawingCanvasView: View {
     private func drawLineWithArrow(_ object: DrawableObject, in context: GraphicsContext) {
         guard object.positions.count >= 2 else { return }
         
+        let lineW = object.strokeWidth
         // Рисуем линию до последней точки
         var path = Path()
         for i in 0..<(object.positions.count - 1) {
@@ -1934,13 +1984,15 @@ struct DrawingCanvasView: View {
             path.addLine(to: object.positions[i + 1])
         }
         
-        var strokeStyle = StrokeStyle(lineWidth: 2)
+        var strokeStyle = StrokeStyle(lineWidth: lineW)
         if object.lineStyle == .dashed {
-            strokeStyle.dash = [5, 5]
+            let baseLineWidth: CGFloat = 3.0
+            let scale = max(1, lineW / baseLineWidth)
+            strokeStyle.dash = [5 * scale, 5 * scale]
         }
         context.stroke(path, with: .color(object.edgeColor.opacity(0.8)), style: strokeStyle)
         
-        // Рисуем стрелку на последней точке
+        // Рисуем стрелку на последней точке (размер стрелки фиксированный)
         let lastPoint = object.positions[object.positions.count - 1]
         let secondLastPoint = object.positions[object.positions.count - 2]
         
@@ -1949,7 +2001,7 @@ struct DrawingCanvasView: View {
         let dy = lastPoint.y - secondLastPoint.y
         let angle = atan2(dy, dx)
         
-        // Размер стрелки
+        // Размер стрелки (фиксированный, как у закругленной стрелки)
         let arrowLength: CGFloat = 15
         let arrowWidth: CGFloat = 10
         
@@ -1971,7 +2023,7 @@ struct DrawingCanvasView: View {
         arrowPath.closeSubpath()
         
         context.fill(arrowPath, with: .color(object.edgeColor))
-        context.stroke(arrowPath, with: .color(object.edgeColor), lineWidth: 2)
+        context.stroke(arrowPath, with: .color(object.edgeColor), lineWidth: lineW)
         
         // Вершины (кроме последней, так как там стрелка)
         for position in object.positions.dropLast() {
@@ -2029,7 +2081,8 @@ struct DrawingCanvasView: View {
         path.move(to: startPoint)
         path.addQuadCurve(to: endPoint, control: controlPoint)
         
-        var strokeStyle = StrokeStyle(lineWidth: 2)
+        let lineW = object.strokeWidth
+        var strokeStyle = StrokeStyle(lineWidth: lineW)
         if object.lineStyle == .dashed {
             strokeStyle.dash = [5, 5]
         }
@@ -2047,7 +2100,7 @@ struct DrawingCanvasView: View {
         let dy = endPoint.y - curvePoint.y
         let angle = atan2(dy, dx)
         
-        // Размер стрелки
+        // Размер стрелки фиксированный (не зависит от толщины линии)
         let arrowLength: CGFloat = 15
         let arrowWidth: CGFloat = 10
         
@@ -2069,7 +2122,7 @@ struct DrawingCanvasView: View {
         arrowPath.closeSubpath()
         
         context.fill(arrowPath, with: .color(object.edgeColor))
-        context.stroke(arrowPath, with: .color(object.edgeColor), lineWidth: 2)
+        context.stroke(arrowPath, with: .color(object.edgeColor), lineWidth: lineW)
         
         // Показываем только начальную точку (конечная точка скрыта, так как там стрелка)
         let circle = Path(ellipseIn: CGRect(
@@ -2178,7 +2231,7 @@ struct DrawingCanvasView: View {
         shapePath = shapePath.applying(transform)
         
         // Заливка
-        context.fill(shapePath, with: .color(shape.fillColor))
+        context.fill(shapePath, with: .color(shape.fillColor.opacity(shape.fillOpacity)))
         
         // Обводка
         var strokeStyle = StrokeStyle(lineWidth: shape.strokeWidth)
@@ -2679,6 +2732,36 @@ struct EditorZoneBetweenObjectsCustomization: View {
                 .pickerStyle(MenuPickerStyle())
                 .frame(width: 120)
             }
+            
+            Divider()
+            
+            Group {
+                if drawingState.isAddingPointToTelestration {
+                    Button {
+                        drawingState.isAddingPointToTelestration.toggle()
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle")
+                            Text("Добавить точку")
+                            Text("(режим)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .buttonStyle(BorderedProminentButtonStyle())
+                } else {
+                    Button {
+                        drawingState.isAddingPointToTelestration.toggle()
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle")
+                            Text("Добавить точку")
+                        }
+                    }
+                    .buttonStyle(BorderedButtonStyle())
+                }
+            }
+            .help("Включить режим: следующий клик по изображению добавит вершину к объекту")
         }
     }
 }
@@ -2687,7 +2770,30 @@ struct EditorLineBetweenObjectsCustomization: View {
     @ObservedObject var drawingState: EditorDrawingState
     
     var body: some View {
-        EditorZoneBetweenObjectsCustomization(drawingState: drawingState)
+        VStack(spacing: 12) {
+            EditorZoneBetweenObjectsCustomization(drawingState: drawingState)
+            
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text(^String.Titles.lineWidth)
+                    .font(.subheadline)
+                HStack {
+                    Stepper("", value: Binding(
+                        get: { drawingState.telestrationCustomization.strokeWidth },
+                        set: { newWidth in
+                            let clamped = min(20, max(1, newWidth))
+                            drawingState.telestrationCustomization.strokeWidth = clamped
+                            drawingState.updatePendingTelestrationObjectFromCustomization()
+                        }
+                    ), in: 1...20, step: 1)
+                    .labelsHidden()
+                    Text("\(Int(drawingState.telestrationCustomization.strokeWidth))")
+                        .frame(width: 36)
+                        .font(.caption)
+                }
+            }
+        }
     }
 }
 
@@ -2745,16 +2851,49 @@ struct EditorCurvedArrowCustomization: View {
                 Text("Высота центра параболы")
                     .font(.subheadline)
                 
-                HStack {
-                    Slider(value: Binding(
-                        get: { drawingState.telestrationCustomization.curveHeight },
-                        set: { newHeight in
-                            drawingState.telestrationCustomization.curveHeight = newHeight
+                let curveHeightBinding = Binding<CGFloat>(
+                    get: { drawingState.telestrationCustomization.curveHeight },
+                    set: { newHeight in
+                        let clamped = min(300, max(-300, newHeight))
+                        drawingState.telestrationCustomization.curveHeight = clamped
+                        drawingState.updatePendingTelestrationObjectFromCustomization()
+                    }
+                )
+                
+                Slider(value: curveHeightBinding, in: -300...300)
+                
+                HStack(spacing: 8) {
+                    Stepper("", value: curveHeightBinding, in: -300...300, step: 1)
+                        .labelsHidden()
+                    TextField("", value: Binding(
+                        get: { Int(drawingState.telestrationCustomization.curveHeight) },
+                        set: { newVal in
+                            let clamped = min(300, max(-300, CGFloat(newVal)))
+                            drawingState.telestrationCustomization.curveHeight = clamped
                             drawingState.updatePendingTelestrationObjectFromCustomization()
                         }
-                    ), in: -300...300)
-                    Text("\(Int(drawingState.telestrationCustomization.curveHeight))")
-                        .frame(width: 50)
+                    ), format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 60)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text(^String.Titles.lineWidth)
+                    .font(.subheadline)
+                
+                HStack {
+                    Stepper("", value: Binding(
+                        get: { drawingState.telestrationCustomization.strokeWidth },
+                        set: { newWidth in
+                            drawingState.telestrationCustomization.strokeWidth = newWidth
+                            drawingState.updatePendingTelestrationObjectFromCustomization()
+                        }
+                    ), in: 1...20, step: 1)
+                    .labelsHidden()
+                    Text("\(Int(drawingState.telestrationCustomization.strokeWidth))")
+                        .frame(width: 36)
                         .font(.caption)
                 }
             }

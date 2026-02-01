@@ -425,6 +425,8 @@
 "EdgeColor" = "边缘颜色:"; // ^String.Titles.edgeColor
 "VertexColor" = "顶点颜色:"; // ^String.Titles.vertexColor
 "FillColor" = "填充颜色:"; // ^String.Titles.fillColor
+"TransparentBackground" = "透明背景"; // ^String.Titles.transparentBackground
+"OpaqueBackground" = "不透明背景"; // ^String.Titles.opaqueBackground
 "LineType" = "线条类型:"; // ^String.Titles.lineType
 "ShowMisalignedVertices" = "显示未对齐的顶点"; // ^String.Titles.showMisalignedVertices
 "WarningColor" = "警告颜色:"; // ^String.Titles.warningColor
