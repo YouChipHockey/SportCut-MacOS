@@ -98,10 +98,12 @@ enum CutsExportType {
     case allTimelines
     case tag(selectedTag: Tag)
     case timeEvent(selectedEvent: TimeEvent)
-    case label(selectedLabel: Label) 
+    case label(selectedLabel: Label)
     case tagWithLabels(selectedTag: Tag, selectedLabels: [Label])
     case labelWithTags(selectedLabel: Label, selectedTags: [Tag])
     case screenshots
+    /// Экспорт таймлайна «Рисунки» как фильм или плейлист с картинками (каждый тег = рисунок с наложением).
+    case drawingsTimeline
 }
 
 struct ExportSegment {

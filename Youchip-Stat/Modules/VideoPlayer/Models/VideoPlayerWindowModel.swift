@@ -56,9 +56,45 @@ struct ScreenshotData {
     let url: URL
 }
 
+// MARK: - Copy/Paste for Cursor Context Menu
+
+/// Результат hit-test под курсором для контекстного меню ПКМ.
+enum CursorMenuHit {
+    case telestration(DrawableObject)
+    case shape(EditorShape)
+    case textBox(EditorTextBox)
+    case empty
+}
+
+/// Элемент буфера обмена редактора (только для инструмента «Курсор», ПКМ).
+enum CopiedEditorItem: Identifiable {
+    case telestration(DrawableObject)
+    case shape(EditorShape)
+    case textBox(EditorTextBox)
+    
+    var id: UUID {
+        switch self {
+        case .telestration(let o): return o.id
+        case .shape(let s): return s.id
+        case .textBox(let t): return t.id
+        }
+    }
+    
+    var shortLabel: String {
+        switch self {
+        case .telestration(let o): return "\(o.type.displayName)"
+        case .shape(let s): return s.type.displayName
+        case .textBox: return ^String.Titles.editorTextBox
+        }
+    }
+}
+
 // MARK: - Editor Drawing State
 
 class EditorDrawingState: ObservableObject {
+    /// Максимум элементов в буфере копирования (ПКМ → Вставить).
+    static let copyBufferMaxCount = 5
+    
     @Published var currentTool: EditorTool = .pencil
     @Published var currentPath: EditorDrawingPath = EditorDrawingPath()
     @Published var completedPaths: [EditorDrawingPath] = []
@@ -80,9 +116,16 @@ class EditorDrawingState: ObservableObject {
     @Published var selectedTelestrationObjectId: UUID? = nil
     /// Режим «Добавить точку»: следующий клик по холсту добавит точку к текущему объекту телестрации (зона/линия).
     @Published var isAddingPointToTelestration: Bool = false
+    /// Индексы точек, добавленных в режиме «Добавить точку» (порядок добавления). Back удаляет по этому порядку.
+    var telestrationPointUndoStack: [Int] = []
     var lastTelestrationDragStartPositions: [CGPoint]? = nil
     /// Индекс вершины при перетаскивании одной вершины; nil = перемещение всего объекта.
     var lastTelestrationDragVertexIndex: Int? = nil
+    /// Перетаскивание центральной ручки закруглённой стрелки (кружок по середине кривой).
+    var isDraggingCurvedArrowMiddle: Bool = false
+    
+    /// Буфер копирования для ПКМ (курсор): последние 5 скопированных объектов.
+    @Published var copyBuffer: [CopiedEditorItem] = []
     
     // Shapes state
     @Published var shapes: [EditorShape] = []
@@ -255,12 +298,26 @@ class EditorDrawingState: ObservableObject {
             }
         }
         
-        // Стираем объекты телестрации
+        // Стираем объекты телестрации: если ластик пересекает вершину или любой отрезок линии
         telestrationObjects.removeAll { object in
-            object.positions.contains { position in
-                let distance = hypot(position.x - point.x, position.y - point.y)
-                return distance < eraserRadius
+            eraserHitsTelestrationObject(object, point: point, eraserRadius: eraserRadius)
+        }
+        
+        // Стираем текстбоксы (попадание центра ластика в прямоугольник бокса)
+        if let pending = pendingTextBox {
+            let rect = textBoxRect(center: pending.position, size: pending.size)
+            if rect.contains(point) {
+                pendingTextBox = nil
+                isCreatingTextBox = false
             }
+        }
+        textBoxes.removeAll { box in
+            let rect = textBoxRect(center: box.position, size: box.size)
+            if rect.contains(point) {
+                if box.id == selectedTextBoxId { selectedTextBoxId = nil }
+                return true
+            }
+            return false
         }
         
         // Стираем фигуры
@@ -273,6 +330,54 @@ class EditorDrawingState: ObservableObject {
             )
             return shapeRect.contains(point)
         }
+    }
+    
+    private func textBoxRect(center: CGPoint, size: CGSize) -> CGRect {
+        CGRect(
+            x: center.x - size.width / 2,
+            y: center.y - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+    }
+    
+    /// Проверяет, попадает ли ластик в объект телестрации (вершина или любой отрезок линии).
+    private func eraserHitsTelestrationObject(_ object: DrawableObject, point: CGPoint, eraserRadius: CGFloat) -> Bool {
+        let positions = object.positions
+        if positions.isEmpty { return false }
+        // Попадание в вершину
+        for p in positions {
+            if hypot(p.x - point.x, p.y - point.y) < eraserRadius { return true }
+        }
+        // Попадание в отрезок между вершинами
+        let closed: Bool
+        switch object.type {
+        case .zoneBetweenObjects, .simpleZone, .objectHighlight:
+            closed = (object.type == .zoneBetweenObjects || object.type == .simpleZone)
+        case .lineBetweenObjects, .lineWithArrow, .curvedArrow:
+            closed = false
+        }
+        let n = positions.count
+        guard n >= 2 else { return false }
+        for i in 0..<n {
+            let next = closed ? (i + 1) % n : i + 1
+            guard next < n || (closed && next == 0) else { continue }
+            let a = positions[i]
+            let b = positions[next]
+            if distanceFromPointToSegment(point, a, b) < eraserRadius { return true }
+        }
+        // objectHighlight: один сегмент не рисуется, но можно считать «линию» нулевой длины — уже проверено по вершине
+        return false
+    }
+    
+    private func distanceFromPointToSegment(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let abx = b.x - a.x, aby = b.y - a.y
+        let apx = p.x - a.x, apy = p.y - a.y
+        let abLenSq = abx * abx + aby * aby
+        if abLenSq == 0 { return hypot(apx, apy) }
+        let t = max(0, min(1, (apx * abx + apy * aby) / abLenSq))
+        let proj = CGPoint(x: a.x + t * abx, y: a.y + t * aby)
+        return hypot(p.x - proj.x, p.y - proj.y)
     }
     
     
@@ -301,12 +406,19 @@ class EditorDrawingState: ObservableObject {
         } else if isCreatingShape || pendingShape != nil {
             // Отменяем создание фигуры
             cancelShapeCreation()
+        } else if isCreatingTextBox || pendingTextBox != nil {
+            // Отменяем создание текстового бокса
+            cancelTextBoxCreation()
         } else if !shapes.isEmpty {
             // Удаляем последнюю добавленную фигуру
             shapes.removeLast()
         } else if !telestrationObjects.isEmpty {
             // Удаляем последний добавленный объект телестрации
             telestrationObjects.removeLast()
+        } else if !textBoxes.isEmpty {
+            // Удаляем последний добавленный текстовый бокс
+            let removedId = textBoxes.removeLast().id
+            if selectedTextBoxId == removedId { selectedTextBoxId = nil }
         } else if !completedPaths.isEmpty {
             // Удаляем последний путь
             completedPaths.removeLast()
@@ -314,7 +426,7 @@ class EditorDrawingState: ObservableObject {
     }
     
     var hasDrawing: Bool {
-        return !completedPaths.isEmpty || !currentPath.points.isEmpty || !telestrationObjects.isEmpty || !shapes.isEmpty
+        return !completedPaths.isEmpty || !currentPath.points.isEmpty || !telestrationObjects.isEmpty || !shapes.isEmpty || !textBoxes.isEmpty || pendingTextBox != nil
     }
     
     // MARK: - Telestration Methods
@@ -450,6 +562,128 @@ class EditorDrawingState: ObservableObject {
         telestrationObjects.removeAll { $0.id == id }
         selectedTelestrationObjectId = nil
         isAddingPointToTelestration = false
+        telestrationPointUndoStack = []
+    }
+    
+    // MARK: - Cursor context menu (right-click): copy / delete / paste
+    
+    /// Удалить объект телестрации по id (из контекстного меню ПКМ).
+    func deleteTelestrationObject(id: UUID) {
+        telestrationObjects.removeAll { $0.id == id }
+        if selectedTelestrationObjectId == id {
+            selectedTelestrationObjectId = nil
+            isAddingPointToTelestration = false
+            telestrationPointUndoStack = []
+        }
+    }
+    
+    /// Удалить фигуру по id (из контекстного меню ПКМ).
+    func deleteShape(id: UUID) {
+        shapes.removeAll { $0.id == id }
+        if selectedShapeId == id { selectedShapeId = nil }
+    }
+    
+    /// Удалить текстовый бокс по id (из контекстного меню ПКМ).
+    func deleteTextBox(id: UUID) {
+        textBoxes.removeAll { $0.id == id }
+        if selectedTextBoxId == id { selectedTextBoxId = nil }
+    }
+    
+    /// Добавить объект в буфер копирования (макс. copyBufferMaxCount).
+    func addToCopyBuffer(_ item: CopiedEditorItem) {
+        copyBuffer.insert(item, at: 0)
+        if copyBuffer.count > Self.copyBufferMaxCount {
+            copyBuffer.removeLast()
+        }
+    }
+    
+    /// Hit-test для контекстного меню ПКМ (только при currentTool == .cursor). Порядок: текстбокс → фигура → телестрация.
+    func hitTestForCursorContextMenu(at point: CGPoint) -> CursorMenuHit {
+        for textBox in textBoxes.reversed() {
+            let r = CGRect(x: textBox.position.x - textBox.size.width / 2, y: textBox.position.y - textBox.size.height / 2, width: textBox.size.width, height: textBox.size.height)
+            if r.contains(point) { return .textBox(textBox) }
+        }
+        for shape in shapes.reversed() {
+            let hw = shape.size.width / 2 + 5, hh = shape.size.height / 2 + 5
+            let r = CGRect(x: shape.position.x - hw, y: shape.position.y - hh, width: hw * 2, height: hh * 2)
+            if r.contains(point) { return .shape(shape) }
+        }
+        for object in telestrationObjects.reversed() {
+            if Self.telestrationContainsForHitTest(point, object) { return .telestration(object) }
+        }
+        return .empty
+    }
+    
+    private static func telestrationContainsForHitTest(_ point: CGPoint, _ object: DrawableObject) -> Bool {
+        switch object.type {
+        case .zoneBetweenObjects, .simpleZone:
+            guard object.positions.count >= 3 else { return false }
+            if pointInPolygonForHitTest(point, object.positions) { return true }
+            return distanceToPolygonForHitTest(point, object.positions, closed: true) < 15
+        case .lineBetweenObjects, .lineWithArrow:
+            guard object.positions.count >= 2 else { return false }
+            return distanceToPolygonForHitTest(point, object.positions, closed: false) < 15
+        case .curvedArrow:
+            guard object.positions.count >= 2 else { return false }
+            return distanceFromPointToSegment(point, object.positions[0], object.positions[1]) < 20
+        case .objectHighlight:
+            guard let p = object.positions.first else { return false }
+            let r = object.radius
+            let rect = CGRect(x: p.x - r/2 - 10, y: p.y - r*2 - 10, width: r + 20, height: r*2 + r*0.6 + 20)
+            return rect.contains(point)
+        }
+    }
+    
+    private static func pointInPolygonForHitTest(_ point: CGPoint, _ polygon: [CGPoint]) -> Bool {
+        var inside = false
+        let n = polygon.count
+        var j = n - 1
+        for i in 0..<n {
+            let xi = polygon[i].x, yi = polygon[i].y
+            let xj = polygon[j].x, yj = polygon[j].y
+            if ((yi > point.y) != (yj > point.y)) && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi) { inside.toggle() }
+            j = i
+        }
+        return inside
+    }
+    
+    private static func distanceToPolygonForHitTest(_ point: CGPoint, _ pts: [CGPoint], closed: Bool) -> CGFloat {
+        var d: CGFloat = .greatestFiniteMagnitude
+        for i in 0..<(pts.count - 1) {
+            d = min(d, distanceFromPointToSegment(point, pts[i], pts[i + 1]))
+        }
+        if closed, pts.count >= 3 {
+            d = min(d, distanceFromPointToSegment(point, pts[pts.count - 1], pts[0]))
+        }
+        return d
+    }
+    
+    /// Вставить объект из буфера по индексу в заданную точку (центр/опорная точка).
+    func pasteFromBuffer(at point: CGPoint, bufferIndex: Int) {
+        guard bufferIndex >= 0, bufferIndex < copyBuffer.count else { return }
+        switch copyBuffer[bufferIndex] {
+        case .telestration(let obj):
+            let copy = DrawableObject(copying: obj)
+            if copy.positions.isEmpty {
+                telestrationObjects.append(copy)
+                return
+            }
+            let cx = copy.positions.map(\.x).reduce(0, +) / CGFloat(copy.positions.count)
+            let cy = copy.positions.map(\.y).reduce(0, +) / CGFloat(copy.positions.count)
+            var newObj = copy
+            newObj.positions = copy.positions.map { CGPoint(x: $0.x + (point.x - cx), y: $0.y + (point.y - cy)) }
+            telestrationObjects.append(newObj)
+        case .shape(let s):
+            let copy = EditorShape(copying: s)
+            var newShape = copy
+            newShape.position = point
+            shapes.append(newShape)
+        case .textBox(let t):
+            var copy = t
+            copy.id = UUID()
+            copy.position = point
+            textBoxes.append(copy)
+        }
     }
     
     func startMovingTelestrationObject(vertexIndex: Int? = nil) {
@@ -506,6 +740,43 @@ class EditorDrawingState: ObservableObject {
         lastTelestrationDragVertexIndex = nil
     }
     
+    /// Контрольная точка квадратичной Безье по желаемой точке на середине кривой: B(0.5) = middle => control = 2*middle - 0.5*start - 0.5*end.
+    static func controlPoint(fromMiddlePoint middle: CGPoint, start: CGPoint, end: CGPoint) -> CGPoint {
+        CGPoint(
+            x: 2 * middle.x - 0.5 * start.x - 0.5 * end.x,
+            y: 2 * middle.y - 0.5 * start.y - 0.5 * end.y
+        )
+    }
+    
+    func startDraggingCurvedArrowMiddle() {
+        isDraggingCurvedArrowMiddle = true
+    }
+    
+    func moveCurvedArrowMiddle(to newMiddle: CGPoint) {
+        guard isDraggingCurvedArrowMiddle else { return }
+        func apply(to obj: inout DrawableObject) {
+            guard obj.type == .curvedArrow, obj.positions.count >= 2 else { return }
+            let start = obj.positions[0]
+            let end = obj.positions[1]
+            obj.controlPoint = Self.controlPoint(fromMiddlePoint: newMiddle, start: start, end: end)
+        }
+        if let id = selectedTelestrationObjectId,
+           let arrIdx = telestrationObjects.firstIndex(where: { $0.id == id }) {
+            var obj = telestrationObjects[arrIdx]
+            apply(to: &obj)
+            telestrationObjects[arrIdx] = obj
+        } else if var pending = pendingTelestrationObject,
+                  pending.type == .curvedArrow,
+                  pending.positions.count >= 2 {
+            apply(to: &pending)
+            pendingTelestrationObject = pending
+        }
+    }
+    
+    func endDraggingCurvedArrowMiddle() {
+        isDraggingCurvedArrowMiddle = false
+    }
+    
     /// Типы объектов телестрации, к которым можно добавлять точки (зоны и линии с вершинами).
     private static let telestrationTypesSupportingAddPoint: Set<ObjectType> = [.zoneBetweenObjects, .lineBetweenObjects, .lineWithArrow, .simpleZone]
     
@@ -521,6 +792,7 @@ class EditorDrawingState: ObservableObject {
             let idx = Self.indexToInsertPoint(point, in: positions, closed: closed)
             obj.positions.insert(point, at: idx)
             pendingTelestrationObject = obj
+            telestrationPointUndoStack.append(idx)
             return true
         }
         guard let id = selectedTelestrationObjectId,
@@ -533,7 +805,53 @@ class EditorDrawingState: ObservableObject {
         let insertIdx = Self.indexToInsertPoint(point, in: positions, closed: closed)
         obj.positions.insert(point, at: insertIdx)
         telestrationObjects[idxArr] = obj
+        telestrationPointUndoStack.append(insertIdx)
         return true
+    }
+    
+    /// Минимальное число точек для типа объекта (меньше нельзя откатывать).
+    private static func minPointsForTelestrationType(_ type: ObjectType) -> Int {
+        switch type {
+        case .zoneBetweenObjects, .simpleZone: return 3
+        case .lineBetweenObjects, .lineWithArrow: return 2
+        case .curvedArrow, .objectHighlight: return 1
+        }
+    }
+    
+    /// Можно ли откатить последнюю точку (показать кнопку «Назад»).
+    var canRemoveLastTelestrationPoint: Bool {
+        if isCreatingTelestrationObject, let type = currentTelestrationType {
+            if type == .objectHighlight || type == .curvedArrow { return false }
+            return !telestrationVertices.isEmpty
+        }
+        // В режиме настроек (pending/выбранный) — только если есть точки, добавленные в этой сессии
+        if pendingTelestrationObject != nil || selectedTelestrationObjectId != nil {
+            return !telestrationPointUndoStack.isEmpty
+        }
+        return false
+    }
+    
+    /// Откатывает последнюю добавленную точку телестрации (по порядку добавления, а не по краю объекта).
+    func removeLastTelestrationPoint() {
+        if isCreatingTelestrationObject, !telestrationVertices.isEmpty {
+            telestrationVertices.removeLast()
+            return
+        }
+        guard let idxToRemove = telestrationPointUndoStack.popLast() else { return }
+        if var obj = pendingTelestrationObject, Self.telestrationTypesSupportingAddPoint.contains(obj.type), idxToRemove < obj.positions.count {
+            obj.positions.remove(at: idxToRemove)
+            pendingTelestrationObject = obj
+            // Индексы в стеке, большие удалённого, сдвигаются на -1
+            telestrationPointUndoStack = telestrationPointUndoStack.map { $0 > idxToRemove ? $0 - 1 : $0 }
+            return
+        }
+        guard let id = selectedTelestrationObjectId,
+              let arrIdx = telestrationObjects.firstIndex(where: { $0.id == id }) else { return }
+        var obj = telestrationObjects[arrIdx]
+        guard Self.telestrationTypesSupportingAddPoint.contains(obj.type), idxToRemove < obj.positions.count else { return }
+        obj.positions.remove(at: idxToRemove)
+        telestrationObjects[arrIdx] = obj
+        telestrationPointUndoStack = telestrationPointUndoStack.map { $0 > idxToRemove ? $0 - 1 : $0 }
     }
     
     /// Индекс, после которого вставить новую точку (вставка на ближайший сегмент).
@@ -579,9 +897,8 @@ class EditorDrawingState: ObservableObject {
             object.glowOpacity = telestrationCustomization.glowOpacity
         }
         
-        // Для закругленной стрелки сохраняем curveHeight и толщину линии
+        // Для закругленной стрелки сохраняем только толщину линии; изгиб (curveHeight/controlPoint) не перезаписываем — он уже задан перетаскиванием кружка или при создании
         if object.type == .curvedArrow {
-            object.curveHeight = telestrationCustomization.curveHeight
             object.strokeWidth = telestrationCustomization.strokeWidth
         }
         // Для линии между объектами и линии со стрелкой — толщину линии
@@ -594,6 +911,7 @@ class EditorDrawingState: ObservableObject {
         pendingTelestrationObject = nil
         telestrationCustomization = ObjectCustomization()
         isAddingPointToTelestration = false
+        telestrationPointUndoStack = []
         
         return object
     }
@@ -605,6 +923,7 @@ class EditorDrawingState: ObservableObject {
         currentTelestrationType = nil
         telestrationCustomization = ObjectCustomization()
         isAddingPointToTelestration = false
+        telestrationPointUndoStack = []
     }
     
     // MARK: - Shapes Methods
@@ -704,6 +1023,50 @@ class EditorDrawingState: ObservableObject {
         pendingTextBox = nil
         isCreatingTextBox = false
         savedTextBoxRotationBeforeEdit = nil
+    }
+    
+    /// Обработка Enter в режиме редактирования: аналог нажатия Done/Apply для телестрации, фигур и текстбоксов.
+    func handleEditorEnterKey() {
+        if isCreatingTelestrationObject, let type = currentTelestrationType, !telestrationVertices.isEmpty {
+            finishCreatingTelestrationObject()
+            return
+        }
+        if pendingTelestrationObject != nil {
+            confirmTelestrationObjectCreation()
+            currentTool = .cursor
+            return
+        }
+        if selectedTelestrationObjectId != nil {
+            selectedTelestrationObjectId = nil
+            isAddingPointToTelestration = false
+            telestrationPointUndoStack = []
+            currentTool = .cursor
+            return
+        }
+        if pendingShape != nil {
+            confirmShapeCreation()
+            currentTool = .cursor
+            return
+        }
+        if selectedShapeId != nil {
+            selectedShapeId = nil
+            currentTool = .cursor
+            return
+        }
+        if pendingTextBox != nil {
+            confirmTextBoxCreation()
+            if currentTool == .textBox {
+                startCreatingTextBox()
+            }
+            return
+        }
+        if selectedTextBoxId != nil {
+            selectedTextBoxId = nil
+            if currentTool == .textBox {
+                startCreatingTextBox()
+            }
+            return
+        }
     }
     
     func updateSelectedTextBox(text: String? = nil, textColor: Color? = nil, fontSize: CGFloat? = nil, fontName: String? = nil, backgroundColor: Color? = nil, borderColor: Color? = nil, borderWidth: CGFloat? = nil) {
@@ -898,12 +1261,12 @@ enum ShapeType: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .triangle: return "Triangle"
-        case .square: return "Square"
-        case .rectangle: return "Rectangle"
-        case .circle: return "Circle"
-        case .star: return "Star"
-        case .hexagon: return "Hexagon"
+        case .triangle: return ^String.Titles.editorShapeTriangle
+        case .square: return ^String.Titles.editorShapeSquare
+        case .rectangle: return ^String.Titles.editorShapeRectangle
+        case .circle: return ^String.Titles.editorShapeCircle
+        case .star: return ^String.Titles.editorShapeStar
+        case .hexagon: return ^String.Titles.editorShapeHexagon
         }
     }
     
@@ -920,7 +1283,7 @@ enum ShapeType: String, CaseIterable {
 }
 
 struct EditorShape: Identifiable {
-    let id = UUID()
+    let id: UUID
     var type: ShapeType
     var position: CGPoint
     var size: CGSize
@@ -934,9 +1297,24 @@ struct EditorShape: Identifiable {
     var lineStyle: EditorLineStyle = .solid
     
     init(type: ShapeType, position: CGPoint, size: CGSize = CGSize(width: 100, height: 100)) {
+        self.id = UUID()
         self.type = type
         self.position = position
         self.size = size
+    }
+    
+    /// Копия с новым id (для вставки из буфера).
+    init(copying other: EditorShape) {
+        self.id = UUID()
+        self.type = other.type
+        self.position = other.position
+        self.size = other.size
+        self.rotation = other.rotation
+        self.fillColor = other.fillColor
+        self.fillOpacity = other.fillOpacity
+        self.strokeColor = other.strokeColor
+        self.strokeWidth = other.strokeWidth
+        self.lineStyle = other.lineStyle
     }
 }
 

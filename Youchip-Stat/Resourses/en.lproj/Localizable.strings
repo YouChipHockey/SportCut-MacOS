@@ -155,6 +155,7 @@
 "FullControlMenuExport" = "Cuts";  // ^String.Titles.fullControlMenuExport
 "FullControlButtonExportTimeline" = "Export Current Timeline";  // ^String.Titles.fullControlButtonExportTimeline
 "FullControlButtonExportAll" = "Export All";  // ^String.Titles.fullControlButtonExportAll
+"FullControlButtonExportDrawings" = "Export Drawings";  // ^String.Titles.fullControlButtonExportDrawings
 "FullControlButtonExportTags" = "Export Tags";  // ^String.Titles.fullControlButtonExportTags
 "FullControlButtonExportEvents" = "Export Events";  // ^String.Titles.fullControlButtonExportEvents
 "FullControlButtonReport" = "Report";  // ^String.Titles.fullControlButtonReport
@@ -650,3 +651,48 @@
 "OpenSystemSettings" = "Open System Settings"; // ^String.Titles.openSystemSettings
 "DownloadsFolderAccessGranted" = "Downloads folder access granted"; // ^String.Titles.downloadsFolderAccessGranted
 "CheckPermissions" = "Check Permissions"; // ^String.Titles.checkPermissions
+
+// Editor
+"EditorCursor" = "Cursor"; // ^String.Titles.editorCursor
+"EditorTelestration" = "Telestration"; // ^String.Titles.editorTelestration
+"EditorShapes" = "Shapes"; // ^String.Titles.editorShapes
+"EditorTextBox" = "Text Box"; // ^String.Titles.editorTextBox
+"Undo" = "Undo"; // ^String.Titles.undo
+"EditorCursorMode" = "Cursor Mode"; // ^String.Titles.editorCursorMode
+"EditorSelectMode" = "Select mode"; // ^String.Titles.editorSelectMode
+"EditorCreatingFormat" = "Creating: %@"; // ^String.Titles.editorCreatingFormat
+"EditorVerticesCount" = "Vertices: %d"; // ^String.Titles.editorVerticesCount
+"EditorBack" = "Back"; // ^String.Titles.editorBack
+"EditorConfigurationShapeFormat" = "Configuration: %@"; // ^String.Titles.editorConfigurationShapeFormat
+"EditorEditShapeFormat" = "Edit: %@"; // ^String.Titles.editorEditShapeFormat
+"EditorStrokeColor" = "Stroke Color"; // ^String.Titles.editorStrokeColor
+"EditorStrokeWidth" = "Stroke Width"; // ^String.Titles.editorStrokeWidth
+"EditorEditTextBox" = "Edit Text Box"; // ^String.Titles.editorEditTextBox
+"EditorTextLabel" = "Text"; // ^String.Titles.editorTextLabel
+"EditorTextColor" = "Text Color"; // ^String.Titles.editorTextColor
+"EditorFontSize" = "Font Size"; // ^String.Titles.editorFontSize
+"EditorFont" = "Font"; // ^String.Titles.editorFont
+"EditorBackground" = "Background"; // ^String.Titles.editorBackground
+"EditorBorderColor" = "Border Color"; // ^String.Titles.editorBorderColor
+"EditorBorderWidth" = "Border Width"; // ^String.Titles.editorBorderWidth
+"EditorAddPoint" = "Add point"; // ^String.Titles.editorAddPoint
+"EditorModeInParentheses" = "(mode)"; // ^String.Titles.editorModeInParentheses
+"EditorCurveHeight" = "Parabola center height"; // ^String.Titles.editorCurveHeight
+"EditorExportDurationLabel" = "Export Duration:"; // ^String.Titles.editorExportDurationLabel
+"EditorSaveToTag" = "Save to tag"; // ^String.Titles.editorSaveToTag
+"EditorScreenshotNamePlaceholder" = "Screenshot Name"; // ^String.Titles.editorScreenshotNamePlaceholder
+"EditorTitle" = "Editor"; // ^String.Titles.editorTitle
+"EditorSelectTagsForScreenshot" = "Select tags for screenshot"; // ^String.Titles.editorSelectTagsForScreenshot
+"EditorTimeLabelFormat" = "Time: %@"; // ^String.Titles.editorTimeLabelFormat
+"EditorNoTagsAtMoment" = "No tags at this moment"; // ^String.Titles.editorNoTagsAtMoment
+"EditorAddPointModeHelp" = "Enable mode: next click on image will add vertex to object"; // ^String.Titles.editorAddPointModeHelp
+"Copy" = "Copy"; // ^String.Titles.copy
+"Paste" = "Paste"; // ^String.Titles.paste
+
+// Editor shape names
+"EditorShapeTriangle" = "Triangle"; // ^String.Titles.editorShapeTriangle
+"EditorShapeSquare" = "Square"; // ^String.Titles.editorShapeSquare
+"EditorShapeRectangle" = "Rectangle"; // ^String.Titles.editorShapeRectangle
+"EditorShapeCircle" = "Circle"; // ^String.Titles.editorShapeCircle
+"EditorShapeStar" = "Star"; // ^String.Titles.editorShapeStar
+"EditorShapeHexagon" = "Hexagon"; // ^String.Titles.editorShapeHexagon

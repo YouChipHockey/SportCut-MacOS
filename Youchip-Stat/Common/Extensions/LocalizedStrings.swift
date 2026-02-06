@@ -158,6 +158,7 @@ extension String {
         case fullControlMenuExport
         case fullControlButtonExportTimeline
         case fullControlButtonExportAll
+        case fullControlButtonExportDrawings
         case fullControlButtonExportTags
         case fullControlButtonExportEvents
         case fullControlButtonReport
@@ -654,6 +655,51 @@ extension String {
         case openSystemSettings
         case downloadsFolderAccessGranted
         case checkPermissions
+        
+        // Editor (drawing / video player)
+        case editorCursor
+        case editorTelestration
+        case editorShapes
+        case editorTextBox
+        case undo
+        case editorCursorMode
+        case editorSelectMode
+        case editorCreatingFormat
+        case editorVerticesCount
+        case editorBack
+        case editorConfigurationShapeFormat
+        case editorEditShapeFormat
+        case editorStrokeColor
+        case editorStrokeWidth
+        case editorEditTextBox
+        case editorTextLabel
+        case editorTextColor
+        case editorFontSize
+        case editorFont
+        case editorBackground
+        case editorBorderColor
+        case editorBorderWidth
+        case editorAddPoint
+        case editorModeInParentheses
+        case editorCurveHeight
+        case editorExportDurationLabel
+        case editorSaveToTag
+        case editorScreenshotNamePlaceholder
+        case editorTitle
+        case editorSelectTagsForScreenshot
+        case editorTimeLabelFormat
+        case editorNoTagsAtMoment
+        case editorAddPointModeHelp
+        case copy
+        case paste
+        
+        // Editor shape names (ShapeType.displayName)
+        case editorShapeTriangle
+        case editorShapeSquare
+        case editorShapeRectangle
+        case editorShapeCircle
+        case editorShapeStar
+        case editorShapeHexagon
     }
     
 }

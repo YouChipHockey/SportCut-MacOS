@@ -141,13 +141,39 @@ struct VideoPlayerView: View {
                 EditorSettingsPanel(drawingState: viewModel.state.editorDrawingState)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .editorEnterKeyPressed)) { _ in
+            viewModel.state.editorDrawingState.handleEditorEnterKey()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorCopyKeyPressed)) { _ in
+            let state = viewModel.state.editorDrawingState
+            guard state.currentTool == .cursor else { return }
+            if let id = state.selectedTelestrationObjectId,
+               let obj = state.telestrationObjects.first(where: { $0.id == id }) {
+                state.addToCopyBuffer(.telestration(obj))
+            } else if let id = state.selectedShapeId,
+                      let s = state.shapes.first(where: { $0.id == id }) {
+                state.addToCopyBuffer(.shape(s))
+            } else if let id = state.selectedTextBoxId,
+                      let t = state.textBoxes.first(where: { $0.id == id }) {
+                state.addToCopyBuffer(.textBox(t))
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorPasteKeyPressed)) { _ in
+            let state = viewModel.state.editorDrawingState
+            guard state.currentTool == .cursor, !state.copyBuffer.isEmpty else { return }
+            let center = CGPoint(x: state.viewSize.width / 2, y: state.viewSize.height / 2)
+            state.pasteFromBuffer(at: center, bufferIndex: 0)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorUndoKeyPressed)) { _ in
+            viewModel.state.editorDrawingState.undo()
+        }
     }
     
     // MARK: - Custom Editor Toolbar
     
     private var customEditorToolbar: some View {
         HStack(spacing: 12) {
-            TextField("Screenshot Name", text: Binding(
+            TextField(^String.Titles.editorScreenshotNamePlaceholder, text: Binding(
                 get: { viewModel.state.editorScreenshotName },
                 set: { viewModel.action.send(.updateEditorName($0)) }
             ))
@@ -155,7 +181,7 @@ struct VideoPlayerView: View {
             .frame(width: 250)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Export Duration:")
+                Text(^String.Titles.editorExportDurationLabel)
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -176,20 +202,20 @@ struct VideoPlayerView: View {
             
             Spacer()
             
-            Button("Cancel") {
+            Button(^String.Titles.cancel) {
                 viewModel.action.send(.cancelEditor)
             }
             .keyboardShortcut(.escape, modifiers: [])
             
             // Show "Сохранить на тег" button only if there are intersecting stamps
             if !viewModel.getIntersectingStamps().isEmpty {
-                Button("Сохранить на тег") {
+                Button(^String.Titles.editorSaveToTag) {
                     viewModel.action.send(.showTagSelectionSheet(show: true))
                 }
                 .buttonStyle(.bordered)
             }
             
-            Button("Save") {
+            Button(^String.Titles.save) {
                 viewModel.action.send(.saveEditor)
             }
             .keyboardShortcut(.return, modifiers: [.command])
@@ -348,7 +374,7 @@ struct VideoPlayerView: View {
         Button {
             viewModel.action.send(.takeScreenshotForPolygonEditor)
         } label: {
-            Text("Telestration")
+            Text(^String.Titles.editorTelestration)
         }
         .help("Создать скриншот для телестрации")
     }
@@ -357,7 +383,7 @@ struct VideoPlayerView: View {
         Button {
             viewModel.action.send(.takeScreenshotForEditor)
         } label: {
-            Text("Редактор")
+            Text(^String.Titles.editorTitle)
         }
         .help("Открыть редактор")
     }
@@ -559,11 +585,11 @@ struct EditorTagSelectionSheet: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            Text("Выберите теги для скриншота")
+            Text(^String.Titles.editorSelectTagsForScreenshot)
                 .font(.headline)
                 .padding(.top)
             
-            Text("Время: \(formatTime(videoTime))")
+            Text(String.Titles.editorTimeLabelFormat.format(formatTime(videoTime)))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
@@ -572,7 +598,7 @@ struct EditorTagSelectionSheet: View {
                     Image(systemName: "tag.slash")
                         .font(.system(size: 32))
                         .foregroundColor(.gray)
-                    Text("Нет тегов в этом моменте времени")
+                    Text(^String.Titles.editorNoTagsAtMoment)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -620,12 +646,12 @@ struct EditorTagSelectionSheet: View {
             }
             
             HStack {
-                Button("Отмена", action: onCancel)
+                Button(^String.Titles.cancel, action: onCancel)
                     .keyboardShortcut(.escape, modifiers: [])
                 
                 Spacer()
                 
-                Button("Сохранить") {
+                Button(^String.Titles.save) {
                     let selected = intersectingStamps.filter { selectedStamps.contains($0.id) }
                     onSave(selected)
                 }

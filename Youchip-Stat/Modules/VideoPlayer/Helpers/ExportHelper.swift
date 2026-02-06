@@ -46,8 +46,15 @@ class ExportHelper: ObservableObject {
             return
         }
         
+        let effectiveWithScreenshots: Bool
+        if case .drawingsTimeline = selectedType {
+            effectiveWithScreenshots = true
+        } else {
+            effectiveWithScreenshots = withScreenshots
+        }
+        
         if mode == .film {
-            exportFilm(segments: segments, asset: asset, type: selectedType, withScreenshots: withScreenshots) { result in
+            exportFilm(segments: segments, asset: asset, type: selectedType, withScreenshots: effectiveWithScreenshots) { result in
                 DispatchQueue.main.async {
                     switch result {
                     case .success(let outputURL):
@@ -74,7 +81,7 @@ class ExportHelper: ObservableObject {
                 }
             }
         } else {
-            exportPlaylist(segments: segments, asset: asset, type: selectedType, withScreenshots: withScreenshots) { result in
+            exportPlaylist(segments: segments, asset: asset, type: selectedType, withScreenshots: effectiveWithScreenshots) { result in
                 DispatchQueue.main.async {
                     switch result {
                     case .success(let zipURL):
@@ -275,6 +282,8 @@ class ExportHelper: ObservableObject {
         
         case .screenshots:
             fileName = "screenshots.mp4"
+        case .drawingsTimeline:
+            fileName = "\(ScreenshotConstants.screenshotsGroupName)_Фильм\(^String.Titles.fullControlFileTimelineFile)"
         }
         
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -443,6 +452,8 @@ class ExportHelper: ObservableObject {
             
             case .screenshots:
                 fileName = "screenshot_\(index + 1).png"
+            case .drawingsTimeline:
+                fileName = "\(ScreenshotConstants.screenshotsGroupName)_\(segment.tagName)_\(index + 1).mp4"
             }
             
             let clipOutputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -782,6 +793,33 @@ class ExportHelper: ObservableObject {
             }
         case .screenshots:
             break
+        case .drawingsTimeline:
+            if let line = timelineData.lines.first(where: { $0.id == ScreenshotConstants.screenshotsTimelineID }) {
+                for stamp in line.stamps {
+                    guard let correctedTime = correctTimeRange(
+                        startSeconds: stamp.timeStartSeconds,
+                        durationSeconds: stamp.duration,
+                        maxVideoDuration: maxVideoDuration
+                    ) else {
+                        continue
+                    }
+                    let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
+                    let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
+                    let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
+                    result.append(
+                        ExportSegment(
+                            stamp: stamp,
+                            tagName: stamp.label,
+                            timeRange: CMTimeRange(start: start, duration: duration),
+                            lineName: line.name,
+                            groupName: possibleGroup?.name,
+                            labelGroupName: nil,
+                            selectedLabel: nil,
+                            stampId: stamp.id
+                        )
+                    )
+                }
+            }
         }
         
         result.sort { $0.timeRange.start.seconds < $1.timeRange.start.seconds }

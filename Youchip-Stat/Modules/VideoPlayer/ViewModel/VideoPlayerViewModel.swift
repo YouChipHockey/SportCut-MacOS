@@ -1250,14 +1250,17 @@ class VideoPlayerViewModel: ObservableObject {
         
         let startPoint = object.positions[0]
         let endPoint = object.positions[1]
-        
-        // Вычисляем контрольную точку на основе curveHeight
-        // При сохранении инвертируем curveHeight для компенсации зеркалирования
-        let controlPoint = computeControlPointForCurvedArrow(
-            start: startPoint,
-            end: endPoint,
-            curveHeight: -object.curveHeight
-        )
+        let controlPoint: CGPoint
+        if let cp = object.controlPoint {
+            controlPoint = cp
+        } else {
+            // При сохранении инвертируем curveHeight для компенсации зеркалирования
+            controlPoint = computeControlPointForCurvedArrow(
+                start: startPoint,
+                end: endPoint,
+                curveHeight: -object.curveHeight
+            )
+        }
         
         // Рисуем квадратичную кривую Bezier
         let path = NSBezierPath()

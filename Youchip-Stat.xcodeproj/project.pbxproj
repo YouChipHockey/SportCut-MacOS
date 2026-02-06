@@ -94,7 +94,6 @@
 		DD32C25E2D74A00C0052B5C6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DD32C2602D74A00C0052B5C6 /* Youchip_Stat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Youchip_Stat.entitlements; sourceTree = "<group>"; };
 		DD32C2612D74A00C0052B5C6 /* Youchip_StatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Youchip_StatApp.swift; sourceTree = "<group>"; };
-		DD32C26A2D74A0420052B5C6 /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		DD32C26D2D74A0480052B5C6 /* SFCompactText-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFCompactText-Medium.ttf"; sourceTree = "<group>"; };
 		DD32C26E2D74A0480052B5C6 /* SFMono-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFMono-Regular.otf"; sourceTree = "<group>"; };
 		DD32C26F2D74A0480052B5C6 /* SFProDisplay-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SFProDisplay-Bold.ttf"; sourceTree = "<group>"; };
@@ -135,6 +134,7 @@
 		DD5CF9F42E046879009CD51A /* String+Conveniece.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Conveniece.swift"; sourceTree = "<group>"; };
 		DD5CFA022E046932009CD51A /* DispatchWorkItem+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DispatchWorkItem+Convenience.swift"; sourceTree = "<group>"; };
 		DDB401912D749E0F004A12C2 /* SportCut.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SportCut.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDC54DF42F33969B00193CAC /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		DDC938E62DD2338300B7AB12 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		DDD1236D2E0CB0F400116F7D /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
 		DDD60A952D7A5D7E0097600D /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
@@ -398,16 +398,16 @@
 				};
 			};
 			buildConfigurationList = DDB4018C2D749E0F004A12C2 /* Build configuration list for PBXProject "Youchip-Stat" */;
-			developmentRegion = en;
+			developmentRegion = ru;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
 				Base,
 				ru,
 				fr,
 				es,
 				"zh-Hans",
 				uz,
+				en,
 			);
 			mainGroup = DDB401882D749E0F004A12C2;
 			minimizedProjectReferenceProxies = 1;
@@ -587,12 +587,12 @@
 		DD32C26B2D74A0420052B5C6 /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
-				DD32C26A2D74A0420052B5C6 /* Localizable.strings */,
 				DDD1236D2E0CB0F400116F7D /* ru */,
 				DD408D1F2E6DF19900E615E5 /* fr */,
 				DD408D202E6DF1AC00E615E5 /* es */,
 				DD408D212E6DF1C900E615E5 /* zh-Hans */,
 				DD408D222E6DF1E000E615E5 /* uz */,
+				DDC54DF42F33969B00193CAC /* en */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";

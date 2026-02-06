@@ -15,6 +15,10 @@ extension NSNotification.Name {
     static let stampCountsChanged = NSNotification.Name("stampCountsChanged")
     static let timelineStampHoverChanged = NSNotification.Name("timelineStampHoverChanged")
     static let editorModeChanged = NSNotification.Name("editorModeChanged")
+    static let editorEnterKeyPressed = NSNotification.Name("editorEnterKeyPressed")
+    static let editorCopyKeyPressed = NSNotification.Name("editorCopyKeyPressed")
+    static let editorPasteKeyPressed = NSNotification.Name("editorPasteKeyPressed")
+    static let editorUndoKeyPressed = NSNotification.Name("editorUndoKeyPressed")
     static let screenshotDisplayChanged = NSNotification.Name("screenshotDisplayChanged")
     static let textBoxEditingChanged = NSNotification.Name("textBoxEditingChanged")
 }

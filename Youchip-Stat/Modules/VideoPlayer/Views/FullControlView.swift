@@ -962,6 +962,10 @@ struct FullControlView: View {
                                     selectedExportType = .allTimelines
                                     showExportModeSheet = true
                                 }
+                                Button(^String.Titles.fullControlButtonExportDrawings) {
+                                    selectedExportType = .drawingsTimeline
+                                    showExportModeSheet = true
+                                }
                                 Button(^String.Titles.fullControlButtonExportTags) {
                                     showTagSelectionSheet = true
                                 }
@@ -1041,6 +1045,10 @@ struct FullControlView: View {
                             }
                             Button(^String.Titles.fullControlButtonExportAll) {
                                 selectedExportType = .allTimelines
+                                showExportModeSheet = true
+                            }
+                            Button(^String.Titles.fullControlButtonExportDrawings) {
+                                selectedExportType = .drawingsTimeline
                                 showExportModeSheet = true
                             }
                             Button(^String.Titles.fullControlButtonExportTags) {
@@ -2293,7 +2301,6 @@ struct ScreenshotMarkersView: View {
             }
             
             for stamp in line.stamps {
-                // Проверяем пересечение времени
                 let screenshotTime = screenshot.videoTime
                 if screenshotTime >= stamp.timeStartSeconds && screenshotTime <= stamp.timeFinishSeconds {
                     availableStamps.append((line: line, stamp: stamp))

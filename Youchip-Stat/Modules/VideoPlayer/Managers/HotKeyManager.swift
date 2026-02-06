@@ -138,6 +138,26 @@ class HotKeyManager: ObservableObject {
         
         localMonitorForKeyEvents = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
+            // В режиме редактирования Enter = Done/Apply для телестрации, фигур и текстбоксов
+            if self.isEditorModeActive, event.keyCode == 36, !self.isEditingTextBox {
+                NotificationCenter.default.post(name: .editorEnterKeyPressed, object: nil)
+                return nil
+            }
+            // В режиме редактирования Cmd+C = копировать выбранный объект, Cmd+V = вставить (при инструменте «Курсор»)
+            if self.isEditorModeActive, !self.isEditingTextBox, event.modifierFlags.contains(.command) {
+                if event.keyCode == 8 {
+                    NotificationCenter.default.post(name: .editorCopyKeyPressed, object: nil)
+                    return nil
+                }
+                if event.keyCode == 9 {
+                    NotificationCenter.default.post(name: .editorPasteKeyPressed, object: nil)
+                    return nil
+                }
+                if event.keyCode == 6 {
+                    NotificationCenter.default.post(name: .editorUndoKeyPressed, object: nil)
+                    return nil
+                }
+            }
             // Когда в фокусе окно таймлайна или библиотеки тегов — пробел всегда play/pause (если хоткеи не заблокированы)
             if event.keyCode == 49,
                WindowsManager.shared.isControlOrTagLibraryWindowKey(),

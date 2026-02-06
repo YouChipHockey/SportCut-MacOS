@@ -155,6 +155,7 @@
 "FullControlMenuExport" = "Kesimlar";  // ^String.Titles.fullControlMenuExport
 "FullControlButtonExportTimeline" = "Joriy vaqt chiziqini eksport qilish";  // ^String.Titles.fullControlButtonExportTimeline
 "FullControlButtonExportAll" = "Hammasini eksport qilish";  // ^String.Titles.fullControlButtonExportAll
+"FullControlButtonExportDrawings" = "Rasmlarni eksport qilish";  // ^String.Titles.fullControlButtonExportDrawings
 "FullControlButtonExportTags" = "Teglarni eksport qilish";  // ^String.Titles.fullControlButtonExportTags
 "FullControlButtonExportEvents" = "Voqealarni eksport qilish";  // ^String.Titles.fullControlButtonExportEvents
 "FullControlButtonReport" = "Hisobot";  // ^String.Titles.fullControlButtonReport
@@ -624,3 +625,48 @@
 "RenamePlaylist" = "Pleylist nomini o‘zgartirish";
 "NewName" = "Yangi nom:";
 "Rename" = "Nomini o‘zgartirish";
+
+// Tahrirchi
+"EditorCursor" = "Kursor";
+"EditorTelestration" = "Telestratsiya";
+"EditorShapes" = "Shakllar";
+"EditorTextBox" = "Matn bloki";
+"Undo" = "Bekor qilish";
+"EditorCursorMode" = "Kursor rejimi";
+"EditorSelectMode" = "Tanlash rejimi";
+"EditorCreatingFormat" = "Yaratish: %@";
+"EditorVerticesCount" = "Uchlar: %d";
+"EditorBack" = "Orqaga";
+"EditorConfigurationShapeFormat" = "Sozlash: %@";
+"EditorEditShapeFormat" = "Tahrirlash: %@";
+"EditorStrokeColor" = "Chiziq rangi";
+"EditorStrokeWidth" = "Chiziq qalinligi";
+"EditorEditTextBox" = "Matn blokini tahrirlash";
+"EditorTextLabel" = "Matn";
+"EditorTextColor" = "Matn rangi";
+"EditorFontSize" = "Shrift o‘lchami";
+"EditorFont" = "Shrift";
+"EditorBackground" = "Fon";
+"EditorBorderColor" = "Chegara rangi";
+"EditorBorderWidth" = "Chegara qalinligi";
+"EditorAddPoint" = "Nuqta qo‘shish";
+"EditorModeInParentheses" = "(rejim)";
+"EditorCurveHeight" = "Parabola markazining balandligi";
+"EditorExportDurationLabel" = "Eksport davomiyligi:";
+"EditorSaveToTag" = "Tegga saqlash";
+"EditorScreenshotNamePlaceholder" = "Skrinshot nomi";
+"EditorTitle" = "Tahrirchi";
+"EditorSelectTagsForScreenshot" = "Skrinshot uchun teglarni tanlang";
+"EditorTimeLabelFormat" = "Vaqt: %@";
+"EditorNoTagsAtMoment" = "Bu vaqtda teglar yo‘q";
+"EditorAddPointModeHelp" = "Rejimni yoqing: keyingi bosish ob’ektga uch qo‘shadi";
+"Copy" = "Nusxalash";
+"Paste" = "Qo‘yish";
+
+// Tahrirchi shakllari
+"EditorShapeTriangle" = "Uchburchak";
+"EditorShapeSquare" = "Kvadrat";
+"EditorShapeRectangle" = "To‘rtburchak";
+"EditorShapeCircle" = "Doira";
+"EditorShapeStar" = "Yulduz";
+"EditorShapeHexagon" = "Oltiburchak";

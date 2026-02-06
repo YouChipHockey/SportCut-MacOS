@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVKit
+import AppKit
 
 // MARK: - Editor Tools Panel
 
@@ -17,15 +18,15 @@ struct EditorToolsPanel: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                Text("Tools")
+                Text(^String.Titles.tools)
                     .font(.headline)
                     .padding(.top)
                 
                 VStack(spacing: 8) {
-                    toolButton(tool: .cursor, icon: "cursorarrow.rays", label: "Cursor")
-                    toolButton(tool: .pencil, icon: "pencil", label: "Pencil")
-                    toolButton(tool: .arrow, icon: "arrow.right", label: "Arrow")
-                    toolButton(tool: .eraser, icon: "eraser", label: "Eraser")
+                    toolButton(tool: .cursor, icon: "cursorarrow.rays", label: ^String.Titles.editorCursor)
+                    toolButton(tool: .pencil, icon: "pencil", label: ^String.Titles.pencil)
+                    toolButton(tool: .arrow, icon: "arrow.right", label: ^String.Titles.arrow)
+                    toolButton(tool: .eraser, icon: "eraser", label: ^String.Titles.eraser)
                     
                     // Telestration menu
                     Menu {
@@ -45,7 +46,7 @@ struct EditorToolsPanel: View {
                     } label: {
                         HStack {
                             Image(systemName: "circle.grid.3x3")
-                            Text("Telestration")
+                            Text(^String.Titles.editorTelestration)
                             Spacer()
                             if drawingState.currentTool == .telestration {
                                 Image(systemName: "checkmark")
@@ -89,7 +90,7 @@ struct EditorToolsPanel: View {
                     } label: {
                         HStack {
                             Image(systemName: "square.on.circle")
-                            Text("Shapes")
+                            Text(^String.Titles.editorShapes)
                             Spacer()
                             if drawingState.currentTool == .shapes {
                                 Image(systemName: "checkmark")
@@ -105,7 +106,7 @@ struct EditorToolsPanel: View {
                     .buttonStyle(.plain)
                     
                     // TextBox button
-                    toolButton(tool: .textBox, icon: "text.bubble", label: "Text Box")
+                    toolButton(tool: .textBox, icon: "text.bubble", label: ^String.Titles.editorTextBox)
                 }
                 
                 Divider()
@@ -114,7 +115,7 @@ struct EditorToolsPanel: View {
                 Button(action: {
                     drawingState.undo()
                 }) {
-                    Text("Undo")
+                    Text(^String.Titles.undo)
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(!drawingState.hasDrawing)
@@ -122,7 +123,7 @@ struct EditorToolsPanel: View {
                 Button(action: {
                     drawingState.clearDrawing()
                 }) {
-                    Text("Clear All")
+                    Text(^String.Titles.clearAll)
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(!drawingState.hasDrawing)
@@ -179,7 +180,7 @@ struct EditorSettingsPanel: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                Text("Settings")
+                Text(^String.Titles.settings)
                     .font(.headline)
                     .padding(.top)
                 
@@ -214,10 +215,10 @@ struct EditorSettingsPanel: View {
     
     private var cursorSettings: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Cursor Mode")
+            Text(^String.Titles.editorCursorMode)
                 .font(.subheadline)
             
-            Text("Select mode")
+            Text(^String.Titles.editorSelectMode)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -227,7 +228,7 @@ struct EditorSettingsPanel: View {
         Group {
             // Color Picker
             VStack(alignment: .leading, spacing: 8) {
-                Text("Color")
+                Text(^String.Titles.color)
                     .font(.subheadline)
                 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 30))], spacing: 8) {
@@ -241,7 +242,7 @@ struct EditorSettingsPanel: View {
             
             // Line Width
             VStack(alignment: .leading, spacing: 8) {
-                Text("Line Width")
+                Text(^String.Titles.lineWidth)
                     .font(.subheadline)
                 
                 ForEach(EditorDrawingSettings.availableWidths, id: \.self) { width in
@@ -253,11 +254,11 @@ struct EditorSettingsPanel: View {
             
             // Line Style
             VStack(alignment: .leading, spacing: 8) {
-                Text("Line Style")
+                Text(^String.Titles.lineStyleDrawing)
                     .font(.subheadline)
                 
-                lineStyleButton(style: .solid, label: "Solid")
-                lineStyleButton(style: .dashed, label: "Dashed")
+                lineStyleButton(style: .solid, label: ^String.Titles.solid)
+                lineStyleButton(style: .dashed, label: ^String.Titles.dashedLine)
             }
         }
     }
@@ -269,7 +270,7 @@ struct EditorSettingsPanel: View {
     
     private var eraserSettings: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Eraser Size")
+            Text(^String.Titles.eraserWidth)
                 .font(.subheadline)
             
             ForEach(EditorDrawingSettings.availableEraserWidths, id: \.self) { width in
@@ -281,15 +282,27 @@ struct EditorSettingsPanel: View {
     private var telestrationCreationSettings: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let type = drawingState.currentTelestrationType {
-                Text("Creating: \(type.displayName)")
+                Text(String.Titles.editorCreatingFormat.format(type.displayName))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
-                Text("Vertices: \(drawingState.telestrationVertices.count)")
+                Text(String.Titles.editorVerticesCount.format(drawingState.telestrationVertices.count))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
                 Divider()
+                
+                if drawingState.canRemoveLastTelestrationPoint {
+                    Button(action: { drawingState.removeLastTelestrationPoint() }) {
+                        HStack {
+                            Image(systemName: "arrow.uturn.backward")
+                            Text(^String.Titles.editorBack)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.bottom, 4)
+                }
                 
                 Button(^String.Titles.done) {
                     drawingState.finishCreatingTelestrationObject()
@@ -315,6 +328,18 @@ struct EditorSettingsPanel: View {
                     .font(.headline)
                 
                 Divider()
+                
+                if drawingState.canRemoveLastTelestrationPoint {
+                    Button(action: { drawingState.removeLastTelestrationPoint() }) {
+                        HStack {
+                            Image(systemName: "arrow.uturn.backward")
+                            Text(^String.Titles.editorBack)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.bottom, 4)
+                }
                 
                 Group {
                     switch object.type {
@@ -345,6 +370,7 @@ struct EditorSettingsPanel: View {
                     
                     Button(^String.Titles.apply) {
                         drawingState.confirmTelestrationObjectCreation()
+                        drawingState.currentTool = .cursor
                     }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
@@ -361,6 +387,18 @@ struct EditorSettingsPanel: View {
                     .font(.headline)
                 
                 Divider()
+                
+                if drawingState.canRemoveLastTelestrationPoint {
+                    Button(action: { drawingState.removeLastTelestrationPoint() }) {
+                        HStack {
+                            Image(systemName: "arrow.uturn.backward")
+                            Text(^String.Titles.editorBack)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.bottom, 4)
+                }
                 
                 Group {
                     switch object.type {
@@ -395,6 +433,7 @@ struct EditorSettingsPanel: View {
                     Button(^String.Titles.cancel) {
                         drawingState.selectedTelestrationObjectId = nil
                         drawingState.isAddingPointToTelestration = false
+                        drawingState.telestrationPointUndoStack = []
                     }
                     .buttonStyle(.plain)
                     .frame(maxWidth: .infinity)
@@ -402,6 +441,8 @@ struct EditorSettingsPanel: View {
                     Button(^String.Titles.apply) {
                         drawingState.selectedTelestrationObjectId = nil
                         drawingState.isAddingPointToTelestration = false
+                        drawingState.telestrationPointUndoStack = []
+                        drawingState.currentTool = .cursor
                     }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
@@ -413,14 +454,14 @@ struct EditorSettingsPanel: View {
     private var shapeCustomizationSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let shape = drawingState.pendingShape {
-                Text("Configuration: \(shape.type.displayName)")
+                Text(String.Titles.editorConfigurationShapeFormat.format(shape.type.displayName))
                     .font(.headline)
                 
                 Divider()
                 
                 // Fill Color
                 HStack {
-                    Text("Fill Color")
+                    Text(^String.Titles.fillColor)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -459,7 +500,7 @@ struct EditorSettingsPanel: View {
                 
                 // Stroke Color
                 HStack {
-                    Text("Stroke Color")
+                    Text(^String.Titles.editorStrokeColor)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -478,7 +519,7 @@ struct EditorSettingsPanel: View {
                 
                 // Stroke Width
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Stroke Width")
+                    Text(^String.Titles.editorStrokeWidth)
                         .font(.subheadline)
                     HStack {
                         Text("\(Int(shape.strokeWidth))pt")
@@ -501,7 +542,7 @@ struct EditorSettingsPanel: View {
                 
                 // Line Style
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Line Style")
+                    Text(^String.Titles.lineStyleDrawing)
                         .font(.subheadline)
                     HStack {
                         Button(action: {
@@ -510,7 +551,7 @@ struct EditorSettingsPanel: View {
                                 drawingState.pendingShape = updatedShape
                             }
                         }) {
-                            Text("Solid")
+                            Text(^String.Titles.solid)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
@@ -523,7 +564,7 @@ struct EditorSettingsPanel: View {
                                 drawingState.pendingShape = updatedShape
                             }
                         }) {
-                            Text("Dashed")
+                            Text(^String.Titles.dashedLine)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
@@ -544,6 +585,7 @@ struct EditorSettingsPanel: View {
                     
                     Button(^String.Titles.apply) {
                         drawingState.confirmShapeCreation()
+                        drawingState.currentTool = .cursor
                     }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
@@ -556,14 +598,14 @@ struct EditorSettingsPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             if let shapeId = drawingState.selectedShapeId,
                let shape = drawingState.shapes.first(where: { $0.id == shapeId }) {
-                Text("Edit: \(shape.type.displayName)")
+                Text(String.Titles.editorEditShapeFormat.format(shape.type.displayName))
                     .font(.headline)
                 
                 Divider()
                 
                 // Fill Color
                 HStack {
-                    Text("Fill Color")
+                    Text(^String.Titles.fillColor)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -592,7 +634,7 @@ struct EditorSettingsPanel: View {
                 
                 // Stroke Color
                 HStack {
-                    Text("Stroke Color")
+                    Text(^String.Titles.editorStrokeColor)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -608,7 +650,7 @@ struct EditorSettingsPanel: View {
                 
                 // Stroke Width
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Stroke Width")
+                    Text(^String.Titles.editorStrokeWidth)
                         .font(.subheadline)
                     HStack {
                         Text("\(Int(shape.strokeWidth))pt")
@@ -628,13 +670,13 @@ struct EditorSettingsPanel: View {
                 
                 // Line Style
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Line Style")
+                    Text(^String.Titles.lineStyleDrawing)
                         .font(.subheadline)
                     HStack {
                         Button(action: {
                             drawingState.updateSelectedShape(lineStyle: .solid)
                         }) {
-                            Text("Solid")
+                            Text(^String.Titles.solid)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
@@ -644,7 +686,7 @@ struct EditorSettingsPanel: View {
                         Button(action: {
                             drawingState.updateSelectedShape(lineStyle: .dashed)
                         }) {
-                            Text("Dashed")
+                            Text(^String.Titles.dashedLine)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
@@ -665,6 +707,7 @@ struct EditorSettingsPanel: View {
                     Button(^String.Titles.apply) {
                         // Изменения уже применены, просто убираем выделение
                         drawingState.selectedShapeId = nil
+                        drawingState.currentTool = .cursor
                     }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
@@ -676,14 +719,14 @@ struct EditorSettingsPanel: View {
     private var textBoxCustomizationSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let textBox = drawingState.pendingTextBox {
-                Text("Edit Text Box")
+                Text(^String.Titles.editorEditTextBox)
                     .font(.headline)
                 
                 Divider()
                 
                 // Text (многострочный)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Text")
+                    Text(^String.Titles.editorTextLabel)
                         .font(.subheadline)
                     TextEditor(text: Binding(
                         get: { textBox.text },
@@ -700,7 +743,7 @@ struct EditorSettingsPanel: View {
                 
                 // Text Color
                 HStack {
-                    Text("Text Color")
+                    Text(^String.Titles.editorTextColor)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -719,7 +762,7 @@ struct EditorSettingsPanel: View {
                 
                 // Font Size
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Font Size")
+                    Text(^String.Titles.editorFontSize)
                         .font(.subheadline)
                     HStack {
                         Text("\(Int(textBox.fontSize))pt")
@@ -739,7 +782,7 @@ struct EditorSettingsPanel: View {
                 
                 // Font Name
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Font")
+                    Text(^String.Titles.editorFont)
                         .font(.subheadline)
                     Picker("", selection: Binding(
                         get: { textBox.fontName },
@@ -759,7 +802,7 @@ struct EditorSettingsPanel: View {
                 
                 // Background Color
                 HStack {
-                    Text("Background")
+                    Text(^String.Titles.editorBackground)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -778,7 +821,7 @@ struct EditorSettingsPanel: View {
                 
                 // Border Color
                 HStack {
-                    Text("Border Color")
+                    Text(^String.Titles.editorBorderColor)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -797,7 +840,7 @@ struct EditorSettingsPanel: View {
                 
                 // Border Width
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Border Width")
+                    Text(^String.Titles.editorBorderWidth)
                         .font(.subheadline)
                     HStack {
                         Text("\(Int(textBox.borderWidth))pt")
@@ -842,14 +885,14 @@ struct EditorSettingsPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             if let textBoxId = drawingState.selectedTextBoxId,
                let textBox = drawingState.textBoxes.first(where: { $0.id == textBoxId }) {
-                Text("Edit Text Box")
+                Text(^String.Titles.editorEditTextBox)
                     .font(.headline)
                 
                 Divider()
                 
                 // Text (многострочный)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Text")
+                    Text(^String.Titles.editorTextLabel)
                         .font(.subheadline)
                     TextEditor(text: Binding(
                         get: { textBox.text },
@@ -866,7 +909,7 @@ struct EditorSettingsPanel: View {
                 
                 // Text Color
                 HStack {
-                    Text("Text Color")
+                    Text(^String.Titles.editorTextColor)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -882,7 +925,7 @@ struct EditorSettingsPanel: View {
                 
                 // Font Size
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Font Size")
+                    Text(^String.Titles.editorFontSize)
                         .font(.subheadline)
                     HStack {
                         Text("\(Int(textBox.fontSize))pt")
@@ -902,7 +945,7 @@ struct EditorSettingsPanel: View {
                 
                 // Font Name
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Font")
+                    Text(^String.Titles.editorFont)
                         .font(.subheadline)
                     Picker("", selection: Binding(
                         get: { textBox.fontName },
@@ -922,7 +965,7 @@ struct EditorSettingsPanel: View {
                 
                 // Background Color
                 HStack {
-                    Text("Background")
+                    Text(^String.Titles.editorBackground)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -938,7 +981,7 @@ struct EditorSettingsPanel: View {
                 
                 // Border Color
                 HStack {
-                    Text("Border Color")
+                    Text(^String.Titles.editorBorderColor)
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
@@ -954,7 +997,7 @@ struct EditorSettingsPanel: View {
                 
                 // Border Width
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Border Width")
+                    Text(^String.Titles.editorBorderWidth)
                         .font(.subheadline)
                     HStack {
                         Text("\(Int(textBox.borderWidth))pt")
@@ -1118,6 +1161,7 @@ struct DrawingCanvasView: View {
     @State private var initialTextBoxSize: CGSize = .zero
     @State private var initialTextBoxPosition: CGPoint = .zero
     @State private var isMovingTelestrationObject = false
+    @State private var curvedArrowMiddleDragStart: CGPoint? = nil
     @State private var lastTapTime: Date?
     @State private var lastTapLocation: CGPoint?
     
@@ -1141,6 +1185,7 @@ struct DrawingCanvasView: View {
                 drawingState.selectedShapeId = nil
                 drawingState.selectedTelestrationObjectId = nil
                 drawingState.isAddingPointToTelestration = false
+                drawingState.telestrationPointUndoStack = []
                 return
             }
         }
@@ -1190,6 +1235,7 @@ struct DrawingCanvasView: View {
                 drawingState.selectedShapeId = shape.id
                 drawingState.selectedTelestrationObjectId = nil
                 drawingState.isAddingPointToTelestration = false
+                drawingState.telestrationPointUndoStack = []
                 return
             }
         }
@@ -1202,12 +1248,14 @@ struct DrawingCanvasView: View {
                 drawingState.selectedTelestrationObjectId = object.id
                 drawingState.selectedShapeId = nil
                 drawingState.selectedTextBoxId = nil
+                drawingState.telestrationPointUndoStack = []
                 drawingState.syncTelestrationCustomizationFromSelectedObject()
                 return
             }
         }
         drawingState.selectedTelestrationObjectId = nil
         drawingState.isAddingPointToTelestration = false
+        drawingState.telestrationPointUndoStack = []
     }
     
     private func telestrationObjectContains(point: CGPoint, object: DrawableObject) -> Bool {
@@ -1499,6 +1547,7 @@ struct DrawingCanvasView: View {
                             }
                             if drawingState.selectedTelestrationObjectId != nil {
                                 drawingState.selectedTelestrationObjectId = nil
+                                drawingState.telestrationPointUndoStack = []
                             }
                             drawingState.isAddingPointToTelestration = false
                         }
@@ -1543,6 +1592,10 @@ struct DrawingCanvasView: View {
                     // Рендеринг настраиваемого объекта телестрации (показывается во время настройки)
                     if let pendingObject = drawingState.pendingTelestrationObject {
                         drawTelestrationObject(pendingObject, in: context, size: size, isSelected: false)
+                        if pendingObject.type == .curvedArrow, pendingObject.positions.count >= 2 {
+                            let middle = middlePointForCurvedArrow(pendingObject)
+                            drawCurvedArrowMiddleHandle(at: middle, in: context)
+                        }
                     }
                     
                     // Рендеринг фигур
@@ -1605,17 +1658,33 @@ struct DrawingCanvasView: View {
                                     isPending: false
                                 )
                             }
+                            // Перетаскивание центральной ручки закруглённой стрелки (кружок по середине кривой) — и для выбранного, и для pending.
+                            else if drawingState.isDraggingCurvedArrowMiddle, let startMiddle = curvedArrowMiddleDragStart {
+                                let newMiddle = CGPoint(x: startMiddle.x + value.translation.width, y: startMiddle.y + value.translation.height)
+                                drawingState.moveCurvedArrowMiddle(to: newMiddle)
+                            }
                             // Перемещение объекта телестрации в настройке (после Done, до Apply) — без выделения. Вершина = тянуть вершину, ребро/внутренность = тянуть весь объект. В режиме «Добавить точку» не начинаем перетаскивание.
                             else if !drawingState.isAddingPointToTelestration, let pendingObj = drawingState.pendingTelestrationObject {
                                 let start = CGPoint(x: value.location.x - value.translation.width, y: value.location.y - value.translation.height)
                                 if isMovingTelestrationObject {
                                     drawingState.movePendingTelestrationObject(by: value.translation)
                                 } else {
-                                    let hit = telestrationHitTest(point: start, object: pendingObj)
-                                    if hit.isOnObject {
-                                        isMovingTelestrationObject = true
-                                        drawingState.startMovingPendingTelestrationObject(vertexIndex: hit.vertexIndex)
-                                        drawingState.movePendingTelestrationObject(by: value.translation)
+                                    // Сначала проверяем клик по центральной ручке закруглённой стрелки (pending)
+                                    if pendingObj.type == .curvedArrow, pendingObj.positions.count >= 2 {
+                                        let middle = middlePointForCurvedArrow(pendingObj)
+                                        if hypot(start.x - middle.x, start.y - middle.y) < 14 {
+                                            curvedArrowMiddleDragStart = middle
+                                            drawingState.startDraggingCurvedArrowMiddle()
+                                            drawingState.moveCurvedArrowMiddle(to: CGPoint(x: middle.x + value.translation.width, y: middle.y + value.translation.height))
+                                        }
+                                    }
+                                    if !drawingState.isDraggingCurvedArrowMiddle {
+                                        let hit = telestrationHitTest(point: start, object: pendingObj)
+                                        if hit.isOnObject {
+                                            isMovingTelestrationObject = true
+                                            drawingState.startMovingPendingTelestrationObject(vertexIndex: hit.vertexIndex)
+                                            drawingState.movePendingTelestrationObject(by: value.translation)
+                                        }
                                     }
                                 }
                             }
@@ -1627,11 +1696,22 @@ struct DrawingCanvasView: View {
                                 if isMovingTelestrationObject {
                                     drawingState.moveSelectedTelestrationObject(by: value.translation)
                                 } else {
-                                    let hit = telestrationHitTest(point: start, object: obj)
-                                    if hit.isOnObject {
-                                        isMovingTelestrationObject = true
-                                        drawingState.startMovingTelestrationObject(vertexIndex: hit.vertexIndex)
-                                        drawingState.moveSelectedTelestrationObject(by: value.translation)
+                                    // Сначала проверяем клик по центральной ручке закруглённой стрелки
+                                    if obj.type == .curvedArrow, obj.positions.count >= 2 {
+                                        let middle = middlePointForCurvedArrow(obj)
+                                        if hypot(start.x - middle.x, start.y - middle.y) < 14 {
+                                            curvedArrowMiddleDragStart = middle
+                                            drawingState.startDraggingCurvedArrowMiddle()
+                                            drawingState.moveCurvedArrowMiddle(to: CGPoint(x: middle.x + value.translation.width, y: middle.y + value.translation.height))
+                                        }
+                                    }
+                                    if !drawingState.isDraggingCurvedArrowMiddle {
+                                        let hit = telestrationHitTest(point: start, object: obj)
+                                        if hit.isOnObject {
+                                            isMovingTelestrationObject = true
+                                            drawingState.startMovingTelestrationObject(vertexIndex: hit.vertexIndex)
+                                            drawingState.moveSelectedTelestrationObject(by: value.translation)
+                                        }
                                     }
                                 }
                             }
@@ -1668,6 +1748,11 @@ struct DrawingCanvasView: View {
                             if isMovingTelestrationObject {
                                 drawingState.endMovingTelestrationObject()
                                 isMovingTelestrationObject = false
+                            }
+                            // Завершаем перетаскивание центральной ручки закруглённой стрелки
+                            if drawingState.isDraggingCurvedArrowMiddle {
+                                drawingState.endDraggingCurvedArrowMiddle()
+                                curvedArrowMiddleDragStart = nil
                             }
                             // Клик (малое движение): режим «Добавить точку» телестрации — клик по холсту добавляет вершину
                             let location = value.location
@@ -1758,6 +1843,12 @@ struct DrawingCanvasView: View {
                             NotificationCenter.default.post(name: .textBoxEditingChanged, object: false)
                         }
                     )
+                }
+                
+                // ПКМ: контекстное меню только для инструмента «Курсор» (Удалить, Копировать, Вставить)
+                if drawingState.currentTool == .cursor {
+                    RightClickCanvasOverlay(drawingState: drawingState)
+                        .allowsHitTesting(true)
                 }
             }
         }
@@ -1899,10 +1990,19 @@ struct DrawingCanvasView: View {
             context.stroke(path, with: .color(.blue), style: strokeStyle)
         case .curvedArrow:
             guard object.positions.count >= 2 else { return }
+            let start = object.positions[0]
+            let end = object.positions[1]
+            let control = effectiveControlPointForCurvedArrow(object)
             var path = Path()
-            path.move(to: object.positions[0])
-            path.addLine(to: object.positions[1])
+            path.move(to: start)
+            path.addQuadCurve(to: end, control: control)
             context.stroke(path, with: .color(.blue), style: strokeStyle)
+            // Кружок по середине кривой для перетаскивания
+            let middle = CGPoint(
+                x: 0.25*start.x + 0.5*control.x + 0.25*end.x,
+                y: 0.25*start.y + 0.5*control.y + 0.25*end.y
+            )
+            drawCurvedArrowMiddleHandle(at: middle, in: context)
         case .objectHighlight:
             guard let p = object.positions.first else { return }
             let r = object.radius
@@ -2038,6 +2138,35 @@ struct DrawingCanvasView: View {
         }
     }
     
+    /// Рисует кружок-ручку по середине кривой закруглённой стрелки (для выбранного и для pending).
+    private func drawCurvedArrowMiddleHandle(at middle: CGPoint, in context: GraphicsContext) {
+        let circle = Path(ellipseIn: CGRect(x: middle.x - 8, y: middle.y - 8, width: 16, height: 16))
+        context.fill(circle, with: .color(.blue.opacity(0.3)))
+        context.stroke(circle, with: .color(.blue), lineWidth: 2)
+    }
+    
+    /// Эффективная контрольная точка закруглённой стрелки: явная controlPoint или вычисленная из curveHeight.
+    private func effectiveControlPointForCurvedArrow(_ object: DrawableObject) -> CGPoint {
+        guard object.positions.count >= 2 else { return .zero }
+        let start = object.positions[0]
+        let end = object.positions[1]
+        if let cp = object.controlPoint { return cp }
+        return computeControlPointForCurvedArrow(start: start, end: end, curveHeight: object.curveHeight)
+    }
+    
+    /// Точка на середине кривой (B(0.5)) для закруглённой стрелки — там рисуем ручку и обрабатываем перетаскивание.
+    private func middlePointForCurvedArrow(_ object: DrawableObject) -> CGPoint {
+        guard object.positions.count >= 2 else { return .zero }
+        let start = object.positions[0]
+        let end = object.positions[1]
+        let control = effectiveControlPointForCurvedArrow(object)
+        let t: CGFloat = 0.5
+        return CGPoint(
+            x: (1-t)*(1-t)*start.x + 2*(1-t)*t*control.x + t*t*end.x,
+            y: (1-t)*(1-t)*start.y + 2*(1-t)*t*control.y + t*t*end.y
+        )
+    }
+    
     // Вычисляем контрольную точку на основе curveHeight
     private func computeControlPointForCurvedArrow(start: CGPoint, end: CGPoint, curveHeight: CGFloat) -> CGPoint {
         let midX = (start.x + end.x) / 2
@@ -2068,13 +2197,7 @@ struct DrawingCanvasView: View {
         
         let startPoint = object.positions[0]
         let endPoint = object.positions[1]
-        
-        // Вычисляем контрольную точку на основе curveHeight
-        let controlPoint = computeControlPointForCurvedArrow(
-            start: startPoint,
-            end: endPoint,
-            curveHeight: object.curveHeight
-        )
+        let controlPoint = effectiveControlPointForCurvedArrow(object)
         
         // Рисуем квадратичную кривую Bezier
         var path = Path()
@@ -2742,8 +2865,8 @@ struct EditorZoneBetweenObjectsCustomization: View {
                     } label: {
                         HStack {
                             Image(systemName: "plus.circle")
-                            Text("Добавить точку")
-                            Text("(режим)")
+                            Text(^String.Titles.editorAddPoint)
+                            Text(^String.Titles.editorModeInParentheses)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -2755,13 +2878,13 @@ struct EditorZoneBetweenObjectsCustomization: View {
                     } label: {
                         HStack {
                             Image(systemName: "plus.circle")
-                            Text("Добавить точку")
+                            Text(^String.Titles.editorAddPoint)
                         }
                     }
                     .buttonStyle(BorderedButtonStyle())
                 }
             }
-            .help("Включить режим: следующий клик по изображению добавит вершину к объекту")
+            .help(^String.Titles.editorAddPointModeHelp)
         }
     }
 }
@@ -2848,38 +2971,6 @@ struct EditorCurvedArrowCustomization: View {
             Divider()
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("Высота центра параболы")
-                    .font(.subheadline)
-                
-                let curveHeightBinding = Binding<CGFloat>(
-                    get: { drawingState.telestrationCustomization.curveHeight },
-                    set: { newHeight in
-                        let clamped = min(300, max(-300, newHeight))
-                        drawingState.telestrationCustomization.curveHeight = clamped
-                        drawingState.updatePendingTelestrationObjectFromCustomization()
-                    }
-                )
-                
-                Slider(value: curveHeightBinding, in: -300...300)
-                
-                HStack(spacing: 8) {
-                    Stepper("", value: curveHeightBinding, in: -300...300, step: 1)
-                        .labelsHidden()
-                    TextField("", value: Binding(
-                        get: { Int(drawingState.telestrationCustomization.curveHeight) },
-                        set: { newVal in
-                            let clamped = min(300, max(-300, CGFloat(newVal)))
-                            drawingState.telestrationCustomization.curveHeight = clamped
-                            drawingState.updatePendingTelestrationObjectFromCustomization()
-                        }
-                    ), format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 60)
-                        .multilineTextAlignment(.center)
-                }
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
                 Text(^String.Titles.lineWidth)
                     .font(.subheadline)
                 
@@ -2945,3 +3036,149 @@ struct EditorObjectHighlightCustomization: View {
     }
 }
 
+// MARK: - Right-Click Context Menu Overlay (Cursor tool only)
+
+struct RightClickCanvasOverlay: NSViewRepresentable {
+    @ObservedObject var drawingState: EditorDrawingState
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = RightClickHostView()
+        view.storedDrawingState = drawingState
+        view.onRightClick = { [weak drawingState] location in
+            guard let state = drawingState else { return }
+            let hit = state.hitTestForCursorContextMenu(at: location)
+            RightClickCanvasOverlay.showContextMenu(hit: hit, at: location, drawingState: state, hostView: view)
+        }
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let host = nsView as? RightClickHostView else { return }
+        host.storedDrawingState = drawingState
+        host.onRightClick = { [weak drawingState] location in
+            guard let state = drawingState else { return }
+            let hit = state.hitTestForCursorContextMenu(at: location)
+            RightClickCanvasOverlay.showContextMenu(hit: hit, at: location, drawingState: state, hostView: host)
+        }
+    }
+    
+    private static func showContextMenu(hit: CursorMenuHit, at location: CGPoint, drawingState: EditorDrawingState, hostView: RightClickHostView) {
+        let menu = NSMenu()
+        
+        switch hit {
+        case .telestration(let obj):
+            let del = NSMenuItem(title: ^String.Titles.delete, action: #selector(RightClickHostView.menuDelete), keyEquivalent: "")
+            del.representedObject = CursorMenuAction.deleteTelestration(obj.id)
+            del.target = hostView
+            let copy = NSMenuItem(title: ^String.Titles.copy, action: #selector(RightClickHostView.menuCopy), keyEquivalent: "")
+            copy.representedObject = CursorMenuAction.copyTelestration(obj)
+            copy.target = hostView
+            menu.addItem(del)
+            menu.addItem(copy)
+        case .shape(let s):
+            let del = NSMenuItem(title: ^String.Titles.delete, action: #selector(RightClickHostView.menuDelete), keyEquivalent: "")
+            del.representedObject = CursorMenuAction.deleteShape(s.id)
+            del.target = hostView
+            let copy = NSMenuItem(title: ^String.Titles.copy, action: #selector(RightClickHostView.menuCopy), keyEquivalent: "")
+            copy.representedObject = CursorMenuAction.copyShape(s)
+            copy.target = hostView
+            menu.addItem(del)
+            menu.addItem(copy)
+        case .textBox(let t):
+            let del = NSMenuItem(title: ^String.Titles.delete, action: #selector(RightClickHostView.menuDelete), keyEquivalent: "")
+            del.representedObject = CursorMenuAction.deleteTextBox(t.id)
+            del.target = hostView
+            let copy = NSMenuItem(title: ^String.Titles.copy, action: #selector(RightClickHostView.menuCopy), keyEquivalent: "")
+            copy.representedObject = CursorMenuAction.copyTextBox(t)
+            copy.target = hostView
+            menu.addItem(del)
+            menu.addItem(copy)
+        case .empty:
+            if drawingState.copyBuffer.isEmpty { return }
+            for (index, item) in drawingState.copyBuffer.enumerated() {
+                let title = "\(^String.Titles.paste): \(item.shortLabel)"
+                let menuItem = NSMenuItem(title: title, action: #selector(RightClickHostView.menuPaste), keyEquivalent: "")
+                menuItem.representedObject = CursorMenuAction.paste(index: index, point: location)
+                menuItem.target = hostView
+                menu.addItem(menuItem)
+            }
+        }
+        
+        guard !menu.items.isEmpty else { return }
+        
+        // Точка уже в координатах hostView (isFlipped), popUp ожидает именно их для параметра in:
+        menu.popUp(positioning: nil, at: location, in: hostView)
+    }
+}
+
+/// Действия контекстного меню (передаются через representedObject).
+private enum CursorMenuAction {
+    case deleteTelestration(UUID)
+    case deleteShape(UUID)
+    case deleteTextBox(UUID)
+    case copyTelestration(DrawableObject)
+    case copyShape(EditorShape)
+    case copyTextBox(EditorTextBox)
+    case paste(index: Int, point: CGPoint)
+}
+
+private class RightClickHostView: NSView {
+    weak var storedDrawingState: EditorDrawingState?
+    var onRightClick: ((CGPoint) -> Void)?
+    private var rightClickMonitor: Any?
+    
+    /// Координаты как у SwiftUI: (0,0) сверху слева, Y вниз — совпадает с холстом и hit-test.
+    override var isFlipped: Bool { true }
+    
+    /// Не перехватываем hit-test — все события (ЛКМ и др.) проходят к SwiftUI-холсту под нами.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
+    }
+    
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil {
+            rightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
+                guard let self = self else { return event }
+                let loc = self.convert(event.locationInWindow, from: nil)
+                guard self.bounds.contains(loc) else { return event }
+                self.onRightClick?(loc)
+                return nil
+            }
+        } else {
+            if let m = rightClickMonitor {
+                NSEvent.removeMonitor(m)
+                rightClickMonitor = nil
+            }
+        }
+    }
+    
+    @objc func menuDelete(_ sender: NSMenuItem) {
+        guard let action = sender.representedObject as? CursorMenuAction,
+              let state = storedDrawingState else { return }
+        switch action {
+        case .deleteTelestration(let id): state.deleteTelestrationObject(id: id)
+        case .deleteShape(let id): state.deleteShape(id: id)
+        case .deleteTextBox(let id): state.deleteTextBox(id: id)
+        default: break
+        }
+    }
+    
+    @objc func menuCopy(_ sender: NSMenuItem) {
+        guard let action = sender.representedObject as? CursorMenuAction,
+              let state = storedDrawingState else { return }
+        switch action {
+        case .copyTelestration(let obj): state.addToCopyBuffer(.telestration(obj))
+        case .copyShape(let s): state.addToCopyBuffer(.shape(s))
+        case .copyTextBox(let t): state.addToCopyBuffer(.textBox(t))
+        default: break
+        }
+    }
+    
+    @objc func menuPaste(_ sender: NSMenuItem) {
+        guard let action = sender.representedObject as? CursorMenuAction,
+              case .paste(let index, let point) = action,
+              let state = storedDrawingState else { return }
+        state.pasteFromBuffer(at: point, bufferIndex: index)
+    }
+}

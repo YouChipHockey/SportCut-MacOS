@@ -155,6 +155,7 @@
 "FullControlMenuExport" = "Coupes";  // ^String.Titles.fullControlMenuExport
 "FullControlButtonExportTimeline" = "Exporter la chronologie actuelle";  // ^String.Titles.fullControlButtonExportTimeline
 "FullControlButtonExportAll" = "Tout exporter";  // ^String.Titles.fullControlButtonExportAll
+"FullControlButtonExportDrawings" = "Exporter les dessins";  // ^String.Titles.fullControlButtonExportDrawings
 "FullControlButtonExportTags" = "Exporter les étiquettes";  // ^String.Titles.fullControlButtonExportTags
 "FullControlButtonExportEvents" = "Exporter les événements";  // ^String.Titles.fullControlButtonExportEvents
 "FullControlButtonReport" = "Rapport";  // ^String.Titles.fullControlButtonReport
@@ -624,3 +625,48 @@
 "RenamePlaylist" = "Renommer la playlist";
 "NewName" = "Nouveau nom :";
 "Rename" = "Renommer";
+
+// Éditeur
+"EditorCursor" = "Curseur";
+"EditorTelestration" = "Télestration";
+"EditorShapes" = "Formes";
+"EditorTextBox" = "Zone de texte";
+"Undo" = "Annuler";
+"EditorCursorMode" = "Mode curseur";
+"EditorSelectMode" = "Mode sélection";
+"EditorCreatingFormat" = "Création : %@";
+"EditorVerticesCount" = "Sommets : %d";
+"EditorBack" = "Retour";
+"EditorConfigurationShapeFormat" = "Configuration : %@";
+"EditorEditShapeFormat" = "Modifier : %@";
+"EditorStrokeColor" = "Couleur du trait";
+"EditorStrokeWidth" = "Épaisseur du trait";
+"EditorEditTextBox" = "Modifier la zone de texte";
+"EditorTextLabel" = "Texte";
+"EditorTextColor" = "Couleur du texte";
+"EditorFontSize" = "Taille de police";
+"EditorFont" = "Police";
+"EditorBackground" = "Arrière-plan";
+"EditorBorderColor" = "Couleur de la bordure";
+"EditorBorderWidth" = "Épaisseur de la bordure";
+"EditorAddPoint" = "Ajouter un point";
+"EditorModeInParentheses" = "(mode)";
+"EditorCurveHeight" = "Hauteur du centre de la parabole";
+"EditorExportDurationLabel" = "Durée d'export :";
+"EditorSaveToTag" = "Enregistrer sur le tag";
+"EditorScreenshotNamePlaceholder" = "Nom de la capture";
+"EditorTitle" = "Éditeur";
+"EditorSelectTagsForScreenshot" = "Sélectionner les tags pour la capture";
+"EditorTimeLabelFormat" = "Heure : %@";
+"EditorNoTagsAtMoment" = "Aucun tag à ce moment";
+"EditorAddPointModeHelp" = "Activer le mode : le prochain clic sur l'image ajoutera un sommet à l'objet";
+"Copy" = "Copier";
+"Paste" = "Coller";
+
+// Noms des formes (éditeur)
+"EditorShapeTriangle" = "Triangle";
+"EditorShapeSquare" = "Carré";
+"EditorShapeRectangle" = "Rectangle";
+"EditorShapeCircle" = "Cercle";
+"EditorShapeStar" = "Étoile";
+"EditorShapeHexagon" = "Hexagone";

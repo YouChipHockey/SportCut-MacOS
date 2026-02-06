@@ -2,14 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>SUEnableInstallerLauncherService</key>
-    <true/>
-    <key>SUEnableDownloaderService</key>
-    <true/>
-    <key>SUFeedURL</key>
-    <string>https://github.com/YouChipHockey/SportCut-MacOS/blob/main/appcast.xml</string>
-    <key>SUPublicEDKey</key>
-    <string>bU5CF9nDmmOeajW0M1szvoPfmtG+XMUB9DFfufiUllY=</string>
 	<key>ATSApplicationFontsPath</key>
 	<string>Fonts</string>
 	<key>CFBundleDevelopmentRegion</key>
@@ -88,6 +80,14 @@
 	<string></string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>We need your permission to access the file system.</string>
+	<key>SUEnableDownloaderService</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/YouChipHockey/SportCut-MacOS/blob/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>bU5CF9nDmmOeajW0M1szvoPfmtG+XMUB9DFfufiUllY=</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>SFCompactText-Regular.ttf</string>

@@ -535,7 +535,7 @@
 "TrianglePlusOne" = "Треугольник+1"; // ^String.Titles.trianglePlusOne
 "WFormation" = "W-формация"; // ^String.Titles.wFormation
 "Pentagon" = "Пентагон"; // ^String.Titles.pentagon
-"Arrow" = "Стрела"; // ^String.Titles.arrow
+"Arrow" = "Стрелка"; // ^String.Titles.arrow
 "Cross" = "Крест"; // ^String.Titles.cross
 "Hexagon" = "Гексагон"; // ^String.Titles.hexagon
 "TwoTwoTwo" = "2-2-2"; // ^String.Titles.twoTwoTwo
@@ -625,9 +625,9 @@
 "NewName" = "Новое имя:"; // ^String.Titles.newName
 "Rename" = "Переименовать"; // ^String.Titles.rename
 
-// Video Download from URL
-"AddVideoFromURL" = "Добавить из интернета"; // ^String.Titles.addVideoFromURL
-"DownloadVideoFromURL" = "Загрузка видео из интернета"; // ^String.Titles.downloadVideoFromURL
+// Загрузка видео по ссылке
+"AddVideoFromURL" = "Добавить по ссылке"; // ^String.Titles.addVideoFromURL
+"DownloadVideoFromURL" = "Загрузка видео по ссылке"; // ^String.Titles.downloadVideoFromURL
 "DownloadVideoFromURLDescription" = "Вставьте ссылку на видео, выберите качество и формат для загрузки"; // ^String.Titles.downloadVideoFromURLDescription
 "VideoURL" = "Ссылка на видео"; // ^String.Titles.videoURL
 "EnterVideoURL" = "Вставьте ссылку на видео"; // ^String.Titles.enterVideoURL
@@ -637,16 +637,62 @@
 "SelectQuality" = "Выберите качество"; // ^String.Titles.selectQuality
 "DownloadingVideo" = "Загрузка видео..."; // ^String.Titles.downloadingVideo
 "VideoDownloaded" = "Видео успешно загружено"; // ^String.Titles.videoDownloaded
-"VideoDownloadedDescription" = "Видео сохранено в папку Загрузки. Продолжите, чтобы добавить его в проект"; // ^String.Titles.videoDownloadedDescription
+"VideoDownloadedDescription" = "Видео сохранено в папку «Загрузки». Продолжите, чтобы добавить его в проект"; // ^String.Titles.videoDownloadedDescription
 "FetchFormats" = "Получить информацию"; // ^String.Titles.fetchFormats
 "DownloadButtonTitle" = "Скачать"; // ^String.Titles.downloadButtonTitle
 "TryAgain" = "Попробовать снова"; // ^String.Titles.tryAgain
 "UseServerVideoName" = "Использовать название видео с сервера"; // ^String.Titles.useServerVideoName
-"UseServerVideoNameDescription" = "Пропустить ввод команд/счета и использовать название с сервера"; // ^String.Titles.useServerVideoNameDescription// Downloads Folder Permissions
-"SelectDownloadsFolderMessage" = "Для сохранения видео необходим доступ к папке Загрузки. Пожалуйста, выберите папку Загрузки в следующем диалоге."; // ^String.Titles.selectDownloadsFolderMessage
+"UseServerVideoNameDescription" = "Пропустить ввод команд и счёта и использовать название с сервера"; // ^String.Titles.useServerVideoNameDescription
+// Доступ к папке «Загрузки»
+"SelectDownloadsFolderMessage" = "Для сохранения видео необходим доступ к папке «Загрузки». Выберите папку «Загрузки» в следующем диалоге."; // ^String.Titles.selectDownloadsFolderMessage
 "GrantAccessButtonTitle" = "Разрешить доступ"; // ^String.Titles.grantAccessButtonTitle
-"DownloadsFolderAccessRequired" = "Требуется доступ к папке Загрузки"; // ^String.Titles.downloadsFolderAccessRequired
-"DownloadsFolderAccessDescription" = "Приложению необходим доступ к папке Загрузки для сохранения видео"; // ^String.Titles.downloadsFolderAccessDescription
-"OpenSystemSettings" = "Открыть настройки"; // ^String.Titles.openSystemSettings
-"DownloadsFolderAccessGranted" = "Доступ к папке Загрузки предоставлен"; // ^String.Titles.downloadsFolderAccessGranted
+"DownloadsFolderAccessRequired" = "Требуется доступ к папке «Загрузки»"; // ^String.Titles.downloadsFolderAccessRequired
+"DownloadsFolderAccessDescription" = "Приложению нужен доступ к папке «Загрузки» для сохранения видео"; // ^String.Titles.downloadsFolderAccessDescription
+"OpenSystemSettings" = "Открыть настройки системы"; // ^String.Titles.openSystemSettings
+"DownloadsFolderAccessGranted" = "Доступ к папке «Загрузки» предоставлен"; // ^String.Titles.downloadsFolderAccessGranted
 "CheckPermissions" = "Проверить разрешения"; // ^String.Titles.checkPermissions
+
+// Редактор
+"EditorCursor" = "Курсор"; // ^String.Titles.editorCursor
+"EditorTelestration" = "Телестрация"; // ^String.Titles.editorTelestration
+"EditorShapes" = "Фигуры"; // ^String.Titles.editorShapes
+"EditorTextBox" = "Текст"; // ^String.Titles.editorTextBox
+"Undo" = "Отменить"; // ^String.Titles.undo
+"EditorCursorMode" = "Режим курсора"; // ^String.Titles.editorCursorMode
+"EditorSelectMode" = "Режим выбора"; // ^String.Titles.editorSelectMode
+"EditorCreatingFormat" = "Создание: %@"; // ^String.Titles.editorCreatingFormat
+"EditorVerticesCount" = "Вершины: %d"; // ^String.Titles.editorVerticesCount
+"EditorBack" = "Назад"; // ^String.Titles.editorBack
+"EditorConfigurationShapeFormat" = "Настройка: %@"; // ^String.Titles.editorConfigurationShapeFormat
+"EditorEditShapeFormat" = "Редактирование: %@"; // ^String.Titles.editorEditShapeFormat
+"EditorStrokeColor" = "Цвет обводки"; // ^String.Titles.editorStrokeColor
+"EditorStrokeWidth" = "Толщина обводки"; // ^String.Titles.editorStrokeWidth
+"EditorEditTextBox" = "Редактировать текст"; // ^String.Titles.editorEditTextBox
+"EditorTextLabel" = "Текст"; // ^String.Titles.editorTextLabel
+"EditorTextColor" = "Цвет текста"; // ^String.Titles.editorTextColor
+"EditorFontSize" = "Размер шрифта"; // ^String.Titles.editorFontSize
+"EditorFont" = "Шрифт"; // ^String.Titles.editorFont
+"EditorBackground" = "Фон"; // ^String.Titles.editorBackground
+"EditorBorderColor" = "Цвет рамки"; // ^String.Titles.editorBorderColor
+"EditorBorderWidth" = "Толщина рамки"; // ^String.Titles.editorBorderWidth
+"EditorAddPoint" = "Добавить точку"; // ^String.Titles.editorAddPoint
+"EditorModeInParentheses" = "(режим)"; // ^String.Titles.editorModeInParentheses
+"EditorCurveHeight" = "Высота центра параболы"; // ^String.Titles.editorCurveHeight
+"EditorExportDurationLabel" = "Длительность экспорта:"; // ^String.Titles.editorExportDurationLabel
+"EditorSaveToTag" = "Сохранить на тег"; // ^String.Titles.editorSaveToTag
+"EditorScreenshotNamePlaceholder" = "Имя скриншота"; // ^String.Titles.editorScreenshotNamePlaceholder
+"EditorTitle" = "Редактор"; // ^String.Titles.editorTitle
+"EditorSelectTagsForScreenshot" = "Выберите теги для скриншота"; // ^String.Titles.editorSelectTagsForScreenshot
+"EditorTimeLabelFormat" = "Время: %@"; // ^String.Titles.editorTimeLabelFormat
+"EditorNoTagsAtMoment" = "Нет тегов в этом моменте времени"; // ^String.Titles.editorNoTagsAtMoment
+"EditorAddPointModeHelp" = "Включить режим: следующий клик по изображению добавит вершину к объекту"; // ^String.Titles.editorAddPointModeHelp
+"Copy" = "Копировать"; // ^String.Titles.copy
+"Paste" = "Вставить"; // ^String.Titles.paste
+
+// Названия фигур редактора
+"EditorShapeTriangle" = "Треугольник"; // ^String.Titles.editorShapeTriangle
+"EditorShapeSquare" = "Квадрат"; // ^String.Titles.editorShapeSquare
+"EditorShapeRectangle" = "Прямоугольник"; // ^String.Titles.editorShapeRectangle
+"EditorShapeCircle" = "Круг"; // ^String.Titles.editorShapeCircle
+"EditorShapeStar" = "Звезда"; // ^String.Titles.editorShapeStar
+"EditorShapeHexagon" = "Шестиугольник"; // ^String.Titles.editorShapeHexagon

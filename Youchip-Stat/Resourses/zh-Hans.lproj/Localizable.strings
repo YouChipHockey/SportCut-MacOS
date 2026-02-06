@@ -155,6 +155,7 @@
 "FullControlMenuExport" = "剪辑";  // ^String.Titles.fullControlMenuExport
 "FullControlButtonExportTimeline" = "导出当前时间线";  // ^String.Titles.fullControlButtonExportTimeline
 "FullControlButtonExportAll" = "全部导出";  // ^String.Titles.fullControlButtonExportAll
+"FullControlButtonExportDrawings" = "导出图画";  // ^String.Titles.fullControlButtonExportDrawings
 "FullControlButtonExportTags" = "导出标签";  // ^String.Titles.fullControlButtonExportTags
 "FullControlButtonExportEvents" = "导出事件";  // ^String.Titles.fullControlButtonExportEvents
 "FullControlButtonReport" = "报告";  // ^String.Titles.fullControlButtonReport
@@ -624,3 +625,48 @@
 "RenamePlaylist" = "重命名播放列表";
 "NewName" = "新名称：";
 "Rename" = "重命名";
+
+// 编辑器
+"EditorCursor" = "光标";
+"EditorTelestration" = "电视解说";
+"EditorShapes" = "形状";
+"EditorTextBox" = "文本框";
+"Undo" = "撤销";
+"EditorCursorMode" = "光标模式";
+"EditorSelectMode" = "选择模式";
+"EditorCreatingFormat" = "创建：%@";
+"EditorVerticesCount" = "顶点：%d";
+"EditorBack" = "返回";
+"EditorConfigurationShapeFormat" = "配置：%@";
+"EditorEditShapeFormat" = "编辑：%@";
+"EditorStrokeColor" = "描边颜色";
+"EditorStrokeWidth" = "描边宽度";
+"EditorEditTextBox" = "编辑文本框";
+"EditorTextLabel" = "文本";
+"EditorTextColor" = "文字颜色";
+"EditorFontSize" = "字体大小";
+"EditorFont" = "字体";
+"EditorBackground" = "背景";
+"EditorBorderColor" = "边框颜色";
+"EditorBorderWidth" = "边框宽度";
+"EditorAddPoint" = "添加点";
+"EditorModeInParentheses" = "（模式）";
+"EditorCurveHeight" = "抛物线中心高度";
+"EditorExportDurationLabel" = "导出时长：";
+"EditorSaveToTag" = "保存到标签";
+"EditorScreenshotNamePlaceholder" = "截图名称";
+"EditorTitle" = "编辑器";
+"EditorSelectTagsForScreenshot" = "选择截图的标签";
+"EditorTimeLabelFormat" = "时间：%@";
+"EditorNoTagsAtMoment" = "此时无标签";
+"EditorAddPointModeHelp" = "启用模式：下次点击图像将为对象添加顶点";
+"Copy" = "复制";
+"Paste" = "粘贴";
+
+// 编辑器形状名称
+"EditorShapeTriangle" = "三角形";
+"EditorShapeSquare" = "正方形";
+"EditorShapeRectangle" = "矩形";
+"EditorShapeCircle" = "圆形";
+"EditorShapeStar" = "星形";
+"EditorShapeHexagon" = "六边形";
