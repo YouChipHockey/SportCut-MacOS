@@ -696,3 +696,4 @@
 "EditorShapeCircle" = "Круг"; // ^String.Titles.editorShapeCircle
 "EditorShapeStar" = "Звезда"; // ^String.Titles.editorShapeStar
 "EditorShapeHexagon" = "Шестиугольник"; // ^String.Titles.editorShapeHexagon
+"FullControlButtonExportDrawings" = "Экспорт Рисунков";  // ^String.Titles.fullControlButtonExportDrawings

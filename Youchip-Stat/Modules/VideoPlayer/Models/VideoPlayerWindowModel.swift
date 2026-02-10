@@ -380,6 +380,50 @@ class EditorDrawingState: ObservableObject {
         return hypot(p.x - proj.x, p.y - proj.y)
     }
     
+    /// Эффективная контрольная точка закруглённой стрелки для hit-test (контекстное меню ПКМ).
+    private static func effectiveControlPointForCurvedArrow(_ object: DrawableObject) -> CGPoint {
+        guard object.positions.count >= 2 else { return .zero }
+        let start = object.positions[0]
+        let end = object.positions[1]
+        if let cp = object.controlPoint { return cp }
+        let midX = (start.x + end.x) / 2
+        let midY = (start.y + end.y) / 2
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = sqrt(dx * dx + dy * dy)
+        if length == 0 { return CGPoint(x: midX, y: midY) }
+        let perpX = -dy / length
+        let perpY = dx / length
+        return CGPoint(x: midX + perpX * object.curveHeight, y: midY + perpY * object.curveHeight)
+    }
+    
+    /// Минимальное расстояние от точки до квадратичной кривой Безье (для hit-test закруглённой стрелки).
+    private static func distanceFromPointToQuadCurve(_ point: CGPoint, start: CGPoint, control: CGPoint, end: CGPoint) -> CGFloat {
+        let steps = 32
+        var minD: CGFloat = .greatestFiniteMagnitude
+        var prev = start
+        for i in 1...steps {
+            let t = CGFloat(i) / CGFloat(steps)
+            let mt = 1 - t
+            let pt = CGPoint(
+                x: mt*mt*start.x + 2*mt*t*control.x + t*t*end.x,
+                y: mt*mt*start.y + 2*mt*t*control.y + t*t*end.y
+            )
+            minD = min(minD, distanceFromPointToSegment(point, prev, pt))
+            prev = pt
+        }
+        return minD
+    }
+    
+    private static func distanceFromPointToSegment(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let abx = b.x - a.x, aby = b.y - a.y
+        let apx = p.x - a.x, apy = p.y - a.y
+        let abLenSq = abx * abx + aby * aby
+        if abLenSq == 0 { return hypot(apx, apy) }
+        let t = max(0, min(1, (apx * abx + apy * aby) / abLenSq))
+        let proj = CGPoint(x: a.x + t * abx, y: a.y + t * aby)
+        return hypot(p.x - proj.x, p.y - proj.y)
+    }
     
     func clearDrawing() {
         completedPaths.removeAll()
@@ -625,7 +669,10 @@ class EditorDrawingState: ObservableObject {
             return distanceToPolygonForHitTest(point, object.positions, closed: false) < 15
         case .curvedArrow:
             guard object.positions.count >= 2 else { return false }
-            return distanceFromPointToSegment(point, object.positions[0], object.positions[1]) < 20
+            let start = object.positions[0]
+            let end = object.positions[1]
+            let control = effectiveControlPointForCurvedArrow(object)
+            return distanceFromPointToQuadCurve(point, start: start, control: control, end: end) < 20
         case .objectHighlight:
             guard let p = object.positions.first else { return false }
             let r = object.radius
@@ -872,16 +919,6 @@ class EditorDrawingState: ObservableObject {
             }
         }
         return bestIndex
-    }
-    
-    private static func distanceFromPointToSegment(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
-        let abx = b.x - a.x, aby = b.y - a.y
-        let apx = p.x - a.x, apy = p.y - a.y
-        let abLenSq = abx * abx + aby * aby
-        if abLenSq == 0 { return hypot(apx, apy) }
-        let t = max(0, min(1, (apx * abx + apy * aby) / abLenSq))
-        let proj = CGPoint(x: a.x + t * abx, y: a.y + t * aby)
-        return hypot(p.x - proj.x, p.y - proj.y)
     }
     
     func confirmTelestrationObjectCreation() -> DrawableObject? {

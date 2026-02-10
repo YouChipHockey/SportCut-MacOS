@@ -863,10 +863,7 @@ struct EditorSettingsPanel: View {
                 
                     Button(^String.Titles.apply) {
                         drawingState.confirmTextBoxCreation()
-                        // После apply, если инструмент textBox все еще выбран, автоматически начинаем создание нового
-                        if drawingState.currentTool == .textBox {
-                            drawingState.startCreatingTextBox()
-                        }
+                        drawingState.currentTool = .cursor
                     }
                     .buttonStyle(.borderedProminent)
                     .frame(maxWidth: .infinity)
@@ -1026,12 +1023,8 @@ struct EditorSettingsPanel: View {
                     .frame(maxWidth: .infinity)
                     
                     Button(^String.Titles.apply) {
-                        // Изменения уже применены, просто убираем выделение
                         drawingState.selectedTextBoxId = nil
-                        // После apply, если инструмент textBox все еще выбран, автоматически начинаем создание нового
-                        if drawingState.currentTool == .textBox {
-                            drawingState.startCreatingTextBox()
-                        }
+                        drawingState.currentTool = .cursor
                     }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
@@ -1269,7 +1262,10 @@ struct DrawingCanvasView: View {
             return distanceToPolygonOrPolyline(point, object.positions, closed: false) < 15
         case .curvedArrow:
             guard object.positions.count >= 2 else { return false }
-            return distanceFromPointToSegment(point, object.positions[0], object.positions[1]) < 20
+            let start = object.positions[0]
+            let end = object.positions[1]
+            let control = effectiveControlPointForCurvedArrow(object)
+            return distanceFromPointToQuadCurve(point, start: start, control: control, end: end) < 20
         case .objectHighlight:
             guard let p = object.positions.first else { return false }
             let r = object.radius
@@ -1328,6 +1324,24 @@ struct DrawingCanvasView: View {
         let t = max(0, min(1, (apx * abx + apy * aby) / abLenSq))
         let proj = CGPoint(x: a.x + t * abx, y: a.y + t * aby)
         return hypot(p.x - proj.x, p.y - proj.y)
+    }
+    
+    /// Минимальное расстояние от точки до квадратичной кривой Безье (start → control → end). Используется для hit-test закруглённой стрелки.
+    private func distanceFromPointToQuadCurve(_ point: CGPoint, start: CGPoint, control: CGPoint, end: CGPoint) -> CGFloat {
+        let steps = 32
+        var minD: CGFloat = .greatestFiniteMagnitude
+        var prev = start
+        for i in 1...steps {
+            let t = CGFloat(i) / CGFloat(steps)
+            let mt = 1 - t
+            let pt = CGPoint(
+                x: mt*mt*start.x + 2*mt*t*control.x + t*t*end.x,
+                y: mt*mt*start.y + 2*mt*t*control.y + t*t*end.y
+            )
+            minD = min(minD, distanceFromPointToSegment(point, prev, pt))
+            prev = pt
+        }
+        return minD
     }
     
     private func handleShapeInteraction(value: DragGesture.Value, shape: EditorShape, drawingState: EditorDrawingState, geometry: GeometryProxy, isPending: Bool) {
