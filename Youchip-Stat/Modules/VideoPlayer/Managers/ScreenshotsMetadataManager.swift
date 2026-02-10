@@ -59,7 +59,8 @@ class ScreenshotsMetadataManager: ObservableObject {
             createdAt: updatedScreenshot.createdAt,
             saveAsTag: updatedScreenshot.saveAsTag,
             displayDuration: updatedScreenshot.displayDuration,
-            relatedStampIds: relatedStampIds
+            relatedStampIds: relatedStampIds,
+            editorState: updatedScreenshot.editorState
         )
         screenshots[index] = updatedScreenshot
         

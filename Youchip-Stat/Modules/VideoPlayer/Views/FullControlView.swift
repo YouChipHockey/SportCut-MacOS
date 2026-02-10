@@ -2208,6 +2208,10 @@ struct ScreenshotMarkersView: View {
             .help("Перейти к скриншоту: \(formatTime(screenshot.videoTime))")
             .padding(.bottom, 2)
             .contextMenu {
+                Button("Редактировать") {
+                    openScreenshotInEditor(screenshot)
+                }
+                
                 let availableStamps = getAvailableStampsForScreenshot(screenshot)
                 if !availableStamps.isEmpty {
                     Button("Редактировать привязанные теги") {
@@ -2342,6 +2346,20 @@ struct ScreenshotMarkersView: View {
         
         // Удаляем из менеджера
         screenshotsManager.removeScreenshot(screenshotName: screenshot.screenshotName)
+    }
+    
+    /// Перематывает видео на момент скриншота и открывает редактор с восстановлением состояния из метаданных (все объекты снова редактируемые).
+    private func openScreenshotInEditor(_ screenshot: ScreenshotMetadata) {
+        guard let filesFile = getCurrentFile() else {
+            print("❌ Не найден текущий файл для открытия редактора")
+            return
+        }
+        let payload = OpenEditorForScreenshotPayload(
+            screenshot: screenshot,
+            screenshotsFolder: filesFile.screenshotsFolder,
+            videoId: filesFile.videoData.id
+        )
+        NotificationCenter.default.post(name: .openEditorForScreenshot, object: payload)
     }
     
     private func deleteScreenshotStampFromTimeline(screenshotName: String) {

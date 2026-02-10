@@ -61,7 +61,7 @@ struct VideoPlayerView: View {
         if isEditor {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 guard let window = WindowsManager.shared.videoWindow?.window else { return }
-                
+                window.makeKeyAndOrderFront(nil)
                 viewModel.action.send(.saveWindowFrame(CGRect(origin: window.frame.origin, size: window.frame.size)))
                 let targetFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
                 window.setFrame(targetFrame, display: true, animate: true)
@@ -207,8 +207,8 @@ struct VideoPlayerView: View {
             }
             .keyboardShortcut(.escape, modifiers: [])
             
-            // Show "Сохранить на тег" button only if there are intersecting stamps
-            if !viewModel.getIntersectingStamps().isEmpty {
+            // «Сохранить на тег» только при создании нового рисунка; при повторном редактировании — только замена текущего
+            if !viewModel.state.isEditingExistingScreenshot && !viewModel.getIntersectingStamps().isEmpty {
                 Button(^String.Titles.editorSaveToTag) {
                     viewModel.action.send(.showTagSelectionSheet(show: true))
                 }
