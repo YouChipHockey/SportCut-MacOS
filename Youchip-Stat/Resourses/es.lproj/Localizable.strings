@@ -670,3 +670,57 @@
 "EditorShapeCircle" = "Círculo";
 "EditorShapeStar" = "Estrella";
 "EditorShapeHexagon" = "Hexágono";
+
+// Data Sync & Backup
+"DataManagementTitle" = "Gestión de Datos";
+"DataManagementBackupSystemInfo" = "Acerca del Sistema de Respaldo";
+"DataManagementBackupSystemDescription" = "Todos sus datos se guardan automáticamente en dos ubicaciones:";
+"DataManagementDocumentsTitle" = "Documents";
+"DataManagementDocumentsDescription" = "Almacenamiento principal";
+"DataManagementDocumentsHelp" = "Haga clic para abrir la carpeta Documents en Finder";
+"DataManagementApplicationSupportTitle" = "Application Support";
+"DataManagementApplicationSupportDescription" = "Copia de respaldo";
+"DataManagementApplicationSupportHelp" = "Haga clic para abrir la carpeta Application Support en Finder";
+"DataManagementBackupNote" = "La copia de respaldo se conserva incluso cuando se elimina la aplicación y se restaura en el próximo inicio.";
+"DataManagementRestoreFromBackup" = "Restaurar desde Respaldo";
+"DataManagementRestoreFromBackupDescription" = "Restaurar datos desde Application Support";
+"DataManagementCreateBackup" = "Crear Respaldo";
+"DataManagementCreateBackupDescription" = "Guardar datos actuales en almacenamiento de respaldo";
+"DataManagementCheckOrphanedTimelines" = "Verificar Líneas de Tiempo Guardadas";
+"DataManagementCheckOrphanedTimelinesDescription" = "Encontrar líneas de tiempo sin videos vinculados";
+"DataManagementDeleteAllData" = "Eliminar Todos los Datos";
+"DataManagementDeleteAllDataDescription" = "Eliminar completamente todos los datos del usuario";
+"DataManagementProcessing" = "Procesando...";
+"DataManagementRestoreConfirmationTitle" = "¿Restaurar Datos?";
+"DataManagementRestoreConfirmationMessage" = "Los datos actuales serán reemplazados por los datos del respaldo.";
+"DataManagementDeleteConfirmationTitle" = "¿Eliminar Todos los Datos?";
+"DataManagementDeleteConfirmationMessage" = "Esta acción es irreversible. Todos sus videos, colecciones y configuraciones serán eliminados de ambos almacenamientos.";
+"DataManagementBackupCreatedSuccess" = "✅ Respaldo creado exitosamente";
+"DataManagementRestoreSuccess" = "✅ Datos restaurados exitosamente desde el respaldo.\n\nReinicie la aplicación para aplicar los cambios.";
+"DataManagementDeleteSuccess" = "✅ Todos los datos (incluyendo líneas de tiempo) eliminados exitosamente.\n\nReinicie la aplicación.";
+"DataManagementNoOrphanedTimelines" = "No Hay Líneas de Tiempo Guardadas";
+"DataManagementAllTimelinesLinked" = "Todas las líneas de tiempo están vinculadas a videos";
+
+// Orphaned Timelines Recovery
+"OrphanedTimelinesTitle" = "Líneas de Tiempo Guardadas Encontradas";
+"OrphanedTimelinesFound" = "Encontradas líneas de tiempo sin videos vinculados: %d";
+"OrphanedTimelinesInstructions" = "Seleccione archivos de video para restaurar líneas de tiempo o omita las innecesarias.";
+"OrphanedTimelinesSkipAll" = "Omitir Todo";
+"OrphanedTimelinesRestoreSelected" = "Restaurar Seleccionadas";
+"OrphanedTimelinesRestoring" = "Restaurando %d de %d...";
+"OrphanedTimelinesRestoreSuccess" = "Restauración Completa";
+"OrphanedTimelinesRestoreSuccessMessage" = "Líneas de tiempo restauradas exitosamente: %d";
+"OrphanedTimelinesSelectVideo" = "Seleccionar Video";
+"OrphanedTimelinesChangeVideo" = "Cambiar Video";
+"OrphanedTimelinesDelete" = "Eliminar";
+"OrphanedTimelinesDeleteConfirmationTitle" = "¿Eliminar Línea de Tiempo?";
+"OrphanedTimelinesDeleteConfirmationMessage" = "La línea de tiempo será eliminada del respaldo. Esta acción no se puede deshacer.";
+"OrphanedTimelinesDeleteHelp" = "Eliminar línea de tiempo del respaldo";
+"OrphanedTimelinesUnknownVideo" = "Video Desconocido";
+"OrphanedTimelinesSaved" = "Guardado: %@";
+"OrphanedTimelinesTimelineSingular" = "1 línea de tiempo";
+"OrphanedTimelinesTimelinePlural24" = "%d líneas de tiempo";
+"OrphanedTimelinesTimelinePlural5Plus" = "%d líneas de tiempo";
+"OrphanedTimelinesStampsSingular" = "1 marca";
+"OrphanedTimelinesStampsPlural24" = "%d marcas";
+"OrphanedTimelinesStampsPlural5Plus" = "%d marcas";

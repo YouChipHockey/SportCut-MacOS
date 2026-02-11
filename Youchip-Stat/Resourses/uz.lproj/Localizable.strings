@@ -670,3 +670,57 @@
 "EditorShapeCircle" = "Doira";
 "EditorShapeStar" = "Yulduz";
 "EditorShapeHexagon" = "Oltiburchak";
+
+// Data Sync & Backup
+"DataManagementTitle" = "Ma'lumotlarni Boshqarish";
+"DataManagementBackupSystemInfo" = "Zaxiralash Tizimi Haqida";
+"DataManagementBackupSystemDescription" = "Barcha ma'lumotlaringiz avtomatik ravishda ikki joyda saqlanadi:";
+"DataManagementDocumentsTitle" = "Documents";
+"DataManagementDocumentsDescription" = "Asosiy ombor";
+"DataManagementDocumentsHelp" = "Finder'da Documents papkasini ochish uchun bosing";
+"DataManagementApplicationSupportTitle" = "Application Support";
+"DataManagementApplicationSupportDescription" = "Zaxira nusxasi";
+"DataManagementApplicationSupportHelp" = "Finder'da Application Support papkasini ochish uchun bosing";
+"DataManagementBackupNote" = "Zaxira nusxasi ilova o'chirilganda ham saqlanadi va keyingi ishga tushirishda tiklanadi.";
+"DataManagementRestoreFromBackup" = "Zaxiradan Tiklash";
+"DataManagementRestoreFromBackupDescription" = "Application Support'dan ma'lumotlarni tiklash";
+"DataManagementCreateBackup" = "Zaxira Yaratish";
+"DataManagementCreateBackupDescription" = "Joriy ma'lumotlarni zaxira omboriga saqlash";
+"DataManagementCheckOrphanedTimelines" = "Saqlangan Vaqt Chiziqlarini Tekshirish";
+"DataManagementCheckOrphanedTimelinesDescription" = "Bog'langan videosiz vaqt chiziqlarini topish";
+"DataManagementDeleteAllData" = "Barcha Ma'lumotlarni O'chirish";
+"DataManagementDeleteAllDataDescription" = "Foydalanuvchi ma'lumotlarini to'liq o'chirish";
+"DataManagementProcessing" = "Qayta ishlanmoqda...";
+"DataManagementRestoreConfirmationTitle" = "Ma'lumotlarni Tiklash?";
+"DataManagementRestoreConfirmationMessage" = "Joriy ma'lumotlar zaxira ma'lumotlari bilan almashtiriladi.";
+"DataManagementDeleteConfirmationTitle" = "Barcha Ma'lumotlarni O'chirish?";
+"DataManagementDeleteConfirmationMessage" = "Bu harakat qaytarib bo'lmaydi. Barcha videolar, kolleksiyalar va sozlamalar ikkala ombordan ham o'chiriladi.";
+"DataManagementBackupCreatedSuccess" = "✅ Zaxira muvaffaqiyatli yaratildi";
+"DataManagementRestoreSuccess" = "✅ Ma'lumotlar zaxiradan muvaffaqiyatli tiklandi.\n\nO'zgarishlarni qo'llash uchun ilovani qayta ishga tushiring.";
+"DataManagementDeleteSuccess" = "✅ Barcha ma'lumotlar (vaqt chiziqlari bilan) muvaffaqiyatli o'chirildi.\n\nIlovani qayta ishga tushiring.";
+"DataManagementNoOrphanedTimelines" = "Saqlangan Vaqt Chiziqlari Yo'q";
+"DataManagementAllTimelinesLinked" = "Barcha vaqt chiziqlari videolarga bog'langan";
+
+// Orphaned Timelines Recovery
+"OrphanedTimelinesTitle" = "Saqlangan Vaqt Chiziqlari Topildi";
+"OrphanedTimelinesFound" = "Bog'langan videosiz vaqt chiziqlari topildi: %d";
+"OrphanedTimelinesInstructions" = "Vaqt chiziqlarini tiklash uchun video fayllarni tanlang yoki keraksizlarini o'tkazib yuboring.";
+"OrphanedTimelinesSkipAll" = "Hammasini O'tkazib Yuborish";
+"OrphanedTimelinesRestoreSelected" = "Tanlanganlarni Tiklash";
+"OrphanedTimelinesRestoring" = "%d dan %d tiklanmoqda...";
+"OrphanedTimelinesRestoreSuccess" = "Tiklanish Tugadi";
+"OrphanedTimelinesRestoreSuccessMessage" = "Muvaffaqiyatli tiklandi vaqt chiziqlari: %d";
+"OrphanedTimelinesSelectVideo" = "Videoni Tanlash";
+"OrphanedTimelinesChangeVideo" = "Videoni O'zgartirish";
+"OrphanedTimelinesDelete" = "O'chirish";
+"OrphanedTimelinesDeleteConfirmationTitle" = "Vaqt Chizig'ini O'chirish?";
+"OrphanedTimelinesDeleteConfirmationMessage" = "Vaqt chizig'i zaxiradan o'chiriladi. Bu harakatni bekor qilib bo'lmaydi.";
+"OrphanedTimelinesDeleteHelp" = "Vaqt chizig'ini zaxiradan o'chirish";
+"OrphanedTimelinesUnknownVideo" = "Noma'lum Video";
+"OrphanedTimelinesSaved" = "Saqlangan: %@";
+"OrphanedTimelinesTimelineSingular" = "1 vaqt chizig'i";
+"OrphanedTimelinesTimelinePlural24" = "%d vaqt chizig'i";
+"OrphanedTimelinesTimelinePlural5Plus" = "%d vaqt chizig'i";
+"OrphanedTimelinesStampsSingular" = "1 belgi";
+"OrphanedTimelinesStampsPlural24" = "%d belgi";
+"OrphanedTimelinesStampsPlural5Plus" = "%d belgi";

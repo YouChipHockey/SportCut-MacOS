@@ -374,6 +374,8 @@ class CustomCollectionManager: ObservableObject {
             }
             changedTags.removeAll()
             
+            DataSyncManager.shared.backupToApplicationSupport()
+            
             return true
         } catch {
             print("SAVE ERROR:", error.localizedDescription)
@@ -632,6 +634,8 @@ class CustomCollectionManager: ObservableObject {
             let data = try JSONEncoder().encode(updatedField)
             try data.write(to: playFieldDataPath)
             
+            DataSyncManager.shared.backupToApplicationSupport()
+            
             return true
         } catch {
             return false
@@ -716,6 +720,8 @@ class CustomCollectionManager: ObservableObject {
                     imageBookmark: imageBookmark
                 )
             }
+            
+            DataSyncManager.shared.backupToApplicationSupport()
             
             return true
         } catch {

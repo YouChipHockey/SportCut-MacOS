@@ -670,3 +670,57 @@
 "EditorShapeCircle" = "圆形";
 "EditorShapeStar" = "星形";
 "EditorShapeHexagon" = "六边形";
+
+// Data Sync & Backup
+"DataManagementTitle" = "数据管理";
+"DataManagementBackupSystemInfo" = "关于备份系统";
+"DataManagementBackupSystemDescription" = "您的所有数据自动保存在两个位置：";
+"DataManagementDocumentsTitle" = "Documents";
+"DataManagementDocumentsDescription" = "主存储";
+"DataManagementDocumentsHelp" = "点击在 Finder 中打开 Documents 文件夹";
+"DataManagementApplicationSupportTitle" = "Application Support";
+"DataManagementApplicationSupportDescription" = "备份副本";
+"DataManagementApplicationSupportHelp" = "点击在 Finder 中打开 Application Support 文件夹";
+"DataManagementBackupNote" = "即使删除应用程序，备份副本也会保留，并在下次启动时恢复。";
+"DataManagementRestoreFromBackup" = "从备份恢复";
+"DataManagementRestoreFromBackupDescription" = "从 Application Support 恢复数据";
+"DataManagementCreateBackup" = "创建备份";
+"DataManagementCreateBackupDescription" = "将当前数据保存到备份存储";
+"DataManagementCheckOrphanedTimelines" = "检查保存的时间线";
+"DataManagementCheckOrphanedTimelinesDescription" = "查找没有链接视频的时间线";
+"DataManagementDeleteAllData" = "删除所有数据";
+"DataManagementDeleteAllDataDescription" = "完全删除所有用户数据";
+"DataManagementProcessing" = "处理中...";
+"DataManagementRestoreConfirmationTitle" = "恢复数据？";
+"DataManagementRestoreConfirmationMessage" = "当前数据将被备份数据替换。";
+"DataManagementDeleteConfirmationTitle" = "删除所有数据？";
+"DataManagementDeleteConfirmationMessage" = "此操作不可逆。您的所有视频、收藏和设置将从两个存储中删除。";
+"DataManagementBackupCreatedSuccess" = "✅ 备份创建成功";
+"DataManagementRestoreSuccess" = "✅ 从备份成功恢复数据。\n\n请重启应用程序以应用更改。";
+"DataManagementDeleteSuccess" = "✅ 所有数据（包括时间线）已成功删除。\n\n请重启应用程序。";
+"DataManagementNoOrphanedTimelines" = "没有保存的时间线";
+"DataManagementAllTimelinesLinked" = "所有时间线都已链接到视频";
+
+// Orphaned Timelines Recovery
+"OrphanedTimelinesTitle" = "发现保存的时间线";
+"OrphanedTimelinesFound" = "找到没有链接视频的时间线：%d";
+"OrphanedTimelinesInstructions" = "选择视频文件以恢复时间线或跳过不必要的。";
+"OrphanedTimelinesSkipAll" = "全部跳过";
+"OrphanedTimelinesRestoreSelected" = "恢复选中的";
+"OrphanedTimelinesRestoring" = "正在恢复 %d / %d...";
+"OrphanedTimelinesRestoreSuccess" = "恢复完成";
+"OrphanedTimelinesRestoreSuccessMessage" = "成功恢复时间线：%d";
+"OrphanedTimelinesSelectVideo" = "选择视频";
+"OrphanedTimelinesChangeVideo" = "更改视频";
+"OrphanedTimelinesDelete" = "删除";
+"OrphanedTimelinesDeleteConfirmationTitle" = "删除时间线？";
+"OrphanedTimelinesDeleteConfirmationMessage" = "时间线将从备份中删除。此操作无法撤销。";
+"OrphanedTimelinesDeleteHelp" = "从备份中删除时间线";
+"OrphanedTimelinesUnknownVideo" = "未知视频";
+"OrphanedTimelinesSaved" = "已保存：%@";
+"OrphanedTimelinesTimelineSingular" = "1 条时间线";
+"OrphanedTimelinesTimelinePlural24" = "%d 条时间线";
+"OrphanedTimelinesTimelinePlural5Plus" = "%d 条时间线";
+"OrphanedTimelinesStampsSingular" = "1 个标记";
+"OrphanedTimelinesStampsPlural24" = "%d 个标记";
+"OrphanedTimelinesStampsPlural5Plus" = "%d 个标记";

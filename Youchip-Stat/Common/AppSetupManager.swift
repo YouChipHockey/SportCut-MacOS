@@ -14,6 +14,7 @@ import FirebaseInstallations
 class AppSetupManager {
     
     class func setup() {
+        DataSyncManager.shared.synchronizeOnAppLaunch()
         FirebaseApp.configure()
         setupMenu()
         setupBaseAppearence()

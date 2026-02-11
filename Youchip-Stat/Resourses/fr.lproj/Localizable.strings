@@ -670,3 +670,57 @@
 "EditorShapeCircle" = "Cercle";
 "EditorShapeStar" = "Étoile";
 "EditorShapeHexagon" = "Hexagone";
+
+// Data Sync & Backup
+"DataManagementTitle" = "Gestion des Données";
+"DataManagementBackupSystemInfo" = "À propos du Système de Sauvegarde";
+"DataManagementBackupSystemDescription" = "Toutes vos données sont automatiquement sauvegardées à deux emplacements:";
+"DataManagementDocumentsTitle" = "Documents";
+"DataManagementDocumentsDescription" = "Stockage principal";
+"DataManagementDocumentsHelp" = "Cliquez pour ouvrir le dossier Documents dans Finder";
+"DataManagementApplicationSupportTitle" = "Application Support";
+"DataManagementApplicationSupportDescription" = "Copie de sauvegarde";
+"DataManagementApplicationSupportHelp" = "Cliquez pour ouvrir le dossier Application Support dans Finder";
+"DataManagementBackupNote" = "La copie de sauvegarde est conservée même lorsque l'application est supprimée et restaurée au prochain lancement.";
+"DataManagementRestoreFromBackup" = "Restaurer depuis la Sauvegarde";
+"DataManagementRestoreFromBackupDescription" = "Restaurer les données depuis Application Support";
+"DataManagementCreateBackup" = "Créer une Sauvegarde";
+"DataManagementCreateBackupDescription" = "Enregistrer les données actuelles dans le stockage de sauvegarde";
+"DataManagementCheckOrphanedTimelines" = "Vérifier les Chronologies Sauvegardées";
+"DataManagementCheckOrphanedTimelinesDescription" = "Trouver les chronologies sans vidéos liées";
+"DataManagementDeleteAllData" = "Supprimer Toutes les Données";
+"DataManagementDeleteAllDataDescription" = "Supprimer complètement toutes les données utilisateur";
+"DataManagementProcessing" = "Traitement...";
+"DataManagementRestoreConfirmationTitle" = "Restaurer les Données?";
+"DataManagementRestoreConfirmationMessage" = "Les données actuelles seront remplacées par les données de la sauvegarde.";
+"DataManagementDeleteConfirmationTitle" = "Supprimer Toutes les Données?";
+"DataManagementDeleteConfirmationMessage" = "Cette action est irréversible. Toutes vos vidéos, collections et paramètres seront supprimés des deux stockages.";
+"DataManagementBackupCreatedSuccess" = "✅ Sauvegarde créée avec succès";
+"DataManagementRestoreSuccess" = "✅ Données restaurées avec succès depuis la sauvegarde.\n\nRedémarrez l'application pour appliquer les modifications.";
+"DataManagementDeleteSuccess" = "✅ Toutes les données (y compris les chronologies) supprimées avec succès.\n\nRedémarrez l'application.";
+"DataManagementNoOrphanedTimelines" = "Aucune Chronologie Sauvegardée";
+"DataManagementAllTimelinesLinked" = "Toutes les chronologies sont liées aux vidéos";
+
+// Orphaned Timelines Recovery
+"OrphanedTimelinesTitle" = "Chronologies Sauvegardées Trouvées";
+"OrphanedTimelinesFound" = "Trouvé des chronologies sans vidéos liées: %d";
+"OrphanedTimelinesInstructions" = "Sélectionnez les fichiers vidéo pour restaurer les chronologies ou ignorez ceux qui ne sont pas nécessaires.";
+"OrphanedTimelinesSkipAll" = "Tout Ignorer";
+"OrphanedTimelinesRestoreSelected" = "Restaurer les Sélectionnées";
+"OrphanedTimelinesRestoring" = "Restauration de %d sur %d...";
+"OrphanedTimelinesRestoreSuccess" = "Restauration Terminée";
+"OrphanedTimelinesRestoreSuccessMessage" = "Chronologies restaurées avec succès: %d";
+"OrphanedTimelinesSelectVideo" = "Sélectionner une Vidéo";
+"OrphanedTimelinesChangeVideo" = "Changer la Vidéo";
+"OrphanedTimelinesDelete" = "Supprimer";
+"OrphanedTimelinesDeleteConfirmationTitle" = "Supprimer la Chronologie?";
+"OrphanedTimelinesDeleteConfirmationMessage" = "La chronologie sera supprimée de la sauvegarde. Cette action ne peut pas être annulée.";
+"OrphanedTimelinesDeleteHelp" = "Supprimer la chronologie de la sauvegarde";
+"OrphanedTimelinesUnknownVideo" = "Vidéo Inconnue";
+"OrphanedTimelinesSaved" = "Enregistré: %@";
+"OrphanedTimelinesTimelineSingular" = "1 chronologie";
+"OrphanedTimelinesTimelinePlural24" = "%d chronologies";
+"OrphanedTimelinesTimelinePlural5Plus" = "%d chronologies";
+"OrphanedTimelinesStampsSingular" = "1 tampon";
+"OrphanedTimelinesStampsPlural24" = "%d tampons";
+"OrphanedTimelinesStampsPlural5Plus" = "%d tampons";

@@ -89,6 +89,7 @@ class VideoFilesManager {
     func refreshFiles() -> [FilesFile] {
         readFiles()
         filterFiles()
+        updateFiles?(files) // Notify UI about file list update
         return files
     }
     
@@ -129,6 +130,14 @@ class VideoFilesManager {
             }
             return
         }
+        
+        // IMPORTANT: Backup timeline BEFORE deleting video
+        // This allows restoring timeline even after repeated deletion
+        let videoDataToBackup = videosData[bookmarkIndex]
+        if !videoDataToBackup.timelines.isEmpty {
+            DataSyncManager.shared.backupTimelinesForVideo(videoDataToBackup)
+        }
+        
         videosData.remove(at: bookmarkIndex)
         files.remove(at: fileIndex)
         saveBookmarks()
@@ -223,6 +232,8 @@ class VideoFilesManager {
         do {
             let encoded = try JSONEncoder().encode(videosData)
             UserDefaults.standard.set(encoded, forKey: "videosData")
+            
+            DataSyncManager.shared.backupToApplicationSupport()
         } catch {
             print("\(^String.Titles.fileManagerErrorEncoding) \(error)")
         }

@@ -19,6 +19,7 @@ struct VideosView: View {
     @State private var searchText: String = ""
     @State private var selectedFilter: VideoFilter = .all
     @State private var showImportCollectionSheet = false
+    @State private var showDataManagementSheet = false
     @StateObject private var importManager = CollectionImportManager()
     
     enum VideoFilter: String, CaseIterable {
@@ -115,6 +116,9 @@ struct VideosView: View {
         .sheet(isPresented: $viewModel.state.showDownloadFromURLSheet) {
             VideoDownloadFromURLView()
                 .environmentObject(viewModel)
+        }
+        .sheet(isPresented: $showDataManagementSheet) {
+            DataManagementSheet()
         }
         .alert(^String.Titles.videoUnavailable, isPresented: $viewModel.state.showRebindAlert) {
             Button(^String.Titles.cancelButtonTitle, role: .cancel) {
@@ -423,6 +427,27 @@ struct VideosView: View {
                                 : Color.orange.opacity(0.3), 
                             lineWidth: 1
                         )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            Button(action: {
+                showDataManagementSheet = true
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "externaldrive.fill")
+                        .font(.system(size: 14))
+                    Text(^String.Titles.dataManagementTitle)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                 )
             }
             .buttonStyle(PlainButtonStyle())
