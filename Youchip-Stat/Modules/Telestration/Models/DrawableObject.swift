@@ -55,4 +55,22 @@ struct DrawableObject: Identifiable {
         self.controlPoint = other.controlPoint
         self.strokeWidth = other.strokeWidth
     }
+    
+    /// Восстановление из снимка редактора (с заданным id и всеми параметрами).
+    init(id: UUID, number: Int, type: ObjectType, positions: [CGPoint] = [], edgeColor: Color = .red, vertexColor: Color = .red, fillColor: Color = .red, lineStyle: LineStyle = .solid, glowColor: Color = .white, glowOpacity: Double = 0.5, radius: CGFloat = 30, curveHeight: CGFloat = 0, controlPoint: CGPoint? = nil, strokeWidth: CGFloat = 2) {
+        self.id = id
+        self.number = number
+        self.type = type
+        self.positions = positions
+        self.edgeColor = edgeColor
+        self.vertexColor = vertexColor
+        self.fillColor = fillColor
+        self.lineStyle = lineStyle
+        self.glowColor = glowColor
+        self.glowOpacity = glowOpacity
+        self.radius = radius
+        self.curveHeight = curveHeight
+        self.controlPoint = controlPoint
+        self.strokeWidth = strokeWidth
+    }
 }

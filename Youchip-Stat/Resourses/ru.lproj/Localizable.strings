@@ -696,6 +696,7 @@
 "EditorShapeCircle" = "Круг"; // ^String.Titles.editorShapeCircle
 "EditorShapeStar" = "Звезда"; // ^String.Titles.editorShapeStar
 "EditorShapeHexagon" = "Шестиугольник"; // ^String.Titles.editorShapeHexagon
+"FullControlButtonExportDrawings" = "Экспорт Рисунков";  // ^String.Titles.fullControlButtonExportDrawings
 
 // Data Sync & Backup
 "DataManagementTitle" = "Управление данными";
@@ -750,3 +751,4 @@
 "OrphanedTimelinesStampsSingular" = "1 метка";
 "OrphanedTimelinesStampsPlural24" = "%d метки";
 "OrphanedTimelinesStampsPlural5Plus" = "%d меток";
+

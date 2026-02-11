@@ -109,6 +109,17 @@ class VideoPlayerViewModel: ObservableObject {
                 }
             }
         }
+        
+        NotificationCenter.default.addObserver(
+            forName: .openEditorForScreenshot,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let payload = notification.object as? OpenEditorForScreenshotPayload,
+                  payload.videoId == self.videoId else { return }
+            self.openEditorForScreenshot(payload: payload)
+        }
     }
     
     private func setupScreenshotTimeObserver() {
@@ -553,6 +564,50 @@ class VideoPlayerViewModel: ObservableObject {
         }
     }
     
+    /// Открыть редактор для ранее сохранённого скриншота: перемотка на videoTime, кадр с видео как чистая основа, поверх — объекты из метаданных.
+    private func openEditorForScreenshot(payload: OpenEditorForScreenshotPayload) {
+        let screenshot = payload.screenshot
+        let name = screenshot.screenshotName.hasSuffix(".png") ? String(screenshot.screenshotName.dropLast(4)) : screenshot.screenshotName
+        
+        guard let player = VideoPlayerManager.shared.player,
+              let asset = player.currentItem?.asset else {
+            print("❌ Нет воспроизведения видео для кадра при повторном редактировании")
+            return
+        }
+        
+        VideoPlayerManager.shared.seek(to: screenshot.videoTime)
+        VideoPlayerManager.shared.player?.pause()
+        
+        // База — кадр с видео в момент времени рисунка, не сохранённая картинка (без наложенных объектов)
+        let time = CMTime(seconds: screenshot.videoTime, preferredTimescale: 600)
+        let imageGenerator = AVAssetImageGenerator(asset: asset)
+        imageGenerator.appliesPreferredTrackTransform = true
+        imageGenerator.requestedTimeToleranceBefore = .zero
+        imageGenerator.requestedTimeToleranceAfter = .zero
+        
+        guard let cgImage = try? imageGenerator.copyCGImage(at: time, actualTime: nil) else {
+            print("❌ Не удалось получить кадр видео для редактирования")
+            return
+        }
+        let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        
+        state.tempScreenshotImage = image
+        state.editorScreenshotName = name
+        state.editorScreenshotVideoTime = screenshot.videoTime
+        state.editorDisplayDuration = screenshot.displayDuration
+        state.isEditingExistingScreenshot = true
+        state.editorDrawingState.clearDrawing()
+        
+        if let editorState = screenshot.editorState {
+            editorState.apply(to: state.editorDrawingState)
+        } else {
+            state.editorDrawingState.currentTool = .pencil
+        }
+        
+        state.isEditorMode = true
+        NotificationCenter.default.post(name: .editorModeChanged, object: true)
+    }
+    
     // MARK: - Editor Mode
     
     private func handleCancelEditor() {
@@ -577,6 +632,7 @@ class VideoPlayerViewModel: ObservableObject {
         }
         
         state.isEditorMode = false
+        state.isEditingExistingScreenshot = false
         state.editorScreenshotName = ""
         state.editorSaveAsTag = false
         state.tempScreenshotImage = nil
@@ -598,31 +654,44 @@ class VideoPlayerViewModel: ObservableObject {
         
         let currentVideoTime = state.editorScreenshotVideoTime
         let screenshotsFolder = filesFile.screenshotsFolder
+        let nameNorm = state.editorScreenshotName.replacingOccurrences(of: ".png", with: "")
         let fileName = state.editorScreenshotName.hasSuffix(".png") ? state.editorScreenshotName : "\(state.editorScreenshotName).png"
         let fileURL = screenshotsFolder.appendingPathComponent(fileName)
         
         let finalImage = mergeDrawingWithImage(baseImage: nsImage, drawingState: state.editorDrawingState)
+        let editorSnapshot = EditorStateSnapshot.from(drawingState: state.editorDrawingState)
         
-        if let imageData = finalImage.pngData() {
-            try? imageData.write(to: fileURL)
-            state.screenshotImage = fileURL
-            
-            // Create a tag on Screenshots timeline and get its stamp ID
+        if state.isEditingExistingScreenshot {
+            // Обновление существующего рисунка: перезапись файла, метаданные с сохранением привязок, без нового тега
+            if let imageData = finalImage.pngData() {
+                try? imageData.write(to: fileURL)
+            }
+            updateExistingScreenshotMetadata(
+                screenshotName: nameNorm,
+                displayDuration: state.editorDisplayDuration,
+                editorState: editorSnapshot,
+                screenshotsFolder: screenshotsFolder
+            )
+            ScreenshotsMetadataManager.shared.loadScreenshots(from: screenshotsFolder)
+        } else {
+            // Новый рисунок: сохраняем картинку, создаём тег, пишем метаданные
+            if let imageData = finalImage.pngData() {
+                try? imageData.write(to: fileURL)
+                state.screenshotImage = fileURL
+            }
             let createdStampId = addScreenshotAsTag(
                 screenshotName: state.editorScreenshotName,
                 videoTime: currentVideoTime
             )
-            
-            // Save metadata with the created tag automatically linked
             let relatedStampIds = createdStampId != nil ? [createdStampId!] : []
             saveScreenshotMetadata(
                 screenshotName: state.editorScreenshotName,
                 videoTime: currentVideoTime,
                 displayDuration: state.editorDisplayDuration,
                 relatedStampIds: relatedStampIds,
-                screenshotsFolder: screenshotsFolder
+                screenshotsFolder: screenshotsFolder,
+                editorState: editorSnapshot
             )
-            
             ScreenshotsMetadataManager.shared.loadScreenshots(from: screenshotsFolder)
         }
         
@@ -650,6 +719,11 @@ class VideoPlayerViewModel: ObservableObject {
     }
     
     private func handleSaveEditorWithTags(_ selectedStamps: [TimelineStamp]) {
+        if state.isEditingExistingScreenshot {
+            state.showTagSelectionSheet = false
+            handleSaveEditor()
+            return
+        }
         guard let nsImage = state.tempScreenshotImage,
               let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId }) else {
             handleCancelEditor()
@@ -680,12 +754,14 @@ class VideoPlayerViewModel: ObservableObject {
                 stampIds.insert(createdId, at: 0)
             }
             
+            let editorSnapshot = EditorStateSnapshot.from(drawingState: state.editorDrawingState)
             saveScreenshotMetadata(
                 screenshotName: state.editorScreenshotName,
                 videoTime: currentVideoTime,
                 displayDuration: state.editorDisplayDuration,
                 relatedStampIds: stampIds,
-                screenshotsFolder: screenshotsFolder
+                screenshotsFolder: screenshotsFolder,
+                editorState: editorSnapshot
             )
             
             ScreenshotsMetadataManager.shared.loadScreenshots(from: screenshotsFolder)
@@ -741,7 +817,7 @@ class VideoPlayerViewModel: ObservableObject {
         return stamps
     }
     
-    private func saveScreenshotMetadata(screenshotName: String, videoTime: Double, displayDuration: Double, relatedStampIds: [UUID], screenshotsFolder: URL) {
+    private func saveScreenshotMetadata(screenshotName: String, videoTime: Double, displayDuration: Double, relatedStampIds: [UUID], screenshotsFolder: URL, editorState: EditorStateSnapshot? = nil) {
         print("💾 Сохранение метаданных скриншота '\(screenshotName)' с displayDuration = \(displayDuration) секунд")
         
         let metadata = ScreenshotMetadata(
@@ -750,7 +826,8 @@ class VideoPlayerViewModel: ObservableObject {
             createdAt: Date(),
             saveAsTag: false, // No longer used but kept for backward compatibility
             displayDuration: displayDuration,
-            relatedStampIds: relatedStampIds
+            relatedStampIds: relatedStampIds,
+            editorState: editorState
         )
         
         let metadataFileName = "\(screenshotName).json"
@@ -764,6 +841,53 @@ class VideoPlayerViewModel: ObservableObject {
             print("✅ Метаданные успешно сохранены: \(metadataURL.path)")
         } catch {
             print("❌ Error saving screenshot metadata: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Обновление метаданных существующего рисунка: сохраняем привязки и время, обновляем displayDuration и editorState.
+    private func updateExistingScreenshotMetadata(screenshotName: String, displayDuration: Double, editorState: EditorStateSnapshot?, screenshotsFolder: URL) {
+        let nameNorm = screenshotName.replacingOccurrences(of: ".png", with: "")
+        let metadataURL = screenshotsFolder.appendingPathComponent("\(nameNorm).json")
+        
+        let existing: ScreenshotMetadata?
+        if let data = try? Data(contentsOf: metadataURL),
+           let decoded = try? JSONDecoder().decode(ScreenshotMetadata.self, from: data) {
+            existing = decoded
+        } else {
+            existing = ScreenshotsMetadataManager.shared.screenshots.first { $0.screenshotName.replacingOccurrences(of: ".png", with: "") == nameNorm }
+        }
+        
+        let metadata: ScreenshotMetadata
+        if let prev = existing {
+            metadata = ScreenshotMetadata(
+                screenshotName: prev.screenshotName,
+                videoTime: prev.videoTime,
+                createdAt: prev.createdAt,
+                saveAsTag: prev.saveAsTag,
+                displayDuration: displayDuration,
+                relatedStampIds: prev.relatedStampIds,
+                editorState: editorState
+            )
+        } else {
+            metadata = ScreenshotMetadata(
+                screenshotName: nameNorm,
+                videoTime: state.editorScreenshotVideoTime,
+                createdAt: Date(),
+                saveAsTag: false,
+                displayDuration: displayDuration,
+                relatedStampIds: [],
+                editorState: editorState
+            )
+        }
+        
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(metadata)
+            try data.write(to: metadataURL)
+            print("✅ Метаданные рисунка обновлены: \(nameNorm)")
+        } catch {
+            print("❌ Ошибка обновления метаданных: \(error.localizedDescription)")
         }
     }
     
@@ -1050,6 +1174,10 @@ class VideoPlayerViewModel: ObservableObject {
             // Инвертируем относительно rect.height, а не viewSize.height
             CGPoint(x: point.x * scaleX, y: rect.height - (point.y * scaleY))
         }
+        // Контрольная точка закруглённой стрелки тоже в координатах вида — переводим в пространство изображения
+        if let cp = object.controlPoint {
+            scaledObject.controlPoint = CGPoint(x: cp.x * scaleX, y: rect.height - (cp.y * scaleY))
+        }
         
         // Масштабируем радиус для objectHighlight
         if object.type == .objectHighlight {
@@ -1064,7 +1192,7 @@ class VideoPlayerViewModel: ObservableObject {
         case .lineWithArrow:
             drawLineWithArrowOnImage(scaledObject, scale: scale)
         case .curvedArrow:
-            drawCurvedArrowOnImage(scaledObject, scale: scale)
+            drawCurvedArrowOnImage(scaledObject, scale: scale, scaleX: scaleX, scaleY: scaleY)
         case .objectHighlight:
             drawObjectHighlightOnImage(scaledObject)
         case .simpleZone:
@@ -1245,7 +1373,7 @@ class VideoPlayerViewModel: ObservableObject {
         )
     }
     
-    private func drawCurvedArrowOnImage(_ object: DrawableObject, scale: CGFloat) {
+    private func drawCurvedArrowOnImage(_ object: DrawableObject, scale: CGFloat, scaleX: CGFloat, scaleY: CGFloat) {
         guard object.positions.count >= 2 else { return }
         
         let startPoint = object.positions[0]
@@ -1254,11 +1382,16 @@ class VideoPlayerViewModel: ObservableObject {
         if let cp = object.controlPoint {
             controlPoint = cp
         } else {
-            // При сохранении инвертируем curveHeight для компенсации зеркалирования
+            // Сохраняем отношение (смещение/длина отрезка) как в редакторе: L_im и L_view могут отличаться при scaleX != scaleY
+            let dxIm = endPoint.x - startPoint.x
+            let dyIm = endPoint.y - startPoint.y
+            let L_im = sqrt(dxIm * dxIm + dyIm * dyIm)
+            let L_view = L_im > 0 ? sqrt((dxIm * dxIm) / (scaleX * scaleX) + (dyIm * dyIm) / (scaleY * scaleY)) : 0
+            let segmentScale = L_view > 0 ? (L_im / L_view) : 1
             controlPoint = computeControlPointForCurvedArrow(
                 start: startPoint,
                 end: endPoint,
-                curveHeight: -object.curveHeight
+                curveHeight: -object.curveHeight * segmentScale
             )
         }
         

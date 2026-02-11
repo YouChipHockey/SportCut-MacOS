@@ -21,4 +21,13 @@ extension NSNotification.Name {
     static let editorUndoKeyPressed = NSNotification.Name("editorUndoKeyPressed")
     static let screenshotDisplayChanged = NSNotification.Name("screenshotDisplayChanged")
     static let textBoxEditingChanged = NSNotification.Name("textBoxEditingChanged")
+    /// Открыть редактор рисунка по скриншоту (перемотка на videoTime + восстановление состояния из метаданных). object = OpenEditorForScreenshotPayload.
+    static let openEditorForScreenshot = NSNotification.Name("openEditorForScreenshot")
+}
+
+/// Payload для открытия редактора из таймлайна (ПКМ по иконке рисунка → Редактировать).
+struct OpenEditorForScreenshotPayload {
+    let screenshot: ScreenshotMetadata
+    let screenshotsFolder: URL
+    let videoId: String
 }

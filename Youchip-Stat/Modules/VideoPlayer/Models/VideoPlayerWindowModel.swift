@@ -32,6 +32,8 @@ struct VideoPlayerState {
     
     // Editor Mode
     var isEditorMode: Bool = false
+    /// Редактируем уже сохранённый рисунок (открыли через «Редактировать» на таймлайне): при сохранении — обновление, без нового тега.
+    var isEditingExistingScreenshot: Bool = false
     var editorScreenshotName: String = ""
     var editorSaveAsTag: Bool = false
     var editorDisplayDuration: Double = 3.0
@@ -183,13 +185,6 @@ class EditorDrawingState: ObservableObject {
                 return newPath
             }
             
-            textBoxes = textBoxes.map { box in
-                var newBox = box
-                newBox.position = CGPoint(x: box.position.x * scaleX, y: box.position.y * scaleY)
-                newBox.size = CGSize(width: box.size.width * scaleX, height: box.size.height * scaleY)
-                return newBox
-            }
-            
             // Масштабируем объекты телестрации
             telestrationObjects = telestrationObjects.map { object in
                 var newObject = object
@@ -199,6 +194,13 @@ class EditorDrawingState: ObservableObject {
                 // Масштабируем радиус для objectHighlight
                 if object.type == .objectHighlight {
                     newObject.radius = object.radius * max(scaleX, scaleY)
+                }
+                // Масштабируем контрольную точку и высоту кривизны для закруглённой стрелки
+                if object.type == .curvedArrow {
+                    if let cp = object.controlPoint {
+                        newObject.controlPoint = CGPoint(x: cp.x * scaleX, y: cp.y * scaleY)
+                    }
+                    newObject.curveHeight = object.curveHeight * max(scaleX, scaleY)
                 }
                 return newObject
             }
@@ -211,6 +213,13 @@ class EditorDrawingState: ObservableObject {
                 // Масштабируем радиус для objectHighlight
                 if pendingObject.type == .objectHighlight {
                     pendingObject.radius = pendingObject.radius * max(scaleX, scaleY)
+                }
+                // Масштабируем контрольную точку и высоту кривизны для закруглённой стрелки
+                if pendingObject.type == .curvedArrow {
+                    if let cp = pendingObject.controlPoint {
+                        pendingObject.controlPoint = CGPoint(x: cp.x * scaleX, y: cp.y * scaleY)
+                    }
+                    pendingObject.curveHeight = pendingObject.curveHeight * max(scaleX, scaleY)
                 }
                 self.pendingTelestrationObject = pendingObject
             }
@@ -380,6 +389,50 @@ class EditorDrawingState: ObservableObject {
         return hypot(p.x - proj.x, p.y - proj.y)
     }
     
+    /// Эффективная контрольная точка закруглённой стрелки для hit-test (контекстное меню ПКМ).
+    private static func effectiveControlPointForCurvedArrow(_ object: DrawableObject) -> CGPoint {
+        guard object.positions.count >= 2 else { return .zero }
+        let start = object.positions[0]
+        let end = object.positions[1]
+        if let cp = object.controlPoint { return cp }
+        let midX = (start.x + end.x) / 2
+        let midY = (start.y + end.y) / 2
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = sqrt(dx * dx + dy * dy)
+        if length == 0 { return CGPoint(x: midX, y: midY) }
+        let perpX = -dy / length
+        let perpY = dx / length
+        return CGPoint(x: midX + perpX * object.curveHeight, y: midY + perpY * object.curveHeight)
+    }
+    
+    /// Минимальное расстояние от точки до квадратичной кривой Безье (для hit-test закруглённой стрелки).
+    private static func distanceFromPointToQuadCurve(_ point: CGPoint, start: CGPoint, control: CGPoint, end: CGPoint) -> CGFloat {
+        let steps = 32
+        var minD: CGFloat = .greatestFiniteMagnitude
+        var prev = start
+        for i in 1...steps {
+            let t = CGFloat(i) / CGFloat(steps)
+            let mt = 1 - t
+            let pt = CGPoint(
+                x: mt*mt*start.x + 2*mt*t*control.x + t*t*end.x,
+                y: mt*mt*start.y + 2*mt*t*control.y + t*t*end.y
+            )
+            minD = min(minD, distanceFromPointToSegment(point, prev, pt))
+            prev = pt
+        }
+        return minD
+    }
+    
+    private static func distanceFromPointToSegment(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let abx = b.x - a.x, aby = b.y - a.y
+        let apx = p.x - a.x, apy = p.y - a.y
+        let abLenSq = abx * abx + aby * aby
+        if abLenSq == 0 { return hypot(apx, apy) }
+        let t = max(0, min(1, (apx * abx + apy * aby) / abLenSq))
+        let proj = CGPoint(x: a.x + t * abx, y: a.y + t * aby)
+        return hypot(p.x - proj.x, p.y - proj.y)
+    }
     
     func clearDrawing() {
         completedPaths.removeAll()
@@ -625,7 +678,10 @@ class EditorDrawingState: ObservableObject {
             return distanceToPolygonForHitTest(point, object.positions, closed: false) < 15
         case .curvedArrow:
             guard object.positions.count >= 2 else { return false }
-            return distanceFromPointToSegment(point, object.positions[0], object.positions[1]) < 20
+            let start = object.positions[0]
+            let end = object.positions[1]
+            let control = effectiveControlPointForCurvedArrow(object)
+            return distanceFromPointToQuadCurve(point, start: start, control: control, end: end) < 20
         case .objectHighlight:
             guard let p = object.positions.first else { return false }
             let r = object.radius
@@ -872,16 +928,6 @@ class EditorDrawingState: ObservableObject {
             }
         }
         return bestIndex
-    }
-    
-    private static func distanceFromPointToSegment(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
-        let abx = b.x - a.x, aby = b.y - a.y
-        let apx = p.x - a.x, apy = p.y - a.y
-        let abLenSq = abx * abx + aby * aby
-        if abLenSq == 0 { return hypot(apx, apy) }
-        let t = max(0, min(1, (apx * abx + apy * aby) / abLenSq))
-        let proj = CGPoint(x: a.x + t * abx, y: a.y + t * aby)
-        return hypot(p.x - proj.x, p.y - proj.y)
     }
     
     func confirmTelestrationObjectCreation() -> DrawableObject? {
@@ -1316,6 +1362,20 @@ struct EditorShape: Identifiable {
         self.strokeWidth = other.strokeWidth
         self.lineStyle = other.lineStyle
     }
+    
+    /// Восстановление из снимка (с заданным id).
+    init(id: UUID, type: ShapeType, position: CGPoint, size: CGSize, rotation: CGFloat = 0, fillColor: Color = .blue, fillOpacity: Double = 1, strokeColor: Color = .white, strokeWidth: CGFloat = 2, lineStyle: EditorLineStyle = .solid) {
+        self.id = id
+        self.type = type
+        self.position = position
+        self.size = size
+        self.rotation = rotation
+        self.fillColor = fillColor
+        self.fillOpacity = fillOpacity
+        self.strokeColor = strokeColor
+        self.strokeWidth = strokeWidth
+        self.lineStyle = lineStyle
+    }
 }
 
 struct EditorDrawingPath {
@@ -1377,6 +1437,289 @@ struct EditorDrawingSettings {
     static let availableEraserWidths: [CGFloat] = [10, 20, 30, 50]
 }
 
+// MARK: - Editor State Snapshot (Codable, for saving/restoring editor with screenshot)
+
+struct EditorStateSnapshot: Codable {
+    var viewSizeWidth: Double
+    var viewSizeHeight: Double
+    var completedPaths: [SnapshotPath] = []
+    var shapes: [SnapshotShape] = []
+    var textBoxes: [SnapshotTextBox] = []
+    var telestrationObjects: [SnapshotTelestration] = []
+    var currentToolRaw: String? = nil // "pencil", "arrow", "cursor", etc.
+    
+    struct SnapshotPath: Codable {
+        var points: [[Double]] // [[x,y], ...]
+        var colorHex: String
+        var lineWidth: Double
+        var lineStyleRaw: String // "solid", "dashed"
+        var hasArrow: Bool
+    }
+    
+    struct SnapshotShape: Codable {
+        var id: UUID
+        var typeRaw: String // ShapeType.rawValue
+        var positionX: Double
+        var positionY: Double
+        var sizeWidth: Double
+        var sizeHeight: Double
+        var rotation: Double
+        var fillColorHex: String
+        var fillOpacity: Double
+        var strokeColorHex: String
+        var strokeWidth: Double
+        var lineStyleRaw: String
+    }
+    
+    struct SnapshotTextBox: Codable {
+        var id: UUID
+        var text: String
+        var positionX: Double
+        var positionY: Double
+        var sizeWidth: Double
+        var sizeHeight: Double
+        var rotation: Double
+        var textColorHex: String
+        var fontSize: Double
+        var fontName: String
+        var backgroundColorHex: String
+        var borderColorHex: String
+        var borderWidth: Double
+    }
+    
+    struct SnapshotTelestration: Codable {
+        var id: UUID
+        var number: Int
+        var typeRaw: String // ObjectType.rawValue
+        var positions: [[Double]]
+        var edgeColorHex: String
+        var vertexColorHex: String
+        var fillColorHex: String
+        var lineStyleRaw: String
+        var glowColorHex: String
+        var glowOpacity: Double
+        var radius: Double
+        var curveHeight: Double
+        var controlPointX: Double?
+        var controlPointY: Double?
+        var strokeWidth: Double
+    }
+    
+    static func from(drawingState: EditorDrawingState) -> EditorStateSnapshot {
+        func hex(_ color: Color) -> String {
+            if color == Color.clear { return "clear" }
+            return color.toHex() ?? "000000"
+        }
+        func lineStyleRaw(_ s: EditorLineStyle) -> String {
+            switch s { case .solid: return "solid"; case .dashed: return "dashed" }
+        }
+        
+        var paths: [SnapshotPath] = []
+        for path in drawingState.completedPaths {
+            paths.append(SnapshotPath(
+                points: path.points.map { [Double($0.x), Double($0.y)] },
+                colorHex: hex(path.color),
+                lineWidth: Double(path.lineWidth),
+                lineStyleRaw: lineStyleRaw(path.lineStyle),
+                hasArrow: path.hasArrow
+            ))
+        }
+        if !drawingState.currentPath.points.isEmpty {
+            paths.append(SnapshotPath(
+                points: drawingState.currentPath.points.map { [Double($0.x), Double($0.y)] },
+                colorHex: hex(drawingState.currentPath.color),
+                lineWidth: Double(drawingState.currentPath.lineWidth),
+                lineStyleRaw: lineStyleRaw(drawingState.currentPath.lineStyle),
+                hasArrow: drawingState.currentPath.hasArrow
+            ))
+        }
+        
+        var shapes: [SnapshotShape] = []
+        for s in drawingState.shapes {
+            shapes.append(SnapshotShape(
+                id: s.id,
+                typeRaw: s.type.rawValue,
+                positionX: Double(s.position.x),
+                positionY: Double(s.position.y),
+                sizeWidth: Double(s.size.width),
+                sizeHeight: Double(s.size.height),
+                rotation: Double(s.rotation),
+                fillColorHex: hex(s.fillColor),
+                fillOpacity: s.fillOpacity,
+                strokeColorHex: hex(s.strokeColor),
+                strokeWidth: Double(s.strokeWidth),
+                lineStyleRaw: lineStyleRaw(s.lineStyle)
+            ))
+        }
+        
+        var boxes: [SnapshotTextBox] = []
+        for t in drawingState.textBoxes {
+            boxes.append(SnapshotTextBox(
+                id: t.id,
+                text: t.text,
+                positionX: Double(t.position.x),
+                positionY: Double(t.position.y),
+                sizeWidth: Double(t.size.width),
+                sizeHeight: Double(t.size.height),
+                rotation: Double(t.rotation),
+                textColorHex: hex(t.textColor),
+                fontSize: Double(t.fontSize),
+                fontName: t.fontName,
+                backgroundColorHex: hex(t.backgroundColor),
+                borderColorHex: hex(t.borderColor),
+                borderWidth: Double(t.borderWidth)
+            ))
+        }
+        
+        var tels: [SnapshotTelestration] = []
+        for o in drawingState.telestrationObjects {
+            tels.append(SnapshotTelestration(
+                id: o.id,
+                number: o.number,
+                typeRaw: o.type.rawValue,
+                positions: o.positions.map { [Double($0.x), Double($0.y)] },
+                edgeColorHex: hex(o.edgeColor),
+                vertexColorHex: hex(o.vertexColor),
+                fillColorHex: hex(o.fillColor),
+                lineStyleRaw: o.lineStyle.rawValue,
+                glowColorHex: hex(o.glowColor),
+                glowOpacity: o.glowOpacity,
+                radius: Double(o.radius),
+                curveHeight: Double(o.curveHeight),
+                controlPointX: o.controlPoint.map { Double($0.x) },
+                controlPointY: o.controlPoint.map { Double($0.y) },
+                strokeWidth: Double(o.strokeWidth)
+            ))
+        }
+        
+        let toolRaw: String? = {
+            switch drawingState.currentTool {
+            case .cursor: return "cursor"
+            case .pencil: return "pencil"
+            case .arrow: return "arrow"
+            case .eraser: return "eraser"
+            case .telestration: return "telestration"
+            case .shapes: return "shapes"
+            case .textBox: return "textBox"
+            }
+        }()
+        
+        return EditorStateSnapshot(
+            viewSizeWidth: Double(drawingState.viewSize.width),
+            viewSizeHeight: Double(drawingState.viewSize.height),
+            completedPaths: paths,
+            shapes: shapes,
+            textBoxes: boxes,
+            telestrationObjects: tels,
+            currentToolRaw: toolRaw
+        )
+    }
+    
+    func apply(to drawingState: EditorDrawingState) {
+        func color(from hex: String) -> Color {
+            if hex == "clear" { return .clear }
+            return Color(hex: hex)
+        }
+        func lineStyle(from raw: String) -> EditorLineStyle {
+            raw == "dashed" ? .dashed : .solid
+        }
+        
+        drawingState.clearDrawing()
+        
+        for p in completedPaths {
+            var path = EditorDrawingPath()
+            path.points = p.points.compactMap { arr in
+                guard arr.count >= 2 else { return nil }
+                return CGPoint(x: arr[0], y: arr[1])
+            }
+            path.color = color(from: p.colorHex)
+            path.lineWidth = CGFloat(p.lineWidth)
+            path.lineStyle = lineStyle(from: p.lineStyleRaw)
+            path.hasArrow = p.hasArrow
+            if !path.points.isEmpty {
+                drawingState.completedPaths.append(path)
+            }
+        }
+        
+        for s in shapes {
+            guard let type = ShapeType(rawValue: s.typeRaw) else { continue }
+            let shape = EditorShape(
+                id: s.id,
+                type: type,
+                position: CGPoint(x: s.positionX, y: s.positionY),
+                size: CGSize(width: s.sizeWidth, height: s.sizeHeight),
+                rotation: CGFloat(s.rotation),
+                fillColor: color(from: s.fillColorHex),
+                fillOpacity: s.fillOpacity,
+                strokeColor: color(from: s.strokeColorHex),
+                strokeWidth: CGFloat(s.strokeWidth),
+                lineStyle: lineStyle(from: s.lineStyleRaw)
+            )
+            drawingState.shapes.append(shape)
+        }
+        
+        for t in textBoxes {
+            var box = EditorTextBox(position: CGPoint(x: t.positionX, y: t.positionY), size: CGSize(width: t.sizeWidth, height: t.sizeHeight))
+            box.id = t.id
+            box.text = t.text
+            box.rotation = CGFloat(t.rotation)
+            box.textColor = color(from: t.textColorHex)
+            box.fontSize = CGFloat(t.fontSize)
+            box.fontName = t.fontName
+            box.backgroundColor = color(from: t.backgroundColorHex)
+            box.borderColor = color(from: t.borderColorHex)
+            box.borderWidth = CGFloat(t.borderWidth)
+            drawingState.textBoxes.append(box)
+        }
+        
+        for o in telestrationObjects {
+            guard let type = ObjectType(rawValue: o.typeRaw) else { continue }
+            let positions = o.positions.compactMap { arr -> CGPoint? in
+                guard arr.count >= 2 else { return nil }
+                return CGPoint(x: arr[0], y: arr[1])
+            }
+            let control: CGPoint? = (o.controlPointX != nil && o.controlPointY != nil) ? CGPoint(x: o.controlPointX!, y: o.controlPointY!) : nil
+            let obj = DrawableObject(
+                id: o.id,
+                number: o.number,
+                type: type,
+                positions: positions,
+                edgeColor: color(from: o.edgeColorHex),
+                vertexColor: color(from: o.vertexColorHex),
+                fillColor: color(from: o.fillColorHex),
+                lineStyle: o.lineStyleRaw == "dashed" ? .dashed : .solid,
+                glowColor: color(from: o.glowColorHex),
+                glowOpacity: o.glowOpacity,
+                radius: CGFloat(o.radius),
+                curveHeight: CGFloat(o.curveHeight),
+                controlPoint: control,
+                strokeWidth: CGFloat(o.strokeWidth)
+            )
+            drawingState.telestrationObjects.append(obj)
+        }
+        
+        if viewSizeWidth > 0 && viewSizeHeight > 0 {
+            drawingState.viewSize = CGSize(width: viewSizeWidth, height: viewSizeHeight)
+            if drawingState.initialViewSize == .zero {
+                drawingState.initialViewSize = drawingState.viewSize
+            }
+        }
+        
+        if let raw = currentToolRaw {
+            switch raw {
+            case "cursor": drawingState.currentTool = .cursor
+            case "pencil": drawingState.currentTool = .pencil
+            case "arrow": drawingState.currentTool = .arrow
+            case "eraser": drawingState.currentTool = .eraser
+            case "telestration": drawingState.currentTool = .telestration
+            case "shapes": drawingState.currentTool = .shapes
+            case "textBox": drawingState.currentTool = .textBox
+            default: drawingState.currentTool = .pencil
+            }
+        }
+    }
+}
+
 // MARK: - Screenshot Metadata
 
 struct ScreenshotMetadata: Codable {
@@ -1386,6 +1729,7 @@ struct ScreenshotMetadata: Codable {
     let saveAsTag: Bool
     let displayDuration: Double // How long to show screenshot during export (default 3.0 for backward compatibility)
     let relatedStampIds: [UUID] // IDs of timeline stamps this screenshot is associated with
+    let editorState: EditorStateSnapshot? // Optional: full editor state to restore drawing layers
     
     var fileName: String {
         return "\(screenshotName).json"
@@ -1398,9 +1742,10 @@ struct ScreenshotMetadata: Codable {
         case saveAsTag
         case displayDuration
         case relatedStampIds
+        case editorState
     }
     
-    // Custom decoder for backward compatibility with old screenshots without displayDuration
+    // Custom decoder for backward compatibility with old screenshots without displayDuration / editorState
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         screenshotName = try container.decode(String.self, forKey: .screenshotName)
@@ -1409,6 +1754,7 @@ struct ScreenshotMetadata: Codable {
         saveAsTag = try container.decode(Bool.self, forKey: .saveAsTag)
         displayDuration = try container.decodeIfPresent(Double.self, forKey: .displayDuration) ?? 3.0
         relatedStampIds = try container.decodeIfPresent([UUID].self, forKey: .relatedStampIds) ?? []
+        editorState = try container.decodeIfPresent(EditorStateSnapshot.self, forKey: .editorState)
     }
     
     // Custom encoder to ensure displayDuration is always saved
@@ -1420,16 +1766,18 @@ struct ScreenshotMetadata: Codable {
         try container.encode(saveAsTag, forKey: .saveAsTag)
         try container.encode(displayDuration, forKey: .displayDuration)
         try container.encode(relatedStampIds, forKey: .relatedStampIds)
+        try container.encodeIfPresent(editorState, forKey: .editorState)
     }
     
     // Standard initializer
-    init(screenshotName: String, videoTime: Double, createdAt: Date, saveAsTag: Bool, displayDuration: Double, relatedStampIds: [UUID] = []) {
+    init(screenshotName: String, videoTime: Double, createdAt: Date, saveAsTag: Bool, displayDuration: Double, relatedStampIds: [UUID] = [], editorState: EditorStateSnapshot? = nil) {
         self.screenshotName = screenshotName
         self.videoTime = videoTime
         self.createdAt = createdAt
         self.saveAsTag = saveAsTag
         self.displayDuration = displayDuration
         self.relatedStampIds = relatedStampIds
+        self.editorState = editorState
     }
 }
 
