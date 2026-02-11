@@ -13,6 +13,7 @@
 		BFE837592F3B5A29005458F4 /* DataSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE837582F3B5A29005458F4 /* DataSyncManager.swift */; };
 		BFE8375C2F3C670A005458F4 /* OrphanedTimelinesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE8375A2F3C670A005458F4 /* OrphanedTimelinesManager.swift */; };
 		BFE8375D2F3C670A005458F4 /* OrphanedTimelinesRecoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE8375B2F3C670A005458F4 /* OrphanedTimelinesRecoveryView.swift */; };
+		BFE8416E2F3CD7CF005458F4 /* CollectionsBackupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE8416C2F3CD7CF005458F4 /* CollectionsBackupManager.swift */; };
 		BFFEC8772F1D32AF00464BF0 /* CircularPercentProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFFEC8762F1D32AF00464BF0 /* CircularPercentProgressView.swift */; };
 		DD1BF67F2DBAFB8A00CB2AE0 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		DD1DAEE32E81E65E00850FAC /* (null) in Sources */ = {isa = PBXBuildFile; };
@@ -82,6 +83,7 @@
 		BFE837582F3B5A29005458F4 /* DataSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataSyncManager.swift; sourceTree = "<group>"; };
 		BFE8375A2F3C670A005458F4 /* OrphanedTimelinesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrphanedTimelinesManager.swift; sourceTree = "<group>"; };
 		BFE8375B2F3C670A005458F4 /* OrphanedTimelinesRecoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrphanedTimelinesRecoveryView.swift; sourceTree = "<group>"; };
+		BFE8416C2F3CD7CF005458F4 /* CollectionsBackupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionsBackupManager.swift; sourceTree = "<group>"; };
 		BFFEC8762F1D32AF00464BF0 /* CircularPercentProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularPercentProgressView.swift; sourceTree = "<group>"; };
 		D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Youchip_Stat.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		DD2A70552D74C33D00287BA8 /* FilesFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesFile.swift; sourceTree = "<group>"; };
@@ -199,6 +201,14 @@
 			path = Pods;
 			sourceTree = "<group>";
 		};
+		BFE8416D2F3CD7CF005458F4 /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				BFE8416C2F3CD7CF005458F4 /* CollectionsBackupManager.swift */,
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
 		BFFEC8752F1D32A700464BF0 /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -263,6 +273,7 @@
 		DD32C2672D74A0110052B5C6 /* Common */ = {
 			isa = PBXGroup;
 			children = (
+				BFE8416D2F3CD7CF005458F4 /* Managers */,
 				BFE8375A2F3C670A005458F4 /* OrphanedTimelinesManager.swift */,
 				BFE8375B2F3C670A005458F4 /* OrphanedTimelinesRecoveryView.swift */,
 				BFE837582F3B5A29005458F4 /* DataSyncManager.swift */,
@@ -557,6 +568,7 @@
 				DD32C2A02D74A1C80052B5C6 /* Colors.swift in Sources */,
 				DD32C2A12D74A1C80052B5C6 /* NSError+Convenience.swift in Sources */,
 				DD32C2A32D74A1C80052B5C6 /* Date+Convenience.swift in Sources */,
+				BFE8416E2F3CD7CF005458F4 /* CollectionsBackupManager.swift in Sources */,
 				BFFEC8772F1D32AF00464BF0 /* CircularPercentProgressView.swift in Sources */,
 				DD5CFA032E046937009CD51A /* DispatchWorkItem+Convenience.swift in Sources */,
 				DD32C2A42D74A1C80052B5C6 /* UInt64+Convenience.swift in Sources */,

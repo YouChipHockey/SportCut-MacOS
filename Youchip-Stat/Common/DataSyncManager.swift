@@ -104,6 +104,9 @@ class DataSyncManager {
     func synchronizeOnAppLaunch() {
         print("🔄 DataSync: Starting synchronization on app launch")
         
+        // Restore collections from backup file if UserDefaults is empty
+        restoreCollectionsFromBackup()
+        
         let hasDocumentsData = checkDocumentsHasData()
         
         if !hasDocumentsData {
@@ -121,6 +124,21 @@ class DataSyncManager {
         }
         
         backupToApplicationSupport()
+    }
+    
+    /// Restores collections from backup file if UserDefaults is empty
+    private func restoreCollectionsFromBackup() {
+        let existingCollections = UserDefaults.standard.getCollectionBookmarks()
+        guard existingCollections.isEmpty else {
+            // UserDefaults already has collections, sync backup file
+            CollectionsBackupManager.shared.syncFromUserDefaults()
+            return
+        }
+        
+        // Try to restore from backup file
+        if CollectionsBackupManager.shared.restoreCollectionsToUserDefaults() {
+            print("✅ DataSync: Collections restored from backup file")
+        }
     }
     
     /// Creates backup from Documents to Application Support with throttling
@@ -149,6 +167,7 @@ class DataSyncManager {
         backupCollections()
         backupPlayFields()
         backupTimelines()
+        backupCollectionsBackup()
         backupUserDefaults()
         
         UserDefaults.standard.set(Date(), forKey: lastSyncDateKey)
@@ -162,7 +181,11 @@ class DataSyncManager {
         restoreCollections()
         restorePlayFields()
         restoreTimelines()
+        restoreCollectionsBackup()
         restoreUserDefaults()
+        
+        // Restore collections from backup file to UserDefaults
+        restoreCollectionsFromBackup()
         
         print("✅ DataSync: Data restored from backup")
     }
@@ -599,6 +622,53 @@ class DataSyncManager {
         }
     }
     
+    private var collectionsBackupFile: URL {
+        let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return documentsDirectory.appendingPathComponent("YouChip-Stat/CollectionsBackup.json")
+    }
+    
+    private func backupCollectionsBackup() {
+        guard fileManager.fileExists(atPath: collectionsBackupFile.path) else {
+            print("⚠️ DataSync: Collections backup file does not exist")
+            return
+        }
+        
+        do {
+            let backupFile = backupDirectory.appendingPathComponent("CollectionsBackup.json")
+            if fileManager.fileExists(atPath: backupFile.path) {
+                try fileManager.removeItem(at: backupFile)
+            }
+            
+            try fileManager.copyItem(at: collectionsBackupFile, to: backupFile)
+            print("✅ DataSync: Collections backup file backed up")
+        } catch {
+            print("❌ DataSync: Error backing up collections backup file - \(error.localizedDescription)")
+        }
+    }
+    
+    private func restoreCollectionsBackup() {
+        let backupFile = backupDirectory.appendingPathComponent("CollectionsBackup.json")
+        
+        guard fileManager.fileExists(atPath: backupFile.path) else {
+            print("⚠️ DataSync: Collections backup file not found in backup")
+            return
+        }
+        
+        do {
+            let parentDir = collectionsBackupFile.deletingLastPathComponent()
+            fileManager.createDirectoryIfNeeded(url: parentDir)
+            
+            if fileManager.fileExists(atPath: collectionsBackupFile.path) {
+                try fileManager.removeItem(at: collectionsBackupFile)
+            }
+            
+            try fileManager.copyItem(at: backupFile, to: collectionsBackupFile)
+            print("✅ DataSync: Collections backup file restored from backup")
+        } catch {
+            print("❌ DataSync: Error restoring collections backup file - \(error.localizedDescription)")
+        }
+    }
+    
     private func restorePlayFields() {
         guard fileManager.fileExists(atPath: backupPlayFieldsDirectory.path) else {
             print("⚠️ DataSync: PlayFields backup not found")
@@ -732,6 +802,13 @@ class DataSyncManager {
         UserDefaults.standard.removeObject(forKey: videosDataKey)
         UserDefaults.standard.removeObject(forKey: collectionsBookmarksKey)
         UserDefaults.standard.removeObject(forKey: lastSyncDateKey)
+        
+        // Clear collections backup file
+        if fileManager.fileExists(atPath: collectionsBackupFile.path) {
+            try? fileManager.removeItem(at: collectionsBackupFile)
+            print("✅ DataSync: Collections backup file cleared")
+        }
+        
         print("✅ DataSync: UserDefaults cleared")
     }
 }

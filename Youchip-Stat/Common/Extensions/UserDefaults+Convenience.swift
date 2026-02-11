@@ -25,6 +25,9 @@ extension UserDefaults {
         if let encoded = try? JSONEncoder().encode(collections) {
             set(encoded, forKey: Keys.collections)
         }
+        
+        // Save to backup file
+        CollectionsBackupManager.shared.saveCollection(bookmark)
     }
     
     func getCollectionBookmarks() -> [CollectionBookmark] {
@@ -37,10 +40,16 @@ extension UserDefaults {
     
     func removeCollectionBookmark(named name: String) {
         var collections = getCollectionBookmarks()
+        let collectionToRemove = collections.first(where: { $0.name == name })
         collections.removeAll { $0.name == name }
         
         if let encoded = try? JSONEncoder().encode(collections) {
             set(encoded, forKey: Keys.collections)
+        }
+        
+        // Remove from backup file
+        if let collection = collectionToRemove {
+            CollectionsBackupManager.shared.removeCollection(id: collection.id)
         }
     }
 }
