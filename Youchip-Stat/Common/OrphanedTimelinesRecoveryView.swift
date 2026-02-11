@@ -134,7 +134,36 @@ struct OrphanedTimelinesRecoveryView: View {
                     continue
                 }
                 
-                let newVideoId = VideoFilesManager.shared.generate32CharacterCode()
+                // Check if video already exists in VideoFilesManager
+                let existingFile = VideoFilesManager.shared.files.first { file in
+                    do {
+                        var isStale = false
+                        let fileURL = try URL(resolvingBookmarkData: file.videoData.bookmark,
+                                            options: .withSecurityScope,
+                                            relativeTo: nil,
+                                            bookmarkDataIsStale: &isStale)
+                        return fileURL == videoURL
+                    } catch {
+                        return false
+                    }
+                }
+                
+                let newVideoId: String
+                if let existing = existingFile {
+                    // Use existing video ID
+                    newVideoId = existing.videoData.id
+                    print("📹 Using existing video ID: \(newVideoId)")
+                } else {
+                    // Import file first to create entry and get ID
+                    if let importedFile = VideoFilesManager.shared.importFile(url: videoURL) {
+                        newVideoId = importedFile.videoData.id
+                        print("📹 Created new video entry with ID: \(newVideoId)")
+                    } else {
+                        print("❌ Failed to import video file")
+                        continue
+                    }
+                }
+                
                 if DataSyncManager.shared.restoreTimelineToVideo(
                     orphanedTimeline: orphaned,
                     newVideoBookmark: bookmark,
@@ -143,12 +172,14 @@ struct OrphanedTimelinesRecoveryView: View {
                     DispatchQueue.main.async {
                         processedCount += 1
                     }
+                } else {
+                    print("❌ Failed to restore timeline for video \(videoURL.lastPathComponent)")
                 }
             }
             
             DispatchQueue.main.async {
                 isProcessing = false
-                showSuccess = true
+                showSuccess = processedCount > 0
                 
                 VideoFilesManager.shared.refreshFiles()
                 updateOrphanedTimelinesList()

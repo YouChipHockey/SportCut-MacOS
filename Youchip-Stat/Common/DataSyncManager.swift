@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AVFoundation
 
 /// Manages data synchronization between Documents and Application Support directories
 class DataSyncManager {
@@ -256,6 +257,31 @@ class DataSyncManager {
     func restoreTimelineToVideo(orphanedTimeline: OrphanedTimeline, newVideoBookmark: Data, newVideoId: String) -> Bool {
         print("🔗 DataSync: Restoring timeline link to video")
         
+        // Get video duration from bookmark
+        var newVideoDuration: Double = 0
+        do {
+            var isStale = false
+            let videoURL = try URL(resolvingBookmarkData: newVideoBookmark,
+                                   options: .withSecurityScope,
+                                   relativeTo: nil,
+                                   bookmarkDataIsStale: &isStale)
+            
+            let asset = AVAsset(url: videoURL)
+            // Use synchronous method to get duration
+            let duration = asset.duration
+            newVideoDuration = CMTimeGetSeconds(duration)
+            
+            guard newVideoDuration > 0 && !duration.isIndefinite else {
+                print("❌ DataSync: Invalid video duration: \(newVideoDuration)")
+                return false
+            }
+            
+            print("📹 DataSync: Video duration: \(newVideoDuration) seconds")
+        } catch {
+            print("❌ DataSync: Error getting video duration - \(error.localizedDescription)")
+            return false
+        }
+        
         guard let data = UserDefaults.standard.data(forKey: videosDataKey) else {
             print("❌ DataSync: No video data")
             return false
@@ -264,27 +290,59 @@ class DataSyncManager {
         do {
             let decoder = JSONDecoder()
             var videosData = try decoder.decode([VideosData].self, from: data)
-            let restoredTimelines: [TimelineLine] = orphanedTimeline.timelines.map { timeline in
-                TimelineLine(
+            
+            // Filter stamps that are outside video duration
+            let restoredTimelines: [TimelineLine] = orphanedTimeline.timelines.compactMap { timeline in
+                let filteredStamps = timeline.stamps.compactMap { stamp -> TimelineStamp? in
+                    // Check if stamp is within video duration
+                    if stamp.timeStartSeconds >= newVideoDuration {
+                        print("⚠️ DataSync: Skipping stamp \(stamp.id) - start time \(stamp.timeStartSeconds) exceeds video duration \(newVideoDuration)")
+                        return nil
+                    }
+                    
+                    // Clamp finish time to video duration
+                    let clampedFinishTime = min(stamp.timeFinishSeconds, newVideoDuration)
+                    
+                    // Ensure start time is before finish time
+                    let clampedStartTime = min(stamp.timeStartSeconds, clampedFinishTime - 0.1)
+                    
+                    guard clampedStartTime >= 0 && clampedFinishTime > clampedStartTime else {
+                        print("⚠️ DataSync: Skipping stamp \(stamp.id) - invalid time range after clamping")
+                        return nil
+                    }
+                    
+                    return TimelineStamp(
+                        id: stamp.id,
+                        idTag: stamp.idTag,
+                        primaryID: stamp.primaryID,
+                        timeStartSeconds: clampedStartTime,
+                        timeFinishSeconds: clampedFinishTime,
+                        colorHex: stamp.colorHex,
+                        label: stamp.label,
+                        labels: stamp.labels,
+                        timeEvents: stamp.timeEvents,
+                        position: stamp.position,
+                        isActiveForMapView: stamp.isActiveForMapView
+                    )
+                }
+                
+                // Only include timeline if it has stamps
+                guard !filteredStamps.isEmpty else {
+                    print("⚠️ DataSync: Skipping timeline \(timeline.name) - no valid stamps after filtering")
+                    return nil
+                }
+                
+                return TimelineLine(
                     id: timeline.id,
                     name: timeline.name,
-                    stamps: timeline.stamps.map { stamp in
-                        TimelineStamp(
-                            id: stamp.id,
-                            idTag: stamp.idTag,
-                            primaryID: stamp.primaryID,
-                            timeStartSeconds: stamp.timeStartSeconds,
-                            timeFinishSeconds: stamp.timeFinishSeconds,
-                            colorHex: stamp.colorHex,
-                            label: stamp.label,
-                            labels: stamp.labels,
-                            timeEvents: stamp.timeEvents,
-                            position: stamp.position,
-                            isActiveForMapView: stamp.isActiveForMapView
-                        )
-                    },
+                    stamps: filteredStamps,
                     tagIdForMode: timeline.tagIdForMode
                 )
+            }
+            
+            guard !restoredTimelines.isEmpty else {
+                print("❌ DataSync: No valid timelines after filtering for video duration")
+                return false
             }
             
             if let index = videosData.firstIndex(where: { $0.id == newVideoId }) {
@@ -313,10 +371,62 @@ class DataSyncManager {
             let updatedData = try encoder.encode(videosData)
             UserDefaults.standard.set(updatedData, forKey: videosDataKey)
             
-            let timelineFile = timelinesBackupDirectory.appendingPathComponent("\(orphanedTimeline.videoId).json")
-            try? fileManager.removeItem(at: timelineFile)
+            // IMPORTANT: Update orphaned timeline file with new videoId for future backups
+            // This ensures that if video is deleted again, backup will use correct videoId
+            let oldTimelineFile = timelinesBackupDirectory.appendingPathComponent("\(orphanedTimeline.videoId).json")
+            let newTimelineFile = timelinesBackupDirectory.appendingPathComponent("\(newVideoId).json")
             
-            print("✅ DataSync: Timeline restored successfully")
+            // Create updated orphaned timeline with new videoId
+            var updatedOrphaned = orphanedTimeline
+            let updatedTimelines = restoredTimelines.map { timeline in
+                OrphanedTimeline.TimelineLine(
+                    id: timeline.id,
+                    name: timeline.name,
+                    stamps: timeline.stamps.map { stamp in
+                        OrphanedTimeline.TimelineLine.TimelineStamp(
+                            id: stamp.id,
+                            idTag: stamp.idTag,
+                            primaryID: stamp.primaryID,
+                            timeStartSeconds: stamp.timeStartSeconds,
+                            timeFinishSeconds: stamp.timeFinishSeconds,
+                            colorHex: stamp.colorHex,
+                            label: stamp.label,
+                            isActiveForMapView: stamp.isActiveForMapView,
+                            labels: stamp.labels,
+                            timeEvents: stamp.timeEvents,
+                            position: stamp.position
+                        )
+                    },
+                    tagIdForMode: timeline.tagIdForMode
+                )
+            }
+            
+            // Update with new videoId and filtered timelines
+            let updatedOrphanedTimeline = OrphanedTimeline(
+                videoId: newVideoId,
+                videoName: updatedOrphaned.videoName,
+                timelines: updatedTimelines,
+                customName: updatedOrphaned.customName,
+                isFavorite: updatedOrphaned.isFavorite,
+                backupDate: Date()
+            )
+            
+            // Save updated timeline with new videoId
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = .prettyPrinted
+                let timelineData = try encoder.encode(updatedOrphanedTimeline)
+                try timelineData.write(to: newTimelineFile)
+                
+                // Remove old timeline file
+                if fileManager.fileExists(atPath: oldTimelineFile.path) {
+                    try? fileManager.removeItem(at: oldTimelineFile)
+                }
+            } catch {
+                print("⚠️ DataSync: Error updating timeline backup file - \(error.localizedDescription)")
+            }
+            
+            print("✅ DataSync: Timeline restored successfully (filtered \(orphanedTimeline.timelines.reduce(0) { $0 + $1.stamps.count } - restoredTimelines.reduce(0) { $0 + $1.stamps.count }) stamps)")
             backupToApplicationSupportImmediate()
             
             return true
