@@ -161,6 +161,7 @@ class DataSyncManager {
         
         restoreCollections()
         restorePlayFields()
+        restoreTimelines()
         restoreUserDefaults()
         
         print("✅ DataSync: Data restored from backup")
@@ -264,22 +265,25 @@ class DataSyncManager {
             }
             
             if let index = videosData.firstIndex(where: { $0.id == newVideoId }) {
-                videosData[index].timelines = restoredTimelines
+                // Update video metadata
                 if let customName = orphanedTimeline.customName {
                     videosData[index].customName = customName
                 }
                 if let isFavorite = orphanedTimeline.isFavorite {
                     videosData[index].isFavorite = isFavorite
                 }
+                // Save timelines to file
+                VideoFilesManager.shared.saveTimelines(restoredTimelines, for: newVideoId)
             } else {
                 let newVideoData = VideosData(
                     bookmark: newVideoBookmark,
                     id: newVideoId,
-                    timelines: restoredTimelines,
                     customName: orphanedTimeline.customName,
                     isFavorite: orphanedTimeline.isFavorite
                 )
                 videosData.append(newVideoData)
+                // Save timelines to file
+                VideoFilesManager.shared.saveTimelines(restoredTimelines, for: newVideoId)
             }
             
             let encoder = JSONEncoder()
@@ -359,6 +363,11 @@ class DataSyncManager {
         }
     }
     
+    private var timelinesDirectory: URL {
+        let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return documentsDirectory.appendingPathComponent("YouChip-Stat/Timelines", isDirectory: true)
+    }
+    
     private func backupTimelines() {
         guard let data = UserDefaults.standard.data(forKey: videosDataKey) else {
             print("⚠️ DataSync: No video data for timeline backup")
@@ -375,7 +384,9 @@ class DataSyncManager {
             var backedUpCount = 0
             
             for videoData in videosData {
-                guard !videoData.timelines.isEmpty else { continue }
+                // Load timelines from file
+                let timelines = VideoFilesManager.shared.loadTimelines(for: videoData.id)
+                guard !timelines.isEmpty else { continue }
                 
                 var videoName: String?
                 do {
@@ -388,7 +399,7 @@ class DataSyncManager {
                 } catch {
                     videoName = nil
                 }
-                let orphanedTimelines = videoData.timelines.map { timeline in
+                let orphanedTimelines = timelines.map { timeline in
                     OrphanedTimeline.TimelineLine(
                         id: timeline.id,
                         name: timeline.name,
@@ -429,6 +440,15 @@ class DataSyncManager {
                 backedUpCount += 1
             }
             
+            // Also backup timeline files directory
+            if fileManager.fileExists(atPath: timelinesDirectory.path) {
+                let backupTimelinesDir = backupDirectory.appendingPathComponent("Timelines", isDirectory: true)
+                if fileManager.fileExists(atPath: backupTimelinesDir.path) {
+                    try? fileManager.removeItem(at: backupTimelinesDir)
+                }
+                try? fileManager.copyItem(at: timelinesDirectory, to: backupTimelinesDir)
+            }
+            
             if backedUpCount > 0 {
                 print("✅ DataSync: Video timelines backed up (\(backedUpCount) files)")
             }
@@ -437,9 +457,18 @@ class DataSyncManager {
         }
     }
     
+    /// Structure for compatibility with backupTimelinesForVideo
+    struct VideosDataWithTimelines {
+        let bookmark: Data
+        let id: String
+        let timelines: [TimelineLine]
+        let customName: String?
+        let isFavorite: Bool?
+    }
+    
     /// Saves timeline for specific video to backup
     /// Used when deleting video to preserve timeline before deletion
-    func backupTimelinesForVideo(_ videoData: VideosData) {
+    func backupTimelinesForVideo(_ videoData: VideosDataWithTimelines) {
         guard !videoData.timelines.isEmpty else {
             return
         }
@@ -547,6 +576,29 @@ class DataSyncManager {
         }
     }
     
+    private func restoreTimelines() {
+        let backupTimelinesDir = backupDirectory.appendingPathComponent("Timelines", isDirectory: true)
+        
+        guard fileManager.fileExists(atPath: backupTimelinesDir.path) else {
+            print("⚠️ DataSync: Timelines backup not found")
+            return
+        }
+        
+        do {
+            let parentDir = timelinesDirectory.deletingLastPathComponent()
+            fileManager.createDirectoryIfNeeded(url: parentDir)
+            
+            if fileManager.fileExists(atPath: timelinesDirectory.path) {
+                try fileManager.removeItem(at: timelinesDirectory)
+            }
+            
+            try fileManager.copyItem(at: backupTimelinesDir, to: timelinesDirectory)
+            print("✅ DataSync: Timelines restored from backup")
+        } catch {
+            print("❌ DataSync: Error restoring timelines - \(error.localizedDescription)")
+        }
+    }
+    
     private func restorePlayFields() {
         guard fileManager.fileExists(atPath: backupPlayFieldsDirectory.path) else {
             print("⚠️ DataSync: PlayFields backup not found")
@@ -640,6 +692,11 @@ class DataSyncManager {
         if fileManager.fileExists(atPath: playFieldsDirectory.path) {
             try? fileManager.removeItem(at: playFieldsDirectory)
             print("✅ DataSync: PlayFields deleted from Documents")
+        }
+        
+        if fileManager.fileExists(atPath: timelinesDirectory.path) {
+            try? fileManager.removeItem(at: timelinesDirectory)
+            print("✅ DataSync: Timelines deleted from Documents")
         }
     }
     

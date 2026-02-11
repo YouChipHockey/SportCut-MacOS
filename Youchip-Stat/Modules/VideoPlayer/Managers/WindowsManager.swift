@@ -200,10 +200,11 @@ class WindowsManager: NSObject {
             return
         }
         
-        let timelineNames = filesFile.videoData.timelines.map { $0.name }
+        let loadedTimelines = filesFile.timelines
+        let timelineNames = loadedTimelines.map { $0.name }
         let uniqueNames = Set(timelineNames)
         if timelineNames.count != uniqueNames.count {
-            let nameCounts = Dictionary(grouping: filesFile.videoData.timelines, by: { $0.name }).mapValues { $0.count }
+            let nameCounts = Dictionary(grouping: loadedTimelines, by: { $0.name }).mapValues { $0.count }
         }
         
         UserDefaults.standard.set("", forKey: "editingStampLineID")
@@ -213,10 +214,10 @@ class WindowsManager: NSObject {
         TimelineDataManager.shared.currentBookmark = filesFile.videoData.bookmark
         
         if MarkupMode.current == .standard {
-            TimelineDataManager.shared.lines = filesFile.videoData.timelines
-            TimelineDataManager.shared.selectedLineID = filesFile.videoData.timelines.first?.id
+            TimelineDataManager.shared.lines = loadedTimelines
+            TimelineDataManager.shared.selectedLineID = loadedTimelines.first?.id
         } else {
-            TimelineDataManager.shared.lines = filesFile.videoData.timelines
+            TimelineDataManager.shared.lines = loadedTimelines
             TimelineDataManager.shared.selectedLineID = nil
         }
         
