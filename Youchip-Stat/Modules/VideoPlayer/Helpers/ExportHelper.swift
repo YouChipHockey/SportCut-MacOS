@@ -1090,8 +1090,8 @@ class ExportHelper: ObservableObject {
             let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
             
             if let image = NSImage(contentsOf: imageURL) {
-                let group = DispatchGroup()
-                group.enter()
+                // Use semaphore instead of DispatchGroup.wait() to prevent potential crashes
+                let semaphore = DispatchSemaphore(value: 0)
                 var screenshotVideoURL: URL?
                 
                 let displayDuration = screenshot.displayDuration
@@ -1101,14 +1101,17 @@ class ExportHelper: ObservableObject {
                     if case .success(let url) = result {
                         screenshotVideoURL = url
                     }
-                    group.leave()
+                    semaphore.signal()
                 }
                 
-                group.wait()
+                // Wait with timeout to prevent infinite blocking
+                let waitResult = semaphore.wait(timeout: .now() + 30)
                 
-                if let videoURL = screenshotVideoURL,
-                   let screenshotAsset = try? AVURLAsset(url: videoURL),
-                   let screenshotVideoTrack = screenshotAsset.tracks(withMediaType: .video).first {
+                if waitResult == .timedOut {
+                    print("❌ Screenshot video creation timed out for '\(screenshot.screenshotName)'")
+                } else if let videoURL = screenshotVideoURL,
+                          let screenshotAsset = try? AVURLAsset(url: videoURL),
+                          let screenshotVideoTrack = screenshotAsset.tracks(withMediaType: .video).first {
                     do {
                         try compVideoTrack.insertTimeRange(
                             CMTimeRange(start: .zero, duration: screenshotAsset.duration),

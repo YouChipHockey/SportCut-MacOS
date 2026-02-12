@@ -15,4 +15,6 @@ extension Notification.Name {
     static let showLabelSheet = Notification.Name("showLabelSheet")
     static let labelHotkeyPressed = Notification.Name("labelHotkeyPressed")
     static let tagUpdated = Notification.Name("tagUpdated")
+    static let collectionsLoadingStarted = Notification.Name("collectionsLoadingStarted")
+    static let collectionsLoadingFinished = Notification.Name("collectionsLoadingFinished")
 }

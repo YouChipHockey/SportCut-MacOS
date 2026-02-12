@@ -423,237 +423,138 @@ class CustomCollectionManager: ObservableObject {
         
         print("✅ CustomCollectionManager: Found collection '\(collectionName)' (id: \(bookmark.id))")
         
-        do {
-            var isStale = false
-            var urls: [URL] = []
-            var accessFlags: [Bool] = []
-            
+        // Validate that bookmarks are not empty before trying to resolve them
+        guard !bookmark.tagGroupsBookmark.isEmpty,
+              !bookmark.tagsBookmark.isEmpty,
+              !bookmark.labelGroupsBookmark.isEmpty,
+              !bookmark.labelsBookmark.isEmpty else {
+            print("❌ CustomCollectionManager: One or more required bookmarks are empty")
+            return false
+        }
+        
+        var isStale = false
+        var urls: [URL] = []
+        var accessFlags: [Bool] = []
+        
+        // Helper function to safely resolve and access bookmark
+        func resolveAndAccessBookmark(_ bookmarkData: Data, name: String) -> (URL, Bool)? {
             do {
-                let tagGroupsURL = try URL(resolvingBookmarkData: bookmark.tagGroupsBookmark,
-                                           options: .withSecurityScope,
-                                           relativeTo: nil,
-                                           bookmarkDataIsStale: &isStale)
-                print("✅ CustomCollectionManager: Resolved tagGroupsURL: \(tagGroupsURL.path)")
-                urls.append(tagGroupsURL)
-                let accessFlag = tagGroupsURL.startAccessingSecurityScopedResource()
-                accessFlags.append(accessFlag)
-                print("✅ CustomCollectionManager: tagGroupsURL access granted: \(accessFlag)")
+                let url = try URL(resolvingBookmarkData: bookmarkData,
+                                 options: .withSecurityScope,
+                                 relativeTo: nil,
+                                 bookmarkDataIsStale: &isStale)
+                let accessFlag = url.startAccessingSecurityScopedResource()
+                print("✅ CustomCollectionManager: Resolved \(name): \(url.path), access: \(accessFlag)")
+                return (url, accessFlag)
             } catch {
-                print("❌ CustomCollectionManager: Failed to resolve tagGroupsURL: \(error.localizedDescription)")
-                return false
+                print("❌ CustomCollectionManager: Failed to resolve \(name): \(error.localizedDescription)")
+                return nil
             }
-            
-            do {
-                let tagsURL = try URL(resolvingBookmarkData: bookmark.tagsBookmark,
-                                      options: .withSecurityScope,
-                                      relativeTo: nil,
-                                      bookmarkDataIsStale: &isStale)
-                urls.append(tagsURL)
-                let accessFlag = tagsURL.startAccessingSecurityScopedResource()
-                accessFlags.append(accessFlag)
-            } catch {
-                stopAccessingResources(urls: urls)
-                return false
+        }
+        
+        // Resolve required bookmarks with error handling
+        guard let (tagGroupsURL, tagGroupsAccess) = resolveAndAccessBookmark(bookmark.tagGroupsBookmark, name: "tagGroups"),
+              let (tagsURL, tagsAccess) = resolveAndAccessBookmark(bookmark.tagsBookmark, name: "tags"),
+              let (labelGroupsURL, labelGroupsAccess) = resolveAndAccessBookmark(bookmark.labelGroupsBookmark, name: "labelGroups"),
+              let (labelsURL, labelsAccess) = resolveAndAccessBookmark(bookmark.labelsBookmark, name: "labels") else {
+            stopAccessingResources(urls: urls)
+            return false
+        }
+        
+        urls = [tagGroupsURL, tagsURL, labelGroupsURL, labelsURL]
+        accessFlags = [tagGroupsAccess, tagsAccess, labelGroupsAccess, labelsAccess]
+        
+        // Verify all access flags are true
+        guard !accessFlags.contains(false) else {
+            print("❌ CustomCollectionManager: Failed to access one or more required resources")
+            stopAccessingResources(urls: urls)
+            return false
+        }
+        
+        // Resolve optional bookmarks (timeEvents and playField)
+        if !bookmark.timeEventsBookmark.isEmpty {
+            if let (timeEventsURL, _) = resolveAndAccessBookmark(bookmark.timeEventsBookmark, name: "timeEvents") {
+                urls.append(timeEventsURL)
             }
-            
-            do {
-                let labelGroupsURL = try URL(resolvingBookmarkData: bookmark.labelGroupsBookmark,
-                                             options: .withSecurityScope,
-                                             relativeTo: nil,
-                                             bookmarkDataIsStale: &isStale)
-                urls.append(labelGroupsURL)
-                let accessFlag = labelGroupsURL.startAccessingSecurityScopedResource()
-                accessFlags.append(accessFlag)
-            } catch {
-                stopAccessingResources(urls: urls)
-                return false
+        }
+        
+        var playFieldURL: URL? = nil
+        if let playFieldBookmark = bookmark.playFieldBookmark, !playFieldBookmark.isEmpty {
+            if let (fieldURL, _) = resolveAndAccessBookmark(playFieldBookmark, name: "playField") {
+                urls.append(fieldURL)
+                playFieldURL = fieldURL
             }
+        }
+        
+        defer {
+            stopAccessingResources(urls: urls)
+        }
             
-            do {
-                let labelsURL = try URL(resolvingBookmarkData: bookmark.labelsBookmark,
-                                        options: .withSecurityScope,
-                                        relativeTo: nil,
-                                        bookmarkDataIsStale: &isStale)
-                urls.append(labelsURL)
-                let accessFlag = labelsURL.startAccessingSecurityScopedResource()
-                accessFlags.append(accessFlag)
-            } catch {
-                stopAccessingResources(urls: urls)
-                return false
-            }
-            
-            do {
-                if bookmark.timeEventsBookmark.isEmpty {
-                } else {
-                    let timeEventsURL = try URL(resolvingBookmarkData: bookmark.timeEventsBookmark,
-                                                options: .withSecurityScope,
-                                                relativeTo: nil,
-                                                bookmarkDataIsStale: &isStale)
-                    urls.append(timeEventsURL)
-                    let accessFlag = timeEventsURL.startAccessingSecurityScopedResource()
-                    accessFlags.append(accessFlag)
-                }
-            } catch {
-                stopAccessingResources(urls: urls)
-            }
-            
-            var playFieldURL: URL? = nil
-            do {
-                if let playFieldBookmark = bookmark.playFieldBookmark {
-                    if !playFieldBookmark.isEmpty {
-                        playFieldURL = try URL(resolvingBookmarkData: playFieldBookmark,
-                                               options: .withSecurityScope,
-                                               relativeTo: nil,
-                                               bookmarkDataIsStale: &isStale)
-                        urls.append(playFieldURL!)
-                        let accessFlag = playFieldURL!.startAccessingSecurityScopedResource()
-                        accessFlags.append(accessFlag)
-                    }
-                }
-            } catch {
-                stopAccessingResources(urls: urls)
-            }
-            
-            if urls.count < 4 || accessFlags.contains(false) {
-                stopAccessingResources(urls: urls)
-                return false
-            }
-            
-            defer {
-                stopAccessingResources(urls: urls)
-            }
-            
-            let tagGroupsURL = urls[0]
-            let tagsURL = urls[1]
-            let labelGroupsURL = urls[2]
-            let labelsURL = urls[3]
             
             let decoder = JSONDecoder()
             
-            // Load files in parallel for better performance
-            let group = DispatchGroup()
-            var tagGroupsResult: TagGroupsData?
-            var tagsResult: TagsData?
-            var labelGroupsResult: LabelGroupsData?
-            var labelsResult: LabelsData?
-            var loadError: Error?
-            
-            // Load tag groups
-            group.enter()
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let data = try Data(contentsOf: tagGroupsURL)
-                    tagGroupsResult = try decoder.decode(TagGroupsData.self, from: data)
-                } catch {
-                    loadError = error
+            // Load files synchronously to avoid blocking main thread with group.wait()
+            // Since this method is already synchronous and called from background threads,
+            // this simplification prevents potential crashes and deadlocks
+            do {
+                let tagGroupsData = try Data(contentsOf: tagGroupsURL)
+                let tagGroups = try decoder.decode(TagGroupsData.self, from: tagGroupsData)
+                self.tagGroups = tagGroups.tagGroups
+                
+                let tagsData = try Data(contentsOf: tagsURL)
+                let tags = try decoder.decode(TagsData.self, from: tagsData)
+                self.tags = tags.tags
+                
+                let labelGroupsData = try Data(contentsOf: labelGroupsURL)
+                let labelGroups = try decoder.decode(LabelGroupsData.self, from: labelGroupsData)
+                self.labelGroups = labelGroups.labelGroups
+                
+                let labelsData = try Data(contentsOf: labelsURL)
+                let labels = try decoder.decode(LabelsData.self, from: labelsData)
+                self.labels = labels.labels
+                
+                // Load timeEvents if available (optional)
+                if urls.count > 4 {
+                    do {
+                        let timeEventsURL = urls[4]
+                        let timeEventsData = try Data(contentsOf: timeEventsURL)
+                        let timeEvents = try decoder.decode(TimeEventsData.self, from: timeEventsData)
+                        self.timeEvents = timeEvents.events
+                    } catch {
+                        print("⚠️ CustomCollectionManager: Failed to load timeEvents (optional): \(error.localizedDescription)")
+                        self.timeEvents = []
+                    }
+                } else {
+                    self.timeEvents = []
                 }
-                group.leave()
-            }
-            
-            // Load tags
-            group.enter()
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let data = try Data(contentsOf: tagsURL)
-                    tagsResult = try decoder.decode(TagsData.self, from: data)
-                } catch {
-                    loadError = error
+                
+                // Load playField if available (optional)
+                if let fieldURL = playFieldURL {
+                    do {
+                        let playFieldData = try Data(contentsOf: fieldURL)
+                        self.playField = try decoder.decode(PlayField.self, from: playFieldData)
+                    } catch {
+                        print("⚠️ CustomCollectionManager: Failed to load playField (optional): \(error.localizedDescription)")
+                        self.playField = nil
+                    }
+                } else {
+                    self.playField = nil
                 }
-                group.leave()
-            }
-            
-            // Load label groups
-            group.enter()
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let data = try Data(contentsOf: labelGroupsURL)
-                    labelGroupsResult = try decoder.decode(LabelGroupsData.self, from: data)
-                } catch {
-                    loadError = error
-                }
-                group.leave()
-            }
-            
-            // Load labels
-            group.enter()
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let data = try Data(contentsOf: labelsURL)
-                    labelsResult = try decoder.decode(LabelsData.self, from: data)
-                } catch {
-                    loadError = error
-                }
-                group.leave()
-            }
-            
-            // Wait for all files to load
-            group.wait()
-            
-            // Check for errors
-            guard loadError == nil,
-                  let tagGroups = tagGroupsResult,
-                  let tags = tagsResult,
-                  let labelGroups = labelGroupsResult,
-                  let labels = labelsResult else {
-                print("❌ CustomCollectionManager: Failed to load collection files: \(loadError?.localizedDescription ?? "Unknown error")")
+            } catch {
+                print("❌ CustomCollectionManager: Failed to load collection files: \(error.localizedDescription)")
                 return false
             }
             
-            self.tagGroups = tagGroups.tagGroups
-            self.tags = tags.tags
-            self.labelGroups = labelGroups.labelGroups
-            self.labels = labels.labels
-            
-            // Load timeEvents and playField in parallel if they exist
-            let optionalGroup = DispatchGroup()
-            var timeEventsResult: TimeEventsData?
-            var playFieldResult: PlayField?
-            
-            if urls.count > 4 {
-                optionalGroup.enter()
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do {
-                        let timeEventsURL = urls[4]
-                        let data = try Data(contentsOf: timeEventsURL)
-                        timeEventsResult = try decoder.decode(TimeEventsData.self, from: data)
-                    } catch {
-                        // timeEvents is optional, so we just set empty array
-                    }
-                    optionalGroup.leave()
-                }
-            }
-            
-            if let fieldURL = playFieldURL {
-                optionalGroup.enter()
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do {
-                        let data = try Data(contentsOf: fieldURL)
-                        playFieldResult = try decoder.decode(PlayField.self, from: data)
-                    } catch {
-                        // playField is optional
-                    }
-                    optionalGroup.leave()
-                }
-            }
-            
-            optionalGroup.wait()
-            
-            self.timeEvents = timeEventsResult?.events ?? []
-            self.playField = playFieldResult
-            
-            print("✅ CustomCollectionManager: Loaded \(self.tagGroups.count) tag groups, \(self.tags.count) tags, \(self.timeEvents.count) timeEvents")
-            
-            self.collectionName = collectionName
-            if isStale {
-                print("⚠️ CustomCollectionManager: Bookmarks are stale, refreshing...")
-                refreshBookmark(collection: collectionName, urls: urls)
-            }
-            
-            print("✅ CustomCollectionManager: Successfully loaded collection '\(collectionName)' - tags: \(self.tags.count), tagGroups: \(self.tagGroups.count), labels: \(self.labels.count), labelGroups: \(self.labelGroups.count), timeEvents: \(self.timeEvents.count)")
-            return true
-        } catch {
-            return false
+        print("✅ CustomCollectionManager: Loaded \(self.tagGroups.count) tag groups, \(self.tags.count) tags, \(self.timeEvents.count) timeEvents")
+        
+        self.collectionName = collectionName
+        if isStale {
+            print("⚠️ CustomCollectionManager: Bookmarks are stale, refreshing...")
+            refreshBookmark(collection: collectionName, urls: urls)
         }
+        
+        print("✅ CustomCollectionManager: Successfully loaded collection '\(collectionName)' - tags: \(self.tags.count), tagGroups: \(self.tagGroups.count), labels: \(self.labels.count), labelGroups: \(self.labelGroups.count), timeEvents: \(self.timeEvents.count)")
+        return true
     }
     
     private func loadAllCollections() {

@@ -68,14 +68,63 @@ class TagLibraryManager: ObservableObject {
         allLabelGroups = labelGroups
         allLabels = labels
         allTimeEvents = timeEvents
+        
+        // Initialize collection count
+        lastCollectionCount = UserDefaults.standard.getCollectionBookmarks().count
         loadAllUserCollections()
     }
     
+    private var isReloadingCollections = false
+    private var lastCollectionCount = 0
+    
     @objc private func handleCollectionDataChanged() {
-        // Clear cache and reload all user collections when collections are updated
-        loadedCollectionsCache.removeAll()
-        // Reload all user collections asynchronously
-        loadAllUserCollections()
+        // Prevent multiple simultaneous reloads
+        guard !isReloadingCollections else {
+            print("⚠️ TagLibraryManager: Already reloading collections, skipping")
+            return
+        }
+        
+        let currentCollections = UserDefaults.standard.getCollectionBookmarks()
+        let currentCount = currentCollections.count
+        
+        // Only do full reload if collection count changed (new/deleted collection)
+        // For simple renames, we don't need to reload everything
+        if currentCount != lastCollectionCount {
+            print("📚 TagLibraryManager: Collection count changed (\(lastCollectionCount) -> \(currentCount)), reloading all")
+            lastCollectionCount = currentCount
+            loadedCollectionsCache.removeAll()
+            isReloadingCollections = true
+            
+            // Notify UI that loading started
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .collectionsLoadingStarted, object: nil)
+            }
+            
+            loadAllUserCollections()
+        } else {
+            // Just update cache keys if collections were renamed
+            print("📚 TagLibraryManager: Collection count unchanged, updating cache keys if needed")
+            updateCacheKeysIfNeeded(newCollections: currentCollections)
+        }
+    }
+    
+    private func updateCacheKeysIfNeeded(newCollections: [CollectionBookmark]) {
+        // Update cache keys for renamed collections
+        var newCache: [String: (tags: [Tag], tagGroups: [TagGroup], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent])] = [:]
+        
+        for collection in newCollections {
+            // Try to find cached data by ID (check all cache entries)
+            if let cachedData = loadedCollectionsCache[collection.name] {
+                // Cache key matches current name - keep as is
+                newCache[collection.name] = cachedData
+            } else {
+                // Check if there's cached data with different name but same ID
+                // For now, just skip - data will be loaded on demand
+                print("⚠️ TagLibraryManager: No cached data for '\(collection.name)', will load on demand")
+            }
+        }
+        
+        loadedCollectionsCache = newCache
     }
         
     private func getSystemLanguage() -> String {
@@ -300,7 +349,11 @@ class TagLibraryManager: ObservableObject {
                 self.allLabelGroups = finalLabelGroups
                 self.allLabels = finalLabels
                 self.allTimeEvents = finalTimeEvents
+                self.isReloadingCollections = false
                 print("✅ TagLibraryManager: Finished loading all collections - total tags: \(finalTags.count), tagGroups: \(finalTagGroups.count)")
+                
+                // Notify UI that loading finished
+                NotificationCenter.default.post(name: .collectionsLoadingFinished, object: nil)
             }
         }
     }

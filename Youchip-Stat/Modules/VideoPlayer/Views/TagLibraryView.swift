@@ -51,6 +51,7 @@ struct TagLibraryView: View {
     @State private var refreshID = UUID()
     @State private var windowWidth: CGFloat = 0
     @State private var isEditorModeActive = false
+    @State private var isLoadingCollections = false
     
     struct ActiveIntervalTag: Identifiable {
         let id: String
@@ -168,6 +169,17 @@ struct TagLibraryView: View {
             HStack {
                 collectionTitleView
                 Spacer()
+                
+                if isLoadingCollections {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Загрузка...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
                 Button(action: {
                     WindowsManager.shared.openCustomCollectionsWindow()
                 }) {
@@ -178,7 +190,7 @@ struct TagLibraryView: View {
                 }
                 .buttonStyle(.borderless)
                 .help(^String.Titles.createCollection)
-                .disabled(!activeIntervalTags.isEmpty)
+                .disabled(!activeIntervalTags.isEmpty || isLoadingCollections)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -294,6 +306,7 @@ struct TagLibraryView: View {
     private func standardCollectionChip(collection: StandardCollection, isSelected: Bool) -> some View {
         Button(action: {
             guard activeIntervalTags.isEmpty else { return }
+            guard !isLoadingCollections else { return }
             isUserCollectionActive = false
             lastSelectedCollectionName = collection.name
             cachedPlayField = nil // Clear cached playField when switching to standard collection
@@ -325,9 +338,10 @@ struct TagLibraryView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? Color.accentColor : Color(.separatorColor), lineWidth: 1)
             )
+            .opacity(isLoadingCollections ? 0.5 : 1.0)
         }
         .buttonStyle(.plain)
-        .disabled(!activeIntervalTags.isEmpty)
+        .disabled(!activeIntervalTags.isEmpty || isLoadingCollections)
     }
     
     private func customCollectionChip(collection: CollectionBookmark) -> some View {
@@ -335,6 +349,7 @@ struct TagLibraryView: View {
         
         return Button(action: {
             guard activeIntervalTags.isEmpty else { return }
+            guard !isLoadingCollections else { return }
             lastSelectedCollectionName = collection.name
             isUserCollectionActive = true
             loadUserCollection(collection)
@@ -360,9 +375,10 @@ struct TagLibraryView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? Color.accentColor : Color(.separatorColor), lineWidth: 1)
             )
+            .opacity(isLoadingCollections ? 0.5 : 1.0)
         }
         .buttonStyle(.plain)
-        .disabled(!activeIntervalTags.isEmpty)
+        .disabled(!activeIntervalTags.isEmpty || isLoadingCollections)
         .contextMenu {
             Button(^String.Titles.editButtonTitle) {
                 WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: collection)
@@ -1100,11 +1116,19 @@ struct TagLibraryView: View {
             // Update collections list
             self.userCollections = UserDefaults.standard.getCollectionBookmarks()
             
-            // Restore selection and load if needed
+            // Restore selection and update name if needed
             if self.isUserCollectionActive, let currentSelectedUserCollectionId,
                let updatedCollection = self.userCollections.first(where: { $0.id == currentSelectedUserCollectionId }) {
-                self.lastSelectedCollectionName = updatedCollection.name
-                // Don't call loadUserCollection here to avoid resetting scroll - it will be loaded when user selects
+                let oldName = self.lastSelectedCollectionName
+                let newName = updatedCollection.name
+                self.lastSelectedCollectionName = newName
+                
+                // If collection was renamed, just update the currentCollectionType name
+                // Don't reload the collection to avoid triggering full cache reload
+                if oldName != newName {
+                    self.tagLibrary.currentCollectionType = .user(name: newName)
+                    UserDefaults.standard.set(newName, forKey: UserDefaults.Keys.lastSelectedCollection)
+                }
             }
         }
         NotificationCenter.default.addObserver(forName: .showLabelSheet, object: nil, queue: .main) { notification in
@@ -1168,6 +1192,12 @@ struct TagLibraryView: View {
                 self.isEditorModeActive = isActive
             }
         }
+        NotificationCenter.default.addObserver(forName: .collectionsLoadingStarted, object: nil, queue: .main) { _ in
+            self.isLoadingCollections = true
+        }
+        NotificationCenter.default.addObserver(forName: .collectionsLoadingFinished, object: nil, queue: .main) { _ in
+            self.isLoadingCollections = false
+        }
     }
     
     
@@ -1179,6 +1209,8 @@ struct TagLibraryView: View {
         NotificationCenter.default.removeObserver(self, name: .markupModeChanged, object: nil)
         NotificationCenter.default.removeObserver(self, name: .stampCountsChanged, object: nil)
         NotificationCenter.default.removeObserver(self, name: .editorModeChanged, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .collectionsLoadingStarted, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .collectionsLoadingFinished, object: nil)
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {
