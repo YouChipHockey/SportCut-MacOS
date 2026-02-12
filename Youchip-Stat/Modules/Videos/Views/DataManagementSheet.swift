@@ -401,8 +401,8 @@ struct DataManagementSheet: View {
         DispatchQueue.global(qos: .userInitiated).async {
             DataSyncManager.shared.restoreFromBackup()
             
-            // Also restore collections from backup file
-            CollectionsBackupManager.shared.restoreCollectionsToUserDefaults()
+            // Collections are automatically restored from CollectionsBookmarks.json
+            // when getCollectionBookmarks() is called
             
             DispatchQueue.main.async {
                 isProcessing = false

@@ -1097,34 +1097,61 @@ struct TagLibraryView: View {
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {
-        let collectionManager = CustomCollectionManager()
-        if collectionManager.loadCollectionFromBookmarks(named: collection.name) {
-            tagLibrary.tags = collectionManager.tags
-            tagLibrary.tagGroups = collectionManager.tagGroups
-            tagLibrary.labelGroups = collectionManager.labelGroups
-            tagLibrary.labels = collectionManager.labels
-            tagLibrary.timeEvents = collectionManager.timeEvents
+        // Try to get from cache first, otherwise load asynchronously
+        if let cachedData = tagLibrary.getCollectionData(for: collection.name) {
+            // Use cached data immediately
+            tagLibrary.tags = cachedData.tags
+            tagLibrary.tagGroups = cachedData.tagGroups
+            tagLibrary.labelGroups = cachedData.labelGroups
+            tagLibrary.labels = cachedData.labels
+            tagLibrary.timeEvents = cachedData.timeEvents
             tagLibrary.selectedTimeEvents.removeAll()
             tagLibrary.currentCollectionType = .user(name: collection.name)
             HotKeyManager.shared.clearHotkeys()
-            HotKeyManager.shared.registerHotkeys(from: collectionManager.tags, for: .user(name: collection.name))
+            HotKeyManager.shared.registerHotkeys(from: cachedData.tags, for: .user(name: collection.name))
             UserDefaults.standard.set(collection.name, forKey: UserDefaults.Keys.lastSelectedCollection)
+            
+            DispatchQueue.main.async {
+                self.updateTagCounts()
+                self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+                self.refreshID = UUID()
+                self.forceWindowRefresh()
+            }
         } else {
-            tagLibrary.tags = []
-            tagLibrary.tagGroups = []
-            tagLibrary.labelGroups = []
-            tagLibrary.labels = []
-            tagLibrary.timeEvents = []
-            tagLibrary.selectedTimeEvents.removeAll()
-            tagLibrary.currentCollectionType = .standard
-            HotKeyManager.shared.clearHotkeys()
-        }
-        
-        DispatchQueue.main.async {
-            self.updateTagCounts()
-            self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-            self.refreshID = UUID()
-            self.forceWindowRefresh()
+            // Load asynchronously if not cached
+            DispatchQueue.global(qos: .userInitiated).async {
+                let collectionManager = CustomCollectionManager()
+                if collectionManager.loadCollectionFromBookmarks(named: collection.name) {
+                    DispatchQueue.main.async {
+                        self.tagLibrary.tags = collectionManager.tags
+                        self.tagLibrary.tagGroups = collectionManager.tagGroups
+                        self.tagLibrary.labelGroups = collectionManager.labelGroups
+                        self.tagLibrary.labels = collectionManager.labels
+                        self.tagLibrary.timeEvents = collectionManager.timeEvents
+                        self.tagLibrary.selectedTimeEvents.removeAll()
+                        self.tagLibrary.currentCollectionType = .user(name: collection.name)
+                        HotKeyManager.shared.clearHotkeys()
+                        HotKeyManager.shared.registerHotkeys(from: collectionManager.tags, for: .user(name: collection.name))
+                        UserDefaults.standard.set(collection.name, forKey: UserDefaults.Keys.lastSelectedCollection)
+                        
+                        self.updateTagCounts()
+                        self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+                        self.refreshID = UUID()
+                        self.forceWindowRefresh()
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.tagLibrary.tags = []
+                        self.tagLibrary.tagGroups = []
+                        self.tagLibrary.labelGroups = []
+                        self.tagLibrary.labels = []
+                        self.tagLibrary.timeEvents = []
+                        self.tagLibrary.selectedTimeEvents.removeAll()
+                        self.tagLibrary.currentCollectionType = .standard
+                        HotKeyManager.shared.clearHotkeys()
+                    }
+                }
+            }
         }
     }
     

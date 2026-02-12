@@ -105,6 +105,13 @@ class DataSyncManager {
     func synchronizeOnAppLaunch() {
         print("🔄 DataSync: Starting synchronization on app launch")
         
+        // Clean up duplicate collections first
+        CollectionsBookmarksManager.shared.cleanupDuplicateCollections()
+        
+        // Load collections from CollectionsBookmarks.json (this triggers migration if needed)
+        // This ensures CollectionsBookmarks.json is populated before restore
+        _ = UserDefaults.standard.getCollectionBookmarks()
+        
         // Restore collections from backup file if UserDefaults is empty
         restoreCollectionsFromBackup()
         
@@ -129,17 +136,10 @@ class DataSyncManager {
     
     /// Restores collections from backup file if UserDefaults is empty
     private func restoreCollectionsFromBackup() {
-        let existingCollections = UserDefaults.standard.getCollectionBookmarks()
-        guard existingCollections.isEmpty else {
-            // UserDefaults already has collections, sync backup file
-            CollectionsBackupManager.shared.syncFromUserDefaults()
-            return
-        }
-        
-        // Try to restore from backup file
-        if CollectionsBackupManager.shared.restoreCollectionsToUserDefaults() {
-            print("✅ DataSync: Collections restored from backup file")
-        }
+        // CollectionsBookmarks.json is now the single source of truth
+        // Collections are loaded from file system based on CollectionsBookmarks.json
+        // No need to restore from old backup system
+        print("✅ DataSync: Collections loaded from CollectionsBookmarks.json")
     }
     
     /// Creates backup from Documents to Application Support with throttling
@@ -187,6 +187,9 @@ class DataSyncManager {
         
         // Restore collections from backup file to UserDefaults
         restoreCollectionsFromBackup()
+        
+        // Clean up and sync collections after restore
+        CollectionsBookmarksManager.shared.cleanupDuplicateCollections()
         
         print("✅ DataSync: Data restored from backup")
     }
@@ -732,50 +735,50 @@ class DataSyncManager {
         }
     }
     
-    private var collectionsBackupFile: URL {
+    private var collectionsBookmarksFile: URL {
         let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return documentsDirectory.appendingPathComponent("YouChip-Stat/CollectionsBackup.json")
+        return documentsDirectory.appendingPathComponent("YouChip-Stat/CollectionsBookmarks.json")
     }
     
     private func backupCollectionsBackup() {
-        guard fileManager.fileExists(atPath: collectionsBackupFile.path) else {
-            print("⚠️ DataSync: Collections backup file does not exist")
+        guard fileManager.fileExists(atPath: collectionsBookmarksFile.path) else {
+            print("⚠️ DataSync: CollectionsBookmarks.json does not exist")
             return
         }
         
         do {
-            let backupFile = backupDirectory.appendingPathComponent("CollectionsBackup.json")
+            let backupFile = backupDirectory.appendingPathComponent("CollectionsBookmarks.json")
             if fileManager.fileExists(atPath: backupFile.path) {
                 try fileManager.removeItem(at: backupFile)
             }
             
-            try fileManager.copyItem(at: collectionsBackupFile, to: backupFile)
-            print("✅ DataSync: Collections backup file backed up")
+            try fileManager.copyItem(at: collectionsBookmarksFile, to: backupFile)
+            print("✅ DataSync: CollectionsBookmarks.json backed up")
         } catch {
-            print("❌ DataSync: Error backing up collections backup file - \(error.localizedDescription)")
+            print("❌ DataSync: Error backing up CollectionsBookmarks.json - \(error.localizedDescription)")
         }
     }
     
     private func restoreCollectionsBackup() {
-        let backupFile = backupDirectory.appendingPathComponent("CollectionsBackup.json")
+        let backupFile = backupDirectory.appendingPathComponent("CollectionsBookmarks.json")
         
         guard fileManager.fileExists(atPath: backupFile.path) else {
-            print("⚠️ DataSync: Collections backup file not found in backup")
+            print("⚠️ DataSync: CollectionsBookmarks.json not found in backup")
             return
         }
         
         do {
-            let parentDir = collectionsBackupFile.deletingLastPathComponent()
+            let parentDir = collectionsBookmarksFile.deletingLastPathComponent()
             fileManager.createDirectoryIfNeeded(url: parentDir)
             
-            if fileManager.fileExists(atPath: collectionsBackupFile.path) {
-                try fileManager.removeItem(at: collectionsBackupFile)
+            if fileManager.fileExists(atPath: collectionsBookmarksFile.path) {
+                try fileManager.removeItem(at: collectionsBookmarksFile)
             }
             
-            try fileManager.copyItem(at: backupFile, to: collectionsBackupFile)
-            print("✅ DataSync: Collections backup file restored from backup")
+            try fileManager.copyItem(at: backupFile, to: collectionsBookmarksFile)
+            print("✅ DataSync: CollectionsBookmarks.json restored from backup")
         } catch {
-            print("❌ DataSync: Error restoring collections backup file - \(error.localizedDescription)")
+            print("❌ DataSync: Error restoring CollectionsBookmarks.json - \(error.localizedDescription)")
         }
     }
     
@@ -913,10 +916,10 @@ class DataSyncManager {
         UserDefaults.standard.removeObject(forKey: collectionsBookmarksKey)
         UserDefaults.standard.removeObject(forKey: lastSyncDateKey)
         
-        // Clear collections backup file
-        if fileManager.fileExists(atPath: collectionsBackupFile.path) {
-            try? fileManager.removeItem(at: collectionsBackupFile)
-            print("✅ DataSync: Collections backup file cleared")
+        // Clear CollectionsBookmarks.json
+        if fileManager.fileExists(atPath: collectionsBookmarksFile.path) {
+            try? fileManager.removeItem(at: collectionsBookmarksFile)
+            print("✅ DataSync: CollectionsBookmarks.json cleared")
         }
         
         print("✅ DataSync: UserDefaults cleared")

@@ -11,11 +11,16 @@ extension UserDefaults {
     enum Keys {
         static let collections = "savedCollections"
         static let lastSelectedCollection = "lastSelectedCollection"
+        static let collectionsBookmarksLoaded = "collectionsBookmarksLoaded"
 
     }
     
     func saveCollectionBookmark(_ bookmark: CollectionBookmark) {
-        var collections = getCollectionBookmarks()
+        // Save only id and name to CollectionsBookmarks.json (single source of truth)
+        CollectionsBookmarksManager.shared.saveCollection(id: bookmark.id, name: bookmark.name)
+        
+        // Keep UserDefaults for backward compatibility during migration
+        var collections = getCollectionBookmarksFromUserDefaults()
         if let index = collections.firstIndex(where: { $0.id == bookmark.id }) {
             collections[index] = bookmark
         } else {
@@ -25,31 +30,69 @@ extension UserDefaults {
         if let encoded = try? JSONEncoder().encode(collections) {
             set(encoded, forKey: Keys.collections)
         }
-        
-        // Save to backup file
-        CollectionsBackupManager.shared.saveCollection(bookmark)
     }
     
     func getCollectionBookmarks() -> [CollectionBookmark] {
+        // Load from CollectionsBookmarks.json (single source of truth)
+        // Migrate from UserDefaults only once on first launch
+        if !bool(forKey: Keys.collectionsBookmarksLoaded) {
+            // First time loading - migrate from UserDefaults if needed
+            migrateFromUserDefaultsIfNeeded()
+            set(true, forKey: Keys.collectionsBookmarksLoaded)
+        }
+        
+        // Always load fresh data from CollectionsBookmarks.json
+        return CollectionsBookmarksManager.shared.loadCollectionBookmarks()
+    }
+    
+    func removeCollectionBookmark(named name: String) {
+        // Find collection by name
+        let collections = getCollectionBookmarks()
+        if let collectionToRemove = collections.first(where: { $0.name == name }) {
+            // Remove from CollectionsBookmarks.json
+            CollectionsBookmarksManager.shared.removeCollection(id: collectionToRemove.id)
+            
+            // Remove from UserDefaults for backward compatibility
+            var userDefaultsCollections = getCollectionBookmarksFromUserDefaults()
+            userDefaultsCollections.removeAll { $0.name == name }
+            
+            if let encoded = try? JSONEncoder().encode(userDefaultsCollections) {
+                set(encoded, forKey: Keys.collections)
+            }
+        }
+    }
+    
+    // MARK: - Private Methods
+    
+    /// Migrates collections from UserDefaults to CollectionsBookmarks.json if needed
+    private func migrateFromUserDefaultsIfNeeded() {
+        // Check if CollectionsBookmarks.json already exists
+        let collectionsBookmarks = CollectionsBookmarksManager.shared.loadCollections()
+        if !collectionsBookmarks.isEmpty {
+            // Already migrated
+            return
+        }
+        
+        // Load from UserDefaults
+        guard let data = data(forKey: Keys.collections),
+              let userDefaultsCollections = try? JSONDecoder().decode([CollectionBookmark].self, from: data) else {
+            return
+        }
+        
+        // Migrate to CollectionsBookmarks.json
+        for bookmark in userDefaultsCollections {
+            CollectionsBookmarksManager.shared.saveCollection(id: bookmark.id, name: bookmark.name)
+        }
+        
+        print("✅ CollectionsBookmarks: Migrated \(userDefaultsCollections.count) collections from UserDefaults")
+    }
+    
+    /// Gets collection bookmarks from UserDefaults (for backward compatibility)
+    private func getCollectionBookmarksFromUserDefaults() -> [CollectionBookmark] {
         guard let data = data(forKey: Keys.collections),
               let collections = try? JSONDecoder().decode([CollectionBookmark].self, from: data) else {
             return []
         }
         return collections
-    }
-    
-    func removeCollectionBookmark(named name: String) {
-        var collections = getCollectionBookmarks()
-        let collectionToRemove = collections.first(where: { $0.name == name })
-        collections.removeAll { $0.name == name }
-        
-        if let encoded = try? JSONEncoder().encode(collections) {
-            set(encoded, forKey: Keys.collections)
-        }
-        
-        // Remove from backup file
-        if let collection = collectionToRemove {
-            CollectionsBackupManager.shared.removeCollection(id: collection.id)
-        }
     }
 }
