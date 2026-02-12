@@ -199,10 +199,13 @@ class TagLibraryManager: ObservableObject {
     }
         
     func findLabelsForTag(_ tag: Tag) -> [Label] {
-        let labelGroupIds = tag.lablesGroup
-        let relevantLabelIds = allLabelGroups.filter { labelGroupIds.contains($0.id) }
+        // Optimize using Set for O(1) lookup
+        let labelGroupIdsSet = Set(tag.lablesGroup)
+        let relevantLabelIds = allLabelGroups
+            .filter { labelGroupIdsSet.contains($0.id) }
             .flatMap { $0.lables }
-        return allLabels.filter { label in relevantLabelIds.contains(label.id) }
+        let relevantLabelIdsSet = Set(relevantLabelIds)
+        return allLabels.filter { relevantLabelIdsSet.contains($0.id) }
     }
     
     // Cache for loaded collections to avoid reloading

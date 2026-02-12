@@ -157,8 +157,13 @@ class VideoFilesManager {
             return
         }
         
+        // Save timelines synchronously (already on background queue)
         saveTimelines(timelines, for: videoData.id)
-        DataSyncManager.shared.backupToApplicationSupport()
+        
+        // Trigger backup asynchronously to avoid blocking
+        DispatchQueue.main.async {
+            DataSyncManager.shared.backupToApplicationSupport()
+        }
     }
     
     // MARK: - Timeline File Management

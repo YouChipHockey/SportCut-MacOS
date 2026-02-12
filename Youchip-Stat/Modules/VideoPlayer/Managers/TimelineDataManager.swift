@@ -245,9 +245,24 @@ class TimelineDataManager: ObservableObject {
         checkAndUnlinkScreenshotsOutsideStamp(stampID: stampID, newStart: stamp.timeStartSeconds, newEnd: stamp.timeFinishSeconds)
     }
     
+    // Throttling for updateTimelines to avoid excessive file writes
+    private var updateTimelinesTimer: Timer?
+    private let updateTimelinesDelay: TimeInterval = 0.3
+    
     func updateTimelines() {
         guard let currentBookmark = currentBookmark else { return }
-        VideoFilesManager.shared.updateTimelines(for: currentBookmark, with: lines)
+        
+        // Cancel previous timer
+        updateTimelinesTimer?.invalidate()
+        
+        // Schedule update with delay to batch multiple rapid calls
+        updateTimelinesTimer = Timer.scheduledTimer(withTimeInterval: updateTimelinesDelay, repeats: false) { [weak self] _ in
+            guard let self = self, let bookmark = self.currentBookmark else { return }
+            // Perform update asynchronously to avoid blocking main thread
+            DispatchQueue.global(qos: .utility).async {
+                VideoFilesManager.shared.updateTimelines(for: bookmark, with: self.lines)
+            }
+        }
     }
     
     @objc private func handleTagUpdated(_ notification: Notification) {

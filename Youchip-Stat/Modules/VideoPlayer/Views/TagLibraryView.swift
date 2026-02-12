@@ -39,6 +39,8 @@ struct TagLibraryView: View {
     @State private var fieldMapBookmark: Data? = nil
     
     @State private var expandedGroups: Set<String> = []
+    @State private var collectionsScrollPosition: CGFloat = 0
+    @State private var cachedPlayField: (name: String, playField: PlayField)? = nil
     
     @State var activeIntervalTags: [ActiveIntervalTag] = []
     
@@ -57,7 +59,14 @@ struct TagLibraryView: View {
     }
     
     func loadUserCollections() {
+        // Update collections list without resetting scroll
+        let previousSelectedName = lastSelectedCollectionName
         userCollections = UserDefaults.standard.getCollectionBookmarks()
+        // Restore selection if it still exists
+        if let previousName = previousSelectedName,
+           userCollections.contains(where: { $0.name == previousName }) {
+            lastSelectedCollectionName = previousName
+        }
     }
     
     func backupDefaultData() {}
@@ -94,10 +103,12 @@ struct TagLibraryView: View {
                 LazyVStack(spacing: 8) {
                     if !tagLibrary.timeEvents.isEmpty {
                         timeEventsSection
+                            .id("timeEvents-\(tagLibrary.timeEvents.count)")
                     }
                     
                     if !tagLibrary.tagGroups.isEmpty {
                         tagGroupsSection
+                            .id("tagGroups-\(tagLibrary.tagGroups.count)")
                     }
                     
                     if tagLibrary.timeEvents.isEmpty && tagLibrary.tagGroups.isEmpty {
@@ -116,7 +127,6 @@ struct TagLibraryView: View {
             }
         }
         .background(Color(.controlBackgroundColor))
-        .id(refreshID)
         .sheet(isPresented: $showLabelSheet) {
             stampLabelSheet
         }
@@ -126,19 +136,19 @@ struct TagLibraryView: View {
             deleteCollectionAlert
         }
         .onChange(of: tagLibrary.timeEvents.count) { _ in
-            refreshID = UUID()
+            // Only update content, don't reset scroll
             forceWindowRefresh()
         }
         .onChange(of: tagLibrary.tagGroups.count) { _ in
-            refreshID = UUID()
+            // Only update content, don't reset scroll
             forceWindowRefresh()
         }
         .onChange(of: tagLibrary.selectedStandardCollectionName) { _ in
-            refreshID = UUID()
+            // Only update content, don't reset scroll
             forceWindowRefresh()
         }
         .onChange(of: isUserCollectionActive) { _ in
-            refreshID = UUID()
+            // Only update content, don't reset scroll
             forceWindowRefresh()
         }
         .onReceive(timelineData.$lines) { _ in
@@ -286,10 +296,11 @@ struct TagLibraryView: View {
             guard activeIntervalTags.isEmpty else { return }
             isUserCollectionActive = false
             lastSelectedCollectionName = collection.name
+            cachedPlayField = nil // Clear cached playField when switching to standard collection
             tagLibrary.applyStandardCollection(named: collection.name)
             DispatchQueue.main.async {
                 self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                self.refreshID = UUID()
+                // Don't change refreshID to preserve scroll position
                 self.forceWindowRefresh()
             }
         }) {
@@ -392,7 +403,7 @@ struct TagLibraryView: View {
                     tagLibrary.applyStandardCollection(named: collection.name)
                     DispatchQueue.main.async {
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                        self.refreshID = UUID()
+                        // Don't change refreshID to preserve scroll position
                         self.forceWindowRefresh()
                     }
                 }) {
@@ -424,6 +435,7 @@ struct TagLibraryView: View {
     private var standardCollectionButton: some View {
         Button(action: {
             isUserCollectionActive = false
+            cachedPlayField = nil // Clear cached playField when switching to standard collection
             if let collectionName =
                 tagLibrary.selectedStandardCollectionName
                 ??
@@ -434,7 +446,7 @@ struct TagLibraryView: View {
             }
             DispatchQueue.main.async {
                 self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                self.refreshID = UUID()
+                // Don't change refreshID to preserve scroll position
                 self.forceWindowRefresh()
             }
         }) {
@@ -555,6 +567,7 @@ struct TagLibraryView: View {
             
             Button(action: {
                 isUserCollectionActive = false
+                cachedPlayField = nil // Clear cached playField when switching to standard collection
                 if let collectionName =
                     tagLibrary.selectedStandardCollectionName
                     ??
@@ -565,7 +578,7 @@ struct TagLibraryView: View {
                 }
                 DispatchQueue.main.async {
                     self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                    self.refreshID = UUID()
+                    // Don't change refreshID to preserve scroll position
                     self.forceWindowRefresh()
                 }
                 showCollectionsList = false
@@ -589,10 +602,45 @@ struct TagLibraryView: View {
                     .font(.headline)
                     .padding(.top, 5)
                 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(userCollections, id: \.name) { collection in
-                            legacyCollectionRow(for: collection)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(userCollections, id: \.name) { collection in
+                                legacyCollectionRow(for: collection)
+                                    .id(collection.name)
+                            }
+                        }
+                    }
+                    .onAppear {
+                        // Restore scroll position if we have a selected collection
+                        if let selectedName = lastSelectedCollectionName,
+                           isUserCollectionActive {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    proxy.scrollTo(selectedName, anchor: .center)
+                                }
+                            }
+                        }
+                    }
+                    .onChange(of: userCollections) { _ in
+                        // When collections list updates, restore scroll position to selected collection
+                        if let selectedName = lastSelectedCollectionName,
+                           isUserCollectionActive,
+                           userCollections.contains(where: { $0.name == selectedName }) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    proxy.scrollTo(selectedName, anchor: .center)
+                                }
+                            }
+                        }
+                    }
+                    .onChange(of: lastSelectedCollectionName) { newName in
+                        if let name = newName, isUserCollectionActive {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    proxy.scrollTo(name, anchor: .center)
+                                }
+                            }
                         }
                     }
                 }
@@ -761,14 +809,30 @@ struct TagLibraryView: View {
     
     private func addTagToTimeline(tag: Tag, selectedLabels: [String]) {
         if tag.mapEnabled == true {
-            let collectionManager = CustomCollectionManager()
-            if let collectionName = tagLibrary.currentCollectionType.name,
-               collectionManager.loadCollectionFromBookmarks(named: collectionName),
-               let playField = collectionManager.playField,
-               let imageBookmark = playField.imageBookmark {
-                
-                showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
-                return
+            // Use cached playField if available, otherwise load
+            if let collectionName = tagLibrary.currentCollectionType.name {
+                if let cached = cachedPlayField, cached.name == collectionName,
+                   let imageBookmark = cached.playField.imageBookmark {
+                    showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
+                    return
+                } else {
+                    // Load playField asynchronously
+                    DispatchQueue.global(qos: .userInitiated).async { 
+                        let collectionManager = CustomCollectionManager()
+                        if collectionManager.loadCollectionFromBookmarks(named: collectionName),
+                           let playField = collectionManager.playField,
+                           let imageBookmark = playField.imageBookmark {
+                            DispatchQueue.main.async {
+                                self.cachedPlayField = (name: collectionName, playField: playField)
+                                self.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
+                            }
+                            return
+                        }
+                    }
+                    // Fallback: proceed without field map
+                    proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil)
+                    return
+                }
             }
         }
         
@@ -794,10 +858,10 @@ struct TagLibraryView: View {
         
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {
-            let collectionManager = CustomCollectionManager()
+            // Use cached playField if available
             if let collectionName = tagLibrary.currentCollectionType.name,
-               collectionManager.loadCollectionFromBookmarks(named: collectionName),
-               let playField = collectionManager.playField {
+               let cached = cachedPlayField, cached.name == collectionName {
+                let playField = cached.playField
                 let fieldWidth = CGFloat(playField.width)
                 let fieldHeight = CGFloat(playField.height)
                 
@@ -836,7 +900,9 @@ struct TagLibraryView: View {
     private var stampLabelSheet: some View {
         if markupMode == .tagBased {
             if let tag = selectedTag {
-                let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
+                // Optimize label check using Set for O(1) lookup
+                let labelGroupIdsSet = Set(tag.lablesGroup)
+                let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                 
                 if hasLabels {
                     StampItemsSelectionSheet(
@@ -914,7 +980,9 @@ struct TagLibraryView: View {
             if let selectedLineID = timelineData.selectedLineID,
                timelineData.lines.contains(where: { $0.id == selectedLineID }),
                let tag = selectedTag {
-                let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
+                // Optimize label check using Set for O(1) lookup
+                let labelGroupIdsSet = Set(tag.lablesGroup)
+                let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                 
                 if hasLabels {
                     StampItemsSelectionSheet(
@@ -1025,12 +1093,18 @@ struct TagLibraryView: View {
             }
         }
         NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
+            // Reload collections list without resetting scroll
             let currentSelectedUserCollectionId = userCollections.first { $0.name == self.lastSelectedCollectionName}?.id
-            loadUserCollections()
+            let currentScrollPosition = self.lastSelectedCollectionName // Save current selection
+            
+            // Update collections list
+            self.userCollections = UserDefaults.standard.getCollectionBookmarks()
+            
+            // Restore selection and load if needed
             if self.isUserCollectionActive, let currentSelectedUserCollectionId,
-               let updatedCollection = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.id == currentSelectedUserCollectionId }) {
+               let updatedCollection = self.userCollections.first(where: { $0.id == currentSelectedUserCollectionId }) {
                 self.lastSelectedCollectionName = updatedCollection.name
-                self.loadUserCollection(updatedCollection)
+                // Don't call loadUserCollection here to avoid resetting scroll - it will be loaded when user selects
             }
         }
         NotificationCenter.default.addObserver(forName: .showLabelSheet, object: nil, queue: .main) { notification in
@@ -1049,7 +1123,9 @@ struct TagLibraryView: View {
                         
                         DispatchQueue.main.async {
                             videoManager.player?.pause()
-                            let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
+                            // Optimize label check using Set for O(1) lookup
+                            let labelGroupIdsSet = Set(tag.lablesGroup)
+                            let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                             if hasLabels {
                                 showLabelSheet = true
                             } else {
@@ -1068,8 +1144,17 @@ struct TagLibraryView: View {
                 
                 selectedTag = tag
                 videoManager.player?.pause()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                
+                // Optimize label check using Set for O(1) lookup - do it immediately
+                let labelGroupIdsSet = Set(tag.lablesGroup)
+                let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
+                
+                if hasLabels {
+                    // Show sheet immediately without delay
                     showLabelSheet = true
+                } else {
+                    // No labels - add tag immediately without showing sheet
+                    addTagToTimeline(tag: tag, selectedLabels: [])
                 }
             }
         }
@@ -1111,12 +1196,13 @@ struct TagLibraryView: View {
             HotKeyManager.shared.registerHotkeys(from: cachedData.tags, for: .user(name: collection.name))
             UserDefaults.standard.set(collection.name, forKey: UserDefaults.Keys.lastSelectedCollection)
             
-            DispatchQueue.main.async {
-                self.updateTagCounts()
-                self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                self.refreshID = UUID()
-                self.forceWindowRefresh()
-            }
+            // Cache playField if available
+            cachePlayFieldForCollection(collection.name)
+            
+            // Update UI without changing refreshID to preserve scroll position
+            updateTagCounts()
+            expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
+            forceWindowRefresh()
         } else {
             // Load asynchronously if not cached
             DispatchQueue.global(qos: .userInitiated).async {
@@ -1134,9 +1220,14 @@ struct TagLibraryView: View {
                         HotKeyManager.shared.registerHotkeys(from: collectionManager.tags, for: .user(name: collection.name))
                         UserDefaults.standard.set(collection.name, forKey: UserDefaults.Keys.lastSelectedCollection)
                         
+                        // Cache playField
+                        if let playField = collectionManager.playField {
+                            self.cachedPlayField = (name: collection.name, playField: playField)
+                        }
+                        
+                        // Update UI without changing refreshID to preserve scroll position
                         self.updateTagCounts()
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                        self.refreshID = UUID()
                         self.forceWindowRefresh()
                     }
                 } else {
@@ -1149,7 +1240,21 @@ struct TagLibraryView: View {
                         self.tagLibrary.selectedTimeEvents.removeAll()
                         self.tagLibrary.currentCollectionType = .standard
                         HotKeyManager.shared.clearHotkeys()
+                        self.cachedPlayField = nil
                     }
+                }
+            }
+        }
+    }
+    
+    /// Cache playField for current collection to avoid reloading
+    private func cachePlayFieldForCollection(_ collectionName: String) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let collectionManager = CustomCollectionManager()
+            if collectionManager.loadCollectionFromBookmarks(named: collectionName),
+               let playField = collectionManager.playField {
+                DispatchQueue.main.async {
+                    self.cachedPlayField = (name: collectionName, playField: playField)
                 }
             }
         }
@@ -1198,7 +1303,9 @@ struct TagLibraryView: View {
                 
                 DispatchQueue.main.async {
                     videoManager.player?.pause()
-                    let hasLabels = !tagLibrary.allLabelGroups.filter({ tag.lablesGroup.contains($0.id) }).isEmpty
+                    // Optimize label check using Set for O(1) lookup
+                let labelGroupIdsSet = Set(tag.lablesGroup)
+                let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                     if hasLabels {
                         showLabelSheet = true
                     } else {
@@ -1217,20 +1324,46 @@ struct TagLibraryView: View {
         
         videoManager.player?.pause()
         selectedTag = tag
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        
+        // Optimize label check using Set for O(1) lookup - do it immediately
+        let labelGroupIdsSet = Set(tag.lablesGroup)
+        let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
+        
+        if hasLabels {
+            // Show sheet immediately without delay
             showLabelSheet = true
+        } else {
+            // No labels - add tag immediately without showing sheet
+            addTagToTimeline(tag: tag, selectedLabels: [])
         }
     }
     
     private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [String]) {
         if tag.mapEnabled == true {
-            let collectionManager = CustomCollectionManager()
-            if let collectionName = tagLibrary.currentCollectionType.name,
-               collectionManager.loadCollectionFromBookmarks(named: collectionName),
-               let playField = collectionManager.playField,
-               let imageBookmark = playField.imageBookmark {
-                showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
-                return
+            // Use cached playField if available, otherwise load
+            if let collectionName = tagLibrary.currentCollectionType.name {
+                if let cached = cachedPlayField, cached.name == collectionName,
+                   let imageBookmark = cached.playField.imageBookmark {
+                    showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
+                    return
+                } else {
+                    // Load playField asynchronously
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let collectionManager = CustomCollectionManager()
+                        if collectionManager.loadCollectionFromBookmarks(named: collectionName),
+                           let playField = collectionManager.playField,
+                           let imageBookmark = playField.imageBookmark {
+                            DispatchQueue.main.async {
+                                self.cachedPlayField = (name: collectionName, playField: playField)
+                                self.showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
+                            }
+                            return
+                        }
+                    }
+                    // Fallback: proceed without field map
+                    proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
+                    return
+                }
             }
         }
         proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
@@ -1251,10 +1384,10 @@ struct TagLibraryView: View {
         
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {
-            let collectionManager = CustomCollectionManager()
+            // Use cached playField if available
             if let collectionName = tagLibrary.currentCollectionType.name,
-               collectionManager.loadCollectionFromBookmarks(named: collectionName),
-               let playField = collectionManager.playField {
+               let cached = cachedPlayField, cached.name == collectionName {
+                let playField = cached.playField
                 let fieldWidth = CGFloat(playField.width)
                 let fieldHeight = CGFloat(playField.height)
                 let fieldX = normalizedCoords.x * fieldWidth

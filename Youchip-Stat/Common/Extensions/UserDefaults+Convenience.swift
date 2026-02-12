@@ -12,6 +12,7 @@ extension UserDefaults {
         static let collections = "savedCollections"
         static let lastSelectedCollection = "lastSelectedCollection"
         static let collectionsBookmarksLoaded = "collectionsBookmarksLoaded"
+        static let collectionsDeduplicationDone = "collectionsDeduplicationDone"
 
     }
     

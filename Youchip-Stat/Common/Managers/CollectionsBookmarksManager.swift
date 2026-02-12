@@ -38,6 +38,7 @@ class CollectionsBookmarksManager {
     // MARK: - Public Methods
     
     /// Saves collection info to CollectionsBookmarks.json
+    /// After initial deduplication, allows duplicate names (they will have suffixes added by ensureUniqueCollectionName)
     func saveCollection(id: String, name: String) {
         var collections = loadCollections()
         
@@ -48,9 +49,9 @@ class CollectionsBookmarksManager {
             collections.append(CollectionInfo(id: id, name: name))
         }
         
-        // Ensure unique names
-        collections = ensureUniqueNames(collections)
-        
+        // After deduplication is done, don't remove duplicates - allow them to exist
+        // The ensureUniqueCollectionName() in CustomCollectionManager will add suffixes for new collections
+        // But we don't remove existing ones here
         saveCollections(collections)
         
         // Trigger backup to Application Support
@@ -104,8 +105,17 @@ class CollectionsBookmarksManager {
     /// Scans Collections folder and adds all collections to CollectionsBookmarks.json
     /// Also cleans up duplicates with same base name (e.g., "Col", "Col (1)", "Col (2)")
     /// Keeps only the one with latest creation date or highest number
+    /// This runs only once - after that, duplicate names are allowed with suffixes
     func cleanupDuplicateCollections() {
+        // Check if deduplication was already done
+        if UserDefaults.standard.bool(forKey: UserDefaults.Keys.collectionsDeduplicationDone) {
+            print("✅ CollectionsBookmarks: Deduplication already done, skipping")
+            return
+        }
+        
         guard fileManager.fileExists(atPath: collectionsDirectory.path) else {
+            // Mark as done even if directory doesn't exist
+            UserDefaults.standard.set(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
             return
         }
         
@@ -215,11 +225,15 @@ class CollectionsBookmarksManager {
                 }
             }
             
-            // Ensure unique names
-            updatedCollections = ensureUniqueNames(updatedCollections)
+            // Don't enforce unique names during deduplication - just save what we have
+            // After deduplication, users can create collections with same names and they'll get suffixes
             saveCollections(updatedCollections)
             
+            // Mark deduplication as done
+            UserDefaults.standard.set(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
+            
             print("✅ CollectionsBookmarks: Updated CollectionsBookmarks.json with \(updatedCollections.count) collections")
+            print("✅ CollectionsBookmarks: Deduplication completed and marked as done")
             
             // Notify that collections were updated
             DispatchQueue.main.async {
@@ -228,6 +242,8 @@ class CollectionsBookmarksManager {
             
         } catch {
             print("❌ CollectionsBookmarks: Error cleaning up duplicates - \(error.localizedDescription)")
+            // Mark as done even on error to prevent retries
+            UserDefaults.standard.set(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
         }
     }
     
@@ -370,21 +386,6 @@ class CollectionsBookmarksManager {
         }
     }
     
-    /// Ensures unique names in collections list
-    /// If duplicates found, keeps the first occurrence
-    private func ensureUniqueNames(_ collections: [CollectionInfo]) -> [CollectionInfo] {
-        var seenNames = Set<String>()
-        var uniqueCollections: [CollectionInfo] = []
-        
-        for collection in collections {
-            if !seenNames.contains(collection.name) {
-                seenNames.insert(collection.name)
-                uniqueCollections.append(collection)
-            } else {
-                print("⚠️ CollectionsBookmarks: Duplicate name found: \(collection.name), skipping")
-            }
-        }
-        
-        return uniqueCollections
-    }
+    // Note: ensureUniqueNames() was removed - after initial deduplication,
+    // duplicate names are allowed and will get suffixes added by ensureUniqueCollectionName()
 }
