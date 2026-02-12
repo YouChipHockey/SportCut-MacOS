@@ -107,15 +107,25 @@ class CollectionsBookmarksManager {
     /// Keeps only the one with latest creation date or highest number
     /// This runs only once - after that, duplicate names are allowed with suffixes
     func cleanupDuplicateCollections() {
-        // Check if deduplication was already done
+        // Check if deduplication was already done in Keychain
+        if let keychainValue = KeychainHelper.shared.getBool(forKey: UserDefaults.Keys.collectionsDeduplicationDone),
+           keychainValue {
+            print("✅ CollectionsBookmarks: Deduplication already done (from Keychain), skipping")
+            return
+        }
+        
+        // Migrate from UserDefaults to Keychain if needed (for backward compatibility)
         if UserDefaults.standard.bool(forKey: UserDefaults.Keys.collectionsDeduplicationDone) {
-            print("✅ CollectionsBookmarks: Deduplication already done, skipping")
+            // Migrate from UserDefaults to Keychain
+            _ = KeychainHelper.shared.saveBool(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
+            UserDefaults.standard.removeObject(forKey: UserDefaults.Keys.collectionsDeduplicationDone)
+            print("✅ CollectionsBookmarks: Migrated deduplication flag from UserDefaults to Keychain")
             return
         }
         
         guard fileManager.fileExists(atPath: collectionsDirectory.path) else {
             // Mark as done even if directory doesn't exist
-            UserDefaults.standard.set(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
+            _ = KeychainHelper.shared.saveBool(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
             return
         }
         
@@ -230,7 +240,7 @@ class CollectionsBookmarksManager {
             saveCollections(updatedCollections)
             
             // Mark deduplication as done
-            UserDefaults.standard.set(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
+            _ = KeychainHelper.shared.saveBool(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
             
             print("✅ CollectionsBookmarks: Updated CollectionsBookmarks.json with \(updatedCollections.count) collections")
             print("✅ CollectionsBookmarks: Deduplication completed and marked as done")
@@ -243,7 +253,7 @@ class CollectionsBookmarksManager {
         } catch {
             print("❌ CollectionsBookmarks: Error cleaning up duplicates - \(error.localizedDescription)")
             // Mark as done even on error to prevent retries
-            UserDefaults.standard.set(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
+            _ = KeychainHelper.shared.saveBool(true, forKey: UserDefaults.Keys.collectionsDeduplicationDone)
         }
     }
     
