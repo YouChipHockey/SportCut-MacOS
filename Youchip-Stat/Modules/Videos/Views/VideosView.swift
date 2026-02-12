@@ -74,7 +74,130 @@ struct VideosView: View {
         .overlay(loadingOverlay)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                modernToolbarContent
+                // Import Project button
+                Button(action: {
+                    viewModel.action.send(.importProject)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 14))
+                        Text(^String.Titles.projectImportTitle)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(6)
+                    .shadow(color: .green.opacity(0.3), radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Import Collection button
+                Button(action: {
+                    showImportCollectionSheet = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 14))
+                        Text(^String.Titles.importCollection)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.purple, Color.purple.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(6)
+                    .shadow(color: .purple.opacity(0.3), radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Guides button
+                Button(action: {
+                    viewModel.action.send(.openGuide)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "book")
+                            .font(.system(size: 14))
+                        Text(^String.Titles.videosViewButtonGuides)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // License button
+                Button(action: {
+                    viewModel.action.send(.showAuthSheet)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: viewModel.authManager.isAuthValid ? "checkmark.shield" : "exclamationmark.shield")
+                            .font(.system(size: 14))
+                        Text(viewModel.authManager.isAuthValid ? ^String.Titles.renewLicense : ^String.Titles.buyLicense)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(viewModel.authManager.isAuthValid ? .green : .orange)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        viewModel.authManager.isAuthValid 
+                            ? Color.green.opacity(0.1) 
+                            : Color.orange.opacity(0.1)
+                    )
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(
+                                viewModel.authManager.isAuthValid 
+                                    ? Color.green.opacity(0.3) 
+                                    : Color.orange.opacity(0.3), 
+                                lineWidth: 1
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Data Management button
+                Button(action: {
+                    showDataManagementSheet = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "externaldrive.fill")
+                            .font(.system(size: 14))
+                        Text(^String.Titles.dataManagementTitle)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
         .infoAlert(
@@ -328,130 +451,6 @@ struct VideosView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
-    }
-    
-    private var modernToolbarContent: some View {
-        HStack(spacing: 12) {
-            Button(action: {
-                viewModel.action.send(.importProject)
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.and.arrow.down")
-                        .font(.system(size: 14))
-                    Text(^String.Titles.projectImportTitle)
-                        .font(.system(size: 14, weight: .medium))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .cornerRadius(6)
-                .shadow(color: .green.opacity(0.3), radius: 2, x: 0, y: 1)
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            Button(action: {
-                showImportCollectionSheet = true
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.and.arrow.down")
-                        .font(.system(size: 14))
-                    Text(^String.Titles.importCollection)
-                        .font(.system(size: 14, weight: .medium))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [Color.purple, Color.purple.opacity(0.8)]),
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .cornerRadius(6)
-                .shadow(color: .purple.opacity(0.3), radius: 2, x: 0, y: 1)
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            Button(action: {
-                viewModel.action.send(.openGuide)
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "book")
-                        .font(.system(size: 14))
-                    Text(^String.Titles.videosViewButtonGuides)
-                        .font(.system(size: 14, weight: .medium))
-                }
-                .foregroundColor(.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(6)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            Button(action: {
-                viewModel.action.send(.showAuthSheet)
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: viewModel.authManager.isAuthValid ? "checkmark.shield" : "exclamationmark.shield")
-                        .font(.system(size: 14))
-                    Text(viewModel.authManager.isAuthValid ? ^String.Titles.renewLicense : ^String.Titles.buyLicense)
-                        .font(.system(size: 14, weight: .medium))
-                }
-                .foregroundColor(viewModel.authManager.isAuthValid ? .green : .orange)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    viewModel.authManager.isAuthValid 
-                        ? Color.green.opacity(0.1) 
-                        : Color.orange.opacity(0.1)
-                )
-                .cornerRadius(6)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(
-                            viewModel.authManager.isAuthValid 
-                                ? Color.green.opacity(0.3) 
-                                : Color.orange.opacity(0.3), 
-                            lineWidth: 1
-                        )
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            Button(action: {
-                showDataManagementSheet = true
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "externaldrive.fill")
-                        .font(.system(size: 14))
-                    Text(^String.Titles.dataManagementTitle)
-                        .font(.system(size: 14, weight: .medium))
-                }
-                .foregroundColor(.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(6)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
     }
     
     private var loadingOverlay: some View {
