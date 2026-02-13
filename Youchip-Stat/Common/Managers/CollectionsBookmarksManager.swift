@@ -42,20 +42,13 @@ class CollectionsBookmarksManager {
     func saveCollection(id: String, name: String) {
         var collections = loadCollections()
         
-        // Update or add collection
         if let index = collections.firstIndex(where: { $0.id == id }) {
             collections[index] = CollectionInfo(id: id, name: name)
         } else {
             collections.append(CollectionInfo(id: id, name: name))
         }
         
-        // After deduplication is done, don't remove duplicates - allow them to exist
-        // The ensureUniqueCollectionName() in CustomCollectionManager will add suffixes for new collections
-        // But we don't remove existing ones here
         saveCollections(collections)
-        
-        // Trigger backup to Application Support
-        DataSyncManager.shared.backupToApplicationSupport()
     }
     
     /// Removes collection from CollectionsBookmarks.json

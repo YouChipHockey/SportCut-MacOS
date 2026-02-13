@@ -156,14 +156,7 @@ class VideoFilesManager {
         guard let videoData = videosData.first(where: { $0.bookmark == bookmark }) else {
             return
         }
-        
-        // Save timelines synchronously (already on background queue)
-        saveTimelines(timelines, for: videoData.id)
-        
-        // Trigger backup asynchronously to avoid blocking
-        DispatchQueue.main.async {
-            DataSyncManager.shared.backupToApplicationSupport()
-        }
+        InMemoryStorageManager.shared.saveTimelines(timelines, for: videoData.id)
     }
     
     // MARK: - Timeline File Management
@@ -178,42 +171,16 @@ class VideoFilesManager {
         return timelinesDirectory.appendingPathComponent("\(videoId).json")
     }
     
-    /// Saves timelines to file for a specific video
     func saveTimelines(_ timelines: [TimelineLine], for videoId: String) {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            let data = try encoder.encode(timelines)
-            let fileURL = timelineFileURL(for: videoId)
-            try data.write(to: fileURL)
-        } catch {
-            print("❌ Error saving timelines for video \(videoId): \(error.localizedDescription)")
-        }
+        InMemoryStorageManager.shared.saveTimelines(timelines, for: videoId)
     }
     
-    /// Loads timelines from file for a specific video
     func loadTimelines(for videoId: String) -> [TimelineLine] {
-        let fileURL = timelineFileURL(for: videoId)
-        
-        guard fileManager.fileExists(atPath: fileURL.path) else {
-            return []
-        }
-        
-        do {
-            let data = try Data(contentsOf: fileURL)
-            let decoder = JSONDecoder()
-            return try decoder.decode([TimelineLine].self, from: data)
-        } catch {
-            print("❌ Error loading timelines for video \(videoId): \(error.localizedDescription)")
-            return []
-        }
+        return InMemoryStorageManager.shared.loadTimelines(for: videoId)
     }
     
     private func deleteTimelinesFile(for videoId: String) {
-        let fileURL = timelineFileURL(for: videoId)
-        if fileManager.fileExists(atPath: fileURL.path) {
-            try? fileManager.removeItem(at: fileURL)
-        }
+        InMemoryStorageManager.shared.deleteTimelines(for: videoId)
     }
     
     func renameFile(file: FilesFile, newName: String) {
@@ -276,8 +243,6 @@ class VideoFilesManager {
         do {
             let encoded = try JSONEncoder().encode(videosData)
             UserDefaults.standard.set(encoded, forKey: "videosData")
-            
-            DataSyncManager.shared.backupToApplicationSupport()
         } catch {
             print("\(^String.Titles.fileManagerErrorEncoding) \(error)")
         }
@@ -369,15 +334,14 @@ class VideoFilesManager {
     }
     
     private func migrateOldVideosData(_ oldData: [VideosDataOldFormat]) {
-        print("🔄 Migrating timelines from UserDefaults to files...")
+        print("🔄 Migrating timelines...")
         
         for oldVideoData in oldData {
             if !oldVideoData.timelines.isEmpty {
-                saveTimelines(oldVideoData.timelines, for: oldVideoData.id)
+                InMemoryStorageManager.shared.saveTimelines(oldVideoData.timelines, for: oldVideoData.id)
             }
         }
         
-        // Save migrated data without timelines
         let newVideosData = oldData.map { old in
             VideosData(
                 bookmark: old.bookmark,

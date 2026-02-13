@@ -164,6 +164,8 @@ class DataSyncManager {
         
         print("💾 DataSync: Creating data backup")
         
+        InMemoryStorageManager.shared.saveToDiskImmediate()
+        
         createBackupDirectoryIfNeeded()
         backupCollections()
         backupPlayFields()

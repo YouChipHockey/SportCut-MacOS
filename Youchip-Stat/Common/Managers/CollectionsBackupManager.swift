@@ -35,7 +35,6 @@ class CollectionsBackupManager {
     func saveCollection(_ collection: CollectionBookmark) {
         var collections = loadCollections()
         
-        // Update or add collection
         if let index = collections.firstIndex(where: { $0.id == collection.id }) {
             collections[index] = CollectionInfo(id: collection.id, name: collection.name)
         } else {
@@ -43,9 +42,6 @@ class CollectionsBackupManager {
         }
         
         saveCollections(collections)
-        
-        // Trigger backup to Application Support
-        DataSyncManager.shared.backupToApplicationSupport()
     }
     
     /// Removes collection from backup file
