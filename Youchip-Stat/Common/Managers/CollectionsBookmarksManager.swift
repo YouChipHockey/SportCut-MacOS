@@ -6,20 +6,19 @@
 //
 
 import Foundation
+import AppKit
 
-/// Manages collection bookmarks metadata (id and name) in CollectionsBookmarks.json file
-/// This is the single source of truth for collection bookmarks
+/// Structure for storing collection metadata in CollectionsBookmarks.json
+struct CollectionInfo: Codable, Equatable {
+    let id: String
+    let name: String
+}
+
 class CollectionsBookmarksManager {
     
     static let shared = CollectionsBookmarksManager()
     
     private let fileManager = FileManager.default
-    
-    /// Structure for storing collection metadata in CollectionsBookmarks.json
-    struct CollectionInfo: Codable, Equatable {
-        let id: String
-        let name: String
-    }
     
     private var collectionsBookmarksFile: URL {
         let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -33,33 +32,84 @@ class CollectionsBookmarksManager {
     
     private init() {
         createDirectoryIfNeeded()
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationWillTerminate),
+            name: NSApplication.willTerminateNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func applicationWillTerminate() {
+        saveTimer?.invalidate()
+        saveToFileImmediate()
     }
     
     // MARK: - Public Methods
     
     /// Saves collection info to CollectionsBookmarks.json
     /// After initial deduplication, allows duplicate names (they will have suffixes added by ensureUniqueCollectionName)
+    private var pendingSave = false
+    private var saveTimer: Timer?
+    private let saveDelay: TimeInterval = 2.0
+    
+    private var collectionsCache: [CollectionInfo] = []
+    private let cacheLock = NSLock()
+    
     func saveCollection(id: String, name: String) {
-        var collections = loadCollections()
-        
-        if let index = collections.firstIndex(where: { $0.id == id }) {
-            collections[index] = CollectionInfo(id: id, name: name)
-        } else {
-            collections.append(CollectionInfo(id: id, name: name))
+        cacheLock.lock()
+        if collectionsCache.isEmpty {
+            collectionsCache = loadCollectionsFromFile()
         }
         
-        saveCollections(collections)
+        if let index = collectionsCache.firstIndex(where: { $0.id == id }) {
+            collectionsCache[index] = CollectionInfo(id: id, name: name)
+        } else {
+            collectionsCache.append(CollectionInfo(id: id, name: name))
+        }
+        cacheLock.unlock()
+        
+        scheduleSave()
     }
     
-    /// Removes collection from CollectionsBookmarks.json
     func removeCollection(id: String) {
-        var collections = loadCollections()
-        collections.removeAll { $0.id == id }
-        saveCollections(collections)
+        cacheLock.lock()
+        if collectionsCache.isEmpty {
+            collectionsCache = loadCollectionsFromFile()
+        }
+        let beforeCount = collectionsCache.count
+        collectionsCache.removeAll { $0.id == id }
+        let afterCount = collectionsCache.count
+        cacheLock.unlock()
+        
+        if beforeCount != afterCount {
+            print("✅ CollectionsBookmarks: Removed collection \(id) from cache")
+            scheduleSave()
+        } else {
+            print("⚠️ CollectionsBookmarks: Collection \(id) not found in cache")
+        }
     }
     
-    /// Loads all collections from CollectionsBookmarks.json
     func loadCollections() -> [CollectionInfo] {
+        cacheLock.lock()
+        if !collectionsCache.isEmpty {
+            let cached = collectionsCache
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+        
+        let collections = loadCollectionsFromFile()
+        
+        cacheLock.lock()
+        collectionsCache = collections
+        cacheLock.unlock()
+        
+        return collections
+    }
+    
+    private func loadCollectionsFromFile() -> [CollectionInfo] {
         guard fileManager.fileExists(atPath: collectionsBookmarksFile.path) else {
             return []
         }
@@ -71,6 +121,31 @@ class CollectionsBookmarksManager {
         } catch {
             print("❌ CollectionsBookmarks: Error loading collections - \(error.localizedDescription)")
             return []
+        }
+    }
+    
+    private func scheduleSave() {
+        guard !pendingSave else { return }
+        pendingSave = true
+        
+        saveTimer?.invalidate()
+        saveTimer = Timer.scheduledTimer(withTimeInterval: saveDelay, repeats: false) { [weak self] _ in
+            self?.saveToFileImmediate()
+        }
+    }
+    
+    func saveToFileImmediate() {
+        guard pendingSave else { return }
+        pendingSave = false
+        
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
+            
+            self.cacheLock.lock()
+            let collectionsToSave = self.collectionsCache
+            self.cacheLock.unlock()
+            
+            self.saveCollections(collectionsToSave)
         }
     }
     

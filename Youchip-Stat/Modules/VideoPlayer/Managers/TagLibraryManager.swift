@@ -69,8 +69,7 @@ class TagLibraryManager: ObservableObject {
         allLabels = labels
         allTimeEvents = timeEvents
         
-        // Initialize collection count
-        lastCollectionCount = UserDefaults.standard.getCollectionBookmarks().count
+        lastCollectionCount = CollectionsBookmarksManager.shared.loadCollections().count
         loadAllUserCollections()
     }
     
@@ -78,53 +77,32 @@ class TagLibraryManager: ObservableObject {
     private var lastCollectionCount = 0
     
     @objc private func handleCollectionDataChanged() {
-        // Prevent multiple simultaneous reloads
         guard !isReloadingCollections else {
             print("⚠️ TagLibraryManager: Already reloading collections, skipping")
             return
         }
         
-        let currentCollections = UserDefaults.standard.getCollectionBookmarks()
+        let currentCollections = CollectionsBookmarksManager.shared.loadCollections()
         let currentCount = currentCollections.count
         
-        // Only do full reload if collection count changed (new/deleted collection)
-        // For simple renames, we don't need to reload everything
         if currentCount != lastCollectionCount {
             print("📚 TagLibraryManager: Collection count changed (\(lastCollectionCount) -> \(currentCount)), reloading all")
             lastCollectionCount = currentCount
-            loadedCollectionsCache.removeAll()
-            isReloadingCollections = true
-            
-            // Notify UI that loading started
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .collectionsLoadingStarted, object: nil)
-            }
-            
-            loadAllUserCollections()
         } else {
-            // Just update cache keys if collections were renamed
-            print("📚 TagLibraryManager: Collection count unchanged, updating cache keys if needed")
-            updateCacheKeysIfNeeded(newCollections: currentCollections)
-        }
-    }
-    
-    private func updateCacheKeysIfNeeded(newCollections: [CollectionBookmark]) {
-        // Update cache keys for renamed collections
-        var newCache: [String: (tags: [Tag], tagGroups: [TagGroup], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent])] = [:]
-        
-        for collection in newCollections {
-            // Try to find cached data by ID (check all cache entries)
-            if let cachedData = loadedCollectionsCache[collection.name] {
-                // Cache key matches current name - keep as is
-                newCache[collection.name] = cachedData
-            } else {
-                // Check if there's cached data with different name but same ID
-                // For now, just skip - data will be loaded on demand
-                print("⚠️ TagLibraryManager: No cached data for '\(collection.name)', will load on demand")
-            }
+            print("📚 TagLibraryManager: Collection data modified, reloading")
         }
         
-        loadedCollectionsCache = newCache
+        cacheLock.lock()
+        loadedCollectionsCache.removeAll()
+        cacheLock.unlock()
+        
+        isReloadingCollections = true
+        
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .collectionsLoadingStarted, object: nil)
+        }
+        
+        loadAllUserCollections()
     }
         
     private func getSystemLanguage() -> String {
@@ -257,59 +235,50 @@ class TagLibraryManager: ObservableObject {
         return allLabels.filter { relevantLabelIdsSet.contains($0.id) }
     }
     
-    // Cache for loaded collections to avoid reloading
     private var loadedCollectionsCache: [String: (tags: [Tag], tagGroups: [TagGroup], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent])] = [:]
-    private let collectionLoadingQueue = DispatchQueue(label: "com.youchip.collectionLoading", attributes: .concurrent)
+    private let collectionLoadingQueue = DispatchQueue(label: "com.youchip.collectionLoading", qos: .userInitiated)
+    private let cacheLock = NSLock()
+    
+    func invalidateCollectionCache(for name: String) {
+        cacheLock.lock()
+        loadedCollectionsCache.removeValue(forKey: name)
+        cacheLock.unlock()
+    }
     
     private func loadAllUserCollections() {
-        // Load asynchronously in background to avoid blocking main thread
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        collectionLoadingQueue.async { [weak self] in
             guard let self = self else { return }
             
-            let userCollections = UserDefaults.standard.getCollectionBookmarks()
-            print("📚 TagLibraryManager: Loading \(userCollections.count) user collections asynchronously")
+            let userCollections = CollectionsBookmarksManager.shared.loadCollections()
+            print("📚 TagLibraryManager: Loading \(userCollections.count) user collections")
             
-            // Use concurrent queue for parallel loading
-            let group = DispatchGroup()
             var loadedData: [(tags: [Tag], tagGroups: [TagGroup], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent])] = []
-            let lock = NSLock()
             
-            for collection in userCollections {
-                group.enter()
-                self.collectionLoadingQueue.async {
-                    print("📚 TagLibraryManager: Loading collection '\(collection.name)' (id: \(collection.id))")
-                    let collectionManager = CustomCollectionManager()
-                    if collectionManager.loadCollectionFromBookmarks(named: collection.name) {
-                        print("✅ TagLibraryManager: Successfully loaded collection '\(collection.name)' - tags: \(collectionManager.tags.count), tagGroups: \(collectionManager.tagGroups.count)")
-                        
-                        // Cache the loaded collection
-                        lock.lock()
-                        self.loadedCollectionsCache[collection.name] = (
-                            tags: collectionManager.tags,
-                            tagGroups: collectionManager.tagGroups,
-                            labelGroups: collectionManager.labelGroups,
-                            labels: collectionManager.labels,
-                            timeEvents: collectionManager.timeEvents
-                        )
-                        loadedData.append((
-                            tags: collectionManager.tags,
-                            tagGroups: collectionManager.tagGroups,
-                            labelGroups: collectionManager.labelGroups,
-                            labels: collectionManager.labels,
-                            timeEvents: collectionManager.timeEvents
-                        ))
-                        lock.unlock()
-                    } else {
-                        print("❌ TagLibraryManager: Failed to load collection '\(collection.name)'")
-                    }
-                    group.leave()
+            for collectionInfo in userCollections {
+                print("📚 TagLibraryManager: Loading collection '\(collectionInfo.name)' (id: \(collectionInfo.id))")
+                
+                guard let collection = InMemoryStorageManager.shared.loadCollection(id: collectionInfo.id) else {
+                    print("❌ TagLibraryManager: Failed to load collection '\(collectionInfo.name)'")
+                    continue
                 }
+                
+                print("✅ TagLibraryManager: Successfully loaded collection '\(collectionInfo.name)' - tags: \(collection.tags.count), tagGroups: \(collection.tagGroups.count)")
+                
+                let collectionData = (
+                    tags: collection.tags,
+                    tagGroups: collection.tagGroups,
+                    labelGroups: collection.labelGroups,
+                    labels: collection.labels,
+                    timeEvents: collection.timeEvents
+                )
+                
+                self.cacheLock.lock()
+                self.loadedCollectionsCache[collectionInfo.name] = collectionData
+                self.cacheLock.unlock()
+                
+                loadedData.append(collectionData)
             }
             
-            // Wait for all collections to load
-            group.wait()
-            
-            // Add standard collections data
             for collection in self.standardCollections {
                 loadedData.append((
                     tags: collection.tags,
@@ -320,7 +289,6 @@ class TagLibraryManager: ObservableObject {
                 ))
             }
             
-            // Merge all data
             var mergedTags: [Tag] = []
             var mergedTagGroups: [TagGroup] = []
             var mergedLabelGroups: [LabelGroupData] = []
@@ -335,15 +303,14 @@ class TagLibraryManager: ObservableObject {
                 mergedTimeEvents.append(contentsOf: data.timeEvents)
             }
             
-            // Deduplicate
             let finalTags = Array(Dictionary(grouping: mergedTags, by: { $0.id }).values.compactMap { $0.first })
             let finalTagGroups = Array(Dictionary(grouping: mergedTagGroups, by: { $0.id }).values.compactMap { $0.first })
             let finalLabelGroups = Array(Dictionary(grouping: mergedLabelGroups, by: { $0.id }).values.compactMap { $0.first })
             let finalLabels = Array(Dictionary(grouping: mergedLabels, by: { $0.id }).values.compactMap { $0.first })
             let finalTimeEvents = Array(Dictionary(grouping: mergedTimeEvents, by: { $0.id }).values.compactMap { $0.first })
             
-            // Update UI on main thread
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 self.allTags = finalTags
                 self.allTagGroups = finalTagGroups
                 self.allLabelGroups = finalLabelGroups
@@ -352,19 +319,20 @@ class TagLibraryManager: ObservableObject {
                 self.isReloadingCollections = false
                 print("✅ TagLibraryManager: Finished loading all collections - total tags: \(finalTags.count), tagGroups: \(finalTagGroups.count)")
                 
-                // Notify UI that loading finished
                 NotificationCenter.default.post(name: .collectionsLoadingFinished, object: nil)
             }
         }
     }
     
-    /// Get cached collection data if available, otherwise load it
     func getCollectionData(for collectionName: String) -> (tags: [Tag], tagGroups: [TagGroup], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent])? {
-        if let cached = loadedCollectionsCache[collectionName] {
+        cacheLock.lock()
+        let cached = loadedCollectionsCache[collectionName]
+        cacheLock.unlock()
+        
+        if let cached = cached {
             return cached
         }
         
-        // Load synchronously if not cached (should be rare)
         let collectionManager = CustomCollectionManager()
         if collectionManager.loadCollectionFromBookmarks(named: collectionName) {
             let data = (
@@ -374,7 +342,9 @@ class TagLibraryManager: ObservableObject {
                 labels: collectionManager.labels,
                 timeEvents: collectionManager.timeEvents
             )
+            cacheLock.lock()
             loadedCollectionsCache[collectionName] = data
+            cacheLock.unlock()
             return data
         }
         

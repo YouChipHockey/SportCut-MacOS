@@ -60,10 +60,22 @@ struct TagLibraryView: View {
     }
     
     func loadUserCollections() {
-        // Update collections list without resetting scroll
         let previousSelectedName = lastSelectedCollectionName
-        userCollections = UserDefaults.standard.getCollectionBookmarks()
-        // Restore selection if it still exists
+        
+        let allCollectionsInfo = CollectionsBookmarksManager.shared.loadCollections()
+        userCollections = allCollectionsInfo.map { info in
+            CollectionBookmark(
+                id: info.id,
+                name: info.name,
+                tagGroupsBookmark: Data(),
+                tagsBookmark: Data(),
+                labelGroupsBookmark: Data(),
+                labelsBookmark: Data(),
+                timeEventsBookmark: Data(),
+                playFieldBookmark: nil
+            )
+        }
+        
         if let previousName = previousSelectedName,
            userCollections.contains(where: { $0.name == previousName }) {
             lastSelectedCollectionName = previousName
@@ -236,7 +248,7 @@ struct TagLibraryView: View {
     private var collectionActionButtons: some View {
         HStack(spacing: 8) {
             Button(action: {
-                guard let collectionBookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == lastSelectedCollectionName}) else { return }
+                guard let collectionBookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == lastSelectedCollectionName }) else { return }
                 WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: collectionBookmark)
             }) {
                 Image(systemName: "pencil.circle")
@@ -246,7 +258,7 @@ struct TagLibraryView: View {
             .help(^String.Titles.editCollection)
             
             Button(action: {
-                guard let collectionBookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == lastSelectedCollectionName}) else { return }
+                guard let collectionBookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == lastSelectedCollectionName }) else { return }
                 collectionToDelete = collectionBookmark
                 showDeleteAlert = true
             }) {
@@ -1109,26 +1121,35 @@ struct TagLibraryView: View {
             }
         }
         NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
-            // Reload collections list without resetting scroll
             let currentSelectedUserCollectionId = userCollections.first { $0.name == self.lastSelectedCollectionName}?.id
-            let currentScrollPosition = self.lastSelectedCollectionName // Save current selection
             
-            // Update collections list
-            self.userCollections = UserDefaults.standard.getCollectionBookmarks()
+            let allCollectionsInfo = CollectionsBookmarksManager.shared.loadCollections()
+            self.userCollections = allCollectionsInfo.map { info in
+                CollectionBookmark(
+                    id: info.id,
+                    name: info.name,
+                    tagGroupsBookmark: Data(),
+                    tagsBookmark: Data(),
+                    labelGroupsBookmark: Data(),
+                    labelsBookmark: Data(),
+                    timeEventsBookmark: Data(),
+                    playFieldBookmark: nil
+                )
+            }
             
-            // Restore selection and update name if needed
             if self.isUserCollectionActive, let currentSelectedUserCollectionId,
                let updatedCollection = self.userCollections.first(where: { $0.id == currentSelectedUserCollectionId }) {
                 let oldName = self.lastSelectedCollectionName
                 let newName = updatedCollection.name
                 self.lastSelectedCollectionName = newName
                 
-                // If collection was renamed, just update the currentCollectionType name
-                // Don't reload the collection to avoid triggering full cache reload
                 if oldName != newName {
                     self.tagLibrary.currentCollectionType = .user(name: newName)
                     UserDefaults.standard.set(newName, forKey: UserDefaults.Keys.lastSelectedCollection)
                 }
+                
+                self.tagLibrary.invalidateCollectionCache(for: newName)
+                self.loadUserCollection(updatedCollection)
             }
         }
         NotificationCenter.default.addObserver(forName: .showLabelSheet, object: nil, queue: .main) { notification in
@@ -1293,18 +1314,11 @@ struct TagLibraryView: View {
     }
     
     private func deleteCollection(_ collection: CollectionBookmark) {
-        UserDefaults.standard.removeCollectionBookmark(named: collection.name)
+        InMemoryStorageManager.shared.deleteCollection(id: collection.id)
         
-        let collectionFolderUrlString = URLConstants.getCollecitonFolderStringUrl(with: collection.id)
-        let collectionFolderUrl = URL.appDocumentsDirectory
-            .appendingPathComponent(collectionFolderUrlString, isDirectory: true)
+        CollectionsBookmarksManager.shared.removeCollection(id: collection.id)
         
-        do {
-            try FileManager.default.removeItem(at: collectionFolderUrl)
-        } catch {
-            print("ERROR REMOVING FILE: \(error)")
-        }
-
+        tagLibrary.invalidateCollectionCache(for: collection.name)
         
         if isUserCollectionActive && lastSelectedCollectionName == collection.name {
             isUserCollectionActive = false

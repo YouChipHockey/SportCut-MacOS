@@ -17,20 +17,7 @@ extension UserDefaults {
     }
     
     func saveCollectionBookmark(_ bookmark: CollectionBookmark) {
-        // Save only id and name to CollectionsBookmarks.json (single source of truth)
         CollectionsBookmarksManager.shared.saveCollection(id: bookmark.id, name: bookmark.name)
-        
-        // Keep UserDefaults for backward compatibility during migration
-        var collections = getCollectionBookmarksFromUserDefaults()
-        if let index = collections.firstIndex(where: { $0.id == bookmark.id }) {
-            collections[index] = bookmark
-        } else {
-            collections.append(bookmark)
-        }
-        
-        if let encoded = try? JSONEncoder().encode(collections) {
-            set(encoded, forKey: Keys.collections)
-        }
     }
     
     func getCollectionBookmarks() -> [CollectionBookmark] {
@@ -47,19 +34,9 @@ extension UserDefaults {
     }
     
     func removeCollectionBookmark(named name: String) {
-        // Find collection by name
-        let collections = getCollectionBookmarks()
+        let collections = CollectionsBookmarksManager.shared.loadCollections()
         if let collectionToRemove = collections.first(where: { $0.name == name }) {
-            // Remove from CollectionsBookmarks.json
             CollectionsBookmarksManager.shared.removeCollection(id: collectionToRemove.id)
-            
-            // Remove from UserDefaults for backward compatibility
-            var userDefaultsCollections = getCollectionBookmarksFromUserDefaults()
-            userDefaultsCollections.removeAll { $0.name == name }
-            
-            if let encoded = try? JSONEncoder().encode(userDefaultsCollections) {
-                set(encoded, forKey: Keys.collections)
-            }
         }
     }
     

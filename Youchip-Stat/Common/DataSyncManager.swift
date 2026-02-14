@@ -105,33 +105,33 @@ class DataSyncManager {
     func synchronizeOnAppLaunch() {
         print("🔄 DataSync: Starting synchronization on app launch")
         
-        // Clean up duplicate collections first
-        CollectionsBookmarksManager.shared.cleanupDuplicateCollections()
-        
-        // Load collections from CollectionsBookmarks.json (this triggers migration if needed)
-        // This ensures CollectionsBookmarks.json is populated before restore
-        _ = UserDefaults.standard.getCollectionBookmarks()
-        
-        // Restore collections from backup file if UserDefaults is empty
-        restoreCollectionsFromBackup()
-        
-        let hasDocumentsData = checkDocumentsHasData()
-        
-        if !hasDocumentsData {
-            print("📥 DataSync: No data in Documents, restoring from backup")
-            restoreFromBackup()
-        } else {
-            print("✅ DataSync: Data exists in Documents, checking differences with backup")
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
             
-            if hasBackupDataDifferences() {
-                print("⚠️ DataSync: Differences found, restoring newer data from backup")
-                restoreFromBackup()
+            CollectionsBookmarksManager.shared.cleanupDuplicateCollections()
+            
+            _ = CollectionsBookmarksManager.shared.loadCollections()
+            
+            self.restoreCollectionsFromBackup()
+            
+            let hasDocumentsData = self.checkDocumentsHasData()
+            
+            if !hasDocumentsData {
+                print("📥 DataSync: No data in Documents, restoring from backup")
+                self.restoreFromBackup()
             } else {
-                print("✅ DataSync: Data is identical")
+                print("✅ DataSync: Data exists in Documents, checking differences with backup")
+                
+                if self.hasBackupDataDifferences() {
+                    print("⚠️ DataSync: Differences found, restoring newer data from backup")
+                    self.restoreFromBackup()
+                } else {
+                    print("✅ DataSync: Data is identical")
+                }
             }
+            
+            self.backupToApplicationSupport()
         }
-        
-        backupToApplicationSupport()
     }
     
     /// Restores collections from backup file if UserDefaults is empty
@@ -152,9 +152,9 @@ class DataSyncManager {
         }
     }
     
-    /// Immediate backup creation without throttling
     func backupToApplicationSupportImmediate() {
         backupTimer?.invalidate()
+        pendingBackup = true
         performBackup()
     }
     
@@ -165,6 +165,7 @@ class DataSyncManager {
         print("💾 DataSync: Creating data backup")
         
         InMemoryStorageManager.shared.saveToDiskImmediate()
+        CollectionsBookmarksManager.shared.saveToFileImmediate()
         
         createBackupDirectoryIfNeeded()
         backupCollections()
@@ -190,7 +191,6 @@ class DataSyncManager {
         // Restore collections from backup file to UserDefaults
         restoreCollectionsFromBackup()
         
-        // Clean up and sync collections after restore
         CollectionsBookmarksManager.shared.cleanupDuplicateCollections()
         
         print("✅ DataSync: Data restored from backup")
@@ -466,21 +466,61 @@ class DataSyncManager {
     }
     
     private func backupCollections() {
+        let collectionsInfo = CollectionsBookmarksManager.shared.loadCollections()
+        let existingCollectionIds = Set(collectionsInfo.map { $0.id })
+        
+        if !fileManager.fileExists(atPath: backupCollectionsDirectory.path) {
+            try? fileManager.createDirectory(at: backupCollectionsDirectory, withIntermediateDirectories: true)
+        }
+        
+        do {
+            let existingBackupFolders = try fileManager.contentsOfDirectory(
+                at: backupCollectionsDirectory,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+            
+            for backupFolder in existingBackupFolders {
+                guard let isDirectory = try? backupFolder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory,
+                      isDirectory == true else { continue }
+                
+                let folderId = backupFolder.lastPathComponent
+                if !existingCollectionIds.contains(folderId) {
+                    try? fileManager.removeItem(at: backupFolder)
+                    print("🗑️ DataSync: Removed deleted collection from backup: \(folderId)")
+                }
+            }
+        } catch {
+            print("⚠️ DataSync: Error cleaning up backup collections - \(error.localizedDescription)")
+        }
+        
         guard fileManager.fileExists(atPath: collectionsDirectory.path) else {
             print("⚠️ DataSync: Collections directory in Documents does not exist")
             return
         }
         
-        do {
-            if fileManager.fileExists(atPath: backupCollectionsDirectory.path) {
-                try fileManager.removeItem(at: backupCollectionsDirectory)
+        for collectionInfo in collectionsInfo {
+            let sourceFolder = collectionsDirectory.appendingPathComponent(collectionInfo.id)
+            let destinationFolder = backupCollectionsDirectory.appendingPathComponent(collectionInfo.id)
+            
+            guard fileManager.fileExists(atPath: sourceFolder.path) else {
+                print("⚠️ DataSync: Collection folder missing in Documents: \(collectionInfo.id)")
+                continue
             }
             
-            try fileManager.copyItem(at: collectionsDirectory, to: backupCollectionsDirectory)
-            print("✅ DataSync: Collections backed up")
-        } catch {
-            print("❌ DataSync: Error backing up collections - \(error.localizedDescription)")
+            do {
+                if fileManager.fileExists(atPath: destinationFolder.path) {
+                    try fileManager.removeItem(at: destinationFolder)
+                }
+                
+                try fileManager.copyItem(at: sourceFolder, to: destinationFolder)
+                print("✅ DataSync: Backed up collection: \(collectionInfo.name)")
+            } catch {
+                print("❌ DataSync: Error backing up collection \(collectionInfo.name) - \(error.localizedDescription)")
+            }
         }
+        
+        print("✅ DataSync: Collections backup completed (\(collectionsInfo.count) collections)")
     }
     
     private func backupPlayFields() {

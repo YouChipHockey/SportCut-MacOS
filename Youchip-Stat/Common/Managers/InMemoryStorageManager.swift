@@ -29,6 +29,7 @@ final class InMemoryStorageManager {
     @objc private func applicationWillTerminate() {
         saveToDiskTimer?.invalidate()
         saveToDiskImmediate()
+        CollectionsBookmarksManager.shared.saveToFileImmediate()
     }
     
     func saveTimelines(_ timelines: [TimelineLine], for videoId: String) {
@@ -74,7 +75,7 @@ final class InMemoryStorageManager {
     func deleteCollection(id: String) {
         let key = "collection_\(id)"
         userDefaults.removeObject(forKey: key)
-        deleteCollectionFiles(id: id)
+        scheduleSaveToDisk()
     }
     
     private func scheduleSaveToDisk() {
@@ -113,6 +114,21 @@ final class InMemoryStorageManager {
     
     private func saveCollectionsToDisk() {
         let keys = userDefaults.dictionaryRepresentation().keys.filter { $0.hasPrefix("collection_") }
+        let existingCollectionIds = Set(keys.map { String($0.dropFirst("collection_".count)) })
+        
+        let collectionsDirectory = getCollectionsDirectory()
+        guard fileManager.fileExists(atPath: collectionsDirectory.path) else { return }
+        
+        do {
+            let folderContents = try fileManager.contentsOfDirectory(at: collectionsDirectory, includingPropertiesForKeys: nil)
+            
+            for folderURL in folderContents where folderURL.hasDirectoryPath {
+                let folderId = folderURL.lastPathComponent
+                if !existingCollectionIds.contains(folderId) {
+                    try? fileManager.removeItem(at: folderURL)
+                }
+            }
+        } catch {}
         
         for key in keys {
             guard let data = userDefaults.data(forKey: key),
@@ -235,11 +251,6 @@ final class InMemoryStorageManager {
            let playFieldData = try? encoder.encode(playField) {
             try? playFieldData.write(to: collectionFolderUrl.appendingPathComponent("playField.json"))
         }
-    }
-    
-    private func deleteCollectionFiles(id: String) {
-        let collectionFolderUrl = getCollectionsDirectory().appendingPathComponent(id, isDirectory: true)
-        try? fileManager.removeItem(at: collectionFolderUrl)
     }
     
     private func getTimelinesDirectory() -> URL {

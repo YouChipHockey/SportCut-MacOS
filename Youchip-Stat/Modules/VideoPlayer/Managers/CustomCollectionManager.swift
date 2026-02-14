@@ -335,8 +335,8 @@ class CustomCollectionManager: ObservableObject {
     }
     
     func ensureUniqueCollectionName(_ baseName: String, collectionID: String) -> String {
-        let existingNames = UserDefaults.standard
-            .getCollectionBookmarks()
+        let existingNames = CollectionsBookmarksManager.shared
+            .loadCollections()
             .filter { $0.id != collectionID }
             .map(\.name)
         if (isEditingExisting && baseName == originalName) || !existingNames.contains(baseName) {
@@ -367,22 +367,34 @@ class CustomCollectionManager: ObservableObject {
             return false
         }
         
-        self.collectionID = collection.id
-        self.collectionName = collectionName
-        self.tagGroups = collection.tagGroups
-        self.tags = collection.tags
-        self.labelGroups = collection.labelGroups
-        self.labels = collection.labels
-        self.timeEvents = collection.timeEvents
-        self.playField = collection.playField
+        if Thread.isMainThread {
+            self.collectionID = collection.id
+            self.collectionName = collectionName
+            self.tagGroups = collection.tagGroups
+            self.tags = collection.tags
+            self.labelGroups = collection.labelGroups
+            self.labels = collection.labels
+            self.timeEvents = collection.timeEvents
+            self.playField = collection.playField
+        } else {
+            DispatchQueue.main.sync {
+                self.collectionID = collection.id
+                self.collectionName = collectionName
+                self.tagGroups = collection.tagGroups
+                self.tags = collection.tags
+                self.labelGroups = collection.labelGroups
+                self.labels = collection.labels
+                self.timeEvents = collection.timeEvents
+                self.playField = collection.playField
+            }
+        }
         
         print("✅ CustomCollectionManager: Successfully loaded collection '\(collectionName)'")
         return true
     }
     
     private func loadAllCollections() {
-        let allBookmarks = UserDefaults.standard.getCollectionBookmarks()
-        
+        _ = CollectionsBookmarksManager.shared.loadCollections()
     }
     
     func updateTagMapEnabled(id: String, mapEnabled: Bool) -> Bool {
@@ -479,88 +491,100 @@ class CustomCollectionManager: ObservableObject {
     }
     
     func setFieldImage(from url: URL) -> Bool {
-        do {
-            let fileManager = FileManager.default
-            let playFieldsFolder = URL.appDocumentsDirectory
-                .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
-                .fixedFile()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
             
-            if !fileManager.fileExists(atPath: playFieldsFolder.path) {
-                try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
+            do {
+                let fileManager = FileManager.default
+                let playFieldsFolder = URL.appDocumentsDirectory
+                    .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+                    .fixedFile()
+                
+                if !fileManager.fileExists(atPath: playFieldsFolder.path) {
+                    try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
+                }
+                
+                let imageName = url.lastPathComponent
+                let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
+                
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try fileManager.removeItem(at: destinationURL)
+                }
+                
+                try fileManager.copyItem(at: url, to: destinationURL)
+                
+                let imageBookmark = destinationURL.makeBookmark()
+                
+                DispatchQueue.main.async {
+                    if let existingField = self.playField {
+                        self.playField = PlayField(
+                            id: existingField.id,
+                            name: existingField.name,
+                            imagePath: imageName,
+                            width: existingField.width,
+                            height: existingField.height,
+                            imageBookmark: imageBookmark
+                        )
+                    } else {
+                        self.playField = PlayField(
+                            id: UUID().uuidString,
+                            name: "Field",
+                            imagePath: imageName,
+                            width: 100.0,
+                            height: 60.0,
+                            imageBookmark: imageBookmark
+                        )
+                    }
+                    self.objectWillChange.send()
+                }
+            } catch {
+                print("❌ Error setting field image: \(error)")
             }
-            
-            let imageName = url.lastPathComponent
-            let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
-            
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
-            }
-            
-            try fileManager.copyItem(at: url, to: destinationURL)
-            
-            let imageBookmark = destinationURL.makeBookmark()
-            
-            if let existingField = playField {
-                playField = PlayField(
-                    id: existingField.id,
-                    name: existingField.name,
-                    imagePath: imageName,
-                    width: existingField.width,
-                    height: existingField.height,
-                    imageBookmark: imageBookmark
-                )
-            } else {
-                playField = PlayField(
-                    id: UUID().uuidString,
-                    name: "Field",
-                    imagePath: imageName,
-                    width: 100.0,
-                    height: 60.0,
-                    imageBookmark: imageBookmark
-                )
-            }
-            
-            return true
-        } catch {
-            return false
         }
+        return true
     }
     
     func deleteFieldImage() {
         guard let field = playField else { return }
         
-        let fileManager = FileManager.default
-        let playFieldsFolder = URL.appDocumentsDirectory
-            .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
-            .fixedFile()
-        
-        let imagePath = playFieldsFolder.appendingPathComponent(field.imagePath)
-        
-        if fileManager.fileExists(atPath: imagePath.path) {
-            try? fileManager.removeItem(at: imagePath)
-        }
-        
-        for i in 0..<tags.count {
-            if tags[i].mapEnabled == true {
-                tags[i] = Tag(
-                    id: tags[i].id,
-                    primaryID: tags[i].primaryID,
-                    name: tags[i].name,
-                    description: tags[i].description,
-                    color: tags[i].color,
-                    defaultTimeBefore: tags[i].defaultTimeBefore,
-                    defaultTimeAfter: tags[i].defaultTimeAfter,
-                    collection: tags[i].collection,
-                    lablesGroup: tags[i].lablesGroup,
-                    hotkey: tags[i].hotkey,
-                    labelHotkeys: tags[i].labelHotkeys,
-                    mapEnabled: false
-                )
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            let fileManager = FileManager.default
+            let playFieldsFolder = URL.appDocumentsDirectory
+                .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+                .fixedFile()
+            
+            let imagePath = playFieldsFolder.appendingPathComponent(field.imagePath)
+            
+            if fileManager.fileExists(atPath: imagePath.path) {
+                try? fileManager.removeItem(at: imagePath)
+            }
+            
+            DispatchQueue.main.async {
+                for i in 0..<self.tags.count {
+                    if self.tags[i].mapEnabled == true {
+                        self.tags[i] = Tag(
+                            id: self.tags[i].id,
+                            primaryID: self.tags[i].primaryID,
+                            name: self.tags[i].name,
+                            description: self.tags[i].description,
+                            color: self.tags[i].color,
+                            defaultTimeBefore: self.tags[i].defaultTimeBefore,
+                            defaultTimeAfter: self.tags[i].defaultTimeAfter,
+                            collection: self.tags[i].collection,
+                            lablesGroup: self.tags[i].lablesGroup,
+                            hotkey: self.tags[i].hotkey,
+                            labelHotkeys: self.tags[i].labelHotkeys,
+                            mapEnabled: false
+                        )
+                    }
+                }
+                
+                self.playField = nil
+                self.objectWillChange.send()
             }
         }
-        
-        playField = nil
-        objectWillChange.send()
     }
     
     func updateFieldDimensions(width: Double, height: Double) {

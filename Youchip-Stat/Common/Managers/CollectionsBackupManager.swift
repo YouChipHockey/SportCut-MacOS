@@ -14,12 +14,6 @@ class CollectionsBackupManager {
     
     private let fileManager = FileManager.default
     
-    /// Structure for storing collection metadata in backup file
-    struct CollectionInfo: Codable, Equatable {
-        let id: String
-        let name: String
-    }
-    
     private var collectionsBackupFile: URL {
         let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
         return documentsDirectory.appendingPathComponent("YouChip-Stat/CollectionsBackup.json")
@@ -76,10 +70,8 @@ class CollectionsBackupManager {
             return false
         }
         
-        // Check if UserDefaults already has collections
-        let existingCollections = UserDefaults.standard.getCollectionBookmarks()
+        let existingCollections = CollectionsBookmarksManager.shared.loadCollections()
         guard existingCollections.isEmpty else {
-            // UserDefaults already has data, don't restore
             return false
         }
         
@@ -153,9 +145,8 @@ class CollectionsBackupManager {
     
     /// Syncs all collections from UserDefaults to backup file
     func syncFromUserDefaults() {
-        let userDefaultsCollections = UserDefaults.standard.getCollectionBookmarks()
-        let backupCollections = userDefaultsCollections.map { CollectionInfo(id: $0.id, name: $0.name) }
-        saveCollections(backupCollections)
+        let collections = CollectionsBookmarksManager.shared.loadCollections()
+        saveCollections(collections)
     }
     
     // MARK: - Private Methods

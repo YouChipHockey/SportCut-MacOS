@@ -386,7 +386,8 @@ struct DataManagementSheet: View {
         
         DispatchQueue.global(qos: .userInitiated).async {
             InMemoryStorageManager.shared.saveToDiskImmediate()
-            DataSyncManager.shared.backupToApplicationSupport()
+            CollectionsBookmarksManager.shared.saveToFileImmediate()
+            DataSyncManager.shared.backupToApplicationSupportImmediate()
             
             DispatchQueue.main.async {
                 isProcessing = false
