@@ -10,6 +10,7 @@ import AVKit
 import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
+import Combine
 
 struct TagLibraryView: View {
     
@@ -85,16 +86,7 @@ struct TagLibraryView: View {
     func backupDefaultData() {}
     
     func forceWindowRefresh() {
-        if let window = NSApplication.shared.windows.first(where: { $0.isKeyWindow && $0.title == ^String.Titles.tagLibrary }) {
-            let currentFrame = window.frame
-            let newWidth = currentFrame.width + 1
-            
-            window.setFrame(NSRect(x: currentFrame.origin.x, y: currentFrame.origin.y, width: newWidth, height: currentFrame.height), display: true)
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                window.setFrame(currentFrame, display: true)
-            }
-        }
+        // Removed expensive window resize - SwiftUI updates automatically
     }
     
     func restoreDefaultData() {
@@ -105,7 +97,6 @@ struct TagLibraryView: View {
         }
         hotkeyManager.registerHotkeys(from: tagLibrary.tags, for: .standard)
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
-        forceWindowRefresh()
     }
     
     var body: some View {
@@ -148,31 +139,11 @@ struct TagLibraryView: View {
         .alert(isPresented: $showDeleteAlert) {
             deleteCollectionAlert
         }
-        .onChange(of: tagLibrary.timeEvents.count) { _ in
-            // Only update content, don't reset scroll
-            forceWindowRefresh()
-        }
-        .onChange(of: tagLibrary.tagGroups.count) { _ in
-            // Only update content, don't reset scroll
-            forceWindowRefresh()
-        }
-        .onChange(of: tagLibrary.selectedStandardCollectionName) { _ in
-            // Only update content, don't reset scroll
-            forceWindowRefresh()
-        }
-        .onChange(of: isUserCollectionActive) { _ in
-            // Only update content, don't reset scroll
-            forceWindowRefresh()
-        }
-        .onReceive(timelineData.$lines) { _ in
-            DispatchQueue.main.async {
-                self.updateTagCounts()
-            }
+        .onReceive(timelineData.$lines.throttle(for: .milliseconds(300), scheduler: DispatchQueue.main, latest: true)) { _ in
+            self.updateTagCounts()
         }
         .onChange(of: timelineData.selectedLineID) { _ in
-            DispatchQueue.main.async {
-                self.updateTagCounts()
-            }
+            self.updateTagCounts()
         }
     }
     
@@ -325,8 +296,6 @@ struct TagLibraryView: View {
             tagLibrary.applyStandardCollection(named: collection.name)
             DispatchQueue.main.async {
                 self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                // Don't change refreshID to preserve scroll position
-                self.forceWindowRefresh()
             }
         }) {
             HStack(spacing: 6) {
@@ -431,8 +400,6 @@ struct TagLibraryView: View {
                     tagLibrary.applyStandardCollection(named: collection.name)
                     DispatchQueue.main.async {
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                        // Don't change refreshID to preserve scroll position
-                        self.forceWindowRefresh()
                     }
                 }) {
                     HStack {
@@ -474,8 +441,6 @@ struct TagLibraryView: View {
             }
             DispatchQueue.main.async {
                 self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                // Don't change refreshID to preserve scroll position
-                self.forceWindowRefresh()
             }
         }) {
             HStack {
@@ -606,8 +571,6 @@ struct TagLibraryView: View {
                 }
                 DispatchQueue.main.async {
                     self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                    // Don't change refreshID to preserve scroll position
-                    self.forceWindowRefresh()
                 }
                 showCollectionsList = false
             }) {
@@ -630,45 +593,10 @@ struct TagLibraryView: View {
                     .font(.headline)
                     .padding(.top, 5)
                 
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(userCollections, id: \.name) { collection in
-                                legacyCollectionRow(for: collection)
-                                    .id(collection.name)
-                            }
-                        }
-                    }
-                    .onAppear {
-                        // Restore scroll position if we have a selected collection
-                        if let selectedName = lastSelectedCollectionName,
-                           isUserCollectionActive {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    proxy.scrollTo(selectedName, anchor: .center)
-                                }
-                            }
-                        }
-                    }
-                    .onChange(of: userCollections) { _ in
-                        // When collections list updates, restore scroll position to selected collection
-                        if let selectedName = lastSelectedCollectionName,
-                           isUserCollectionActive,
-                           userCollections.contains(where: { $0.name == selectedName }) {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    proxy.scrollTo(selectedName, anchor: .center)
-                                }
-                            }
-                        }
-                    }
-                    .onChange(of: lastSelectedCollectionName) { newName in
-                        if let name = newName, isUserCollectionActive {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    proxy.scrollTo(name, anchor: .center)
-                                }
-                            }
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(userCollections, id: \.name) { collection in
+                            legacyCollectionRow(for: collection)
                         }
                     }
                 }
@@ -1252,10 +1180,8 @@ struct TagLibraryView: View {
             // Cache playField if available
             cachePlayFieldForCollection(collection.name)
             
-            // Update UI without changing refreshID to preserve scroll position
             updateTagCounts()
             expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
-            forceWindowRefresh()
         } else {
             // Load asynchronously if not cached
             DispatchQueue.global(qos: .userInitiated).async {
@@ -1281,7 +1207,6 @@ struct TagLibraryView: View {
                         // Update UI without changing refreshID to preserve scroll position
                         self.updateTagCounts()
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                        self.forceWindowRefresh()
                     }
                 } else {
                     DispatchQueue.main.async {
