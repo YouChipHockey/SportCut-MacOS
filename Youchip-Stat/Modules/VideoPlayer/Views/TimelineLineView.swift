@@ -41,6 +41,9 @@ struct TimelineLineView: View {
     @State private var visualOffsetX: CGFloat? = nil
     @State private var maxVisualOffsetX: CGFloat? = nil
     
+    @State private var lastSeekTime: Date = Date()
+    private let seekThrottleInterval: TimeInterval = 0.033 // ~30fps
+    
     // MARK: - drag properties
     @State private var dragOffsetY: CGFloat = 0
     @State private var draggingStampID: UUID?
@@ -302,10 +305,8 @@ struct TimelineLineView: View {
                     originalEndTime = stamp.timeFinishSeconds
                     dragStartTime = originalStartTime
                     
-                    // Set flag to block screenshot display
                     videoManager.isResizingTag = true
                     
-                    // Исходные геометрия
                     let baseDuration = originalEndTime - originalStartTime
                     let baseDurationRatio = baseDuration / totalDuration
                     visualWidth = max(baseDurationRatio * widthMax, minWidth)
@@ -319,7 +320,6 @@ struct TimelineLineView: View {
                 let baseWidth = visualWidth ?? 0
                 let baseOffsetX = visualOffsetX ?? 0
                 
-                // Сдвигаем левый край: offset увеличивается, ширина уменьшается
                 let newOffsetX = baseOffsetX + deltaX
                 let newWidth = max(baseWidth - deltaX, minWidth)
                 
@@ -331,7 +331,12 @@ struct TimelineLineView: View {
                 
                 let time = (newOffsetX / widthMax) * totalDuration
                 onTagDragging(newOffsetX)
-                videoManager.seek(to: time)
+                
+                let now = Date()
+                if now.timeIntervalSince(lastSeekTime) >= seekThrottleInterval {
+                    lastSeekTime = now
+                    videoManager.seek(to: time)
+                }
             }
             .onEnded { _ in
                 if let stampID = resizingStampID,
@@ -356,7 +361,6 @@ struct TimelineLineView: View {
                     onTagDragging(nil)
                 }
                 
-                // Clear flag to allow screenshot display again
                 videoManager.isResizingTag = false
                 
                 resizingStampID = nil
@@ -379,19 +383,16 @@ struct TimelineLineView: View {
                     originalEndTime = stamp.timeFinishSeconds
                     dragStartTime = originalStartTime
                     
-                    // Set flag to block screenshot display
                     videoManager.isResizingTag = true
                     
                     let baseStartRatio = originalStartTime / totalDuration
                     visualOffsetX = baseStartRatio * widthMax
                     
-                    // Запомнить исходную ширину в пикселях
                     let baseDuration = originalEndTime - originalStartTime
                     let baseDurationRatio = baseDuration / totalDuration
                     visualWidth = max(baseDurationRatio * widthMax, minWidth)
                 }
                 
-                // Меняем ширину напрямую на deltaX
                 let baseWidth = visualWidth ?? 0
                 let newWidth = max(baseWidth + value.translation.width, minWidth) 
                 if let visualOffsetX, visualOffsetX + newWidth > widthMax {
@@ -401,14 +402,18 @@ struct TimelineLineView: View {
                 
                 let time = originalStartTime + ((visualWidth ?? 0) / widthMax) * totalDuration
                 onTagDragging(time / totalDuration * widthMax)
-                videoManager.seek(to: time)
+                
+                let now = Date()
+                if now.timeIntervalSince(lastSeekTime) >= seekThrottleInterval {
+                    lastSeekTime = now
+                    videoManager.seek(to: time)
+                }
             }
             .onEnded { _ in
                 if let stampID = resizingStampID,
                    let finalWidth = visualWidth,
                    resizingEdge == .right {
                     
-                    // Пересчитываем ширину обратно во время
                     let finalDurationRatio = finalWidth / widthMax
                     let finalDuration = finalDurationRatio * totalDuration
                     let finalEndTime = min(originalStartTime + finalDuration, totalDuration)
@@ -421,7 +426,6 @@ struct TimelineLineView: View {
                     onTagDragging(nil)
                 }
                 
-                // Clear flag to allow screenshot display again
                 videoManager.isResizingTag = false
                 
                 resizingStampID = nil
