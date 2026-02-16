@@ -116,6 +116,24 @@ struct VideosView: View {
             VideoDownloadFromURLView()
                 .environmentObject(viewModel)
         }
+        .sheet(isPresented: $viewModel.state.showLiveSourceSelection) {
+            LiveSourceSelectionView(
+                onConfigure: { _, _, _ in
+                    viewModel.action.send(.liveSourceConfigured)
+                },
+                onCancel: {
+                    viewModel.action.send(.cancelLiveSetup)
+                }
+            )
+        }
+        .sheet(isPresented: $viewModel.state.showLiveMetadataSheet, onDismiss: {
+            if viewModel.state.isLiveSessionConfigured {
+                // User dismissed without saving - cleanup
+                viewModel.action.send(.cancelLiveSetup)
+            }
+        }) {
+            liveMetadataSheet
+        }
         .alert(^String.Titles.videoUnavailable, isPresented: $viewModel.state.showRebindAlert) {
             Button(^String.Titles.cancelButtonTitle, role: .cancel) {
                 viewModel.state.fileToRebind = nil
@@ -199,6 +217,30 @@ struct VideosView: View {
                     )
                     .cornerRadius(8)
                     .shadow(color: .green.opacity(0.3), radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Button(action: {
+                    viewModel.action.send(.showLiveSourceSelection)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "record.circle")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(^String.Titles.recordVideo)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.red, Color.red.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(8)
+                    .shadow(color: .red.opacity(0.3), radius: 2, x: 0, y: 1)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -805,6 +847,154 @@ struct VideosView: View {
             .background(Color(NSColor.windowBackgroundColor))
         }
         .frame(minWidth: 500, maxWidth: 500, minHeight: 400, maxHeight: 500)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+    
+    // MARK: - Live Metadata Sheet
+    
+    @State private var liveTeam1Name: String = ""
+    @State private var liveTeam2Name: String = ""
+    @State private var liveScore: String = ""
+    @State private var liveSelectedDate: Date = Date()
+    
+    private var liveMetadataSheet: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "record.circle")
+                        .foregroundColor(.red)
+                        .font(.system(size: 20))
+                    
+                    Text(^String.Titles.liveStreamMatchInfo)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                }
+                
+                Text(^String.Titles.fillMatchInfo)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
+            
+            ScrollView {
+                VStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.videosViewFieldTeam1)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        TextField(^String.Titles.enterTeam1Name, text: $liveTeam1Name)
+                            .textFieldStyle(ModernTextFieldStyle())
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.videosViewFieldTeam2)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        TextField(^String.Titles.enterTeam2Name, text: $liveTeam2Name)
+                            .textFieldStyle(ModernTextFieldStyle())
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.videosViewFieldScore)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        TextField(^String.Titles.enterScore, text: $liveScore)
+                            .textFieldStyle(ModernTextFieldStyle())
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(^String.Titles.videosViewFieldDateTime)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        DatePicker("",
+                                   selection: $liveSelectedDate,
+                                   displayedComponents: [.date, .hourAndMinute]
+                        )
+                        .datePickerStyle(CompactDatePickerStyle())
+                        .labelsHidden()
+                    }
+                }
+                .padding(.horizontal, 24)
+            }
+            
+            VStack(spacing: 0) {
+                Divider()
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        viewModel.action.send(.cancelLiveSetup)
+                        liveTeam1Name = ""
+                        liveTeam2Name = ""
+                        liveScore = ""
+                    }) {
+                        Text(^String.Titles.collectionsButtonCancel)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        viewModel.action.send(.startLiveWithMetadata(
+                            team1: liveTeam1Name,
+                            team2: liveTeam2Name,
+                            score: liveScore,
+                            dateTime: liveSelectedDate
+                        ))
+                        liveTeam1Name = ""
+                        liveTeam2Name = ""
+                        liveScore = ""
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "record.circle")
+                                .font(.system(size: 14, weight: .medium))
+                            Text(^String.Titles.liveStreamStartRecording)
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.red, Color.red.opacity(0.8)]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .cornerRadius(8)
+                        .shadow(color: .red.opacity(0.3), radius: 2, x: 0, y: 1)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(liveTeam1Name.isEmpty || liveTeam2Name.isEmpty)
+                    .opacity(liveTeam1Name.isEmpty || liveTeam2Name.isEmpty ? 0.6 : 1.0)
+                    .keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+            }
+            .background(Color(NSColor.windowBackgroundColor))
+        }
+        .frame(minWidth: 450, maxWidth: 450, minHeight: 420, maxHeight: 600)
         .background(Color(NSColor.windowBackgroundColor))
     }
     

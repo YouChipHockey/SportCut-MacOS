@@ -16,10 +16,20 @@ struct FullControlView: View {
     
     @State private var scrollOffset: CGFloat = 0
     @ObservedObject var videoManager = VideoPlayerManager.shared
+    @ObservedObject var liveStreamManager = LiveStreamManager.shared
     @ObservedObject var timelineData = TimelineDataManager.shared
     @ObservedObject var focusManager = FocusStateManager.shared
     @ObservedObject var hotkeyManager = HotKeyManager.shared
     @StateObject var exportHelper = ExportHelper()
+    
+    /// Effective video duration - uses live stream duration when in live mode, otherwise AVPlayer duration.
+    /// This computed property explicitly references observed objects so SwiftUI triggers re-renders.
+    private var effectiveVideoDuration: Double {
+        if videoManager.isLiveMode {
+            return max(1.0, liveStreamManager.liveDuration)
+        }
+        return max(1.0, videoManager.videoDuration)
+    }
     
     @State private var markupMode: MarkupMode = MarkupMode.current
     @State private var showMarkupModeToggle = false
@@ -159,7 +169,7 @@ struct FullControlView: View {
                         }
                         .onEnded { value in
                             let newScale = timelineScale * value
-                            let duration = max(1.0, videoManager.videoDuration)
+                            let duration = effectiveVideoDuration
                             let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
                             if potentialInterval >= 0.5 {
                                 timelineScale = max(1.0, newScale)
@@ -509,7 +519,7 @@ struct FullControlView: View {
                 timelineScrollView(
                     geo: geo,
                     effectiveScale: timelineScale * magnifyScale,
-                    duration: max(1.0, videoManager.videoDuration),
+                    duration: effectiveVideoDuration,
                     popupInfo: nil,
                     popupLocation: nil
                 )

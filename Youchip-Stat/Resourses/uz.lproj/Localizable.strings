@@ -670,3 +670,23 @@
 "EditorShapeCircle" = "Doira";
 "EditorShapeStar" = "Yulduz";
 "EditorShapeHexagon" = "Oltiburchak";
+
+// Jonli efir
+"RecordVideo" = "Video yozish";
+"LiveStreamTitle" = "Jonli Efir";
+"LiveStreamDescription" = "Real vaqtda yozish uchun video manba va sifat sozlamalarini tanlang";
+"LiveStreamVideoSource" = "Video manba";
+"LiveStreamAudioSource" = "Audio manba";
+"LiveStreamQuality" = "Video sifati";
+"LiveStreamNoVideoDevices" = "Kameralar topilmadi. Kamerani ulang va qayta urinib ko'ring";
+"LiveStreamNoAudioDevices" = "Mikrofonlar topilmadi";
+"LiveStreamNoAudio" = "Audiosiz";
+"LiveStreamSelectDeviceFirst" = "Avval kamerani tanlang";
+"LiveStreamStartButton" = "Keyingi";
+"LiveStreamConfigError" = "Kamerani sozlash muvaffaqiyatsiz. Ulanish va ruxsatlarni tekshiring";
+"LiveStreamMatchInfo" = "O'yin ma'lumotlari";
+"LiveStreamStartRecording" = "Yozishni boshlash";
+"LiveStreamStopBroadcast" = "To'xtatish";
+"LiveStreamContinueBroadcast" = "Davom ettirish";
+"LiveStreamPausedLabel" = "PAUZA";
+"LiveStreamBroadcastPaused" = "Efir to'xtatilgan";

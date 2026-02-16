@@ -8,6 +8,7 @@
 import SwiftUI
 import AVKit
 import AppKit
+import HaishinKit
 
 // MARK: - Video Player View
 
@@ -82,7 +83,12 @@ struct VideoPlayerView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 
-                if let player = videoManager.player {
+                if videoManager.isLiveMode {
+                    // Live stream: show camera preview layer directly (smooth, no file reads)
+                    GeometryReader { geometry in
+                        liveStreamContent(geometry: geometry)
+                    }
+                } else if let player = videoManager.player {
                     GeometryReader { geometry in
                         videoPlayerContent(geometry: geometry, player: player)
                     }
@@ -99,6 +105,11 @@ struct VideoPlayerView: View {
         HStack(spacing: 12) {
             editorButton
             
+            // Live broadcast controls
+            if videoManager.isLiveMode {
+                liveBroadcastControls
+            }
+            
             Spacer()
             
             zoomControls
@@ -114,6 +125,117 @@ struct VideoPlayerView: View {
                     alignment: .bottom
                 )
         )
+    }
+    
+    // MARK: - Live Broadcast Controls
+    
+    private var liveBroadcastControls: some View {
+        HStack(spacing: 8) {
+            // Live indicator
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(videoManager.isBroadcastActive ? Color.red : Color.gray)
+                    .frame(width: 8, height: 8)
+                    .overlay(
+                        Circle()
+                            .fill(Color.red.opacity(0.5))
+                            .frame(width: 16, height: 16)
+                            .opacity(videoManager.isBroadcastActive ? 1 : 0)
+                            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: videoManager.isBroadcastActive)
+                    )
+                
+                Text(videoManager.isBroadcastActive ? "LIVE" : ^String.Titles.liveStreamPausedLabel)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(videoManager.isBroadcastActive ? .red : .secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(videoManager.isBroadcastActive ? Color.red.opacity(0.1) : Color.gray.opacity(0.1))
+            )
+            
+            // Stop/Continue broadcast button
+            Button(action: {
+                if videoManager.isBroadcastActive {
+                    videoManager.stopBroadcast()
+                } else {
+                    videoManager.resumeBroadcast()
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: videoManager.isBroadcastActive ? "stop.circle.fill" : "record.circle")
+                        .font(.system(size: 14, weight: .medium))
+                    Text(videoManager.isBroadcastActive ? ^String.Titles.liveStreamStopBroadcast : ^String.Titles.liveStreamContinueBroadcast)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(videoManager.isBroadcastActive ? Color.red : Color.green)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            // Duration display
+            Text(formatDuration(videoManager.currentTime))
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.gray.opacity(0.1))
+                )
+        }
+    }
+    
+    private func formatDuration(_ seconds: Double) -> String {
+        let hours = Int(seconds) / 3600
+        let minutes = (Int(seconds) % 3600) / 60
+        let secs = Int(seconds) % 60
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%02d:%02d", minutes, secs)
+    }
+    
+    // MARK: - Live Stream Content
+    
+    private func liveStreamContent(geometry: GeometryProxy) -> some View {
+        ZStack {
+            if videoManager.isBroadcastActive {
+                // Show smooth camera preview via HaishinKit's Metal-based MTHKView
+                LivePreviewView()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                // Broadcast paused - show a paused indicator over last frame
+                LivePreviewView()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        ZStack {
+                            Color.black.opacity(0.3)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            
+                            VStack(spacing: 12) {
+                                Image(systemName: "pause.circle.fill")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(.white.opacity(0.8))
+                                
+                                Text(^String.Titles.liveStreamBroadcastPaused)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
+                    )
+            }
+            
+            if viewModel.state.videoScale > 1.0 {
+                joystickView(geometry: geometry)
+            }
+        }
     }
     
     // MARK: - Editor Mode View
@@ -549,6 +671,28 @@ struct CustomVideoPlayer: NSViewRepresentable {
     
     class Coordinator {
         var playerLayer: AVPlayerLayer?
+    }
+}
+
+// MARK: - Live Preview View (HaishinKit MTHKView wrapper)
+
+/// Wraps HaishinKit's Metal-based MTHKView in SwiftUI for smooth, low-latency camera preview.
+/// MTHKView conforms to MediaMixerOutput and receives video frames directly from the MediaMixer.
+struct LivePreviewView: NSViewRepresentable {
+    
+    func makeNSView(context: Context) -> MTHKView {
+        // Use the shared preview view created during session configuration
+        if let existingView = LiveStreamManager.shared.previewView {
+            return existingView
+        }
+        // Fallback: create a new view (should not normally happen)
+        let view = MTHKView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
+        view.videoGravity = .resizeAspect
+        return view
+    }
+    
+    func updateNSView(_ nsView: MTHKView, context: Context) {
+        nsView.videoGravity = .resizeAspect
     }
 }
 

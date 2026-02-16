@@ -32,4 +32,9 @@ struct VideosState {
     var showDownloadFromURLSheet: Bool = false
     var downloadedVideoURL: URL? = nil
     
+    // Live Stream State
+    var showLiveSourceSelection: Bool = false
+    var showLiveMetadataSheet: Bool = false
+    var isLiveSessionConfigured: Bool = false
+    
 }

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */; };
+		AABB0001F0000000000003 /* HaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = AABB0001F0000000000002 /* HaishinKit */; };
 		BF6715C02EF6E69700A71E47 /* NSAttributedString+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */; };
 		BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFDA33492EEDBD9100358696 /* URLConstants.swift */; };
 		BFFEC8772F1D32AF00464BF0 /* CircularPercentProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFFEC8762F1D32AF00464BF0 /* CircularPercentProgressView.swift */; };
@@ -168,6 +169,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DDD60A962D7A5D7E0097600D /* AVKit.framework in Frameworks */,
+				AABB0001F0000000000003 /* HaishinKit in Frameworks */,
 				4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -378,6 +380,9 @@
 				DDFB1A352DE510CF00175D97 /* web/dist */,
 			);
 			name = "Youchip-Stat";
+			packageProductDependencies = (
+				AABB0001F0000000000002 /* HaishinKit */,
+			);
 			productName = "Youchip-Stat";
 			productReference = DDB401912D749E0F004A12C2 /* SportCut.app */;
 			productType = "com.apple.product-type.application";
@@ -411,6 +416,9 @@
 			);
 			mainGroup = DDB401882D749E0F004A12C2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AABB0001F0000000000001 /* XCRemoteSwiftPackageReference "HaishinKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DDB401922D749E0F004A12C2 /* Products */;
 			projectDirPath = "";
@@ -740,10 +748,10 @@
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
@@ -844,6 +852,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AABB0001F0000000000001 /* XCRemoteSwiftPackageReference "HaishinKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/HaishinKit/HaishinKit.swift";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AABB0001F0000000000002 /* HaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AABB0001F0000000000001 /* XCRemoteSwiftPackageReference "HaishinKit" */;
+			productName = HaishinKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DDB401892D749E0F004A12C2 /* Project object */;
 }

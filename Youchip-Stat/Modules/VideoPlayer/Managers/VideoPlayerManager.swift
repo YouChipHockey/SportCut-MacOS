@@ -21,17 +21,71 @@ class VideoPlayerManager: ObservableObject {
     @Published var isResizingTag: Bool = false // Track if user is resizing a tag
     /// Режим редактирования скриншота во вьюхе видео-окна (для обработки кнопки закрытия окна).
     var isVideoPlayerInEditorMode: Bool = false
+    
+    // MARK: - Live Mode
+    @Published var isLiveMode: Bool = false
+    @Published var isBroadcastActive: Bool = false
+    
     var videoDuration: Double {
-        player?.currentItem?.duration.seconds ?? 0
+        if isLiveMode {
+            return LiveStreamManager.shared.liveDuration
+        }
+        return player?.currentItem?.duration.seconds ?? 0
     }
     private var timeObserverToken: Any?
     private var cancellables = Set<AnyCancellable>()
+    private var liveDurationCancellable: AnyCancellable?
     
     func loadVideo(from url: URL) {
+        isLiveMode = false
+        isBroadcastActive = false
         player = AVPlayer(url: url)
         player?.play()
         startTimeObserver()
         observePlayerState()
+    }
+    
+    // MARK: - Live Mode
+    
+    func startLiveMode() {
+        isLiveMode = true
+        isBroadcastActive = true
+        player = nil // No AVPlayer in live mode - we use preview layer
+        currentTime = 0.0
+        
+        // Observe live duration to update currentTime
+        liveDurationCancellable = LiveStreamManager.shared.$liveDuration
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] duration in
+                guard let self = self, self.isLiveMode, self.isBroadcastActive else { return }
+                self.currentTime = duration
+            }
+    }
+    
+    func stopBroadcast() {
+        isBroadcastActive = false
+        LiveStreamManager.shared.pauseBroadcast()
+    }
+    
+    func resumeBroadcast() {
+        isBroadcastActive = true
+        LiveStreamManager.shared.resumeBroadcast()
+    }
+    
+    /// Called when live stream ends and video file is ready. Transitions to normal playback mode.
+    func transitionToStaticVideo(url: URL) {
+        liveDurationCancellable?.cancel()
+        liveDurationCancellable = nil
+        isLiveMode = false
+        isBroadcastActive = false
+        loadVideo(from: url)
+    }
+    
+    func endLiveMode() {
+        liveDurationCancellable?.cancel()
+        liveDurationCancellable = nil
+        isLiveMode = false
+        isBroadcastActive = false
     }
     func seek(to time: Double) {
         guard let player = player else { return }
@@ -57,6 +111,10 @@ class VideoPlayerManager: ObservableObject {
         currentTime = 0.0
         playbackSpeed = 1.0
         cancellables.removeAll()
+        liveDurationCancellable?.cancel()
+        liveDurationCancellable = nil
+        isLiveMode = false
+        isBroadcastActive = false
     }
     private func startTimeObserver() {
         guard let player = player else { return }

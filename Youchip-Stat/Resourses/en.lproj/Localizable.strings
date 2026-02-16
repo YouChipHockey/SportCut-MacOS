@@ -696,3 +696,23 @@
 "EditorShapeCircle" = "Circle"; // ^String.Titles.editorShapeCircle
 "EditorShapeStar" = "Star"; // ^String.Titles.editorShapeStar
 "EditorShapeHexagon" = "Hexagon"; // ^String.Titles.editorShapeHexagon
+
+// Live Stream
+"RecordVideo" = "Record Video"; // ^String.Titles.recordVideo
+"LiveStreamTitle" = "Live Stream"; // ^String.Titles.liveStreamTitle
+"LiveStreamDescription" = "Select a video source and quality settings for real-time recording"; // ^String.Titles.liveStreamDescription
+"LiveStreamVideoSource" = "Video Source"; // ^String.Titles.liveStreamVideoSource
+"LiveStreamAudioSource" = "Audio Source"; // ^String.Titles.liveStreamAudioSource
+"LiveStreamQuality" = "Video Quality"; // ^String.Titles.liveStreamQuality
+"LiveStreamNoVideoDevices" = "No cameras found. Connect a camera and try again"; // ^String.Titles.liveStreamNoVideoDevices
+"LiveStreamNoAudioDevices" = "No microphones found"; // ^String.Titles.liveStreamNoAudioDevices
+"LiveStreamNoAudio" = "No audio"; // ^String.Titles.liveStreamNoAudio
+"LiveStreamSelectDeviceFirst" = "Select a camera first"; // ^String.Titles.liveStreamSelectDeviceFirst
+"LiveStreamStartButton" = "Next"; // ^String.Titles.liveStreamStartButton
+"LiveStreamConfigError" = "Failed to configure camera. Check connection and permissions"; // ^String.Titles.liveStreamConfigError
+"LiveStreamMatchInfo" = "Match Information"; // ^String.Titles.liveStreamMatchInfo
+"LiveStreamStartRecording" = "Start Recording"; // ^String.Titles.liveStreamStartRecording
+"LiveStreamStopBroadcast" = "Stop"; // ^String.Titles.liveStreamStopBroadcast
+"LiveStreamContinueBroadcast" = "Continue"; // ^String.Titles.liveStreamContinueBroadcast
+"LiveStreamPausedLabel" = "PAUSED"; // ^String.Titles.liveStreamPausedLabel
+"LiveStreamBroadcastPaused" = "Broadcast paused"; // ^String.Titles.liveStreamBroadcastPaused

@@ -44,4 +44,10 @@ enum VideosActions {
     case cancelVideoDownload
     case addDownloadedVideoWithServerName(url: URL, serverTitle: String?)
     
+    // Live Stream Actions
+    case showLiveSourceSelection
+    case liveSourceConfigured
+    case startLiveWithMetadata(team1: String, team2: String, score: String, dateTime: Date)
+    case cancelLiveSetup
+    
 }

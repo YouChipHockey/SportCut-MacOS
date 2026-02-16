@@ -697,3 +697,23 @@
 "EditorShapeStar" = "Звезда"; // ^String.Titles.editorShapeStar
 "EditorShapeHexagon" = "Шестиугольник"; // ^String.Titles.editorShapeHexagon
 "FullControlButtonExportDrawings" = "Экспорт Рисунков";  // ^String.Titles.fullControlButtonExportDrawings
+
+// Прямая трансляция
+"RecordVideo" = "Записать видео"; // ^String.Titles.recordVideo
+"LiveStreamTitle" = "Прямая трансляция"; // ^String.Titles.liveStreamTitle
+"LiveStreamDescription" = "Выберите источник видео и настройки качества для записи в реальном времени"; // ^String.Titles.liveStreamDescription
+"LiveStreamVideoSource" = "Источник видео"; // ^String.Titles.liveStreamVideoSource
+"LiveStreamAudioSource" = "Источник аудио"; // ^String.Titles.liveStreamAudioSource
+"LiveStreamQuality" = "Качество видео"; // ^String.Titles.liveStreamQuality
+"LiveStreamNoVideoDevices" = "Камеры не найдены. Подключите камеру и попробуйте снова"; // ^String.Titles.liveStreamNoVideoDevices
+"LiveStreamNoAudioDevices" = "Микрофоны не найдены"; // ^String.Titles.liveStreamNoAudioDevices
+"LiveStreamNoAudio" = "Без аудио"; // ^String.Titles.liveStreamNoAudio
+"LiveStreamSelectDeviceFirst" = "Сначала выберите камеру"; // ^String.Titles.liveStreamSelectDeviceFirst
+"LiveStreamStartButton" = "Далее"; // ^String.Titles.liveStreamStartButton
+"LiveStreamConfigError" = "Не удалось настроить камеру. Проверьте подключение и разрешения"; // ^String.Titles.liveStreamConfigError
+"LiveStreamMatchInfo" = "Информация о матче"; // ^String.Titles.liveStreamMatchInfo
+"LiveStreamStartRecording" = "Начать запись"; // ^String.Titles.liveStreamStartRecording
+"LiveStreamStopBroadcast" = "Остановить"; // ^String.Titles.liveStreamStopBroadcast
+"LiveStreamContinueBroadcast" = "Продолжить"; // ^String.Titles.liveStreamContinueBroadcast
+"LiveStreamPausedLabel" = "ПАУЗА"; // ^String.Titles.liveStreamPausedLabel
+"LiveStreamBroadcastPaused" = "Трансляция приостановлена"; // ^String.Titles.liveStreamBroadcastPaused

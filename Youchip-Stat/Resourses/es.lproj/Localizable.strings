@@ -670,3 +670,23 @@
 "EditorShapeCircle" = "Círculo";
 "EditorShapeStar" = "Estrella";
 "EditorShapeHexagon" = "Hexágono";
+
+// Transmisión en vivo
+"RecordVideo" = "Grabar Video";
+"LiveStreamTitle" = "Transmisión en Vivo";
+"LiveStreamDescription" = "Seleccione una fuente de video y configuración de calidad para grabación en tiempo real";
+"LiveStreamVideoSource" = "Fuente de Video";
+"LiveStreamAudioSource" = "Fuente de Audio";
+"LiveStreamQuality" = "Calidad de Video";
+"LiveStreamNoVideoDevices" = "No se encontraron cámaras. Conecte una cámara e intente de nuevo";
+"LiveStreamNoAudioDevices" = "No se encontraron micrófonos";
+"LiveStreamNoAudio" = "Sin audio";
+"LiveStreamSelectDeviceFirst" = "Seleccione una cámara primero";
+"LiveStreamStartButton" = "Siguiente";
+"LiveStreamConfigError" = "Error al configurar la cámara. Verifique la conexión y los permisos";
+"LiveStreamMatchInfo" = "Información del Partido";
+"LiveStreamStartRecording" = "Iniciar Grabación";
+"LiveStreamStopBroadcast" = "Detener";
+"LiveStreamContinueBroadcast" = "Continuar";
+"LiveStreamPausedLabel" = "PAUSADO";
+"LiveStreamBroadcastPaused" = "Transmisión en pausa";

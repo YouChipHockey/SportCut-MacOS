@@ -347,6 +347,49 @@ class VideosViewModel: ObservableObject {
                     WindowsManager.shared.openVideo(id: file.videoData.id)
                 }
             }
+            
+        // MARK: - Live Stream Actions
+            
+        case .showLiveSourceSelection:
+            if !canAddMoreVideos() {
+                self.action.send(.showError(error: ^String.Titles.videoUploadLimitReached))
+                return
+            }
+            state.showLiveSourceSelection = true
+            
+        case .liveSourceConfigured:
+            state.showLiveSourceSelection = false
+            state.isLiveSessionConfigured = true
+            state.showLiveMetadataSheet = true
+            
+        case .startLiveWithMetadata(let team1, let team2, let score, let dateTime):
+            let metadata = VideoMetadata(team1: team1, team2: team2, score: score, dateTime: dateTime)
+            // Reset flag before closing sheet so onDismiss doesn't trigger cancelLiveSetup
+            state.isLiveSessionConfigured = false
+            startLiveStream(with: metadata)
+            state.showLiveMetadataSheet = false
+            
+        case .cancelLiveSetup:
+            state.showLiveSourceSelection = false
+            state.showLiveMetadataSheet = false
+            state.isLiveSessionConfigured = false
+            LiveStreamManager.shared.fullCleanup()
         }
+    }
+    
+    // MARK: - Live Stream
+    
+    private func startLiveStream(with metadata: VideoMetadata) {
+        let newFileName = metadata.generateFileName()
+        let videoId = filesManager.generate32CharacterCode()
+        
+        // Create a placeholder entry in files manager (no bookmark yet, will be set after recording)
+        // For now, we just open the live player
+        
+        if !authManager.isAuthValid {
+            incrementAddedVideosCount()
+        }
+        
+        WindowsManager.shared.openLiveVideo(videoId: videoId, fileName: newFileName)
     }
 }

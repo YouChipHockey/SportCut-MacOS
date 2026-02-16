@@ -76,6 +76,10 @@
 	<string>NSFileProtectionComplete</string>
 	<key>NSFileSystemUsageDescription</key>
 	<string>We need access to your file system to open and save files.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is required for live video recording.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is required for audio recording during live streams.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
 	<key>NSUserTrackingUsageDescription</key>

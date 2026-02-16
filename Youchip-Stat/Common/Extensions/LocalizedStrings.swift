@@ -700,6 +700,26 @@ extension String {
         case editorShapeCircle
         case editorShapeStar
         case editorShapeHexagon
+        
+        // Live Stream
+        case recordVideo
+        case liveStreamTitle
+        case liveStreamDescription
+        case liveStreamVideoSource
+        case liveStreamAudioSource
+        case liveStreamQuality
+        case liveStreamNoVideoDevices
+        case liveStreamNoAudioDevices
+        case liveStreamNoAudio
+        case liveStreamSelectDeviceFirst
+        case liveStreamStartButton
+        case liveStreamConfigError
+        case liveStreamMatchInfo
+        case liveStreamStartRecording
+        case liveStreamStopBroadcast
+        case liveStreamContinueBroadcast
+        case liveStreamPausedLabel
+        case liveStreamBroadcastPaused
     }
     
 }

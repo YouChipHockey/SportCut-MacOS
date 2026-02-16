@@ -670,3 +670,23 @@
 "EditorShapeCircle" = "圆形";
 "EditorShapeStar" = "星形";
 "EditorShapeHexagon" = "六边形";
+
+// 直播
+"RecordVideo" = "录制视频";
+"LiveStreamTitle" = "直播";
+"LiveStreamDescription" = "选择视频源和质量设置进行实时录制";
+"LiveStreamVideoSource" = "视频源";
+"LiveStreamAudioSource" = "音频源";
+"LiveStreamQuality" = "视频质量";
+"LiveStreamNoVideoDevices" = "未找到摄像头。请连接摄像头后重试";
+"LiveStreamNoAudioDevices" = "未找到麦克风";
+"LiveStreamNoAudio" = "无音频";
+"LiveStreamSelectDeviceFirst" = "请先选择摄像头";
+"LiveStreamStartButton" = "下一步";
+"LiveStreamConfigError" = "摄像头配置失败。请检查连接和权限";
+"LiveStreamMatchInfo" = "比赛信息";
+"LiveStreamStartRecording" = "开始录制";
+"LiveStreamStopBroadcast" = "停止";
+"LiveStreamContinueBroadcast" = "继续";
+"LiveStreamPausedLabel" = "已暂停";
+"LiveStreamBroadcastPaused" = "直播已暂停";

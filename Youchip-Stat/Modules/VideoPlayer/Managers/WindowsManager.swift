@@ -47,6 +47,11 @@ class WindowsManager: NSObject {
     private var isClosing = true
     private var isWindowsLocked = false
     
+    /// Tracks whether the current session is a live stream
+    private(set) var isLiveSession: Bool = false
+    private var liveVideoId: String?
+    private var liveFileName: String?
+    
     private var collectionWindowDelegate: CollectionWindowDelegate?
     
     override init() {
@@ -81,8 +86,125 @@ class WindowsManager: NSObject {
         
         ScreenshotsMetadataManager.shared.clearScreenshots()
         
-        VideoPlayerManager.shared.deleteVideo()
+        // If this was a live session, finalize the recording and import the video
+        if isLiveSession {
+            finalizeLiveSession()
+        } else {
+            VideoPlayerManager.shared.deleteVideo()
+        }
+        
         isClosing = true
+    }
+    
+    // MARK: - Live Stream
+    
+    func openLiveVideo(videoId: String, fileName: String) {
+        currentVideoId = videoId
+        isLiveSession = true
+        liveVideoId = videoId
+        liveFileName = fileName
+        
+        guard isClosing else { return }
+        
+        UserDefaults.standard.set("", forKey: "editingStampLineID")
+        UserDefaults.standard.set("", forKey: "editingStampID")
+        isClosing = false
+        
+        // Initialize empty timelines for the live session
+        TimelineDataManager.shared.currentBookmark = nil
+        TimelineDataManager.shared.lines = []
+        TimelineDataManager.shared.selectedLineID = nil
+        
+        ensureScreenshotsTimelineExists()
+        
+        // Create screenshots folder for this live session
+        let fileManager = FileManager.default
+        let documentsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let screenshotsDir = documentsDir.appendingPathComponent("Screenshots").appendingPathComponent(videoId)
+        if !fileManager.fileExists(atPath: screenshotsDir.path) {
+            try? fileManager.createDirectory(at: screenshotsDir, withIntermediateDirectories: true)
+        }
+        ScreenshotsMetadataManager.shared.loadScreenshots(from: screenshotsDir)
+        
+        // Start live mode in VideoPlayerManager (no AVPlayer - uses preview layer)
+        VideoPlayerManager.shared.startLiveMode()
+        
+        // Start the actual capture and recording
+        LiveStreamManager.shared.startLiveStream(videoId: videoId)
+        
+        // Create windows
+        videoWindow = VideoPlayerWindowController(id: videoId)
+        controlWindow = FullControlWindowController()
+        tagLibraryWindow = TagLibraryWindowController()
+        
+        if let screen = NSScreen.main {
+            let screenFrame = screen.frame
+            let bottomHeight = screenFrame.height * 0.4
+            let topHeight = screenFrame.height - bottomHeight - 40
+            
+            let timelineRect = NSRect(
+                x: screenFrame.minX,
+                y: screenFrame.minY,
+                width: screenFrame.width,
+                height: bottomHeight
+            )
+            controlWindow?.window?.setFrame(timelineRect, display: true)
+            
+            let libraryRect = NSRect(
+                x: screenFrame.minX,
+                y: screenFrame.minY + bottomHeight,
+                width: screenFrame.width / 3,
+                height: topHeight
+            )
+            tagLibraryWindow?.window?.setFrame(libraryRect, display: true)
+            
+            let videoRect = NSRect(
+                x: screenFrame.minX + screenFrame.width / 3,
+                y: screenFrame.minY + bottomHeight,
+                width: (screenFrame.width * 2) / 3,
+                height: topHeight
+            )
+            videoWindow?.window?.setFrame(videoRect, display: true)
+        }
+        
+        videoWindow?.showWindow(nil)
+        controlWindow?.showWindow(nil)
+        tagLibraryWindow?.showWindow(nil)
+    }
+    
+    /// Finalize the live recording: stop capture, write final file, import as static video.
+    private func finalizeLiveSession() {
+        let videoId = liveVideoId ?? ""
+        let fileName = liveFileName ?? "Live_\(Date().timeIntervalSince1970)"
+        let timelines = TimelineDataManager.shared.lines
+        
+        VideoPlayerManager.shared.endLiveMode()
+        
+        LiveStreamManager.shared.stopAndFinalize { [weak self] fileURL in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                if let url = fileURL {
+                    // Import the recorded video as a regular static video
+                    if let filesFile = VideoFilesManager.shared.importFile(url: url, newName: fileName) {
+                        // Restore timelines from the live session
+                        VideoFilesManager.shared.updateTimelines(
+                            for: filesFile.videoData.bookmark,
+                            with: timelines
+                        )
+                        print("WindowsManager: Live recording imported as '\(fileName)' with \(timelines.count) timelines")
+                    }
+                } else {
+                    print("WindowsManager: Live recording finalization failed - no file produced")
+                }
+                
+                self.isLiveSession = false
+                self.liveVideoId = nil
+                self.liveFileName = nil
+                
+                LiveStreamManager.shared.fullCleanup()
+            }
+        }
     }
     
     func showFieldMapVisualizationPicker() {
