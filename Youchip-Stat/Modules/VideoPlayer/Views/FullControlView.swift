@@ -1287,13 +1287,22 @@ struct FullControlView: View {
             .frame(minWidth: 800, minHeight: 300)
             .overlay {
                 if isExporting {
-                    CircularPercentProgressView(progress: Double(exportHelper.progress))
-                        .frame(width: 80, height: 80)
-                        .padding(30)
-                        .background(Color.black.opacity(0.8))
-                        .cornerRadius(12)
-                        .shadow(radius: 20)
-                        .transition(.opacity)
+                    VStack(spacing: 16) {
+                        CircularPercentProgressView(progress: Double(exportHelper.progress))
+                            .frame(width: 80, height: 80)
+                        Button(^String.Titles.cancelButtonTitle) {
+                            exportHelper.cancelExport()
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                    }
+                    .padding(30)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(12)
+                    .shadow(radius: 20)
+                    .transition(.opacity)
                 }
             }
             .onAppear {
