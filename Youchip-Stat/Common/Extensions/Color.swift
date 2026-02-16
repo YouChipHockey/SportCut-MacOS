@@ -95,4 +95,54 @@ extension Color {
         
         return String(format: "%02X%02X%02X", red, green, blue)
     }
+    
+    /// Извлекает альфа-компонент из цвета
+    var alphaComponent: Double {
+        #if os(macOS)
+        let nativeColor = NSColor(self)
+        guard let convertedColor = nativeColor.usingColorSpace(.deviceRGB) else {
+            return 1.0
+        }
+        return Double(convertedColor.alphaComponent)
+        #else
+        let nativeColor = UIColor(self)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        nativeColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return Double(alpha)
+        #endif
+    }
+    
+    /// Возвращает цвет без альфа-компонента (альфа = 1.0)
+    var withoutAlpha: Color {
+        #if os(macOS)
+        let nativeColor = NSColor(self)
+        guard let convertedColor = nativeColor.usingColorSpace(.deviceRGB) else {
+            return self
+        }
+        return Color(
+            .sRGB,
+            red: Double(convertedColor.redComponent),
+            green: Double(convertedColor.greenComponent),
+            blue: Double(convertedColor.blueComponent),
+            opacity: 1.0
+        )
+        #else
+        let nativeColor = UIColor(self)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        nativeColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return Color(
+            .sRGB,
+            red: Double(red),
+            green: Double(green),
+            blue: Double(blue),
+            opacity: 1.0
+        )
+        #endif
+    }
 }
