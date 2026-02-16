@@ -716,3 +716,57 @@
 "LiveStreamContinueBroadcast" = "Continue"; // ^String.Titles.liveStreamContinueBroadcast
 "LiveStreamPausedLabel" = "PAUSED"; // ^String.Titles.liveStreamPausedLabel
 "LiveStreamBroadcastPaused" = "Broadcast paused"; // ^String.Titles.liveStreamBroadcastPaused
+
+// Data Sync & Backup
+"DataManagementTitle" = "Data Management";
+"DataManagementBackupSystemInfo" = "About Backup System";
+"DataManagementBackupSystemDescription" = "All your data is automatically saved in two locations:";
+"DataManagementDocumentsTitle" = "Documents";
+"DataManagementDocumentsDescription" = "Primary storage";
+"DataManagementDocumentsHelp" = "Click to open Documents folder in Finder";
+"DataManagementApplicationSupportTitle" = "Application Support";
+"DataManagementApplicationSupportDescription" = "Backup copy";
+"DataManagementApplicationSupportHelp" = "Click to open Application Support folder in Finder";
+"DataManagementBackupNote" = "Backup copy is preserved even when the app is deleted and restored on next launch.";
+"DataManagementRestoreFromBackup" = "Restore from Backup";
+"DataManagementRestoreFromBackupDescription" = "Restore data from Application Support";
+"DataManagementCreateBackup" = "Create Backup";
+"DataManagementCreateBackupDescription" = "Save current data to backup storage";
+"DataManagementCheckOrphanedTimelines" = "Check Saved Timelines";
+"DataManagementCheckOrphanedTimelinesDescription" = "Find timelines without linked videos";
+"DataManagementDeleteAllData" = "Delete All Data";
+"DataManagementDeleteAllDataDescription" = "Completely delete all user data";
+"DataManagementProcessing" = "Processing...";
+"DataManagementRestoreConfirmationTitle" = "Restore Data?";
+"DataManagementRestoreConfirmationMessage" = "Current data will be replaced with data from backup.";
+"DataManagementDeleteConfirmationTitle" = "Delete All Data?";
+"DataManagementDeleteConfirmationMessage" = "This action is irreversible. All your videos, collections and settings will be deleted from both storages.";
+"DataManagementBackupCreatedSuccess" = "✅ Backup created successfully";
+"DataManagementRestoreSuccess" = "✅ Data restored successfully from backup.\n\nRestart the app to apply changes.";
+"DataManagementDeleteSuccess" = "✅ All data (including timelines) deleted successfully.\n\nRestart the app.";
+"DataManagementNoOrphanedTimelines" = "No Saved Timelines";
+"DataManagementAllTimelinesLinked" = "All timelines are linked to videos";
+
+// Orphaned Timelines Recovery
+"OrphanedTimelinesTitle" = "Saved Timelines Found";
+"OrphanedTimelinesFound" = "Found timelines without linked videos: %d";
+"OrphanedTimelinesInstructions" = "Select video files to restore timelines or skip unnecessary ones.";
+"OrphanedTimelinesSkipAll" = "Skip All";
+"OrphanedTimelinesRestoreSelected" = "Restore Selected";
+"OrphanedTimelinesRestoring" = "Restoring %d of %d...";
+"OrphanedTimelinesRestoreSuccess" = "Restore Complete";
+"OrphanedTimelinesRestoreSuccessMessage" = "Successfully restored timelines: %d";
+"OrphanedTimelinesSelectVideo" = "Select Video";
+"OrphanedTimelinesChangeVideo" = "Change Video";
+"OrphanedTimelinesDelete" = "Delete";
+"OrphanedTimelinesDeleteConfirmationTitle" = "Delete Timeline?";
+"OrphanedTimelinesDeleteConfirmationMessage" = "Timeline will be deleted from backup. This action cannot be undone.";
+"OrphanedTimelinesDeleteHelp" = "Delete timeline from backup";
+"OrphanedTimelinesUnknownVideo" = "Unknown Video";
+"OrphanedTimelinesSaved" = "Saved: %@";
+"OrphanedTimelinesTimelineSingular" = "1 timeline";
+"OrphanedTimelinesTimelinePlural24" = "%d timelines";
+"OrphanedTimelinesTimelinePlural5Plus" = "%d timelines";
+"OrphanedTimelinesStampsSingular" = "1 stamp";
+"OrphanedTimelinesStampsPlural24" = "%d stamps";
+"OrphanedTimelinesStampsPlural5Plus" = "%d stamps";

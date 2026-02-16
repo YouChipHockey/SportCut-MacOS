@@ -717,3 +717,57 @@
 "LiveStreamContinueBroadcast" = "Продолжить"; // ^String.Titles.liveStreamContinueBroadcast
 "LiveStreamPausedLabel" = "ПАУЗА"; // ^String.Titles.liveStreamPausedLabel
 "LiveStreamBroadcastPaused" = "Трансляция приостановлена"; // ^String.Titles.liveStreamBroadcastPaused
+
+// Data Sync & Backup
+"DataManagementTitle" = "Управление данными";
+"DataManagementBackupSystemInfo" = "О системе резервного копирования";
+"DataManagementBackupSystemDescription" = "Все ваши данные автоматически сохраняются в двух местах:";
+"DataManagementDocumentsTitle" = "Documents";
+"DataManagementDocumentsDescription" = "Основное хранилище";
+"DataManagementDocumentsHelp" = "Нажмите, чтобы открыть папку Documents в Finder";
+"DataManagementApplicationSupportTitle" = "Application Support";
+"DataManagementApplicationSupportDescription" = "Резервная копия";
+"DataManagementApplicationSupportHelp" = "Нажмите, чтобы открыть папку Application Support в Finder";
+"DataManagementBackupNote" = "Резервная копия сохраняется даже при удалении приложения и восстанавливается при следующем запуске.";
+"DataManagementRestoreFromBackup" = "Восстановить из резервной копии";
+"DataManagementRestoreFromBackupDescription" = "Восстановить данные из Application Support";
+"DataManagementCreateBackup" = "Создать резервную копию";
+"DataManagementCreateBackupDescription" = "Сохранить текущие данные в резервное хранилище";
+"DataManagementCheckOrphanedTimelines" = "Проверить сохраненные разметки";
+"DataManagementCheckOrphanedTimelinesDescription" = "Найти разметки без связанных видео";
+"DataManagementDeleteAllData" = "Удалить все данные";
+"DataManagementDeleteAllDataDescription" = "Полностью удалить все данные пользователя";
+"DataManagementProcessing" = "Обработка...";
+"DataManagementRestoreConfirmationTitle" = "Восстановить данные?";
+"DataManagementRestoreConfirmationMessage" = "Текущие данные будут заменены данными из резервной копии.";
+"DataManagementDeleteConfirmationTitle" = "Удалить все данные?";
+"DataManagementDeleteConfirmationMessage" = "Это действие необратимо. Все ваши видео, коллекции и настройки будут удалены из обоих хранилищ.";
+"DataManagementBackupCreatedSuccess" = "✅ Резервная копия успешно создана";
+"DataManagementRestoreSuccess" = "✅ Данные успешно восстановлены из резервной копии.\n\nПерезапустите приложение для применения изменений.";
+"DataManagementDeleteSuccess" = "✅ Все данные (включая разметки) успешно удалены.\n\nПерезапустите приложение.";
+"DataManagementNoOrphanedTimelines" = "Нет сохраненных разметок";
+"DataManagementAllTimelinesLinked" = "Все разметки связаны с видео";
+
+// Orphaned Timelines Recovery
+"OrphanedTimelinesTitle" = "Обнаружены сохраненные разметки";
+"OrphanedTimelinesFound" = "Найдено разметок без связанных видео: %d";
+"OrphanedTimelinesInstructions" = "Выберите видео файлы для восстановления разметок или пропустите ненужные.";
+"OrphanedTimelinesSkipAll" = "Пропустить всё";
+"OrphanedTimelinesRestoreSelected" = "Восстановить выбранные";
+"OrphanedTimelinesRestoring" = "Восстановление %d из %d...";
+"OrphanedTimelinesRestoreSuccess" = "Восстановление завершено";
+"OrphanedTimelinesRestoreSuccessMessage" = "Успешно восстановлено разметок: %d";
+"OrphanedTimelinesSelectVideo" = "Выбрать видео";
+"OrphanedTimelinesChangeVideo" = "Изменить видео";
+"OrphanedTimelinesDelete" = "Удалить";
+"OrphanedTimelinesDeleteConfirmationTitle" = "Удалить разметку?";
+"OrphanedTimelinesDeleteConfirmationMessage" = "Разметка будет удалена из резервной копии. Это действие нельзя отменить.";
+"OrphanedTimelinesDeleteHelp" = "Удалить разметку из резервной копии";
+"OrphanedTimelinesUnknownVideo" = "Неизвестное видео";
+"OrphanedTimelinesSaved" = "Сохранено: %@";
+"OrphanedTimelinesTimelineSingular" = "1 таймлайн";
+"OrphanedTimelinesTimelinePlural24" = "%d таймлайна";
+"OrphanedTimelinesTimelinePlural5Plus" = "%d таймлайнов";
+"OrphanedTimelinesStampsSingular" = "1 метка";
+"OrphanedTimelinesStampsPlural24" = "%d метки";
+"OrphanedTimelinesStampsPlural5Plus" = "%d меток";

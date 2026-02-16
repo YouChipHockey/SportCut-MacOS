@@ -286,104 +286,57 @@ class CustomCollectionManager: ObservableObject {
     
     func saveCollectionToFiles() -> Bool {
         collectionName = collectionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if !isEditingExisting && originalName.isEmpty {
+            if collectionName.isEmpty || collectionName == ^String.Titles.myCollection {
+                collectionName = collectionID
+            }
+        }
+        
         if collectionName == originalName || collectionName.isEmpty {
-            collectionName = originalName
+            collectionName = originalName.isEmpty ? collectionID : originalName
         } else {
             collectionName = ensureUniqueCollectionName(collectionName, collectionID: collectionID)
         }
         
-        do {
-            let tagGroupsData = TagGroupsData(tagGroups: tagGroups)
-            let tagsData = TagsData(tags: tags)
-            let labelGroupsData = LabelGroupsData(labelGroups: labelGroups)
-            let labelsData = LabelsData(labels: labels)
-            let timeEventsData = TimeEventsData(events: timeEvents)
-            
-            let urlString = URLConstants.getCollecitonFolderStringUrl(with: collectionID)
-            let collectionsFolderUrl = URL.appDocumentsDirectory
-                .appendingPathComponent(urlString, isDirectory: true)
-            
-            let fileManager = FileManager.default
-            if !fileManager.fileExists(atPath: collectionsFolderUrl.path) {
-                try fileManager.createDirectory(at: collectionsFolderUrl, withIntermediateDirectories: true)
-            }
-            
-            let tagGroupsURL = collectionsFolderUrl.appendingPathComponent("tagGroups.json")
-            let tagsURL = collectionsFolderUrl.appendingPathComponent("tags.json")
-            let labelGroupsURL = collectionsFolderUrl.appendingPathComponent("labelGroups.json")
-            let labelsURL = collectionsFolderUrl.appendingPathComponent("labels.json")
-            let timeEventsURL = collectionsFolderUrl.appendingPathComponent("timeEvents.json")
-            let playFieldURL = collectionsFolderUrl.appendingPathComponent("playField.json")
-            
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            
-            let tagGroupsJSON = try encoder.encode(tagGroupsData)
-            try tagGroupsJSON.write(to: tagGroupsURL)
-            let tagGroupsBookmark = tagGroupsURL.makeBookmark() ?? Data()
-            
-            let tagsJSON = try encoder.encode(tagsData)
-            try tagsJSON.write(to: tagsURL)
-            let tagsBookmark = tagsURL.makeBookmark() ?? Data()
-            
-            let labelGroupsJSON = try encoder.encode(labelGroupsData)
-            try labelGroupsJSON.write(to: labelGroupsURL)
-            let labelGroupsBookmark = labelGroupsURL.makeBookmark() ?? Data()
-            
-            let labelsJSON = try encoder.encode(labelsData)
-            try labelsJSON.write(to: labelsURL)
-            let labelsBookmark = labelsURL.makeBookmark() ?? Data()
-            
-            let timeEventsJSON = try encoder.encode(timeEventsData)
-            try timeEventsJSON.write(to: timeEventsURL)
-            let timeEventsBookmark = timeEventsURL.makeBookmark() ?? Data()
-            
-            var playFieldBookmark = Data()
-            if let field = playField {
-                let playFieldJSON = try encoder.encode(field)
-                try playFieldJSON.write(to: playFieldURL)
-                playFieldBookmark = playFieldURL.makeBookmark() ?? Data()
-            }
-            
-            let collectionBookmark = CollectionBookmark(
-                id: collectionID,
-                name: collectionName,
-                tagGroupsBookmark: tagGroupsBookmark,
-                tagsBookmark: tagsBookmark,
-                labelGroupsBookmark: labelGroupsBookmark,
-                labelsBookmark: labelsBookmark,
-                timeEventsBookmark: timeEventsBookmark,
-                playFieldBookmark: playFieldBookmark
-            )
-            
-            UserDefaults.standard.saveCollectionBookmark(collectionBookmark)
-            originalName = collectionName
-            if !isEditingExisting {
-                isEditingExisting = true
-            }
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
-            }
-            
-            for tag in changedTags {
-                NotificationCenter.default.post(
-                    name: .tagUpdated,
-                    object: nil,
-                    userInfo: ["tagId": tag.id, "newName": tag.newName]
-                )
-            }
-            changedTags.removeAll()
-            
-            return true
-        } catch {
-            print("SAVE ERROR:", error.localizedDescription)
-            return false
+        let collection = CollectionData(
+            id: collectionID,
+            tagGroups: tagGroups,
+            tags: tags,
+            labelGroups: labelGroups,
+            labels: labels,
+            timeEvents: timeEvents,
+            playField: playField
+        )
+        
+        InMemoryStorageManager.shared.saveCollection(collection)
+        
+        CollectionsBookmarksManager.shared.saveCollection(id: collectionID, name: collectionName)
+        
+        originalName = collectionName
+        if !isEditingExisting {
+            isEditingExisting = true
         }
+        
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+        }
+        
+        for tag in changedTags {
+            NotificationCenter.default.post(
+                name: .tagUpdated,
+                object: nil,
+                userInfo: ["tagId": tag.id, "newName": tag.newName]
+            )
+        }
+        changedTags.removeAll()
+        
+        return true
     }
     
     func ensureUniqueCollectionName(_ baseName: String, collectionID: String) -> String {
-        let existingNames = UserDefaults.standard
-            .getCollectionBookmarks()
+        let existingNames = CollectionsBookmarksManager.shared
+            .loadCollections()
             .filter { $0.id != collectionID }
             .map(\.name)
         if (isEditingExisting && baseName == originalName) || !existingNames.contains(baseName) {
@@ -402,184 +355,46 @@ class CustomCollectionManager: ObservableObject {
     
     @discardableResult
     func loadCollectionFromBookmarks(named collectionName: String) -> Bool {
-        guard let bookmark = UserDefaults.standard.getCollectionBookmarks()
-            .first(where: { $0.name == collectionName }) else {
+        let allCollections = CollectionsBookmarksManager.shared.loadCollections()
+        
+        guard let collectionInfo = allCollections.first(where: { $0.name == collectionName }) else {
+            print("❌ CustomCollectionManager: Collection '\(collectionName)' not found")
             return false
         }
         
-        do {
-            var isStale = false
-            var urls: [URL] = []
-            var accessFlags: [Bool] = []
-            
-            do {
-                let tagGroupsURL = try URL(resolvingBookmarkData: bookmark.tagGroupsBookmark,
-                                           options: .withSecurityScope,
-                                           relativeTo: nil,
-                                           bookmarkDataIsStale: &isStale)
-                urls.append(tagGroupsURL)
-                let accessFlag = tagGroupsURL.startAccessingSecurityScopedResource()
-                accessFlags.append(accessFlag)
-            } catch {
-                return false
-            }
-            
-            do {
-                let tagsURL = try URL(resolvingBookmarkData: bookmark.tagsBookmark,
-                                      options: .withSecurityScope,
-                                      relativeTo: nil,
-                                      bookmarkDataIsStale: &isStale)
-                urls.append(tagsURL)
-                let accessFlag = tagsURL.startAccessingSecurityScopedResource()
-                accessFlags.append(accessFlag)
-            } catch {
-                stopAccessingResources(urls: urls)
-                return false
-            }
-            
-            do {
-                let labelGroupsURL = try URL(resolvingBookmarkData: bookmark.labelGroupsBookmark,
-                                             options: .withSecurityScope,
-                                             relativeTo: nil,
-                                             bookmarkDataIsStale: &isStale)
-                urls.append(labelGroupsURL)
-                let accessFlag = labelGroupsURL.startAccessingSecurityScopedResource()
-                accessFlags.append(accessFlag)
-            } catch {
-                stopAccessingResources(urls: urls)
-                return false
-            }
-            
-            do {
-                let labelsURL = try URL(resolvingBookmarkData: bookmark.labelsBookmark,
-                                        options: .withSecurityScope,
-                                        relativeTo: nil,
-                                        bookmarkDataIsStale: &isStale)
-                urls.append(labelsURL)
-                let accessFlag = labelsURL.startAccessingSecurityScopedResource()
-                accessFlags.append(accessFlag)
-            } catch {
-                stopAccessingResources(urls: urls)
-                return false
-            }
-            
-            do {
-                if bookmark.timeEventsBookmark.isEmpty {
-                } else {
-                    let timeEventsURL = try URL(resolvingBookmarkData: bookmark.timeEventsBookmark,
-                                                options: .withSecurityScope,
-                                                relativeTo: nil,
-                                                bookmarkDataIsStale: &isStale)
-                    urls.append(timeEventsURL)
-                    let accessFlag = timeEventsURL.startAccessingSecurityScopedResource()
-                    accessFlags.append(accessFlag)
-                }
-            } catch {
-                stopAccessingResources(urls: urls)
-            }
-            
-            var playFieldURL: URL? = nil
-            do {
-                if let playFieldBookmark = bookmark.playFieldBookmark {
-                    if !playFieldBookmark.isEmpty {
-                        playFieldURL = try URL(resolvingBookmarkData: playFieldBookmark,
-                                               options: .withSecurityScope,
-                                               relativeTo: nil,
-                                               bookmarkDataIsStale: &isStale)
-                        urls.append(playFieldURL!)
-                        let accessFlag = playFieldURL!.startAccessingSecurityScopedResource()
-                        accessFlags.append(accessFlag)
-                    }
-                }
-            } catch {
-                stopAccessingResources(urls: urls)
-            }
-            
-            if urls.count < 4 || accessFlags.contains(false) {
-                stopAccessingResources(urls: urls)
-                return false
-            }
-            
-            defer {
-                stopAccessingResources(urls: urls)
-            }
-            
-            let tagGroupsURL = urls[0]
-            let tagsURL = urls[1]
-            let labelGroupsURL = urls[2]
-            let labelsURL = urls[3]
-            
-            let decoder = JSONDecoder()
-            
-            do {
-                let tagGroupsData = try Data(contentsOf: tagGroupsURL)
-                let tagGroupsContainer = try decoder.decode(TagGroupsData.self, from: tagGroupsData)
-                self.tagGroups = tagGroupsContainer.tagGroups
-            } catch {
-                return false
-            }
-            
-            do {
-                let tagsData = try Data(contentsOf: tagsURL)
-                let tagsContainer = try decoder.decode(TagsData.self, from: tagsData)
-                self.tags = tagsContainer.tags
-            } catch {
-                return false
-            }
-            
-            do {
-                let labelGroupsData = try Data(contentsOf: labelGroupsURL)
-                let labelGroupsContainer = try decoder.decode(LabelGroupsData.self, from: labelGroupsData)
-                self.labelGroups = labelGroupsContainer.labelGroups
-            } catch {
-                return false
-            }
-            
-            do {
-                let labelsData = try Data(contentsOf: labelsURL)
-                let labelsContainer = try decoder.decode(LabelsData.self, from: labelsData)
-                self.labels = labelsContainer.labels
-            } catch {
-                return false
-            }
-            if urls.count > 4 {
-                let timeEventsURL = urls[4]
-                do {
-                    let timeEventsData = try Data(contentsOf: timeEventsURL)
-                    let timeEventsContainer = try decoder.decode(TimeEventsData.self, from: timeEventsData)
-                    self.timeEvents = timeEventsContainer.events
-                } catch {
-                    self.timeEvents = []
-                }
-            } else {
-                self.timeEvents = []
-            }
-            
-            if let fieldURL = playFieldURL {
-                do {
-                    let fieldData = try Data(contentsOf: fieldURL)
-                    self.playField = try decoder.decode(PlayField.self, from: fieldData)
-                } catch {
-                    self.playField = nil
-                }
-            } else {
-                self.playField = nil
-            }
-            
-            self.collectionName = collectionName
-            if isStale {
-                refreshBookmark(collection: collectionName, urls: urls)
-            }
-            
-            return true
-        } catch {
+        guard let collection = InMemoryStorageManager.shared.loadCollection(id: collectionInfo.id) else {
+            print("❌ CustomCollectionManager: Failed to load collection '\(collectionName)'")
             return false
         }
+        
+        if Thread.isMainThread {
+            self.collectionID = collection.id
+            self.collectionName = collectionName
+            self.tagGroups = collection.tagGroups
+            self.tags = collection.tags
+            self.labelGroups = collection.labelGroups
+            self.labels = collection.labels
+            self.timeEvents = collection.timeEvents
+            self.playField = collection.playField
+        } else {
+            DispatchQueue.main.sync {
+                self.collectionID = collection.id
+                self.collectionName = collectionName
+                self.tagGroups = collection.tagGroups
+                self.tags = collection.tags
+                self.labelGroups = collection.labelGroups
+                self.labels = collection.labels
+                self.timeEvents = collection.timeEvents
+                self.playField = collection.playField
+            }
+        }
+        
+        print("✅ CustomCollectionManager: Successfully loaded collection '\(collectionName)'")
+        return true
     }
     
     private func loadAllCollections() {
-        let allBookmarks = UserDefaults.standard.getCollectionBookmarks()
-        
+        _ = CollectionsBookmarksManager.shared.loadCollections()
     }
     
     func updateTagMapEnabled(id: String, mapEnabled: Bool) -> Bool {
@@ -676,88 +491,100 @@ class CustomCollectionManager: ObservableObject {
     }
     
     func setFieldImage(from url: URL) -> Bool {
-        do {
-            let fileManager = FileManager.default
-            let playFieldsFolder = URL.appDocumentsDirectory
-                .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
-                .fixedFile()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
             
-            if !fileManager.fileExists(atPath: playFieldsFolder.path) {
-                try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
+            do {
+                let fileManager = FileManager.default
+                let playFieldsFolder = URL.appDocumentsDirectory
+                    .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+                    .fixedFile()
+                
+                if !fileManager.fileExists(atPath: playFieldsFolder.path) {
+                    try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
+                }
+                
+                let imageName = url.lastPathComponent
+                let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
+                
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try fileManager.removeItem(at: destinationURL)
+                }
+                
+                try fileManager.copyItem(at: url, to: destinationURL)
+                
+                let imageBookmark = destinationURL.makeBookmark()
+                
+                DispatchQueue.main.async {
+                    if let existingField = self.playField {
+                        self.playField = PlayField(
+                            id: existingField.id,
+                            name: existingField.name,
+                            imagePath: imageName,
+                            width: existingField.width,
+                            height: existingField.height,
+                            imageBookmark: imageBookmark
+                        )
+                    } else {
+                        self.playField = PlayField(
+                            id: UUID().uuidString,
+                            name: "Field",
+                            imagePath: imageName,
+                            width: 100.0,
+                            height: 60.0,
+                            imageBookmark: imageBookmark
+                        )
+                    }
+                    self.objectWillChange.send()
+                }
+            } catch {
+                print("❌ Error setting field image: \(error)")
             }
-            
-            let imageName = url.lastPathComponent
-            let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
-            
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
-            }
-            
-            try fileManager.copyItem(at: url, to: destinationURL)
-            
-            let imageBookmark = destinationURL.makeBookmark()
-            
-            if let existingField = playField {
-                playField = PlayField(
-                    id: existingField.id,
-                    name: existingField.name,
-                    imagePath: imageName,
-                    width: existingField.width,
-                    height: existingField.height,
-                    imageBookmark: imageBookmark
-                )
-            } else {
-                playField = PlayField(
-                    id: UUID().uuidString,
-                    name: "Field",
-                    imagePath: imageName,
-                    width: 100.0,
-                    height: 60.0,
-                    imageBookmark: imageBookmark
-                )
-            }
-            
-            return true
-        } catch {
-            return false
         }
+        return true
     }
     
     func deleteFieldImage() {
         guard let field = playField else { return }
         
-        let fileManager = FileManager.default
-        let playFieldsFolder = URL.appDocumentsDirectory
-            .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
-            .fixedFile()
-        
-        let imagePath = playFieldsFolder.appendingPathComponent(field.imagePath)
-        
-        if fileManager.fileExists(atPath: imagePath.path) {
-            try? fileManager.removeItem(at: imagePath)
-        }
-        
-        for i in 0..<tags.count {
-            if tags[i].mapEnabled == true {
-                tags[i] = Tag(
-                    id: tags[i].id,
-                    primaryID: tags[i].primaryID,
-                    name: tags[i].name,
-                    description: tags[i].description,
-                    color: tags[i].color,
-                    defaultTimeBefore: tags[i].defaultTimeBefore,
-                    defaultTimeAfter: tags[i].defaultTimeAfter,
-                    collection: tags[i].collection,
-                    lablesGroup: tags[i].lablesGroup,
-                    hotkey: tags[i].hotkey,
-                    labelHotkeys: tags[i].labelHotkeys,
-                    mapEnabled: false
-                )
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            let fileManager = FileManager.default
+            let playFieldsFolder = URL.appDocumentsDirectory
+                .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+                .fixedFile()
+            
+            let imagePath = playFieldsFolder.appendingPathComponent(field.imagePath)
+            
+            if fileManager.fileExists(atPath: imagePath.path) {
+                try? fileManager.removeItem(at: imagePath)
+            }
+            
+            DispatchQueue.main.async {
+                for i in 0..<self.tags.count {
+                    if self.tags[i].mapEnabled == true {
+                        self.tags[i] = Tag(
+                            id: self.tags[i].id,
+                            primaryID: self.tags[i].primaryID,
+                            name: self.tags[i].name,
+                            description: self.tags[i].description,
+                            color: self.tags[i].color,
+                            defaultTimeBefore: self.tags[i].defaultTimeBefore,
+                            defaultTimeAfter: self.tags[i].defaultTimeAfter,
+                            collection: self.tags[i].collection,
+                            lablesGroup: self.tags[i].lablesGroup,
+                            hotkey: self.tags[i].hotkey,
+                            labelHotkeys: self.tags[i].labelHotkeys,
+                            mapEnabled: false
+                        )
+                    }
+                }
+                
+                self.playField = nil
+                self.objectWillChange.send()
             }
         }
-        
-        playField = nil
-        objectWillChange.send()
     }
     
     func updateFieldDimensions(width: Double, height: Double) {
@@ -767,49 +594,6 @@ class CustomCollectionManager: ObservableObject {
         playField = updatedField
     }
     
-    private func stopAccessingResources(urls: [URL]) {
-        for url in urls {
-            url.stopAccessingSecurityScopedResource()
-        }
-    }
-    
-    private func refreshBookmark(collection: String, urls: [URL]) {
-        do {
-            let tagGroupsBookmark = try urls[0].bookmarkData()
-            let tagsBookmark = try urls[1].bookmarkData()
-            let labelGroupsBookmark = try urls[2].bookmarkData()
-            let labelsBookmark = try urls[3].bookmarkData()
-            
-            let timeEventsBookmark: Data
-            if urls.count > 4 {
-                timeEventsBookmark = try urls[4].bookmarkData()
-            } else {
-                timeEventsBookmark = Data()
-            }
-            
-            let playFieldBookmark: Data
-            if urls.count > 5 {
-                playFieldBookmark = try urls[5].bookmarkData()
-            } else {
-                playFieldBookmark = Data()
-            }
-            
-            let refreshedBookmark = CollectionBookmark(
-                id: collectionID,
-                name: collection,
-                tagGroupsBookmark: tagGroupsBookmark,
-                tagsBookmark: tagsBookmark,
-                labelGroupsBookmark: labelGroupsBookmark,
-                labelsBookmark: labelsBookmark,
-                timeEventsBookmark: timeEventsBookmark,
-                playFieldBookmark: playFieldBookmark
-            )
-            
-            UserDefaults.standard.saveCollectionBookmark(refreshedBookmark)
-        } catch {
-            print(error)
-        }
-    }
     
     func createTimeEvent(name: String) -> TimeEvent {
         let newEvent = TimeEvent(

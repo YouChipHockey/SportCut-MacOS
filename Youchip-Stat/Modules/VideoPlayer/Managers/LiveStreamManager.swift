@@ -9,6 +9,7 @@ import Foundation
 import AVFoundation
 import Combine
 import AppKit
+import CoreImage
 import HaishinKit
 import ObjectiveC
 
@@ -37,6 +38,9 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     /// MTHKView instance for Metal-based preview rendering.
     private(set) var previewView: MTHKView?
+    
+    /// Output that keeps the latest video frame for editor capture (Metal view doesn't give a valid bitmap).
+    private var latestFrameCapture: LiveFrameCaptureOutput?
     
     // MARK: - Recording state
     
@@ -117,10 +121,12 @@ class LiveStreamManager: NSObject, ObservableObject {
         let oldMixer = self.mixer
         let oldRecorder = self.recorder
         let oldPreview = self.previewView
+        let oldFrameCapture = self.latestFrameCapture
         
         self.mixer = nil
         self.recorder = nil
         self.previewView = nil
+        self.latestFrameCapture = nil
         self.isSessionConfigured = false
         self.isLive = false
         self.isBroadcastPaused = false
@@ -132,6 +138,9 @@ class LiveStreamManager: NSObject, ObservableObject {
                 }
                 if let oldPreview = oldPreview {
                     await oldMixer.removeOutput(oldPreview)
+                }
+                if let oldFrameCapture = oldFrameCapture {
+                    await oldMixer.removeOutput(oldFrameCapture)
                 }
                 await oldMixer.stopRunning()
                 try? await oldMixer.attachVideo(nil)
@@ -193,10 +202,14 @@ class LiveStreamManager: NSObject, ObservableObject {
                 
                 await newMixer.addOutput(view)
                 
+                let frameCapture = LiveFrameCaptureOutput()
+                await newMixer.addOutput(frameCapture)
+                
                 await MainActor.run {
                     guard self.sessionId == thisSessionId else { return }
                     self.mixer = newMixer
                     self.previewView = view
+                    self.latestFrameCapture = frameCapture
                     self.isSessionConfigured = true
                 }
             } catch {
@@ -290,6 +303,64 @@ class LiveStreamManager: NSObject, ObservableObject {
             self.isBroadcastPaused = false
             self.recordingStartDate = Date()
             self.startDurationTimer()
+        }
+    }
+    
+    /// Захват текущего кадра для редактора (режим real-time). Берёт последний кадр из потока микшера (Metal-превью не даёт растр). Вызывать с main queue.
+    func captureCurrentFrame() -> NSImage? {
+        guard Thread.isMainThread else { return nil }
+        return latestFrameCapture?.takeSnapshot()
+    }
+    
+    /// Финализирует текущий фрагмент записи и отдаёт копию файла для экспорта (при паузе или во время записи); затем запускает новый рекордер.
+    func prepareCurrentRecordingForExport(completion: @escaping (URL?) -> Void) {
+        guard isLive, let currentRecorder = recorder, let videoId = currentVideoId else {
+            DispatchQueue.main.async { completion(nil) }
+            return
+        }
+        let sessionId = self.sessionId
+        currentRecorder.stopRecording { [weak self] in
+            guard let self = self, self.sessionId == sessionId else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            let sourceURL = self.tempFileURL!
+            let exportCopyURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("LiveExport_\(videoId)_\(UUID().uuidString).mov")
+            do {
+                if FileManager.default.fileExists(atPath: exportCopyURL.path) {
+                    try FileManager.default.removeItem(at: exportCopyURL)
+                }
+                try FileManager.default.copyItem(at: sourceURL, to: exportCopyURL)
+            } catch {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            DispatchQueue.main.async { completion(exportCopyURL) }
+            Task { [weak self] in
+                await self?.replaceRecorderAfterExport()
+            }
+        }
+    }
+    
+    /// После экспорта при паузе: подменяем рекордер на новый (пишем в новый файл при возобновлении).
+    private func replaceRecorderAfterExport() async {
+        guard let mixer = mixer, let videoId = currentVideoId else { return }
+        let fileManager = FileManager.default
+        let liveDir = fileManager.temporaryDirectory.appendingPathComponent("LiveRecordings")
+        if !fileManager.fileExists(atPath: liveDir.path) {
+            try? fileManager.createDirectory(at: liveDir, withIntermediateDirectories: true)
+        }
+        let newTempURL = liveDir.appendingPathComponent("\(videoId)_resumed_\(UUID().uuidString).mov")
+        let oldRecorder = recorder
+        let newRecorder = LiveStreamRecorder(outputURL: newTempURL)
+        await mixer.removeOutput(oldRecorder!)
+        await mixer.addOutput(newRecorder)
+        await MainActor.run { [weak self] in
+            guard let self = self else { return }
+            self.recorder = newRecorder
+            self.tempFileURL = newTempURL
+            newRecorder.startRecording()
         }
     }
     
@@ -470,6 +541,45 @@ class LiveStreamManager: NSObject, ObservableObject {
         
         recorderToCancel?.cancelRecording()
         cleanupSession()
+    }
+}
+
+// MARK: - LiveFrameCaptureOutput
+
+/// Хранит последний видеокадр из микшера для захвата в редактор (Metal-превью через cacheDisplay даёт чёрный экран).
+final class LiveFrameCaptureOutput: MediaMixerOutput {
+    
+    var videoTrackId: UInt8? { get async { return UInt8.max } }
+    var audioTrackId: UInt8? { get async { return UInt8.max } }
+    func selectTrack(_ id: UInt8?, mediaType: CMFormatDescription.MediaType) async {}
+    
+    private var _latestImage: NSImage?
+    
+    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    
+    nonisolated func mixer(_ mixer: MediaMixer, didOutput sampleBuffer: CMSampleBuffer) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let extent = ciImage.extent
+        guard extent.width >= 1, extent.height >= 1,
+              let cgImage = LiveFrameCaptureOutput.ciContext.createCGImage(ciImage, from: extent) else { return }
+        let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        DispatchQueue.main.async { [weak self] in
+            self?._latestImage = nsImage
+        }
+    }
+    
+    nonisolated func mixer(_ mixer: MediaMixer, didOutput buffer: AVAudioPCMBuffer, when: AVAudioTime) {}
+    
+    /// Вернуть копию последнего кадра (вызывать с main queue).
+    func takeSnapshot() -> NSImage? {
+        assert(Thread.isMainThread)
+        guard let img = _latestImage else { return nil }
+        guard let tiff = img.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff) else { return img }
+        let copy = NSImage(size: img.size)
+        copy.addRepresentation(rep)
+        return copy
     }
 }
 

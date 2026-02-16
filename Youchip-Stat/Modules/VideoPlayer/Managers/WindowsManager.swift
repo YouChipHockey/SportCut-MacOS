@@ -172,6 +172,28 @@ class WindowsManager: NSObject {
         tagLibraryWindow?.showWindow(nil)
     }
     
+    /// Копирует все файлы скриншотов из папки live-сессии в папку импортированного видео (у импорта новый id).
+    private func copyLiveScreenshotsToImportedVideo(liveVideoId: String, importedScreenshotsFolder: URL) {
+        guard !liveVideoId.isEmpty,
+              let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return
+        }
+        let liveScreenshotsFolder = documentsDir.appendingPathComponent("Screenshots").appendingPathComponent(liveVideoId)
+        guard FileManager.default.fileExists(atPath: liveScreenshotsFolder.path) else { return }
+        do {
+            let items = try FileManager.default.contentsOfDirectory(at: liveScreenshotsFolder, includingPropertiesForKeys: nil)
+            for item in items where item.isFileURL {
+                let dest = importedScreenshotsFolder.appendingPathComponent(item.lastPathComponent)
+                if FileManager.default.fileExists(atPath: dest.path) {
+                    try? FileManager.default.removeItem(at: dest)
+                }
+                try? FileManager.default.copyItem(at: item, to: dest)
+            }
+        } catch {
+            print("WindowsManager: Failed to copy live screenshots: \(error.localizedDescription)")
+        }
+    }
+    
     /// Finalize the live recording: stop capture, write final file, import as static video.
     private func finalizeLiveSession() {
         let videoId = liveVideoId ?? ""
@@ -192,6 +214,8 @@ class WindowsManager: NSObject {
                             for: filesFile.videoData.bookmark,
                             with: timelines
                         )
+                        // Перенос скриншотов из папки live-сессии в папку импортированного видео (у импорта новый id — иначе иконки и картинки «пропадают»)
+                        self.copyLiveScreenshotsToImportedVideo(liveVideoId: videoId, importedScreenshotsFolder: filesFile.screenshotsFolder)
                         print("WindowsManager: Live recording imported as '\(fileName)' with \(timelines.count) timelines")
                     }
                 } else {
@@ -322,10 +346,11 @@ class WindowsManager: NSObject {
             return
         }
         
-        let timelineNames = filesFile.videoData.timelines.map { $0.name }
+        let loadedTimelines = filesFile.timelines
+        let timelineNames = loadedTimelines.map { $0.name }
         let uniqueNames = Set(timelineNames)
         if timelineNames.count != uniqueNames.count {
-            let nameCounts = Dictionary(grouping: filesFile.videoData.timelines, by: { $0.name }).mapValues { $0.count }
+            let nameCounts = Dictionary(grouping: loadedTimelines, by: { $0.name }).mapValues { $0.count }
         }
         
         UserDefaults.standard.set("", forKey: "editingStampLineID")
@@ -335,10 +360,10 @@ class WindowsManager: NSObject {
         TimelineDataManager.shared.currentBookmark = filesFile.videoData.bookmark
         
         if MarkupMode.current == .standard {
-            TimelineDataManager.shared.lines = filesFile.videoData.timelines
-            TimelineDataManager.shared.selectedLineID = filesFile.videoData.timelines.first?.id
+            TimelineDataManager.shared.lines = loadedTimelines
+            TimelineDataManager.shared.selectedLineID = loadedTimelines.first?.id
         } else {
-            TimelineDataManager.shared.lines = filesFile.videoData.timelines
+            TimelineDataManager.shared.lines = loadedTimelines
             TimelineDataManager.shared.selectedLineID = nil
         }
         

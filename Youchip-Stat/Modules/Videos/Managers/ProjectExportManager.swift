@@ -39,12 +39,13 @@ class ProjectExportManager {
             dateTime: file.dateAdded
         )
         
-        let customCollection = collectCustomTagsFromTimelines(file.videoData.timelines)
+        let timelines = file.timelines
+        let customCollection = collectCustomTagsFromTimelines(timelines)
         
         return ProjectExportModel(
             projectName: file.name,
             videoMetadata: videoMetadata,
-            timelines: file.videoData.timelines,
+            timelines: timelines,
             customName: file.videoData.customName,
             isFavorite: file.videoData.isFavorite ?? false,
             projectId: file.id,
@@ -153,7 +154,6 @@ class ProjectExportManager {
         let videoData = VideosData(
             bookmark: bookmark,
             id: newId,
-            timelines: updatedTimelines,
             customName: projectData.customName,
             isFavorite: projectData.isFavorite
         )
@@ -163,6 +163,9 @@ class ProjectExportManager {
         file.updateDateModified()
         
         filesManager.addFileWithData(file, videoData: videoData)
+        
+        // Save timelines to file
+        filesManager.saveTimelines(updatedTimelines, for: newId)
         
         return file
     }

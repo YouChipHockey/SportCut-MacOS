@@ -316,13 +316,22 @@ struct OrganizerView: View {
     @ViewBuilder
     private var exportOverlayView: some View {
         if isExporting {
-            CircularPercentProgressView(progress: Double(exportHelper.progress))
-                .frame(width: 80, height: 80)
-                .padding(30)
-                .background(Color.black.opacity(0.8))
-                .cornerRadius(12)
-                .shadow(radius: 20)
-                .transition(.opacity)
+            VStack(spacing: 16) {
+                CircularPercentProgressView(progress: Double(exportHelper.progress))
+                    .frame(width: 80, height: 80)
+                Button(^String.Titles.cancelButtonTitle) {
+                    exportHelper.cancelExport()
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .padding(30)
+            .background(Color.black.opacity(0.8))
+            .cornerRadius(12)
+            .shadow(radius: 20)
+            .transition(.opacity)
         }
     }
     
@@ -420,7 +429,9 @@ struct OrganizerView: View {
                             }
                         }
                     case .failure(let error):
-                        print(error.localizedDescription)
+                        if !ExportHelper.isExportCancelled(error) {
+                            print(error.localizedDescription)
+                        }
                     }
                 }
             }
@@ -442,7 +453,9 @@ struct OrganizerView: View {
                             }
                         }
                     case .failure(let error):
-                        print(error.localizedDescription)
+                        if !ExportHelper.isExportCancelled(error) {
+                            print(error.localizedDescription)
+                        }
                     }
                 }
             }
@@ -571,18 +584,22 @@ struct OrganizerView: View {
         let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
         
         let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
+        exportHelper.addExportSession(exportSession)
         exportHelper.startProgressTimer(exportSession: exportSession)
         
         exportSession?.outputURL = outputURL
         exportSession?.outputFileType = .mp4
         exportSession?.videoComposition = overlayVideoComposition
         exportSession?.exportAsynchronously {
+            exportHelper.removeExportSession(exportSession)
+            exportHelper.stopProgressTimer()
             if exportSession?.status == .completed {
                 completion(.success(outputURL))
+            } else if exportSession?.status == .cancelled {
+                completion(.failure(ExportHelper.exportCancelledError))
             } else {
                 completion(.failure(exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])))
             }
-            exportHelper.stopProgressTimer()
         }
     }
     
@@ -677,10 +694,13 @@ struct OrganizerView: View {
             exportSession?.outputFileType = .mp4
             exportSession?.videoComposition = overlayVideoComposition
             
+            exportHelper.addExportSession(exportSession)
+            
             exportSession?.exportAsynchronously {
+                exportHelper.removeExportSession(exportSession)
                 if exportSession?.status == .completed {
                     exportedURLs.append(clipOutputURL)
-                } else {
+                } else if !exportHelper.exportWasCancelled {
                     exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
                 
@@ -690,6 +710,10 @@ struct OrganizerView: View {
         }
         
         group.notify(queue: .main) {
+            if exportHelper.exportWasCancelled {
+                completion(.failure(ExportHelper.exportCancelledError))
+                return
+            }
             if let error = exportError {
                 completion(.failure(error))
             } else {

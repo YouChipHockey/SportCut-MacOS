@@ -465,11 +465,18 @@ struct EditorSettingsPanel: View {
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
-                        get: { shape.fillColor },
+                        get: { 
+                            // Возвращаем цвет с текущей прозрачностью для отображения в пикере
+                            shape.fillColor.opacity(shape.fillOpacity)
+                        },
                         set: { newColor in
                             if var updatedShape = drawingState.pendingShape {
-                                updatedShape.fillColor = newColor
-                                updatedShape.fillOpacity = 1
+                                // Извлекаем альфа из цвета и сохраняем его в fillOpacity
+                                let colorAlpha = newColor.alphaComponent
+                                // Сохраняем цвет без альфа-компонента
+                                updatedShape.fillColor = newColor.withoutAlpha
+                                // Устанавливаем прозрачность из цвета
+                                updatedShape.fillOpacity = colorAlpha
                                 drawingState.pendingShape = updatedShape
                             }
                         }
@@ -480,6 +487,7 @@ struct EditorSettingsPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Button(^String.Titles.transparentBackground) {
                         if var updatedShape = drawingState.pendingShape {
+                            // Устанавливаем прозрачность в 0, но не меняем цвет
                             updatedShape.fillOpacity = 0
                             drawingState.pendingShape = updatedShape
                         }
@@ -488,6 +496,7 @@ struct EditorSettingsPanel: View {
                     .frame(maxWidth: .infinity)
                     Button(^String.Titles.opaqueBackground) {
                         if var updatedShape = drawingState.pendingShape {
+                            // Устанавливаем прозрачность в 1, но не меняем цвет
                             updatedShape.fillOpacity = 1
                             drawingState.pendingShape = updatedShape
                         }
@@ -609,9 +618,15 @@ struct EditorSettingsPanel: View {
                         .font(.subheadline)
                     Spacer()
                     ColorPicker("", selection: Binding(
-                        get: { shape.fillColor },
+                        get: { 
+                            // Возвращаем цвет с текущей прозрачностью для отображения в пикере
+                            shape.fillColor.opacity(shape.fillOpacity)
+                        },
                         set: { newColor in
-                            drawingState.updateSelectedShape(fillColor: newColor, fillOpacity: 1)
+                            // Извлекаем альфа из цвета и сохраняем его в fillOpacity
+                            let colorAlpha = newColor.alphaComponent
+                            // Сохраняем цвет без альфа-компонента
+                            drawingState.updateSelectedShape(fillColor: newColor.withoutAlpha, fillOpacity: colorAlpha)
                         }
                     ))
                     .frame(width: 40, height: 30)
@@ -619,11 +634,13 @@ struct EditorSettingsPanel: View {
                 
                 VStack(alignment: .leading, spacing: 8) {
                     Button(^String.Titles.transparentBackground) {
+                        // Устанавливаем прозрачность в 0, но не меняем цвет
                         drawingState.updateSelectedShape(fillOpacity: 0)
                     }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
                     Button(^String.Titles.opaqueBackground) {
+                        // Устанавливаем прозрачность в 1, но не меняем цвет
                         drawingState.updateSelectedShape(fillOpacity: 1)
                     }
                     .buttonStyle(.bordered)

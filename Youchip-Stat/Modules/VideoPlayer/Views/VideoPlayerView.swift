@@ -247,12 +247,31 @@ struct VideoPlayerView: View {
             Divider()
             
             HStack(spacing: 0) {
-                EditorToolsPanel(
-                    drawingState: viewModel.state.editorDrawingState,
-                    onSelectTool: { tool in
-                        viewModel.action.send(.selectEditorTool(tool))
+                VStack(alignment: .leading, spacing: 0) {
+                    EditorToolsPanel(
+                        drawingState: viewModel.state.editorDrawingState,
+                        onSelectTool: { tool in
+                            viewModel.action.send(.selectEditorTool(tool))
+                        }
+                    )
+                    if videoManager.isLiveMode {
+                        Spacer(minLength: 8)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("LIVE")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.red)
+                            LivePreviewView()
+                                .frame(width: 160, height: 120)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                                )
+                        }
+                        .padding(8)
                     }
-                )
+                }
+                .frame(minWidth: 200)
                 
                 Divider()
                 
@@ -818,4 +837,3 @@ struct EditorTagSelectionSheet: View {
         return String(format: "%02d:%02d", minutes, secs)
     }
 }
-

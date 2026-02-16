@@ -31,7 +31,9 @@ struct StampItemsSelectionSheet: View {
     
     private var filteredLabelGroups: [LabelGroupData] {
         if let tag = tag {
-            return tagLibrary.allLabelGroups.filter { tag.lablesGroup.contains($0.id) }
+            // Optimize using Set for O(1) lookup
+            let labelGroupIdsSet = Set(tag.lablesGroup)
+            return tagLibrary.allLabelGroups.filter { labelGroupIdsSet.contains($0.id) }
         } else {
             return tagLibrary.allLabelGroups
         }
@@ -49,27 +51,28 @@ struct StampItemsSelectionSheet: View {
         self.onDone = onDone
         self.onCancel = onCancel
         
-        // Initialize timeEvents
+        // Initialize timeEvents - use cached data from TagLibraryManager instead of loading collections
         guard let tag else {
             timeEvents = []
             return
         }
-        let userCollections = UserDefaults.standard.getCollectionBookmarks()
-        for collection in userCollections {
-            let collectionManager = CustomCollectionManager()
-            if collectionManager.loadCollectionFromBookmarks(named: collection.name),
-               collectionManager.tags.contains(where: { $0.id == tag.id })
-            {
-                timeEvents = collectionManager.timeEvents
-                return
-            }
+        
+        // Fast lookup: check standard collections first (already loaded)
+        if let standardCollection = tagLibrary.standardCollections.first(where: { $0.tags.contains(where: { $0.id == tag.id }) }) {
+            timeEvents = standardCollection.timeEvents
+            return
         }
-        for standardCollection in tagLibrary.standardCollections {
-            if standardCollection.tags.contains(where: { $0.id == tag.id }) {
-                timeEvents = standardCollection.timeEvents
-                return
-            }
+        
+        // Check user collections from cache (already loaded in allTags/allTagGroups)
+        // Find which collection contains this tag by checking tagLibrary.allTags
+        if tagLibrary.allTags.contains(where: { $0.id == tag.id }) {
+            // Tag exists in loaded collections, find timeEvents from allTimeEvents
+            // Since we don't know which collection, we'll use all available timeEvents
+            // This is faster than loading collections synchronously
+            timeEvents = tagLibrary.allTimeEvents
+            return
         }
+        
         timeEvents = []
     }
     

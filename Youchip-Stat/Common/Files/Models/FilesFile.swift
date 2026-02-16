@@ -77,6 +77,10 @@ struct FilesFile {
     
     var preview: NSImage?
     
+    var timelines: [TimelineLine] {
+        return VideoFilesManager.shared.loadTimelines(for: videoData.id)
+    }
+    
     init(videoData: VideosData) {
         self.videoData = videoData
     }

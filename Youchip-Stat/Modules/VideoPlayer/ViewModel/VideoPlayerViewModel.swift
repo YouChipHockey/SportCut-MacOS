@@ -534,6 +534,11 @@ class VideoPlayerViewModel: ObservableObject {
     }
     
     private func performTakeScreenshotForEditor() {
+        if VideoPlayerManager.shared.isLiveMode {
+            openEditorFromLiveFrame()
+            return
+        }
+        
         guard let player = VideoPlayerManager.shared.player,
               let asset = player.currentItem?.asset else {
             return
@@ -564,10 +569,31 @@ class VideoPlayerViewModel: ObservableObject {
         }
     }
     
-    /// Открыть редактор для ранее сохранённого скриншота: перемотка на videoTime, кадр с видео как чистая основа, поверх — объекты из метаданных.
+    /// Открыть редактор из текущего кадра real-time трансляции (пауза трансляции выполняется в VideoPlayerView при смене isEditorMode).
+    private func openEditorFromLiveFrame() {
+        guard let nsImage = LiveStreamManager.shared.captureCurrentFrame() else {
+            print("Error capturing live frame for editor")
+            return
+        }
+        state.tempScreenshotImage = nsImage
+        state.isEditorMode = true
+        state.editorScreenshotName = "Screenshot_\(Date().timeIntervalSince1970)"
+        state.editorDrawingState.clearDrawing()
+        state.editorDrawingState.currentTool = .pencil
+        // Фиксируем время открытия редактора — при сохранении тег и метаданные привяжутся к этому моменту, а не к текущему времени трансляции
+        state.editorScreenshotVideoTime = VideoPlayerManager.shared.currentTime
+        NotificationCenter.default.post(name: .editorModeChanged, object: true)
+    }
+    
+    /// Открыть редактор для ранее сохранённого скриншота: в обычном режиме — кадр с видео + метаданные; в live — загружаем сохранённую картинку из папки.
     private func openEditorForScreenshot(payload: OpenEditorForScreenshotPayload) {
         let screenshot = payload.screenshot
         let name = screenshot.screenshotName.hasSuffix(".png") ? String(screenshot.screenshotName.dropLast(4)) : screenshot.screenshotName
+        
+        if VideoPlayerManager.shared.isLiveMode {
+            openEditorForScreenshotInLiveMode(screenshot: screenshot, name: name, screenshotsFolder: payload.screenshotsFolder)
+            return
+        }
         
         guard let player = VideoPlayerManager.shared.player,
               let asset = player.currentItem?.asset else {
@@ -604,6 +630,40 @@ class VideoPlayerViewModel: ObservableObject {
             state.editorDrawingState.currentTool = .pencil
         }
         
+        state.isEditorMode = true
+        NotificationCenter.default.post(name: .editorModeChanged, object: true)
+    }
+    
+    /// В live нет видео-файла — открываем редактор: база всегда «чистый» кадр (_base.png), поверх накладываются метаданные.
+    private func openEditorForScreenshotInLiveMode(screenshot: ScreenshotMetadata, name: String, screenshotsFolder: URL) {
+        let nameNorm = name.replacingOccurrences(of: ".png", with: "")
+        let baseFileName = "\(nameNorm)_base.png"
+        let baseURL = screenshotsFolder.appendingPathComponent(baseFileName)
+        let imageURL = screenshotsFolder.appendingPathComponent(screenshot.screenshotName.hasSuffix(".png") ? screenshot.screenshotName : "\(screenshot.screenshotName).png")
+        // Сначала пробуем загрузить исходный кадр без рисунков — на него накладываются метаданные
+        let image: NSImage?
+        if FileManager.default.fileExists(atPath: baseURL.path), let baseImage = NSImage(contentsOf: baseURL) {
+            image = baseImage
+        } else if let fallback = NSImage(contentsOf: imageURL) {
+            image = fallback
+        } else {
+            image = nil
+        }
+        guard let image = image else {
+            print("❌ Не удалось загрузить изображение для редактирования в live: \(imageURL.path)")
+            return
+        }
+        state.tempScreenshotImage = image
+        state.editorScreenshotName = name
+        state.editorScreenshotVideoTime = screenshot.videoTime
+        state.editorDisplayDuration = screenshot.displayDuration
+        state.isEditingExistingScreenshot = true
+        state.editorDrawingState.clearDrawing()
+        if let editorState = screenshot.editorState {
+            editorState.apply(to: state.editorDrawingState)
+        } else {
+            state.editorDrawingState.currentTool = .pencil
+        }
         state.isEditorMode = true
         NotificationCenter.default.post(name: .editorModeChanged, object: true)
     }
@@ -645,15 +705,27 @@ class VideoPlayerViewModel: ObservableObject {
         NotificationCenter.default.post(name: .editorModeChanged, object: false)
     }
     
+    /// Папка скриншотов для текущего видео: для live — Documents/Screenshots/videoId, иначе из VideoFilesManager.
+    private func screenshotsFolderForCurrentVideo() -> URL? {
+        if VideoPlayerManager.shared.isLiveMode {
+            guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
+            let folder = documentsDir.appendingPathComponent("Screenshots").appendingPathComponent(videoId)
+            if !FileManager.default.fileExists(atPath: folder.path) {
+                try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            }
+            return folder
+        }
+        return VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId })?.screenshotsFolder
+    }
+    
     private func handleSaveEditor() {
         guard let nsImage = state.tempScreenshotImage,
-              let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId }) else {
+              let screenshotsFolder = screenshotsFolderForCurrentVideo() else {
             handleCancelEditor()
             return
         }
         
         let currentVideoTime = state.editorScreenshotVideoTime
-        let screenshotsFolder = filesFile.screenshotsFolder
         let nameNorm = state.editorScreenshotName.replacingOccurrences(of: ".png", with: "")
         let fileName = state.editorScreenshotName.hasSuffix(".png") ? state.editorScreenshotName : "\(state.editorScreenshotName).png"
         let fileURL = screenshotsFolder.appendingPathComponent(fileName)
@@ -678,6 +750,11 @@ class VideoPlayerViewModel: ObservableObject {
             if let imageData = finalImage.pngData() {
                 try? imageData.write(to: fileURL)
                 state.screenshotImage = fileURL
+            }
+            // В live сохраняем ещё «чистый» кадр без рисунков — база для повторного редактирования (метаданные накладываются на неё)
+            if VideoPlayerManager.shared.isLiveMode, let baseData = nsImage.pngData() {
+                let baseURL = screenshotsFolder.appendingPathComponent("\(nameNorm)_base.png")
+                try? baseData.write(to: baseURL)
             }
             let createdStampId = addScreenshotAsTag(
                 screenshotName: state.editorScreenshotName,
@@ -725,13 +802,12 @@ class VideoPlayerViewModel: ObservableObject {
             return
         }
         guard let nsImage = state.tempScreenshotImage,
-              let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId }) else {
+              let screenshotsFolder = screenshotsFolderForCurrentVideo() else {
             handleCancelEditor()
             return
         }
         
         let currentVideoTime = state.editorScreenshotVideoTime
-        let screenshotsFolder = filesFile.screenshotsFolder
         let fileName = state.editorScreenshotName.hasSuffix(".png") ? state.editorScreenshotName : "\(state.editorScreenshotName).png"
         let fileURL = screenshotsFolder.appendingPathComponent(fileName)
         
@@ -740,6 +816,12 @@ class VideoPlayerViewModel: ObservableObject {
         if let imageData = finalImage.pngData() {
             try? imageData.write(to: fileURL)
             state.screenshotImage = fileURL
+            
+            let nameNorm = state.editorScreenshotName.replacingOccurrences(of: ".png", with: "")
+            if VideoPlayerManager.shared.isLiveMode, let baseData = nsImage.pngData() {
+                let baseURL = screenshotsFolder.appendingPathComponent("\(nameNorm)_base.png")
+                try? baseData.write(to: baseURL)
+            }
             
             // Always create a tag on Screenshots timeline and get its stamp ID
             let createdStampId = addScreenshotAsTag(

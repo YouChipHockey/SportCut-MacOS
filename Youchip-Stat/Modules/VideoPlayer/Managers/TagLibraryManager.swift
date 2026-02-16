@@ -56,11 +56,52 @@ class TagLibraryManager: ObservableObject {
             object: nil
         )
         
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleCollectionDataChanged),
+            name: .collectionDataChanged,
+            object: nil
+        )
+        
         allTags = tags
         allTagGroups = tagGroups
         allLabelGroups = labelGroups
         allLabels = labels
         allTimeEvents = timeEvents
+        
+        lastCollectionCount = CollectionsBookmarksManager.shared.loadCollections().count
+        loadAllUserCollections()
+    }
+    
+    private var isReloadingCollections = false
+    private var lastCollectionCount = 0
+    
+    @objc private func handleCollectionDataChanged() {
+        guard !isReloadingCollections else {
+            print("⚠️ TagLibraryManager: Already reloading collections, skipping")
+            return
+        }
+        
+        let currentCollections = CollectionsBookmarksManager.shared.loadCollections()
+        let currentCount = currentCollections.count
+        
+        if currentCount != lastCollectionCount {
+            print("📚 TagLibraryManager: Collection count changed (\(lastCollectionCount) -> \(currentCount)), reloading all")
+            lastCollectionCount = currentCount
+        } else {
+            print("📚 TagLibraryManager: Collection data modified, reloading")
+        }
+        
+        cacheLock.lock()
+        loadedCollectionsCache.removeAll()
+        cacheLock.unlock()
+        
+        isReloadingCollections = true
+        
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .collectionsLoadingStarted, object: nil)
+        }
+        
         loadAllUserCollections()
     }
         
@@ -185,38 +226,129 @@ class TagLibraryManager: ObservableObject {
     }
         
     func findLabelsForTag(_ tag: Tag) -> [Label] {
-        let labelGroupIds = tag.lablesGroup
-        let relevantLabelIds = allLabelGroups.filter { labelGroupIds.contains($0.id) }
+        // Optimize using Set for O(1) lookup
+        let labelGroupIdsSet = Set(tag.lablesGroup)
+        let relevantLabelIds = allLabelGroups
+            .filter { labelGroupIdsSet.contains($0.id) }
             .flatMap { $0.lables }
-        return allLabels.filter { label in relevantLabelIds.contains(label.id) }
+        let relevantLabelIdsSet = Set(relevantLabelIds)
+        return allLabels.filter { relevantLabelIdsSet.contains($0.id) }
+    }
+    
+    private var loadedCollectionsCache: [String: (tags: [Tag], tagGroups: [TagGroup], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent])] = [:]
+    private let collectionLoadingQueue = DispatchQueue(label: "com.youchip.collectionLoading", qos: .userInitiated)
+    private let cacheLock = NSLock()
+    
+    func invalidateCollectionCache(for name: String) {
+        cacheLock.lock()
+        loadedCollectionsCache.removeValue(forKey: name)
+        cacheLock.unlock()
     }
     
     private func loadAllUserCollections() {
-        let userCollections = UserDefaults.standard.getCollectionBookmarks()
-        
-        for collection in userCollections {
-            let collectionManager = CustomCollectionManager()
-            if collectionManager.loadCollectionFromBookmarks(named: collection.name) {
-                allTags.append(contentsOf: collectionManager.tags)
-                allTagGroups.append(contentsOf: collectionManager.tagGroups)
-                allLabelGroups.append(contentsOf: collectionManager.labelGroups)
-                allLabels.append(contentsOf: collectionManager.labels)
-                allTimeEvents.append(contentsOf: collectionManager.timeEvents)
+        collectionLoadingQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            let userCollections = CollectionsBookmarksManager.shared.loadCollections()
+            print("📚 TagLibraryManager: Loading \(userCollections.count) user collections")
+            
+            var loadedData: [(tags: [Tag], tagGroups: [TagGroup], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent])] = []
+            
+            for collectionInfo in userCollections {
+                print("📚 TagLibraryManager: Loading collection '\(collectionInfo.name)' (id: \(collectionInfo.id))")
+                
+                guard let collection = InMemoryStorageManager.shared.loadCollection(id: collectionInfo.id) else {
+                    print("❌ TagLibraryManager: Failed to load collection '\(collectionInfo.name)'")
+                    continue
+                }
+                
+                print("✅ TagLibraryManager: Successfully loaded collection '\(collectionInfo.name)' - tags: \(collection.tags.count), tagGroups: \(collection.tagGroups.count)")
+                
+                let collectionData = (
+                    tags: collection.tags,
+                    tagGroups: collection.tagGroups,
+                    labelGroups: collection.labelGroups,
+                    labels: collection.labels,
+                    timeEvents: collection.timeEvents
+                )
+                
+                self.cacheLock.lock()
+                self.loadedCollectionsCache[collectionInfo.name] = collectionData
+                self.cacheLock.unlock()
+                
+                loadedData.append(collectionData)
+            }
+            
+            for collection in self.standardCollections {
+                loadedData.append((
+                    tags: collection.tags,
+                    tagGroups: collection.tagGroups,
+                    labelGroups: collection.labelGroups,
+                    labels: collection.labels,
+                    timeEvents: collection.timeEvents
+                ))
+            }
+            
+            var mergedTags: [Tag] = []
+            var mergedTagGroups: [TagGroup] = []
+            var mergedLabelGroups: [LabelGroupData] = []
+            var mergedLabels: [Label] = []
+            var mergedTimeEvents: [TimeEvent] = []
+            
+            for data in loadedData {
+                mergedTags.append(contentsOf: data.tags)
+                mergedTagGroups.append(contentsOf: data.tagGroups)
+                mergedLabelGroups.append(contentsOf: data.labelGroups)
+                mergedLabels.append(contentsOf: data.labels)
+                mergedTimeEvents.append(contentsOf: data.timeEvents)
+            }
+            
+            let finalTags = Array(Dictionary(grouping: mergedTags, by: { $0.id }).values.compactMap { $0.first })
+            let finalTagGroups = Array(Dictionary(grouping: mergedTagGroups, by: { $0.id }).values.compactMap { $0.first })
+            let finalLabelGroups = Array(Dictionary(grouping: mergedLabelGroups, by: { $0.id }).values.compactMap { $0.first })
+            let finalLabels = Array(Dictionary(grouping: mergedLabels, by: { $0.id }).values.compactMap { $0.first })
+            let finalTimeEvents = Array(Dictionary(grouping: mergedTimeEvents, by: { $0.id }).values.compactMap { $0.first })
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.allTags = finalTags
+                self.allTagGroups = finalTagGroups
+                self.allLabelGroups = finalLabelGroups
+                self.allLabels = finalLabels
+                self.allTimeEvents = finalTimeEvents
+                self.isReloadingCollections = false
+                print("✅ TagLibraryManager: Finished loading all collections - total tags: \(finalTags.count), tagGroups: \(finalTagGroups.count)")
+                
+                NotificationCenter.default.post(name: .collectionsLoadingFinished, object: nil)
             }
         }
-        for collection in standardCollections {
-            allTags.append(contentsOf: collection.tags)
-            allTagGroups.append(contentsOf: collection.tagGroups)
-            allLabelGroups.append(contentsOf: collection.labelGroups)
-            allLabels.append(contentsOf: collection.labels)
-            allTimeEvents.append(contentsOf: collection.timeEvents)
+    }
+    
+    func getCollectionData(for collectionName: String) -> (tags: [Tag], tagGroups: [TagGroup], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent])? {
+        cacheLock.lock()
+        let cached = loadedCollectionsCache[collectionName]
+        cacheLock.unlock()
+        
+        if let cached = cached {
+            return cached
         }
         
-        allTags = Array(Dictionary(grouping: allTags, by: { $0.id }).values.compactMap { $0.first }) 
-        allTagGroups = Array(Dictionary(grouping: allTagGroups, by: { $0.id }).values.compactMap { $0.first })
-        allLabelGroups = Array(Dictionary(grouping: allLabelGroups, by: { $0.id }).values.compactMap { $0.first })
-        allLabels = Array(Dictionary(grouping: allLabels, by: { $0.id }).values.compactMap { $0.first })
-        allTimeEvents = Array(Dictionary(grouping: allTimeEvents, by: { $0.id }).values.compactMap { $0.first })
+        let collectionManager = CustomCollectionManager()
+        if collectionManager.loadCollectionFromBookmarks(named: collectionName) {
+            let data = (
+                tags: collectionManager.tags,
+                tagGroups: collectionManager.tagGroups,
+                labelGroups: collectionManager.labelGroups,
+                labels: collectionManager.labels,
+                timeEvents: collectionManager.timeEvents
+            )
+            cacheLock.lock()
+            loadedCollectionsCache[collectionName] = data
+            cacheLock.unlock()
+            return data
+        }
+        
+        return nil
     }
     
     func findOrCreateTimeEvent(id: String, name: String, shouldCreate: Bool = true) -> TimeEvent? {

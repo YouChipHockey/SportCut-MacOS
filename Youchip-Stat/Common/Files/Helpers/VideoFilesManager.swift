@@ -11,14 +11,12 @@ struct VideosData: Codable, Equatable {
     
     var bookmark: Data
     var id: String
-    var timelines: [TimelineLine]
     var customName: String?
     var isFavorite: Bool?
     
-    init(bookmark: Data, id: String, timelines: [TimelineLine], customName: String? = nil, isFavorite: Bool? = nil) {
+    init(bookmark: Data, id: String, customName: String? = nil, isFavorite: Bool? = nil) {
         self.bookmark = bookmark
         self.id = id
-        self.timelines = timelines
         self.customName = customName
         self.isFavorite = isFavorite ?? false
     }
@@ -26,7 +24,6 @@ struct VideosData: Codable, Equatable {
     static func == (lhs: VideosData, rhs: VideosData) -> Bool {
         return lhs.bookmark == rhs.bookmark &&
                lhs.id == rhs.id &&
-               lhs.timelines == rhs.timelines &&
                lhs.customName == rhs.customName &&
                lhs.isFavorite == rhs.isFavorite
     }
@@ -71,12 +68,12 @@ class VideoFilesManager {
     func importFile(url: URL) -> FilesFile? {
         if let bookmark = url.makeBookmark() {
             let id = generate32CharacterCode()
-            var file = FilesFile(videoData: VideosData(bookmark: bookmark, id: id, timelines: []))
+            var file = FilesFile(videoData: VideosData(bookmark: bookmark, id: id))
             if videosData.first(where: { $0.bookmark == bookmark}) == nil {
                 file.updateDateOpened()
                 file.updateDateModified()
                 files.append(file)
-                videosData.append(VideosData(bookmark: file.videoData.bookmark, id: id, timelines: []))
+                videosData.append(VideosData(bookmark: file.videoData.bookmark, id: id))
                 saveBookmarks()
                 updateFiles?(files)
             }
@@ -89,6 +86,7 @@ class VideoFilesManager {
     func refreshFiles() -> [FilesFile] {
         readFiles()
         filterFiles()
+        updateFiles?(files) // Notify UI about file list update
         return files
     }
     
@@ -129,6 +127,25 @@ class VideoFilesManager {
             }
             return
         }
+        
+        // IMPORTANT: Backup timeline BEFORE deleting video
+        // This allows restoring timeline even after repeated deletion
+        let videoDataToBackup = videosData[bookmarkIndex]
+        let timelines = loadTimelines(for: videoDataToBackup.id)
+        if !timelines.isEmpty {
+            let videoDataWithTimelines = DataSyncManager.VideosDataWithTimelines(
+                bookmark: videoDataToBackup.bookmark,
+                id: videoDataToBackup.id,
+                timelines: timelines,
+                customName: videoDataToBackup.customName,
+                isFavorite: videoDataToBackup.isFavorite
+            )
+            DataSyncManager.shared.backupTimelinesForVideo(videoDataWithTimelines)
+        }
+        
+        // Delete timeline file
+        deleteTimelinesFile(for: videoDataToBackup.id)
+        
         videosData.remove(at: bookmarkIndex)
         files.remove(at: fileIndex)
         saveBookmarks()
@@ -136,31 +153,34 @@ class VideoFilesManager {
     }
     
     func updateTimelines(for bookmark: Data, with timelines: [TimelineLine]) {
-        var fileIdentifier = "Unknown"
-        do {
-            var isStale = false
-            let resolvedURL = try URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
-            fileIdentifier = resolvedURL.lastPathComponent
-        } catch {
-            print(error)
+        guard let videoData = videosData.first(where: { $0.bookmark == bookmark }) else {
+            return
         }
-        
-        var videosDataUpdated = false
-        var filesUpdated = false
-        
-        if let index = videosData.firstIndex(where: { $0.bookmark == bookmark }) {
-            let oldCount = videosData[index].timelines.count
-            videosData[index].timelines = timelines
-            videosDataUpdated = true
-            saveBookmarks()
-        }
-        
-        if let index = files.firstIndex(where: { $0.videoData.bookmark == bookmark }) {
-            let oldCount = files[index].videoData.timelines.count
-            files[index].videoData.timelines = timelines
-            filesUpdated = true
-            updateFiles?(files)
-        }
+        InMemoryStorageManager.shared.saveTimelines(timelines, for: videoData.id)
+    }
+    
+    // MARK: - Timeline File Management
+    
+    private var timelinesDirectory: URL {
+        let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return documentsDirectory.appendingPathComponent("YouChip-Stat/Timelines", isDirectory: true)
+    }
+    
+    private func timelineFileURL(for videoId: String) -> URL {
+        fileManager.createDirectoryIfNeeded(url: timelinesDirectory)
+        return timelinesDirectory.appendingPathComponent("\(videoId).json")
+    }
+    
+    func saveTimelines(_ timelines: [TimelineLine], for videoId: String) {
+        InMemoryStorageManager.shared.saveTimelines(timelines, for: videoId)
+    }
+    
+    func loadTimelines(for videoId: String) -> [TimelineLine] {
+        return InMemoryStorageManager.shared.loadTimelines(for: videoId)
+    }
+    
+    private func deleteTimelinesFile(for videoId: String) {
+        InMemoryStorageManager.shared.deleteTimelines(for: videoId)
     }
     
     func renameFile(file: FilesFile, newName: String) {
@@ -253,6 +273,13 @@ class VideoFilesManager {
     private func loadBookmarks() {
         if let data = UserDefaults.standard.data(forKey: "videosData") {
             do {
+                // Try to decode as old format (with timelines) first for migration
+                if let oldVideosData = try? JSONDecoder().decode([VideosDataOldFormat].self, from: data) {
+                    // Migrate old data: save timelines to files
+                    migrateOldVideosData(oldVideosData)
+                }
+                
+                // Decode as new format (without timelines)
                 let videosData = try JSONDecoder().decode([VideosData].self, from: data)
                 let migratedVideosData = videosData.map { videoData in
                     var migratedData = videoData
@@ -293,6 +320,43 @@ class VideoFilesManager {
             } catch {
                 print("\(^String.Titles.fileManagerErrorDecoding) \(error)")
             }
+        }
+    }
+    
+    // MARK: - Migration
+    
+    private struct VideosDataOldFormat: Codable {
+        var bookmark: Data
+        var id: String
+        var timelines: [TimelineLine]
+        var customName: String?
+        var isFavorite: Bool?
+    }
+    
+    private func migrateOldVideosData(_ oldData: [VideosDataOldFormat]) {
+        print("🔄 Migrating timelines...")
+        
+        for oldVideoData in oldData {
+            if !oldVideoData.timelines.isEmpty {
+                InMemoryStorageManager.shared.saveTimelines(oldVideoData.timelines, for: oldVideoData.id)
+            }
+        }
+        
+        let newVideosData = oldData.map { old in
+            VideosData(
+                bookmark: old.bookmark,
+                id: old.id,
+                customName: old.customName,
+                isFavorite: old.isFavorite
+            )
+        }
+        
+        do {
+            let encoded = try JSONEncoder().encode(newVideosData)
+            UserDefaults.standard.set(encoded, forKey: "videosData")
+            print("✅ Migration completed: \(oldData.count) videos migrated")
+        } catch {
+            print("❌ Error during migration: \(error.localizedDescription)")
         }
     }
     

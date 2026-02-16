@@ -720,6 +720,81 @@ extension String {
         case liveStreamContinueBroadcast
         case liveStreamPausedLabel
         case liveStreamBroadcastPaused
+        
+        // Data Sync & Backup
+        case dataManagementTitle
+        case dataManagementBackupSystemInfo
+        case dataManagementBackupSystemDescription
+        case dataManagementDocumentsTitle
+        case dataManagementDocumentsDescription
+        case dataManagementDocumentsHelp
+        case dataManagementApplicationSupportTitle
+        case dataManagementApplicationSupportDescription
+        case dataManagementApplicationSupportHelp
+        case dataManagementBackupNote
+        case dataManagementRestoreFromBackup
+        case dataManagementRestoreFromBackupDescription
+        case dataManagementCreateBackup
+        case dataManagementCreateBackupDescription
+        case dataManagementCheckOrphanedTimelines
+        case dataManagementCheckOrphanedTimelinesDescription
+        case dataManagementDeleteAllData
+        case dataManagementDeleteAllDataDescription
+        case dataManagementProcessing
+        case dataManagementRestoreConfirmationTitle
+        case dataManagementRestoreConfirmationMessage
+        case dataManagementDeleteConfirmationTitle
+        case dataManagementDeleteConfirmationMessage
+        case dataManagementBackupCreatedSuccess
+        case dataManagementRestoreSuccess
+        case dataManagementDeleteSuccess
+        case dataManagementNoOrphanedTimelines
+        case dataManagementAllTimelinesLinked
+        
+        // Orphaned Timelines Recovery
+        case orphanedTimelinesTitle
+        case orphanedTimelinesFound
+        case orphanedTimelinesInstructions
+        case orphanedTimelinesSkipAll
+        case orphanedTimelinesRestoreSelected
+        case orphanedTimelinesRestoring
+        case orphanedTimelinesRestoreSuccess
+        case orphanedTimelinesRestoreSuccessMessage
+        case orphanedTimelinesSelectVideo
+        case orphanedTimelinesChangeVideo
+        case orphanedTimelinesDelete
+        case orphanedTimelinesDeleteConfirmationTitle
+        case orphanedTimelinesDeleteConfirmationMessage
+        case orphanedTimelinesDeleteHelp
+        case orphanedTimelinesUnknownVideo
+        case orphanedTimelinesSaved
+        case orphanedTimelinesTimelineSingular
+        case orphanedTimelinesTimelinePlural24
+        case orphanedTimelinesTimelinePlural5Plus
+        case orphanedTimelinesStampsSingular
+        case orphanedTimelinesStampsPlural24
+        case orphanedTimelinesStampsPlural5Plus
+        
+        // Data Sync Logs (for print statements - optional)
+        case dataSyncStartSync
+        case dataSyncNoDataInDocuments
+        case dataSyncRestoringFromBackup
+        case dataSyncDataExists
+        case dataSyncCheckingDifferences
+        case dataSyncDifferencesFound
+        case dataSyncDataIdentical
+        case dataSyncCreatingBackup
+        case dataSyncBackupCreated
+        case dataSyncRestoringData
+        case dataSyncDataRestored
+        case dataSyncDeletingAllData
+        case dataSyncAllDataDeleted
+        case dataSyncOrphanedTimelinesFound
+        case dataSyncRestoringTimeline
+        case dataSyncNoVideoData
+        case dataSyncTimelineRestored
+        case dataSyncTimelineRestoreError
+        case dataSyncTimelineDeleted
     }
     
 }

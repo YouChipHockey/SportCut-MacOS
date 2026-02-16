@@ -72,6 +72,23 @@ class VideoPlayerManager: ObservableObject {
         LiveStreamManager.shared.resumeBroadcast()
     }
     
+    /// При входе в редактор в режиме live — ставим трансляцию на паузу. При выходе — возобновляем.
+    private var broadcastPausedForEditor: Bool = false
+    
+    func pauseBroadcastForEditor() {
+        guard isLiveMode, isBroadcastActive else { return }
+        broadcastPausedForEditor = true
+        LiveStreamManager.shared.pauseBroadcast()
+        isBroadcastActive = false
+    }
+    
+    func resumeBroadcastFromEditor() {
+        guard isLiveMode, broadcastPausedForEditor else { return }
+        broadcastPausedForEditor = false
+        LiveStreamManager.shared.resumeBroadcast()
+        isBroadcastActive = true
+    }
+    
     /// Called when live stream ends and video file is ready. Transitions to normal playback mode.
     func transitionToStaticVideo(url: URL) {
         liveDurationCancellable?.cancel()

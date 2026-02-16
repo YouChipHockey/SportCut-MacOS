@@ -246,8 +246,11 @@ class TimelineDataManager: ObservableObject {
     }
     
     func updateTimelines() {
-        guard let currentBookmark = currentBookmark else { return }
-        VideoFilesManager.shared.updateTimelines(for: currentBookmark, with: lines)
+        guard let currentBookmark = currentBookmark,
+              let videoData = VideoFilesManager.shared.videosData.first(where: { $0.bookmark == currentBookmark }) else {
+            return
+        }
+        InMemoryStorageManager.shared.saveTimelines(lines, for: videoData.id)
     }
     
     @objc private func handleTagUpdated(_ notification: Notification) {

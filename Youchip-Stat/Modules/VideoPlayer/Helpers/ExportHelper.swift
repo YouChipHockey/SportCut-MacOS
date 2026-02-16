@@ -11,14 +11,51 @@ import Cocoa
 
 class ExportHelper: ObservableObject {
     
+    static let exportCancelledCode = 999
+    static var exportCancelledError: NSError {
+        NSError(domain: "Export", code: exportCancelledCode, userInfo: [NSLocalizedDescriptionKey: "Cancelled"])
+    }
+    static func isExportCancelled(_ error: Error) -> Bool {
+        (error as NSError).code == exportCancelledCode
+    }
+    
     private let videoManager = VideoPlayerManager.shared
     private let timelineData = TimelineDataManager.shared
     private let tagLibrary = TagLibraryManager.shared
     
     private var exportProgressTimer: DispatchSourceTimer?
     private var processedSegments: Int = 0
+    private var activeExportSessions: [AVAssetExportSession] = []
+    private let sessionsLock = NSLock()
+    private var isExportCancelled = false
+    
+    var exportWasCancelled: Bool { isExportCancelled }
     
     @Published var progress: Float = 0
+    
+    func addExportSession(_ session: AVAssetExportSession?) {
+        guard let session else { return }
+        sessionsLock.lock()
+        activeExportSessions.append(session)
+        sessionsLock.unlock()
+    }
+    
+    func removeExportSession(_ session: AVAssetExportSession?) {
+        guard let session else { return }
+        sessionsLock.lock()
+        activeExportSessions.removeAll { $0 === session }
+        sessionsLock.unlock()
+    }
+    
+    func cancelExport() {
+        isExportCancelled = true
+        sessionsLock.lock()
+        let sessions = activeExportSessions
+        activeExportSessions.removeAll()
+        sessionsLock.unlock()
+        for s in sessions { s.cancelExport() }
+        stopProgressTimer()
+    }
     
     // MARK: Public Export Method
     
@@ -31,10 +68,6 @@ class ExportHelper: ObservableObject {
             return
         }
         
-        guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
-            completion(NSError.getErrorWithDescription("Asset not found"))
-            return
-        }
         guard let selectedType = selectedExportType else {
             completion(NSError.getErrorWithDescription("No export type selected"))
             return
@@ -53,6 +86,28 @@ class ExportHelper: ObservableObject {
             effectiveWithScreenshots = withScreenshots
         }
         
+        // В режиме трансляции: финализируем текущий фрагмент записи и экспортируем его (работает и при паузе, и во время записи)
+        if videoManager.isLiveMode {
+            LiveStreamManager.shared.prepareCurrentRecordingForExport { exportURL in
+                guard let url = exportURL else {
+                    DispatchQueue.main.async { completion(NSError.getErrorWithDescription(^String.Titles.fullControlExportErrorAsset)) }
+                    return
+                }
+                let asset = AVURLAsset(url: url)
+                self.performExportWithAsset(asset, segments: segments, selectedType: selectedType, mode: mode, effectiveWithScreenshots: effectiveWithScreenshots, completion: completion)
+            }
+            return
+        }
+        
+        guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
+            completion(NSError.getErrorWithDescription(^String.Titles.fullControlExportErrorAsset))
+            return
+        }
+        
+        performExportWithAsset(asset, segments: segments, selectedType: selectedType, mode: mode, effectiveWithScreenshots: effectiveWithScreenshots, completion: completion)
+    }
+    
+    private func performExportWithAsset(_ asset: AVAsset, segments: [ExportSegment], selectedType: CutsExportType, mode: ExportMode, effectiveWithScreenshots: Bool, completion: @escaping (Error?) -> Void) {
         if mode == .film {
             exportFilm(segments: segments, asset: asset, type: selectedType, withScreenshots: effectiveWithScreenshots) { result in
                 DispatchQueue.main.async {
@@ -76,7 +131,11 @@ class ExportHelper: ObservableObject {
                             completion(nil)
                         }
                     case .failure(let error):
-                        completion(NSError.getErrorWithDescription("\(^String.Titles.fullControlExportFilmError): \(error.localizedDescription)"))
+                        if ExportHelper.isExportCancelled(error) {
+                            completion(nil)
+                        } else {
+                            completion(NSError.getErrorWithDescription("\(^String.Titles.fullControlExportFilmError): \(error.localizedDescription)"))
+                        }
                     }
                 }
             }
@@ -102,7 +161,11 @@ class ExportHelper: ObservableObject {
                             completion(nil)
                         }
                     case .failure(let error):
-                        completion(NSError.getErrorWithDescription("Ошибка сохранения плейлиста: \(error.localizedDescription)"))
+                        if ExportHelper.isExportCancelled(error) {
+                            completion(nil)
+                        } else {
+                            completion(NSError.getErrorWithDescription("Ошибка сохранения плейлиста: \(error.localizedDescription)"))
+                        }
                     }
                 }
             }
@@ -152,6 +215,7 @@ class ExportHelper: ObservableObject {
     func resetValues() {
         progress = 0
         processedSegments = 0
+        isExportCancelled = false
     }
     
     // MARK: - Export Film
@@ -303,16 +367,19 @@ class ExportHelper: ObservableObject {
         exportSession?.outputFileType = .mp4
         exportSession?.videoComposition = overlayVideoComposition
         
+        addExportSession(exportSession)
         startProgressTimer(exportSession: exportSession)
         
         exportSession?.exportAsynchronously { [weak self] in
+            self?.removeExportSession(exportSession)
+            self?.stopProgressTimer()
             if exportSession?.status == .completed {
                 completion(.success(outputURL))
+            } else if exportSession?.status == .cancelled {
+                completion(.failure(ExportHelper.exportCancelledError))
             } else {
                 completion(.failure(exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])))
             }
-            
-            self?.stopProgressTimer()
         }
     }
     
@@ -330,6 +397,7 @@ class ExportHelper: ObservableObject {
             return
         }
         
+        isExportCancelled = false
         var exportedURLs: [URL] = []
         let group = DispatchGroup()
         var exportError: Error? = nil
@@ -483,10 +551,13 @@ class ExportHelper: ObservableObject {
             exportSession?.outputFileType = .mp4
             exportSession?.videoComposition = overlayVideoComposition
             
+            addExportSession(exportSession)
+            
             exportSession?.exportAsynchronously { [weak self] in
+                self?.removeExportSession(exportSession)
                 if exportSession?.status == .completed {
                     exportedURLs.append(clipOutputURL)
-                } else {
+                } else if self?.isExportCancelled != true {
                     exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
                 self?.processSegment(segmentsCount: segments.count)
@@ -496,6 +567,10 @@ class ExportHelper: ObservableObject {
         
         group.notify(queue: .main) { [weak self] in
             self?.progress = 1
+            if self?.exportWasCancelled == true {
+                completion(.failure(ExportHelper.exportCancelledError))
+                return
+            }
             if let error = exportError {
                 completion(.failure(error))
             } else if exportedURLs.isEmpty {
@@ -1090,8 +1165,8 @@ class ExportHelper: ObservableObject {
             let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
             
             if let image = NSImage(contentsOf: imageURL) {
-                let group = DispatchGroup()
-                group.enter()
+                // Use semaphore instead of DispatchGroup.wait() to prevent potential crashes
+                let semaphore = DispatchSemaphore(value: 0)
                 var screenshotVideoURL: URL?
                 
                 let displayDuration = screenshot.displayDuration
@@ -1101,14 +1176,17 @@ class ExportHelper: ObservableObject {
                     if case .success(let url) = result {
                         screenshotVideoURL = url
                     }
-                    group.leave()
+                    semaphore.signal()
                 }
                 
-                group.wait()
+                // Wait with timeout to prevent infinite blocking
+                let waitResult = semaphore.wait(timeout: .now() + 30)
                 
-                if let videoURL = screenshotVideoURL,
-                   let screenshotAsset = try? AVURLAsset(url: videoURL),
-                   let screenshotVideoTrack = screenshotAsset.tracks(withMediaType: .video).first {
+                if waitResult == .timedOut {
+                    print("❌ Screenshot video creation timed out for '\(screenshot.screenshotName)'")
+                } else if let videoURL = screenshotVideoURL,
+                          let screenshotAsset = try? AVURLAsset(url: videoURL),
+                          let screenshotVideoTrack = screenshotAsset.tracks(withMediaType: .video).first {
                     do {
                         try compVideoTrack.insertTimeRange(
                             CMTimeRange(start: .zero, duration: screenshotAsset.duration),

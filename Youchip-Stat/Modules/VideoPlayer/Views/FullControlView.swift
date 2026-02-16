@@ -1297,13 +1297,22 @@ struct FullControlView: View {
             .frame(minWidth: 800, minHeight: 300)
             .overlay {
                 if isExporting {
-                    CircularPercentProgressView(progress: Double(exportHelper.progress))
-                        .frame(width: 80, height: 80)
-                        .padding(30)
-                        .background(Color.black.opacity(0.8))
-                        .cornerRadius(12)
-                        .shadow(radius: 20)
-                        .transition(.opacity)
+                    VStack(spacing: 16) {
+                        CircularPercentProgressView(progress: Double(exportHelper.progress))
+                            .frame(width: 80, height: 80)
+                        Button(^String.Titles.cancelButtonTitle) {
+                            exportHelper.cancelExport()
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                    }
+                    .padding(30)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(12)
+                    .shadow(radius: 20)
+                    .transition(.opacity)
                 }
             }
             .onAppear {
@@ -2146,6 +2155,28 @@ struct ScreenshotMarkersView: View {
         return VideoFilesManager.shared.files.first(where: { $0.videoData.bookmark == currentBookmark })
     }
     
+    /// Папка скриншотов для текущей сессии: для live — Documents/Screenshots/currentVideoId, иначе из filesFile.
+    private func getCurrentScreenshotsFolder() -> URL? {
+        if WindowsManager.shared.isLiveSession {
+            let videoId = WindowsManager.shared.currentVideoId
+            guard !videoId.isEmpty,
+                  let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                return nil
+            }
+            return documentsDir.appendingPathComponent("Screenshots").appendingPathComponent(videoId)
+        }
+        return getCurrentFile()?.screenshotsFolder
+    }
+    
+    /// Id текущего видео (для live — currentVideoId, иначе из filesFile).
+    private func getCurrentVideoId() -> String? {
+        if WindowsManager.shared.isLiveSession {
+            let id = WindowsManager.shared.currentVideoId
+            return id.isEmpty ? nil : id
+        }
+        return getCurrentFile()?.videoData.id
+    }
+    
     var body: some View {
         ZStack(alignment: .topLeading) {
             ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
@@ -2188,14 +2219,11 @@ struct ScreenshotMarkersView: View {
     }
     
     private func screenshotFileExists(for screenshot: ScreenshotMetadata) -> Bool {
-        guard let filesFile = getCurrentFile() else {
+        guard let screenshotsFolder = getCurrentScreenshotsFolder() else {
             return false
         }
-        
-        let screenshotsFolder = filesFile.screenshotsFolder
         let imageFileName = screenshot.screenshotName.hasSuffix(".png") ? screenshot.screenshotName : "\(screenshot.screenshotName).png"
         let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
-        
         return FileManager.default.fileExists(atPath: imageURL.path)
     }
     
@@ -2326,12 +2354,10 @@ struct ScreenshotMarkersView: View {
     }
     
     private func deleteScreenshot(_ screenshot: ScreenshotMetadata) {
-        guard let filesFile = getCurrentFile() else {
-            print("❌ Не найден filesFile для удаления скриншота")
+        guard let screenshotsFolder = getCurrentScreenshotsFolder() else {
+            print("❌ Не найдена папка скриншотов для удаления")
             return
         }
-        
-        let screenshotsFolder = filesFile.screenshotsFolder
         let imageFileName = screenshot.screenshotName.hasSuffix(".png") ? screenshot.screenshotName : "\(screenshot.screenshotName).png"
         let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
         let jsonURL = screenshotsFolder.appendingPathComponent("\(screenshot.screenshotName).json")
@@ -2360,14 +2386,15 @@ struct ScreenshotMarkersView: View {
     
     /// Перематывает видео на момент скриншота и открывает редактор с восстановлением состояния из метаданных (все объекты снова редактируемые).
     private func openScreenshotInEditor(_ screenshot: ScreenshotMetadata) {
-        guard let filesFile = getCurrentFile() else {
-            print("❌ Не найден текущий файл для открытия редактора")
+        guard let screenshotsFolder = getCurrentScreenshotsFolder(),
+              let videoId = getCurrentVideoId() else {
+            print("❌ Не найдена папка скриншотов или videoId для открытия редактора")
             return
         }
         let payload = OpenEditorForScreenshotPayload(
             screenshot: screenshot,
-            screenshotsFolder: filesFile.screenshotsFolder,
-            videoId: filesFile.videoData.id
+            screenshotsFolder: screenshotsFolder,
+            videoId: videoId
         )
         NotificationCenter.default.post(name: .openEditorForScreenshot, object: payload)
     }
@@ -2386,12 +2413,10 @@ struct ScreenshotMarkersView: View {
         }
         
         // Проверяем, существует ли файл скриншота (если файл удален, значит можно удалять штамп)
-        guard let filesFile = getCurrentFile() else {
-            print("❌ Не найден filesFile для проверки скриншота")
+        guard let screenshotsFolder = getCurrentScreenshotsFolder() else {
+            print("❌ Не найдена папка скриншотов для проверки")
             return
         }
-        
-        let screenshotsFolder = filesFile.screenshotsFolder
         let imageFileName = screenshotName.hasSuffix(".png") ? screenshotName : "\(screenshotName).png"
         let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
         
