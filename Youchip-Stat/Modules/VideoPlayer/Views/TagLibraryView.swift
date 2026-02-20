@@ -53,7 +53,6 @@ struct TagLibraryView: View {
     @State private var windowWidth: CGFloat = 0
     @State private var isEditorModeActive = false
     @State private var isLoadingCollections = false
-    @State private var notificationObserverTokens: [NSObjectProtocol] = []
     
     struct ActiveIntervalTag: Identifiable {
         let id: String
@@ -145,6 +144,92 @@ struct TagLibraryView: View {
         }
         .onChange(of: timelineData.selectedLineID) { _ in
             self.updateTagCounts()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .markupModeChanged).receive(on: DispatchQueue.main)) { notification in
+            if let newMode = notification.object as? MarkupMode {
+                self.markupMode = newMode
+            } else {
+                self.markupMode = MarkupMode.current
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .collectionDataChanged).receive(on: DispatchQueue.main)) { _ in
+            let currentSelectedUserCollectionId = userCollections.first { $0.name == self.lastSelectedCollectionName }?.id
+            let allCollectionsInfo = CollectionsBookmarksManager.shared.loadCollections()
+            self.userCollections = allCollectionsInfo.map { info in
+                CollectionBookmark(
+                    id: info.id,
+                    name: info.name,
+                    tagGroupsBookmark: Data(),
+                    tagsBookmark: Data(),
+                    labelGroupsBookmark: Data(),
+                    labelsBookmark: Data(),
+                    timeEventsBookmark: Data(),
+                    playFieldBookmark: nil
+                )
+            }
+            if self.isUserCollectionActive, let currentSelectedUserCollectionId,
+               let updatedCollection = self.userCollections.first(where: { $0.id == currentSelectedUserCollectionId }) {
+                let oldName = self.lastSelectedCollectionName
+                let newName = updatedCollection.name
+                self.lastSelectedCollectionName = newName
+                if oldName != newName {
+                    self.tagLibrary.currentCollectionType = .user(name: newName)
+                    UserDefaults.standard.set(newName, forKey: UserDefaults.Keys.lastSelectedCollection)
+                }
+                self.tagLibrary.invalidateCollectionCache(for: newName)
+                self.loadUserCollection(updatedCollection)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showLabelSheet).receive(on: DispatchQueue.main)) { notification in
+            guard let tag = notification.object as? Tag else { return }
+            if tag.isInterval ?? false {
+                if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
+                    let activeTag = activeIntervalTags[index]
+                    let videoDuration = max(1.0, videoManager.videoDuration)
+                    let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
+                    let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
+                    let timeStart = min(start, end)
+                    let timeFinish = max(start, end)
+                    selectedTag = tag
+                    showLabelSheet = false
+                    videoManager.player?.pause()
+                    let labelGroupIdsSet = Set(tag.lablesGroup)
+                    let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
+                    if hasLabels {
+                        showLabelSheet = true
+                    } else {
+                        activeIntervalTags.remove(at: index)
+                        addTagToTimelineInterval(tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish, selectedLabels: [])
+                    }
+                } else {
+                    guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else { return }
+                    activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
+                }
+                return
+            }
+            selectedTag = tag
+            videoManager.player?.pause()
+            let labelGroupIdsSet = Set(tag.lablesGroup)
+            let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
+            if hasLabels {
+                showLabelSheet = true
+            } else {
+                addTagToTimeline(tag: tag, selectedLabels: [])
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .stampCountsChanged).receive(on: DispatchQueue.main)) { _ in
+            self.updateTagCounts()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorModeChanged).receive(on: DispatchQueue.main)) { notification in
+            if let isActive = notification.object as? Bool {
+                self.isEditorModeActive = isActive
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .collectionsLoadingStarted).receive(on: DispatchQueue.main)) { _ in
+            self.isLoadingCollections = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .collectionsLoadingFinished).receive(on: DispatchQueue.main)) { _ in
+            self.isLoadingCollections = false
         }
     }
     
@@ -1038,130 +1123,13 @@ struct TagLibraryView: View {
         backupDefaultData()
         restoreDefaultData()
         markupMode = MarkupMode.current
-        
         updateTagCounts()
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
-        
-        var tokens: [NSObjectProtocol] = []
-        
-        tokens.append(NotificationCenter.default.addObserver(forName: .markupModeChanged, object: nil, queue: .main) { notification in
-            if let newMode = notification.object as? MarkupMode {
-                self.markupMode = newMode
-            } else {
-                self.markupMode = MarkupMode.current
-            }
-        })
-        tokens.append(NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
-            let currentSelectedUserCollectionId = userCollections.first { $0.name == self.lastSelectedCollectionName}?.id
-            
-            let allCollectionsInfo = CollectionsBookmarksManager.shared.loadCollections()
-            self.userCollections = allCollectionsInfo.map { info in
-                CollectionBookmark(
-                    id: info.id,
-                    name: info.name,
-                    tagGroupsBookmark: Data(),
-                    tagsBookmark: Data(),
-                    labelGroupsBookmark: Data(),
-                    labelsBookmark: Data(),
-                    timeEventsBookmark: Data(),
-                    playFieldBookmark: nil
-                )
-            }
-            
-            if self.isUserCollectionActive, let currentSelectedUserCollectionId,
-               let updatedCollection = self.userCollections.first(where: { $0.id == currentSelectedUserCollectionId }) {
-                let oldName = self.lastSelectedCollectionName
-                let newName = updatedCollection.name
-                self.lastSelectedCollectionName = newName
-                
-                if oldName != newName {
-                    self.tagLibrary.currentCollectionType = .user(name: newName)
-                    UserDefaults.standard.set(newName, forKey: UserDefaults.Keys.lastSelectedCollection)
-                }
-                
-                self.tagLibrary.invalidateCollectionCache(for: newName)
-                self.loadUserCollection(updatedCollection)
-            }
-        })
-        tokens.append(NotificationCenter.default.addObserver(forName: .showLabelSheet, object: nil, queue: .main) { notification in
-            if let tag = notification.object as? Tag {
-                if tag.isInterval ?? false {
-                    if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
-                        let activeTag = activeIntervalTags[index]
-                        let videoDuration = max(1.0, videoManager.videoDuration)
-                        let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
-                        let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
-                        let timeStart = min(start, end)
-                        let timeFinish = max(start, end)
-                        
-                        selectedTag = tag
-                        showLabelSheet = false
-                        
-                        DispatchQueue.main.async {
-                            videoManager.player?.pause()
-                            // Optimize label check using Set for O(1) lookup
-                            let labelGroupIdsSet = Set(tag.lablesGroup)
-                            let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
-                            if hasLabels {
-                                showLabelSheet = true
-                            } else {
-                                activeIntervalTags.remove(at: index)
-                                addTagToTimelineInterval(tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish, selectedLabels: [])
-                            }
-                        }
-                    } else {
-                        guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else {
-                            return
-                        }
-                        activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
-                    }
-                    return
-                }
-                
-                selectedTag = tag
-                videoManager.player?.pause()
-                
-                // Optimize label check using Set for O(1) lookup - do it immediately
-                let labelGroupIdsSet = Set(tag.lablesGroup)
-                let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
-                
-                if hasLabels {
-                    // Show sheet immediately without delay
-                    showLabelSheet = true
-                } else {
-                    // No labels - add tag immediately without showing sheet
-                    addTagToTimeline(tag: tag, selectedLabels: [])
-                }
-            }
-        })
-        tokens.append(NotificationCenter.default.addObserver(forName: .stampCountsChanged, object: nil, queue: .main) { _ in
-            DispatchQueue.main.async {
-                self.updateTagCounts()
-            }
-        })
-        tokens.append(NotificationCenter.default.addObserver(forName: .editorModeChanged, object: nil, queue: .main) { notification in
-            if let isActive = notification.object as? Bool {
-                self.isEditorModeActive = isActive
-            }
-        })
-        tokens.append(NotificationCenter.default.addObserver(forName: .collectionsLoadingStarted, object: nil, queue: .main) { _ in
-            self.isLoadingCollections = true
-        })
-        tokens.append(NotificationCenter.default.addObserver(forName: .collectionsLoadingFinished, object: nil, queue: .main) { _ in
-            self.isLoadingCollections = false
-        })
-        
-        notificationObserverTokens = tokens
     }
-    
     
     private func onDisappearCleanup() {
         updateTimer?.invalidate()
         updateTimer = nil
-        for token in notificationObserverTokens {
-            NotificationCenter.default.removeObserver(token)
-        }
-        notificationObserverTokens.removeAll()
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {

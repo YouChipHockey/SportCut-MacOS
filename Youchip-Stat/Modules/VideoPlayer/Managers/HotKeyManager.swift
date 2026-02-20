@@ -15,7 +15,6 @@ class HotKeyManager: ObservableObject {
     static let shared = HotKeyManager()
     
     private var localMonitorForKeyEvents: Any?
-    private var globalMonitorForKeyEvents: Any?
     var registeredHotkeys: [String: Tag] = [:]
     var registeredLabelHotkeys: [String: (labelId: String, tagId: String)] = [:]
     
@@ -284,6 +283,14 @@ class HotKeyManager: ObservableObject {
     func clearHotkeys() {
         registeredHotkeys.removeAll()
         registeredLabelHotkeys.removeAll()
+    }
+    
+    func suspendKeyboardMonitoring() {
+        removeMonitors()
+    }
+    
+    func resumeKeyboardMonitoring() {
+        setupKeyboardMonitoring()
     }
     
     func hotkeyStringFromEvent(_ event: NSEvent) -> String {

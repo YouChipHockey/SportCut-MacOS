@@ -82,6 +82,7 @@ class WindowsManager: NSObject {
         ScreenshotsMetadataManager.shared.clearScreenshots()
         
         HotKeyManager.shared.clearHotkeys()
+        HotKeyManager.shared.suspendKeyboardMonitoring()
         
         VideoPlayerManager.shared.deleteVideo()
         isClosing = true
@@ -227,6 +228,8 @@ class WindowsManager: NSObject {
         ScreenshotsMetadataManager.shared.loadScreenshots(from: filesFile.screenshotsFolder)
         
         VideoPlayerManager.shared.loadVideo(from: file)
+        
+        HotKeyManager.shared.resumeKeyboardMonitoring()
         
         videoWindow = VideoPlayerWindowController(id: id)
         controlWindow = FullControlWindowController()
