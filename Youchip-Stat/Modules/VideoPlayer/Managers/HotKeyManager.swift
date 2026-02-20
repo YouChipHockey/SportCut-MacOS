@@ -159,8 +159,10 @@ class HotKeyManager: ObservableObject {
                 }
             }
             // Когда в фокусе окно таймлайна или библиотеки тегов — пробел всегда play/pause (если хоткеи не заблокированы)
+            // Работает только на экране разметчика
             if event.keyCode == 49,
                WindowsManager.shared.isControlOrTagLibraryWindowKey(),
+               ActiveWindowManager.shared.isMarkerWindowActive(),
                self.isEnabled,
                !self.blockedSheetActive {
                 VideoPlayerManager.shared.togglePlayPause()
@@ -184,10 +186,12 @@ class HotKeyManager: ObservableObject {
     }
     
     private func handleHotkey(_ event: NSEvent) -> Bool {
-        let isViewerWindowActive = ActiveWindowManager.shared.isViewerWindowActive()
-        guard ActiveWindowManager.shared.isAllowedWindowActive() || isViewerWindowActive else {
+        let isMarkerWindowActive = ActiveWindowManager.shared.isMarkerWindowActive()
+        guard isMarkerWindowActive else {
             return false
         }
+        
+        let isViewerWindowActive = ActiveWindowManager.shared.isViewerWindowActive()
         let isViewerMode = WindowsManager.shared.viewerWindow != nil && isViewerWindowActive
         
         if event.keyCode == 49 {

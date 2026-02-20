@@ -388,4 +388,13 @@ class ActiveWindowManager {
     func isViewerWindowActive() -> Bool {
         return currentActiveWindow?.windowController == WindowsManager.shared.viewerWindow
     }
+    
+    /// Проверяет, является ли активное окно окном разметчика (VideoPlayerWindowController, FullControlWindowController или TagLibraryWindowController)
+    func isMarkerWindowActive() -> Bool {
+        guard let activeWindow = currentActiveWindow else { return false }
+        let windowsManager = WindowsManager.shared
+        return activeWindow.windowController === windowsManager.videoWindow || 
+               activeWindow.windowController === windowsManager.controlWindow ||
+               activeWindow.windowController === windowsManager.tagLibraryWindow
+    }
 }
