@@ -95,7 +95,10 @@ struct FilesFile {
 extension FilesFile: Equatable {
     
     static func == (lhs: FilesFile, rhs: FilesFile) -> Bool {
-        return lhs.url == rhs.url
+        return lhs.videoData.bookmark == rhs.videoData.bookmark &&
+               lhs.videoData.id == rhs.videoData.id &&
+               lhs.videoData.customName == rhs.videoData.customName &&
+               lhs.videoData.isFavorite == rhs.videoData.isFavorite
     }
     
 }

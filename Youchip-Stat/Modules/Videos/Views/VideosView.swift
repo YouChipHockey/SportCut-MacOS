@@ -398,7 +398,7 @@ struct VideosView: View {
                 spacing: 20
             ) {
                 ForEach(filteredFiles, id: \.videoData.bookmark) { file in
-                    VideoThumbnailView(id: file.videoData.id, viewModel: viewModel)
+                    VideoThumbnailView(file: file, viewModel: viewModel)
                 }
             }
             .padding(.horizontal, 20)
