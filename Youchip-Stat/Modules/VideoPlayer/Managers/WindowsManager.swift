@@ -81,6 +81,8 @@ class WindowsManager: NSObject {
         
         ScreenshotsMetadataManager.shared.clearScreenshots()
         
+        HotKeyManager.shared.clearHotkeys()
+        
         VideoPlayerManager.shared.deleteVideo()
         isClosing = true
     }

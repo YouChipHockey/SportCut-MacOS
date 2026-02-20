@@ -53,6 +53,7 @@ struct TagLibraryView: View {
     @State private var windowWidth: CGFloat = 0
     @State private var isEditorModeActive = false
     @State private var isLoadingCollections = false
+    @State private var notificationObserverTokens: [NSObjectProtocol] = []
     
     struct ActiveIntervalTag: Identifiable {
         let id: String
@@ -1041,14 +1042,16 @@ struct TagLibraryView: View {
         updateTagCounts()
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
         
-        NotificationCenter.default.addObserver(forName: .markupModeChanged, object: nil, queue: .main) { notification in
+        var tokens: [NSObjectProtocol] = []
+        
+        tokens.append(NotificationCenter.default.addObserver(forName: .markupModeChanged, object: nil, queue: .main) { notification in
             if let newMode = notification.object as? MarkupMode {
                 self.markupMode = newMode
             } else {
                 self.markupMode = MarkupMode.current
             }
-        }
-        NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
+        })
+        tokens.append(NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
             let currentSelectedUserCollectionId = userCollections.first { $0.name == self.lastSelectedCollectionName}?.id
             
             let allCollectionsInfo = CollectionsBookmarksManager.shared.loadCollections()
@@ -1079,8 +1082,8 @@ struct TagLibraryView: View {
                 self.tagLibrary.invalidateCollectionCache(for: newName)
                 self.loadUserCollection(updatedCollection)
             }
-        }
-        NotificationCenter.default.addObserver(forName: .showLabelSheet, object: nil, queue: .main) { notification in
+        })
+        tokens.append(NotificationCenter.default.addObserver(forName: .showLabelSheet, object: nil, queue: .main) { notification in
             if let tag = notification.object as? Tag {
                 if tag.isInterval ?? false {
                     if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
@@ -1130,36 +1133,35 @@ struct TagLibraryView: View {
                     addTagToTimeline(tag: tag, selectedLabels: [])
                 }
             }
-        }
-        NotificationCenter.default.addObserver(forName: .stampCountsChanged, object: nil, queue: .main) { _ in
+        })
+        tokens.append(NotificationCenter.default.addObserver(forName: .stampCountsChanged, object: nil, queue: .main) { _ in
             DispatchQueue.main.async {
                 self.updateTagCounts()
             }
-        }
-        NotificationCenter.default.addObserver(forName: .editorModeChanged, object: nil, queue: .main) { notification in
+        })
+        tokens.append(NotificationCenter.default.addObserver(forName: .editorModeChanged, object: nil, queue: .main) { notification in
             if let isActive = notification.object as? Bool {
                 self.isEditorModeActive = isActive
             }
-        }
-        NotificationCenter.default.addObserver(forName: .collectionsLoadingStarted, object: nil, queue: .main) { _ in
+        })
+        tokens.append(NotificationCenter.default.addObserver(forName: .collectionsLoadingStarted, object: nil, queue: .main) { _ in
             self.isLoadingCollections = true
-        }
-        NotificationCenter.default.addObserver(forName: .collectionsLoadingFinished, object: nil, queue: .main) { _ in
+        })
+        tokens.append(NotificationCenter.default.addObserver(forName: .collectionsLoadingFinished, object: nil, queue: .main) { _ in
             self.isLoadingCollections = false
-        }
+        })
+        
+        notificationObserverTokens = tokens
     }
     
     
     private func onDisappearCleanup() {
         updateTimer?.invalidate()
         updateTimer = nil
-        NotificationCenter.default.removeObserver(self, name: .collectionDataChanged, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .showLabelSheet, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .markupModeChanged, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .stampCountsChanged, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .editorModeChanged, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .collectionsLoadingStarted, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .collectionsLoadingFinished, object: nil)
+        for token in notificationObserverTokens {
+            NotificationCenter.default.removeObserver(token)
+        }
+        notificationObserverTokens.removeAll()
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {
