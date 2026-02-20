@@ -8,12 +8,18 @@
 import SwiftUI
 
 struct VideoThumbnailView: View {
-    let file: FilesFile
     let id: String
-    let viewModel: VideosViewModel
+    @ObservedObject var viewModel: VideosViewModel
     
     @State private var isHovered = false
     @State private var isFavorite: Bool = false
+    
+    private var file: FilesFile {
+        guard let file = viewModel.state.files.first(where: { $0.id == id }) else {
+            fatalError("File with id \(id) not found in viewModel.state.files")
+        }
+        return file
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -247,16 +253,9 @@ struct VideoThumbnailView: View {
     }
     
     private func updateFavoriteState() {
-        if let updatedFile = viewModel.state.files.first(where: { $0.id == file.id }) {
-            let newFavoriteState = viewModel.filesManager.isFavorite(updatedFile)
-            if isFavorite != newFavoriteState {
-                isFavorite = newFavoriteState
-            }
-        } else {
-            let newFavoriteState = viewModel.filesManager.isFavorite(file)
-            if isFavorite != newFavoriteState {
-                isFavorite = newFavoriteState
-            }
+        let newFavoriteState = viewModel.filesManager.isFavorite(file)
+        if isFavorite != newFavoriteState {
+            isFavorite = newFavoriteState
         }
     }
     
