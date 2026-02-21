@@ -61,6 +61,8 @@ class WindowsManager: NSObject {
     }
     
     func closeAll() {
+        tagLibraryWindow?.cancelNotificationSubscriptions()
+        
         videoWindow?.window?.delegate = nil
         controlWindow?.window?.delegate = nil
         tagLibraryWindow?.window?.delegate = nil
