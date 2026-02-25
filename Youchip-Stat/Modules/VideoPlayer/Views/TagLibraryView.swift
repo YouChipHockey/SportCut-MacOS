@@ -132,6 +132,7 @@ struct TagLibraryView: View {
                     .frame(height: 300)
             }
         }
+        .id(refreshID)
         .background(Color(.controlBackgroundColor))
         .sheet(isPresented: $showLabelSheet) {
             stampLabelSheet
@@ -1060,8 +1061,7 @@ struct TagLibraryView: View {
         notificationSubscriptions.store(
             NotificationCenter.default.publisher(for: .collectionDataChanged)
                 .receive(on: DispatchQueue.main)
-                .sink { [self] _ in
-                    let currentSelectedUserCollectionId = userCollections.first { $0.name == lastSelectedCollectionName }?.id
+                .sink { [self] notification in
                     let allCollectionsInfo = CollectionsBookmarksManager.shared.loadCollections()
                     userCollections = allCollectionsInfo.map { info in
                         CollectionBookmark(
@@ -1071,19 +1071,22 @@ struct TagLibraryView: View {
                             timeEventsBookmark: Data(), playFieldBookmark: nil
                         )
                     }
-                    if isUserCollectionActive, let currentSelectedUserCollectionId,
-                       let updatedCollection = userCollections.first(where: { $0.id == currentSelectedUserCollectionId }) {
-                        let oldName = lastSelectedCollectionName
-                        let newName = updatedCollection.name
-                        lastSelectedCollectionName = newName
-                        if oldName != newName {
-                            tagLibrary.currentCollectionType = .user(name: newName)
-                            UserDefaults.standard.set(newName, forKey: UserDefaults.Keys.lastSelectedCollection)
-                        }
-                        tagLibrary.invalidateCollectionCache(for: newName)
+                    let changedName = notification.userInfo?[Notification.Key.collectionName] as? String
+                    if changedName != nil {
+                        return
+                    }
+                    if isUserCollectionActive, let currentName = lastSelectedCollectionName,
+                       let updatedCollection = userCollections.first(where: { $0.name == currentName }) {
+                        lastSelectedCollectionName = updatedCollection.name
+                        tagLibrary.invalidateCollectionCache(for: updatedCollection.name)
                         loadUserCollection(updatedCollection)
                     }
                 }
+        )
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .currentCollectionRefreshed)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] _ in refreshID = UUID() }
         )
         notificationSubscriptions.store(
             NotificationCenter.default.publisher(for: .showLabelSheet)
@@ -1148,7 +1151,14 @@ struct TagLibraryView: View {
         notificationSubscriptions.store(
             NotificationCenter.default.publisher(for: .collectionsLoadingFinished)
                 .receive(on: DispatchQueue.main)
-                .sink { [self] _ in isLoadingCollections = false }
+                .sink { [self] _ in
+                    isLoadingCollections = false
+                    if isUserCollectionActive, let currentName = lastSelectedCollectionName,
+                       let collection = userCollections.first(where: { $0.name == currentName }) {
+                        loadUserCollection(collection)
+                        refreshID = UUID()
+                    }
+                }
         )
     }
     
@@ -1172,11 +1182,11 @@ struct TagLibraryView: View {
             HotKeyManager.shared.registerHotkeys(from: cachedData.tags, for: .user(name: collection.name))
             UserDefaults.standard.set(collection.name, forKey: UserDefaults.Keys.lastSelectedCollection)
             
-            // Cache playField if available
             cachePlayFieldForCollection(collection.name)
             
             updateTagCounts()
             expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
+            tagLibrary.objectWillChange.send()
         } else {
             // Load asynchronously if not cached
             DispatchQueue.global(qos: .userInitiated).async {
@@ -1199,9 +1209,9 @@ struct TagLibraryView: View {
                             self.cachedPlayField = (name: collection.name, playField: playField)
                         }
                         
-                        // Update UI without changing refreshID to preserve scroll position
                         self.updateTagCounts()
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+                        self.tagLibrary.objectWillChange.send()
                     }
                 } else {
                     DispatchQueue.main.async {

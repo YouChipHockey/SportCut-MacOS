@@ -318,8 +318,13 @@ class CustomCollectionManager: ObservableObject {
             isEditingExisting = true
         }
         
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            NotificationCenter.default.post(
+                name: .collectionDataChanged,
+                object: nil,
+                userInfo: [Notification.Key.collectionName: collectionName]
+            )
         }
         
         for tag in changedTags {
@@ -551,6 +556,7 @@ class CustomCollectionManager: ObservableObject {
             }
             _ = savePlayFieldForCollection()
             objectWillChange.send()
+            _ = saveCollectionToFiles()
             return true
         } catch {
             print("❌ Error setting field image: \(error)")
@@ -597,6 +603,7 @@ class CustomCollectionManager: ObservableObject {
                 
                 self.playField = nil
                 self.objectWillChange.send()
+                _ = self.saveCollectionToFiles()
             }
         }
     }

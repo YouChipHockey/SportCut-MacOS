@@ -7,8 +7,15 @@
 
 import Foundation
 
+extension Notification {
+    struct Key {
+        static let collectionName = "collectionName"
+    }
+}
+
 extension NSNotification.Name {
     static let collectionDataChanged = NSNotification.Name("collectionDataChanged")
+    static let currentCollectionRefreshed = NSNotification.Name("currentCollectionRefreshed")
     static let collectionEditorOpened = NSNotification.Name("collectionEditorOpened")
     static let collectionEditorClosed = NSNotification.Name("collectionEditorClosed")
     static let markupModeChanged = NSNotification.Name("markupModeChanged")
