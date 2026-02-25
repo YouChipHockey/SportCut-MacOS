@@ -186,11 +186,11 @@ class HotKeyManager: ObservableObject {
     
     private func handleHotkey(_ event: NSEvent) -> Bool {
         let isMarkerWindowActive = ActiveWindowManager.shared.isMarkerWindowActive()
-        guard isMarkerWindowActive else {
+        let isViewerWindowActive = ActiveWindowManager.shared.isViewerWindowActive()
+        guard isMarkerWindowActive || isViewerWindowActive  else {
             return false
         }
         
-        let isViewerWindowActive = ActiveWindowManager.shared.isViewerWindowActive()
         let isViewerMode = WindowsManager.shared.viewerWindow != nil && isViewerWindowActive
         
         if event.keyCode == 49 {
