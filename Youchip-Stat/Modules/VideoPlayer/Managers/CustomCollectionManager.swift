@@ -436,10 +436,11 @@ class CustomCollectionManager: ObservableObject {
             
             let playFieldDataPath = playFieldsFolder.appendingPathComponent("\(collectionName).json")
             
+            let imagePathToSave = playField.imagePath.isEmpty ? "\(collectionName).png" : playField.imagePath
             let updatedField = PlayField(
                 id: playField.id,
                 name: playField.name,
-                imagePath: "",
+                imagePath: imagePathToSave,
                 width: playField.width,
                 height: playField.height
             )
@@ -464,8 +465,22 @@ class CustomCollectionManager: ObservableObject {
         if fileManager.fileExists(atPath: newPlayFieldDataPath.path),
            let data = try? Data(contentsOf: newPlayFieldDataPath) {
             if var field = try? JSONDecoder().decode(PlayField.self, from: data) {
-                field.imagePath = "\(collectionName).png"
-                playField = field
+                if field.imagePath.isEmpty {
+                    field.imagePath = "\(collectionName).png"
+                }
+                let imageURL = playFieldsFolder.appendingPathComponent(field.imagePath)
+                if fileManager.fileExists(atPath: imageURL.path), let bookmark = imageURL.makeBookmark() {
+                    playField = PlayField(
+                        id: field.id,
+                        name: field.name,
+                        imagePath: field.imagePath,
+                        width: field.width,
+                        height: field.height,
+                        imageBookmark: bookmark
+                    )
+                } else {
+                    playField = field
+                }
                 return
             }
         }
@@ -491,57 +506,56 @@ class CustomCollectionManager: ObservableObject {
     }
     
     func setFieldImage(from url: URL) -> Bool {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+        do {
+            let fileManager = FileManager.default
+            let playFieldsFolder = URL.appDocumentsDirectory
+                .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+                .fixedFile()
             
-            do {
-                let fileManager = FileManager.default
-                let playFieldsFolder = URL.appDocumentsDirectory
-                    .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
-                    .fixedFile()
-                
-                if !fileManager.fileExists(atPath: playFieldsFolder.path) {
-                    try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
-                }
-                
-                let imageName = url.lastPathComponent
-                let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
-                
-                if fileManager.fileExists(atPath: destinationURL.path) {
-                    try fileManager.removeItem(at: destinationURL)
-                }
-                
-                try fileManager.copyItem(at: url, to: destinationURL)
-                
-                let imageBookmark = destinationURL.makeBookmark()
-                
-                DispatchQueue.main.async {
-                    if let existingField = self.playField {
-                        self.playField = PlayField(
-                            id: existingField.id,
-                            name: existingField.name,
-                            imagePath: imageName,
-                            width: existingField.width,
-                            height: existingField.height,
-                            imageBookmark: imageBookmark
-                        )
-                    } else {
-                        self.playField = PlayField(
-                            id: UUID().uuidString,
-                            name: "Field",
-                            imagePath: imageName,
-                            width: 100.0,
-                            height: 60.0,
-                            imageBookmark: imageBookmark
-                        )
-                    }
-                    self.objectWillChange.send()
-                }
-            } catch {
-                print("❌ Error setting field image: \(error)")
+            if !fileManager.fileExists(atPath: playFieldsFolder.path) {
+                try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
             }
+            
+            let imageName = "\(collectionName).png"
+            let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
+            
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            
+            try fileManager.copyItem(at: url, to: destinationURL)
+            
+            guard let imageBookmark = destinationURL.makeBookmark() else {
+                print("❌ Error setting field image: failed to create bookmark")
+                return false
+            }
+            
+            if let existingField = playField {
+                playField = PlayField(
+                    id: existingField.id,
+                    name: existingField.name,
+                    imagePath: imageName,
+                    width: existingField.width,
+                    height: existingField.height,
+                    imageBookmark: imageBookmark
+                )
+            } else {
+                playField = PlayField(
+                    id: UUID().uuidString,
+                    name: "Field",
+                    imagePath: imageName,
+                    width: 100.0,
+                    height: 60.0,
+                    imageBookmark: imageBookmark
+                )
+            }
+            _ = savePlayFieldForCollection()
+            objectWillChange.send()
+            return true
+        } catch {
+            print("❌ Error setting field image: \(error)")
+            return false
         }
-        return true
     }
     
     func deleteFieldImage() {
