@@ -73,6 +73,15 @@ class VideoPlayerManager: ObservableObject {
             player.rate = Float(playbackSpeed)
         }
     }
+    
+    func pause() {
+        player?.pause()
+    }
+    
+    func play() {
+        player?.rate = Float(playbackSpeed)
+    }
+    
     func seek(by seconds: Double) {
         guard let player = player else { return }
         let actualCurrentTime = player.currentTime().seconds

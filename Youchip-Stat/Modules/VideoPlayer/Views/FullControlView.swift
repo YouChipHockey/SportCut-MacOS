@@ -35,8 +35,11 @@ struct FullControlView: View {
     @GestureState private var magnifyScale: CGFloat = 1.0
     @State private var keyEventMonitor: Any?
     @State private var tagEdgePosition: CGFloat? = nil
-    /// Позиция плейхеда в пикселях в момент последней авто-прокрутки таймлайна (чтобы скроллить только когда плейхед ушёл за край).
+    @State private var isDraggingPlayhead: Bool = false
+    @State private var wasPlayingBeforePlayheadDrag: Bool = false
+    @State private var lastPlayheadSeekTime: Date = Date()
     @State private var lastScrolledPlayheadPixels: CGFloat = 0
+    @State private var timelineHScrollOffset: CGFloat = 0
     
     @State private var isEditorModeActive = false
     @State private var isScreenshotDisplayActive = false
@@ -211,9 +214,14 @@ struct FullControlView: View {
                         effectiveScale: effectiveScale,
                         visibleWidth: visibleWidth,
                         scrollProxy: scrollProxy,
-                        lastScrolledPlayheadPixels: $lastScrolledPlayheadPixels
+                        lastScrolledPlayheadPixels: $lastScrolledPlayheadPixels,
+                        isDraggingPlayhead: $isDraggingPlayhead,
+                        wasPlayingBeforePlayheadDrag: $wasPlayingBeforePlayheadDrag,
+                        lastPlayheadSeekTime: $lastPlayheadSeekTime,
+                        timelineHScrollOffset: timelineHScrollOffset
                     )
                 }
+                .background(TimelineScrollOffsetReader(scrollOffset: $timelineHScrollOffset).frame(width: 1, height: 1))
             }
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
@@ -240,7 +248,11 @@ struct FullControlView: View {
         effectiveScale: CGFloat,
         visibleWidth: CGFloat,
         scrollProxy: ScrollViewProxy,
-        lastScrolledPlayheadPixels: Binding<CGFloat>
+        lastScrolledPlayheadPixels: Binding<CGFloat>,
+        isDraggingPlayhead: Binding<Bool>,
+        wasPlayingBeforePlayheadDrag: Binding<Bool>,
+        lastPlayheadSeekTime: Binding<Date>,
+        timelineHScrollOffset: CGFloat
     ) -> some View {
         let timeOffsetToPixels = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
         let playheadX = tagEdgePosition ?? timeOffsetToPixels
@@ -260,6 +272,36 @@ struct FullControlView: View {
                     width: gridWidth
                 )
                 .frame(height: 30)
+                .contentShape(Rectangle())
+                .overlay(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineSpace"))
+                                .onChanged { value in
+                                    if !isDraggingPlayhead.wrappedValue {
+                                        wasPlayingBeforePlayheadDrag.wrappedValue = videoManager.player?.timeControlStatus == .playing
+                                        if wasPlayingBeforePlayheadDrag.wrappedValue { videoManager.pause() }
+                                    }
+                                    isDraggingPlayhead.wrappedValue = true
+                                    let x = max(0, min(value.location.x, gridWidth))
+                                    let time = duration > 0 ? (x / gridWidth) * duration : 0
+                                    let now = Date()
+                                    if now.timeIntervalSince(lastPlayheadSeekTime.wrappedValue) >= 0.08 {
+                                        videoManager.seek(to: time)
+                                        lastPlayheadSeekTime.wrappedValue = now
+                                    }
+                                }
+                                .onEnded { value in
+                                    let x = max(0, min(value.location.x, gridWidth))
+                                    let time = duration > 0 ? (x / gridWidth) * duration : 0
+                                    videoManager.seek(to: time)
+                                    if wasPlayingBeforePlayheadDrag.wrappedValue { videoManager.play() }
+                                    wasPlayingBeforePlayheadDrag.wrappedValue = false
+                                    isDraggingPlayhead.wrappedValue = false
+                                }
+                        )
+                )
                 
                 ForEach(timelineData.lines) { line in
                     TimelineLineView(
@@ -309,6 +351,41 @@ struct FullControlView: View {
                 .offset(x: playheadX)
             
             HStack(spacing: 0) {
+                Spacer().frame(width: max(0, playheadX - 10))
+                Color.clear
+                    .frame(width: 20, height: 30 * CGFloat(timelineData.lines.count + 1))
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineSpace"))
+                            .onChanged { value in
+                                guard tagEdgePosition == nil else { return }
+                                if !isDraggingPlayhead.wrappedValue {
+                                    wasPlayingBeforePlayheadDrag.wrappedValue = videoManager.player?.timeControlStatus == .playing
+                                    if wasPlayingBeforePlayheadDrag.wrappedValue { videoManager.pause() }
+                                }
+                                isDraggingPlayhead.wrappedValue = true
+                                let x = max(0, min(value.location.x, gridWidth))
+                                let time = duration > 0 ? (x / gridWidth) * duration : 0
+                                let now = Date()
+                                if now.timeIntervalSince(lastPlayheadSeekTime.wrappedValue) >= 0.08 {
+                                    videoManager.seek(to: time)
+                                    lastPlayheadSeekTime.wrappedValue = now
+                                }
+                            }
+                            .onEnded { value in
+                                let x = max(0, min(value.location.x, gridWidth))
+                                let time = duration > 0 ? (x / gridWidth) * duration : 0
+                                videoManager.seek(to: time)
+                                if wasPlayingBeforePlayheadDrag.wrappedValue { videoManager.play() }
+                                wasPlayingBeforePlayheadDrag.wrappedValue = false
+                                isDraggingPlayhead.wrappedValue = false
+                            }
+                    )
+                Spacer().frame(minWidth: 0)
+            }
+            .frame(width: gridWidth)
+            
+            HStack(spacing: 0) {
                 Spacer().frame(width: max(0, playheadX))
                 Color.clear
                     .frame(width: 1, height: 1)
@@ -339,13 +416,12 @@ struct FullControlView: View {
             lastScrolledPlayheadPixels.wrappedValue = timeOffsetToPixels
         }
         .onChange(of: videoManager.currentTime) { newTime in
-            guard tagEdgePosition == nil, visibleWidth > 0 else { return }
+            guard tagEdgePosition == nil, !isDraggingPlayhead.wrappedValue, visibleWidth > 0 else { return }
             let pixels = duration > 0 ? (newTime / duration) * gridWidth : 0
-            let last = lastScrolledPlayheadPixels.wrappedValue
+            let scrollOff = timelineHScrollOffset
             let margin: CGFloat = 24
-            let shouldScrollRight = pixels - last > visibleWidth - margin
-            let shouldScrollLeft = last - pixels > margin
-            if shouldScrollRight || shouldScrollLeft {
+            let isVisible = pixels >= scrollOff - 1 && pixels <= scrollOff + visibleWidth - margin
+            if !isVisible {
                 lastScrolledPlayheadPixels.wrappedValue = pixels
                 DispatchQueue.main.async {
                     scrollProxy.scrollTo("timeline-playhead", anchor: .leading)
@@ -2162,6 +2238,57 @@ extension TimelineMouseTracker: Equatable {
         lhs.duration == rhs.duration &&
         lhs.gridWidth == rhs.gridWidth &&
         lhs.lines == rhs.lines
+    }
+}
+
+// MARK: - Timeline Scroll Offset Reader (macOS NSScrollView)
+
+private struct TimelineScrollOffsetReader: NSViewRepresentable {
+    @Binding var scrollOffset: CGFloat
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = ScrollOffsetTrackingView()
+        view.onOffsetChange = { offset in
+            DispatchQueue.main.async {
+                $scrollOffset.wrappedValue = offset
+            }
+        }
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    
+    private class ScrollOffsetTrackingView: NSView {
+        var onOffsetChange: ((CGFloat) -> Void)?
+        private var timer: Timer?
+        
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            if superview != nil {
+                timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+                    self?.updateScrollOffset()
+                }
+                RunLoop.current.add(timer!, forMode: .common)
+            } else {
+                timer?.invalidate()
+                timer = nil
+            }
+        }
+        
+        private func updateScrollOffset() {
+            guard let scrollView = findEnclosingScrollView() else { return }
+            let offset = scrollView.contentView.bounds.origin.x
+            onOffsetChange?(offset)
+        }
+        
+        private func findEnclosingScrollView() -> NSScrollView? {
+            var view: NSView? = superview
+            while let v = view {
+                if let sv = v as? NSScrollView { return sv }
+                view = v.superview
+            }
+            return nil
+        }
     }
 }
 

@@ -42,6 +42,9 @@ struct TimelineLineView: View {
     @State private var maxVisualOffsetX: CGFloat? = nil
     
     @State private var lastSeekTime: Date = Date()
+    @State private var wasPlayingBeforeLineScrub: Bool = false
+    @State private var isLineScrubbing: Bool = false
+    @State private var wasPlayingBeforeResize: Bool = false
     private let seekThrottleInterval: TimeInterval = 0.033 // ~30fps
     
     // MARK: - drag properties
@@ -94,9 +97,33 @@ struct TimelineLineView: View {
                                 lineWidth: 0.5
                             )
                     )
-                    .onTapGesture {
-                        timelineData.selectStamp(stampID: nil)
-                    }
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineSpace"))
+                            .onChanged { value in
+                                if !isLineScrubbing {
+                                    isLineScrubbing = true
+                                    wasPlayingBeforeLineScrub = videoManager.player?.timeControlStatus == .playing
+                                    if wasPlayingBeforeLineScrub { videoManager.pause() }
+                                }
+                                let x = max(0, min(value.location.x, widthMax))
+                                let time = (x / widthMax) * totalDuration
+                                let now = Date()
+                                if now.timeIntervalSince(lastSeekTime) >= seekThrottleInterval {
+                                    videoManager.seek(to: max(0, min(time, totalDuration)))
+                                    lastSeekTime = now
+                                }
+                            }
+                            .onEnded { value in
+                                timelineData.selectStamp(stampID: nil)
+                                let x = max(0, min(value.location.x, widthMax))
+                                let time = (x / widthMax) * totalDuration
+                                videoManager.seek(to: max(0, min(time, totalDuration)))
+                                if wasPlayingBeforeLineScrub { videoManager.play() }
+                                wasPlayingBeforeLineScrub = false
+                                isLineScrubbing = false
+                            }
+                    )
                     ForEach(Array(line.stamps.enumerated()), id: \.element.id) { index, stamp in
                         stampView(
                             stamp: stamp,
@@ -305,6 +332,8 @@ struct TimelineLineView: View {
                     originalEndTime = stamp.timeFinishSeconds
                     dragStartTime = originalStartTime
                     
+                    wasPlayingBeforeResize = videoManager.player?.timeControlStatus == .playing
+                    if wasPlayingBeforeResize { videoManager.pause() }
                     videoManager.isResizingTag = true
                     
                     let baseDuration = originalEndTime - originalStartTime
@@ -362,6 +391,8 @@ struct TimelineLineView: View {
                 }
                 
                 videoManager.isResizingTag = false
+                if wasPlayingBeforeResize { videoManager.play() }
+                wasPlayingBeforeResize = false
                 
                 resizingStampID = nil
                 resizingEdge = nil
@@ -383,6 +414,8 @@ struct TimelineLineView: View {
                     originalEndTime = stamp.timeFinishSeconds
                     dragStartTime = originalStartTime
                     
+                    wasPlayingBeforeResize = videoManager.player?.timeControlStatus == .playing
+                    if wasPlayingBeforeResize { videoManager.pause() }
                     videoManager.isResizingTag = true
                     
                     let baseStartRatio = originalStartTime / totalDuration
@@ -427,6 +460,8 @@ struct TimelineLineView: View {
                 }
                 
                 videoManager.isResizingTag = false
+                if wasPlayingBeforeResize { videoManager.play() }
+                wasPlayingBeforeResize = false
                 
                 resizingStampID = nil
                 resizingEdge = nil
