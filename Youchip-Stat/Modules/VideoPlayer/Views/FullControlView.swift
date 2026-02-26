@@ -35,6 +35,8 @@ struct FullControlView: View {
     @GestureState private var magnifyScale: CGFloat = 1.0
     @State private var keyEventMonitor: Any?
     @State private var tagEdgePosition: CGFloat? = nil
+    /// Позиция плейхеда в пикселях в момент последней авто-прокрутки таймлайна (чтобы скроллить только когда плейхед ушёл за край).
+    @State private var lastScrolledPlayheadPixels: CGFloat = 0
     
     @State private var isEditorModeActive = false
     @State private var isScreenshotDisplayActive = false
@@ -197,19 +199,24 @@ struct FullControlView: View {
     private func timelineScrollView(geo: GeometryProxy, effectiveScale: CGFloat, duration: Double, popupInfo: String?, popupLocation: CGPoint?) -> some View {
         let interval = calculateTimeGridInterval(scale: effectiveScale, totalDuration: duration)
         let gridWidth = geo.size.width * max(effectiveScale, 1.0)
+        let visibleWidth = geo.size.width
         
-        return ScrollView(.horizontal) {
-            HStack(spacing: 0) {
-                timelineZStackContent(
-                    duration: duration,
-                    interval: interval,
-                    gridWidth: gridWidth,
-                    effectiveScale: effectiveScale
-                )
+        return ScrollViewReader { scrollProxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 0) {
+                    timelineZStackContent(
+                        duration: duration,
+                        interval: interval,
+                        gridWidth: gridWidth,
+                        effectiveScale: effectiveScale,
+                        visibleWidth: visibleWidth,
+                        scrollProxy: scrollProxy,
+                        lastScrolledPlayheadPixels: $lastScrolledPlayheadPixels
+                    )
+                }
             }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-
     }
     
     private func formatTimeForHover(_ time: Double) -> String {
@@ -226,7 +233,18 @@ struct FullControlView: View {
     }
     
     @ViewBuilder
-    private func timelineZStackContent(duration: Double, interval: Double, gridWidth: CGFloat, effectiveScale: CGFloat) -> some View {
+    private func timelineZStackContent(
+        duration: Double,
+        interval: Double,
+        gridWidth: CGFloat,
+        effectiveScale: CGFloat,
+        visibleWidth: CGFloat,
+        scrollProxy: ScrollViewProxy,
+        lastScrolledPlayheadPixels: Binding<CGFloat>
+    ) -> some View {
+        let timeOffsetToPixels = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
+        let playheadX = tagEdgePosition ?? timeOffsetToPixels
+        
         ZStack(alignment: .topLeading) {
             TimeGridView(
                 duration: duration,
@@ -285,11 +303,20 @@ struct FullControlView: View {
                 totalHeight: 30 * CGFloat(timelineData.lines.count + 1)
             )
             
-            let timeOffsetToPixels = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
             Rectangle()
                 .fill(Color.red)
                 .frame(width: 2)
-                .offset(x: tagEdgePosition ?? timeOffsetToPixels)
+                .offset(x: playheadX)
+            
+            HStack(spacing: 0) {
+                Spacer().frame(width: max(0, playheadX))
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .id("timeline-playhead")
+                Spacer().frame(minWidth: 0)
+            }
+            .frame(width: gridWidth, height: 1)
+            .allowsHitTesting(false)
             
             TimelineMouseTracker(
                 duration: duration,
@@ -308,6 +335,23 @@ struct FullControlView: View {
         }
         .frame(width: gridWidth)
         .coordinateSpace(name: "timelineSpace")
+        .onAppear {
+            lastScrolledPlayheadPixels.wrappedValue = timeOffsetToPixels
+        }
+        .onChange(of: videoManager.currentTime) { newTime in
+            guard tagEdgePosition == nil, visibleWidth > 0 else { return }
+            let pixels = duration > 0 ? (newTime / duration) * gridWidth : 0
+            let last = lastScrolledPlayheadPixels.wrappedValue
+            let margin: CGFloat = 24
+            let shouldScrollRight = pixels - last > visibleWidth - margin
+            let shouldScrollLeft = last - pixels > margin
+            if shouldScrollRight || shouldScrollLeft {
+                lastScrolledPlayheadPixels.wrappedValue = pixels
+                DispatchQueue.main.async {
+                    scrollProxy.scrollTo("timeline-playhead", anchor: .leading)
+                }
+            }
+        }
     }
     
     @ViewBuilder
