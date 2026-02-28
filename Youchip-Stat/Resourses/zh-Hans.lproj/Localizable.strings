@@ -223,6 +223,13 @@
 "EditTimelineName" = "编辑时间线名称";  // ^String.Titles.editTimelineName
 "TimelineName" = "时间线名称";  // ^String.Titles.timelineName
 "ExportAs" = "导出为:";  // ^String.Titles.exportAs
+"ExportWithDrawings" = "导出时包含绘图";  // ^String.Titles.exportWithDrawings
+"ExportWithDrawingsHelp" = "开启后，绘图将插入到视频的相应时刻。每个绘图的显示时长在创建时设置。";  // ^String.Titles.exportWithDrawingsHelp
+"EditorTextBoxDefaultText" = "文本";  // ^String.Titles.editorTextBoxDefaultText
+"AIReportTitle" = "AI 报告: %@ vs %@";  // ^String.Titles.aiReportTitle
+"AiReportFileNameFormat" = "AI_报告_%@_vs_%@.pdf";  // ^String.Titles.aiReportFileNameFormat
+"AiReportSaveError" = "保存报告时出错: %@";  // ^String.Titles.aiReportSaveError
+"DrawingsTimelineName" = "图画";  // ^String.Titles.drawingsTimelineName
 "Movie" = "电影";  // ^String.Titles.movie
 "Playlist" = "播放列表";  // ^String.Titles.playlist
 "AvailableEvents" = "可用事件";  // ^String.Titles.availableEvents

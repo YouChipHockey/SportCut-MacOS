@@ -49,11 +49,7 @@ class TimelineDataManager: ObservableObject {
         let line = lines[lineIndex]
         
         // Проверяем, является ли это таймлайном рисунков
-        let isDrawingsTimeline = line.name.lowercased().contains("рисунок") ||
-                                 line.name.lowercased().contains("рисунки") ||
-                                 line.name.lowercased().contains("скриншот") ||
-                                 line.name.lowercased().contains("screenshot") ||
-                                 line.name.lowercased().contains("drawing")
+        let isDrawingsTimeline = line.isDrawingsTimeline
         
         // Если это таймлайн рисунков, удаляем файл скриншота
         if isDrawingsTimeline {

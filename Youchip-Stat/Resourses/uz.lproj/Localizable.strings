@@ -223,6 +223,13 @@
 "EditTimelineName" = "Vaqt chiziqi nomini tahrirlash";  // ^String.Titles.editTimelineName
 "TimelineName" = "Vaqt chiziqi nomi";  // ^String.Titles.timelineName
 "ExportAs" = "Eksport qilish:";  // ^String.Titles.exportAs
+"ExportWithDrawings" = "Chizmalar bilan eksport qilish";  // ^String.Titles.exportWithDrawings
+"ExportWithDrawingsHelp" = "Yoqilganda chizmalar videoning tegishli momentlariga joylashtiriladi. Har bir chizmaning ko‘rsatilish davomiyligi uni yaratishda belgilanadi.";  // ^String.Titles.exportWithDrawingsHelp
+"EditorTextBoxDefaultText" = "Matn";  // ^String.Titles.editorTextBoxDefaultText
+"AIReportTitle" = "Sun'iy intellekt hisoboti: %@ vs %@";  // ^String.Titles.aiReportTitle
+"AiReportFileNameFormat" = "AI_Hisobot_%@_vs_%@.pdf";  // ^String.Titles.aiReportFileNameFormat
+"AiReportSaveError" = "Hisobotni saqlashda xato: %@";  // ^String.Titles.aiReportSaveError
+"DrawingsTimelineName" = "Rasmlar";  // ^String.Titles.drawingsTimelineName
 "Movie" = "Film";  // ^String.Titles.movie
 "Playlist" = "Pleylist";  // ^String.Titles.playlist
 "AvailableEvents" = "Mavjud voqealar";  // ^String.Titles.availableEvents

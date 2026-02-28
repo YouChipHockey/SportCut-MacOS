@@ -222,6 +222,13 @@
 "EditTimelineName" = "Редактировать название таймлайна";  // ^String.Titles.editTimelineName
 "TimelineName" = "Название таймлайна";  // ^String.Titles.timelineName
 "ExportAs" = "Экспортировать как:";  // ^String.Titles.exportAs
+"ExportWithDrawings" = "Экспортировать с рисунками";  // ^String.Titles.exportWithDrawings
+"ExportWithDrawingsHelp" = "При включении рисунки будут вставлены в соответствующие моменты видео. Длительность показа каждого рисунка задаётся при его создании.";  // ^String.Titles.exportWithDrawingsHelp
+"EditorTextBoxDefaultText" = "Текст";  // ^String.Titles.editorTextBoxDefaultText
+"AIReportTitle" = "ИИ Отчет: %@ vs %@";  // ^String.Titles.aiReportTitle
+"AiReportFileNameFormat" = "ИИ_Отчет_%@_vs_%@.pdf";  // ^String.Titles.aiReportFileNameFormat
+"AiReportSaveError" = "Ошибка сохранения отчета: %@";  // ^String.Titles.aiReportSaveError
+"DrawingsTimelineName" = "Рисунки";  // ^String.Titles.drawingsTimelineName
 "Movie" = "Фильм";  // ^String.Titles.movie
 "Playlist" = "Плейлист";  // ^String.Titles.playlist
 "AvailableEvents" = "Доступные события";  // ^String.Titles.availableEvents

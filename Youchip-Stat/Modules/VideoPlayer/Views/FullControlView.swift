@@ -102,7 +102,7 @@ struct FullControlView: View {
     @State private var showEventSelectionSheet: Bool = false
     @State private var showAiReportSheet: Bool = false
     @State private var showSimpleReportSheet: Bool = false
-    @State private var exportWithScreenshots: Bool = false
+    @State private var exportWithDrawings: Bool = false
     
     @State private var showLabelSelectionSheet: Bool = false
     @State private var showMultiLabelSelectionSheet: Bool = false
@@ -687,7 +687,9 @@ struct FullControlView: View {
             match_date: matchDate
         )
         
-        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-interactive-report") else {
+        let locale = Locale.current.identifier.hasPrefix("ru") ? "ru" : "en"
+        print("Locale.current.identifier", Locale.current.identifier)
+        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-interactive-report?locale=\(locale)") else {
             print("Invalid URL")
             return
         }
@@ -763,7 +765,8 @@ struct FullControlView: View {
             match_date: matchDate
         )
         
-        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-match-report") else {
+        let locale = Locale.current.identifier.hasPrefix("ru") ? "ru" : "en"
+        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-match-report?locale=\(locale)") else {
             print("Invalid URL")
             return
         }
@@ -833,13 +836,13 @@ struct FullControlView: View {
     func saveReportFile(data: Data, teamName: String, opponentName: String) {
         let panel = NSSavePanel()
         panel.allowedFileTypes = ["pdf"]
-        panel.nameFieldStringValue = "ИИ_Отчет_\(teamName)_vs_\(opponentName).pdf"
+        panel.nameFieldStringValue = String.Titles.aiReportFileNameFormat.format(teamName, opponentName)
         
         if panel.runModal() == .OK, let url = panel.url {
             do {
                 try data.write(to: url)
             } catch {
-                errorMessage = "Ошибка сохранения отчета: \(error.localizedDescription)"
+                errorMessage = String.Titles.aiReportSaveError.format(error.localizedDescription)
                 showErrorAlert = true
             }
         }
@@ -1488,7 +1491,7 @@ struct FullControlView: View {
             ExportModeSelectionSheet(
                 onSelect: { mode in
                     isExporting = true
-                    exportHelper.performExport(selectedExportType: selectedExportType, mode: mode, withScreenshots: exportWithScreenshots) { error in
+                    exportHelper.performExport(selectedExportType: selectedExportType, mode: mode, withScreenshots: exportWithDrawings) { error in
                         isExporting = false
                         showExportModeSheet = false
                         if let error {
@@ -1497,7 +1500,7 @@ struct FullControlView: View {
                         }
                     }
                 },
-                exportWithScreenshots: $exportWithScreenshots
+                exportWithDrawings: $exportWithDrawings
             )
         }
         .sheet(isPresented: $showLabelSelectionSheet) {
@@ -2475,14 +2478,7 @@ struct ScreenshotMarkersView: View {
         var availableStamps: [(line: TimelineLine, stamp: TimelineStamp)] = []
         
         for line in timelineData.lines {
-            // Исключаем таймлайн "Рисунки" (ранее "скриншоты")
-            if line.name.lowercased().contains("рисунок") || 
-               line.name.lowercased().contains("рисунки") ||
-               line.name.lowercased().contains("скриншот") || 
-               line.name.lowercased().contains("screenshot") ||
-               line.name.lowercased().contains("drawing") {
-                continue
-            }
+            if line.isDrawingsTimeline { continue }
             
             for stamp in line.stamps {
                 let screenshotTime = screenshot.videoTime
@@ -2543,14 +2539,7 @@ struct ScreenshotMarkersView: View {
     }
     
     private func deleteScreenshotStampFromTimeline(screenshotName: String) {
-        // Ищем таймлайн "Рисунки" (ранее "скриншоты")
-        guard let screenshotLine = timelineData.lines.first(where: { line in
-            line.name.lowercased().contains("рисунок") || 
-            line.name.lowercased().contains("рисунки") ||
-            line.name.lowercased().contains("скриншот") || 
-            line.name.lowercased().contains("screenshot") ||
-            line.name.lowercased().contains("drawing")
-        }) else {
+        guard let screenshotLine = timelineData.lines.first(where: { $0.isDrawingsTimeline }) else {
             print("ℹ️ Таймлайн рисунков не найден")
             return
         }
@@ -2615,14 +2604,7 @@ struct ScreenshotTagEditorSheet: View {
         var stamps: [(line: TimelineLine, stamp: TimelineStamp)] = []
         
         for line in timelineData.lines {
-            // Исключаем таймлайн "Рисунки"
-            if line.name.lowercased().contains("рисунок") || 
-               line.name.lowercased().contains("рисунки") ||
-               line.name.lowercased().contains("скриншот") || 
-               line.name.lowercased().contains("screenshot") ||
-               line.name.lowercased().contains("drawing") {
-                continue
-            }
+            if line.isDrawingsTimeline { continue }
             
             for stamp in line.stamps {
                 // Проверяем пересечение времени
