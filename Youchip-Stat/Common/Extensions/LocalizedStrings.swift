@@ -235,6 +235,26 @@ extension String {
         case aiReportTitle
         case aiReportFileNameFormat
         case aiReportSaveError
+        case fullControlLabelStandard
+        case fullControlLabelZoom
+        case fullControlMenuJSON
+        case fullControlExportSimpleJsonFileName
+        case fullControlExportFullJsonFileName
+        case fullControlAiReportErrorGeneration
+        case fullControlErrorNoServerData
+        case fullControlErrorServer
+        case fullControlErrorEncodingRequest
+        case fullControlSimpleReportErrorGeneration
+        case fullControlErrorDataToHtml
+        case fullControlExportJsonSaveError
+        case fullControlExportFullJsonSaveError
+        case fullControlScreenshotGoToHelp
+        case fullControlEdit
+        case fullControlEditBoundTags
+        case fullControlEditBoundTagsTitle
+        case fullControlScreenshotLabel
+        case fullControlNoTagsForBinding
+        case fullControlTimelineLabel
         case drawingsTimelineName
         case movie
         case playlist
