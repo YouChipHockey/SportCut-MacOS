@@ -1121,21 +1121,14 @@ struct FullControlView: View {
                         }
                         
                         HStack(spacing: 8) {
-                            Menu {
-                                Button(^String.Titles.configureVisualization) {
-                                    WindowsManager.shared.showFieldMapConfigurationWindow()
-                                }
-                                Button(^String.Titles.fullControlButtonMap) {
-                                    WindowsManager.shared.showFieldMapVisualizationPicker()
-                                }
+                            Button {
+                                WindowsManager.shared.showFieldMapVisualizationPicker()
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "map")
                                         .font(.system(size: 12, weight: .medium))
                                     Text(^String.Titles.map)
                                         .font(.system(size: 10, weight: .medium))
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 8))
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 6)
@@ -1154,21 +1147,14 @@ struct FullControlView: View {
                         }
                         .buttonStyle(CompactButtonStyle(icon: "camera", color: .teal, showText: true, text: ^String.Titles.screenshots))
                         
-                        Menu {
-                            Button(^String.Titles.configureVisualization) {
-                                WindowsManager.shared.showFieldMapConfigurationWindow()
-                            }
-                            Button(^String.Titles.fullControlButtonMap) {
-                                WindowsManager.shared.showFieldMapVisualizationPicker()
-                            }
+                        Button {
+                            WindowsManager.shared.showFieldMapVisualizationPicker()
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "map")
                                     .font(.system(size: 12, weight: .medium))
                                 Text(^String.Titles.map)
                                     .font(.system(size: 10, weight: .medium))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 8))
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
