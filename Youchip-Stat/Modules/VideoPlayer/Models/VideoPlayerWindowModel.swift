@@ -1019,7 +1019,7 @@ class EditorDrawingState: ObservableObject {
     
     func createTextBox(at point: CGPoint) {
         var newTextBox = EditorTextBox(position: point, size: CGSize(width: 100, height: 40))
-        newTextBox.text = "Текст"
+        newTextBox.text = ^String.Titles.editorTextBoxDefaultText
         updateTextBoxSizeToFit(&newTextBox)
         newTextBox.position = clampTextBoxPosition(newTextBox.position, size: newTextBox.size)
         pendingTextBox = newTextBox
@@ -1402,7 +1402,7 @@ enum EditorLineStyle {
 
 struct EditorTextBox: Identifiable {
     var id = UUID()
-    var text: String = "Текст"
+    var text: String = ^String.Titles.editorTextBoxDefaultText
     var position: CGPoint
     var size: CGSize = CGSize(width: 150, height: 60)
     var rotation: CGFloat = 0.0
@@ -1786,6 +1786,10 @@ struct ScreenshotMetadata: Codable {
 struct ScreenshotConstants {
     static let screenshotsTimelineID = UUID(uuidString: "00000000-0000-0000-0000-000000000228")!
     static let screenshotsGroupID = "screenshots_group_id_unique_228"
-    static let screenshotsGroupName = "Рисунки"
+    static var screenshotsGroupName: String { ^String.Titles.drawingsTimelineName }
+}
+
+extension TimelineLine {
+    var isDrawingsTimeline: Bool { id == ScreenshotConstants.screenshotsTimelineID }
 }
 

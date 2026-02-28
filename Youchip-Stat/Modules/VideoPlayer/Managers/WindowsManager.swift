@@ -28,7 +28,7 @@ class WindowsManager: NSObject {
             return
         }
         
-        let screenshotsLine = TimelineLine(id: screenshotsID, name: "Рисунки", stamps: [], tagIdForMode: "")
+        let screenshotsLine = TimelineLine(id: screenshotsID, name: ScreenshotConstants.screenshotsGroupName, stamps: [], tagIdForMode: "")
         timelineData.lines.insert(screenshotsLine, at: 0)
         timelineData.updateTimelines()
     }
@@ -303,7 +303,7 @@ class WindowsManager: NSObject {
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
-        window.title = "ИИ Отчет: \(teamName) vs \(opponentName)"
+        window.title = String.Titles.aiReportTitle.format(teamName, opponentName)
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         
         if let screen = NSScreen.main {

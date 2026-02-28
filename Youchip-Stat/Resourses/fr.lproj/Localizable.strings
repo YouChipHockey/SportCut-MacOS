@@ -223,6 +223,13 @@
 "EditTimelineName" = "Modifier le nom de la chronologie";  // ^String.Titles.editTimelineName
 "TimelineName" = "Nom de la chronologie";  // ^String.Titles.timelineName
 "ExportAs" = "Exporter en tant que :";  // ^String.Titles.exportAs
+"ExportWithDrawings" = "Exporter avec les dessins";  // ^String.Titles.exportWithDrawings
+"ExportWithDrawingsHelp" = "Lorsqu'il est activé, les dessins seront insérés aux moments correspondants de la vidéo. La durée d'affichage de chaque dessin est définie lors de sa création.";  // ^String.Titles.exportWithDrawingsHelp
+"EditorTextBoxDefaultText" = "Texte";  // ^String.Titles.editorTextBoxDefaultText
+"AIReportTitle" = "Rapport IA : %@ vs %@";  // ^String.Titles.aiReportTitle
+"AiReportFileNameFormat" = "Rapport_IA_%@_vs_%@.pdf";  // ^String.Titles.aiReportFileNameFormat
+"AiReportSaveError" = "Erreur lors de l'enregistrement du rapport : %@";  // ^String.Titles.aiReportSaveError
+"DrawingsTimelineName" = "Dessins";  // ^String.Titles.drawingsTimelineName
 "Movie" = "Film";  // ^String.Titles.movie
 "Playlist" = "Playlist";  // ^String.Titles.playlist
 "AvailableEvents" = "Événements disponibles";  // ^String.Titles.availableEvents

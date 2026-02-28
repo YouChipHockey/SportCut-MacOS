@@ -223,6 +223,13 @@
 "EditTimelineName" = "Editar nombre de línea de tiempo";  // ^String.Titles.editTimelineName
 "TimelineName" = "Nombre de línea de tiempo";  // ^String.Titles.timelineName
 "ExportAs" = "Exportar como:";  // ^String.Titles.exportAs
+"ExportWithDrawings" = "Exportar con dibujos";  // ^String.Titles.exportWithDrawings
+"ExportWithDrawingsHelp" = "Cuando está activado, los dibujos se insertarán en los momentos correspondientes del video. La duración de visualización de cada dibujo se establece al crearlo.";  // ^String.Titles.exportWithDrawingsHelp
+"EditorTextBoxDefaultText" = "Texto";  // ^String.Titles.editorTextBoxDefaultText
+"AIReportTitle" = "Informe IA: %@ vs %@";  // ^String.Titles.aiReportTitle
+"AiReportFileNameFormat" = "Informe_IA_%@_vs_%@.pdf";  // ^String.Titles.aiReportFileNameFormat
+"AiReportSaveError" = "Error al guardar el informe: %@";  // ^String.Titles.aiReportSaveError
+"DrawingsTimelineName" = "Dibujos";  // ^String.Titles.drawingsTimelineName
 "Movie" = "Película";  // ^String.Titles.movie
 "Playlist" = "Lista de Reproducción";  // ^String.Titles.playlist
 "AvailableEvents" = "Eventos Disponibles";  // ^String.Titles.availableEvents

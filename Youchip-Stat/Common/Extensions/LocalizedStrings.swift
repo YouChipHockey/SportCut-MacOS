@@ -229,6 +229,13 @@ extension String {
         case editTimelineName
         case timelineName
         case exportAs
+        case exportWithDrawings
+        case exportWithDrawingsHelp
+        case editorTextBoxDefaultText
+        case aiReportTitle
+        case aiReportFileNameFormat
+        case aiReportSaveError
+        case drawingsTimelineName
         case movie
         case playlist
         case availableEvents

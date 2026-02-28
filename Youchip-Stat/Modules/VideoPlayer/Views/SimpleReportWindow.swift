@@ -96,7 +96,7 @@ extension SimpleReportWindow: NSWindowDelegate {
 
 class SimpleReportWindowFactory {
     static func createReportWindow(htmlString: String, teamName: String, opponentName: String) -> SimpleReportWindow {
-        let title = "ИИ Отчет: \(teamName) vs \(opponentName)"
+        let title = String.Titles.aiReportTitle.format(teamName, opponentName)
         return SimpleReportWindow(htmlString: htmlString, title: title)
     }
 }
