@@ -775,8 +775,7 @@ struct TagLibraryView: View {
                     showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
                     return
                 } else {
-                    // Load playField asynchronously
-                    DispatchQueue.global(qos: .userInitiated).async { 
+                    DispatchQueue.global(qos: .userInitiated).async {
                         let collectionManager = CustomCollectionManager()
                         if collectionManager.loadCollectionFromBookmarks(named: collectionName),
                            let playField = collectionManager.playField,
@@ -785,11 +784,12 @@ struct TagLibraryView: View {
                                 self.cachedPlayField = (name: collectionName, playField: playField)
                                 self.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
                             }
-                            return
+                        } else {
+                            DispatchQueue.main.async {
+                                self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil)
+                            }
                         }
                     }
-                    // Fallback: proceed without field map
-                    proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil)
                     return
                 }
             }
@@ -1045,8 +1045,8 @@ struct TagLibraryView: View {
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
     }
     
-    /// Подписки хранятся в notificationSubscriptions — явная отписка при closeAll().
     private func setupNotificationSubscriptions() {
+        notificationSubscriptions.cancelAll()
         notificationSubscriptions.store(
             NotificationCenter.default.publisher(for: .markupModeChanged)
                 .receive(on: DispatchQueue.main)
@@ -1323,7 +1323,6 @@ struct TagLibraryView: View {
                     showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
                     return
                 } else {
-                    // Load playField asynchronously
                     DispatchQueue.global(qos: .userInitiated).async {
                         let collectionManager = CustomCollectionManager()
                         if collectionManager.loadCollectionFromBookmarks(named: collectionName),
@@ -1333,11 +1332,12 @@ struct TagLibraryView: View {
                                 self.cachedPlayField = (name: collectionName, playField: playField)
                                 self.showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
                             }
-                            return
+                        } else {
+                            DispatchQueue.main.async {
+                                self.proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
+                            }
                         }
                     }
-                    // Fallback: proceed without field map
-                    proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
                     return
                 }
             }
