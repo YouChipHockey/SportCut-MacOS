@@ -567,7 +567,8 @@ struct FullControlView: View {
             match_date: matchDate
         )
         
-        let locale = Locale.current.identifier.hasPrefix("ru") ? "ru" : "en"
+        let appLocale = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+        let locale = appLocale.hasPrefix("ru") ? "ru" : "en"
         guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-interactive-report?locale=\(locale)") else {
             print("FullControlView: Invalid URL for generate-interactive-report")
             return
@@ -644,7 +645,8 @@ struct FullControlView: View {
             match_date: matchDate
         )
         
-        let locale = Locale.current.identifier.hasPrefix("ru") ? "ru" : "en"
+        let appLocale = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+        let locale = appLocale.hasPrefix("ru") ? "ru" : "en"
         guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-match-report?locale=\(locale)") else {
             print("FullControlView: Invalid URL for generate-match-report")
             return

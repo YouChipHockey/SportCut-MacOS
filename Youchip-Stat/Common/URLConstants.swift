@@ -17,7 +17,8 @@ class URLConstants {
     }
     
     static var siteHost: String {
-        Locale.current.identifier.hasPrefix("ru") ? "sportcut.youchip.pro" : "sportcut.pro"
+        let currentLocale = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+        return currentLocale.hasPrefix("ru") ? "sportcut.youchip.pro" : "sportcut.pro"
     }
     
 }

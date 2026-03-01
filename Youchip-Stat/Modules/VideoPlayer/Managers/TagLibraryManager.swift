@@ -148,14 +148,14 @@ class TagLibraryManager: ObservableObject {
         loadAllUserCollections()
     }
         
-    private func getSystemLanguage() -> String {
-        let preferredLanguage = Locale.preferredLanguages.first ?? "en"
-        if preferredLanguage.hasPrefix("ru") {
+    private func getAppCollectionLanguage() -> String {
+        let appLanguage = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+        if appLanguage.hasPrefix("ru") {
             return "ru"
-        } else if preferredLanguage.hasPrefix("en") {
+        } else if appLanguage.hasPrefix("uz") {
+            return "ru"
+        } else if appLanguage.hasPrefix("en") {
             return "en"
-        } else if preferredLanguage.hasPrefix("uz") {
-            return "ru"
         } else {
             return "en"
         }
@@ -171,7 +171,7 @@ class TagLibraryManager: ObservableObject {
         
         guard let languageCollectionsData: LanguageCollectionsData = loadJSON(url: namesUrl) else { return }
         
-        let currentLanguage = getSystemLanguage()
+        let currentLanguage = getAppCollectionLanguage()
         
         guard let currentLanguageCollection = languageCollectionsData.collections.first(where: { $0.language == currentLanguage }) else {
             guard let fallbackCollection = languageCollectionsData.collections.first(where: { $0.language == "en" }) else { return }
