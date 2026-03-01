@@ -90,6 +90,7 @@
 "CollectionsFieldWidth" = "场地宽度（米），垂直:";  // ^String.Titles.collectionsFieldWidth
 "CollectionsFieldHeight" = "场地长度（米），水平:";  // ^String.Titles.collectionsFieldHeight
 "CollectionsTagsForMap" = "用于地图的标签";  // ^String.Titles.collectionsTagsForMap
+"CollectionsTagsCount" = "%d / %d";  // ^String.Titles.collectionsTagsCount
 "CollectionsGroupEmpty" = "选择标签组或创建新组";  // ^String.Titles.collectionsGroupEmpty
 "CollectionsLabelGroupEmpty" = "选择标签组或创建新组";  // ^String.Titles.CollectionsLabelGroupEmpty
 "CollectionsTagEmpty" = "选择标签或创建新标签";  // ^String.Titles.collectionsTagEmpty
@@ -617,7 +618,7 @@
 "LabelsPrefix" = "标签: %@"; // ^String.Titles.labelsPrefix
 "EventsNone" = "事件: 无事件"; // ^String.Titles.eventsNone
 "EventsPrefix" = "事件: %@"; // ^String.Titles.eventsPrefix
-"TimeAndMoment" = "时间: %@ / 时刻: %@"; // ^String.Titles.timeAndMoment
+"TimeAndMoment" = "时长: %@ / 时间: %@"; // ^String.Titles.timeAndMoment
 "PlayTag" = "播放标签"; // ^String.Titles.playTag
 "RemoveFromOrganizer" = "从组织器中移除"; // ^String.Titles.removeFromOrganizer
 

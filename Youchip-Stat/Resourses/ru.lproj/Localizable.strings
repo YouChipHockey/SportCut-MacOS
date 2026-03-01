@@ -90,6 +90,7 @@
 "CollectionsFieldWidth" = "Ширина поля (м), по вертикали:";  // ^String.Titles.collectionsFieldWidth
 "CollectionsFieldHeight" = "Длина поля (м), по горизонтали:";  // ^String.Titles.collectionsFieldHeight
 "CollectionsTagsForMap" = "Теги для использования с картой";  // ^String.Titles.collectionsTagsForMap
+"CollectionsTagsCount" = "%d из %d";  // ^String.Titles.collectionsTagsCount
 "CollectionsGroupEmpty" = "Выберите группу тегов или создайте новую";  // ^String.Titles.collectionsGroupEmpty
 "CollectionsLabelGroupEmpty" = "Выберите группу лейблов или создайте новую";  // ^String.Titles.CollectionsLabelGroupEmpty
 "CollectionsTagEmpty" = "Выберите тег или создайте новый";  // ^String.Titles.collectionsTagEmpty
@@ -616,7 +617,7 @@
 "LabelsPrefix" = "Лейблы: %@"; // ^String.Titles.labelsPrefix
 "EventsNone" = "События: нет событий"; // ^String.Titles.eventsNone
 "EventsPrefix" = "События: %@"; // ^String.Titles.eventsPrefix
-"TimeAndMoment" = "Время: %@ / Момент: %@"; // ^String.Titles.timeAndMoment
+"TimeAndMoment" = "Длительность: %@ / Время: %@"; // ^String.Titles.timeAndMoment
 "PlayTag" = "Воспроизвести тег"; // ^String.Titles.playTag
 "RemoveFromOrganizer" = "Удалить из органайзера"; // ^String.Titles.removeFromOrganizer
 

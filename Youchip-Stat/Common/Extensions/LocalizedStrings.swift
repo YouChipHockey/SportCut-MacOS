@@ -95,6 +95,7 @@ extension String {
         case collectionsFieldWidth // ^String.Titles.collectionsFieldWidth
         case collectionsFieldHeight // ^String.Titles.collectionsFieldHeight
         case collectionsTagsForMap // ^String.Titles.collectionsTagsForMap
+        case collectionsTagsCount // ^String.Titles.collectionsTagsCount
         case collectionsGroupEmpty // ^String.Titles.collectionsGroupEmpty
         case CollectionsLabelGroupEmpty // ^String.Titles.CollectionsLabelGroupEmpty
         case collectionsTagEmpty // ^String.Titles.collectionsTagEmpty

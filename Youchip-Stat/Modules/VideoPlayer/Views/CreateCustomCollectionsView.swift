@@ -1661,7 +1661,7 @@ struct CreateCustomCollectionsView: View {
                         
                         Spacer()
                         
-                        Text("\(enabledTagsForMap.count) из \(allTagsForMap.count)")
+                        Text(String.Titles.collectionsTagsCount.format(enabledTagsForMap.count, allTagsForMap.count))
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(.secondary)

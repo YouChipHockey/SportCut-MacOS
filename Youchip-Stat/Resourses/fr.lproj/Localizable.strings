@@ -90,6 +90,7 @@
 "CollectionsFieldWidth" = "Largeur du terrain (m), vertical :";  // ^String.Titles.collectionsFieldWidth
 "CollectionsFieldHeight" = "Longueur du terrain (m), horizontal :";  // ^String.Titles.collectionsFieldHeight
 "CollectionsTagsForMap" = "Étiquettes à utiliser avec la carte";  // ^String.Titles.collectionsTagsForMap
+"CollectionsTagsCount" = "%d sur %d";  // ^String.Titles.collectionsTagsCount
 "CollectionsGroupEmpty" = "Sélectionnez un groupe d'étiquettes ou créez-en un nouveau";  // ^String.Titles.collectionsGroupEmpty
 "CollectionsLabelGroupEmpty" = "Sélectionnez un groupe d'étiquettes ou créez-en un nouveau";  // ^String.Titles.CollectionsLabelGroupEmpty
 "CollectionsTagEmpty" = "Sélectionnez une étiquette ou créez-en une nouvelle";  // ^String.Titles.collectionsTagEmpty
@@ -617,7 +618,7 @@
 "LabelsPrefix" = "Étiquettes : %@"; // ^String.Titles.labelsPrefix
 "EventsNone" = "Événements : aucun événement"; // ^String.Titles.eventsNone
 "EventsPrefix" = "Événements : %@"; // ^String.Titles.eventsPrefix
-"TimeAndMoment" = "Temps : %@ / Moment : %@"; // ^String.Titles.timeAndMoment
+"TimeAndMoment" = "Durée : %@ / Temps : %@"; // ^String.Titles.timeAndMoment
 "PlayTag" = "Lire l'étiquette"; // ^String.Titles.playTag
 "RemoveFromOrganizer" = "Retirer de l'organisateur"; // ^String.Titles.removeFromOrganizer
 

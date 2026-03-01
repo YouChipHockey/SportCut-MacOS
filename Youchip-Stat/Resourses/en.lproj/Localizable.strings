@@ -90,6 +90,7 @@
 "CollectionsFieldWidth" = "Field width (m), vertical:";  // ^String.Titles.collectionsFieldWidth
 "CollectionsFieldHeight" = "Field length (m), horizontal:";  // ^String.Titles.collectionsFieldHeight
 "CollectionsTagsForMap" = "Tags for use with map";  // ^String.Titles.collectionsTagsForMap
+"CollectionsTagsCount" = "%d of %d";  // ^String.Titles.collectionsTagsCount
 "CollectionsGroupEmpty" = "Select a tag group or create a new one";  // ^String.Titles.collectionsGroupEmpty
 "CollectionsLabelGroupEmpty" = "Select a label group or create a new one";  // ^String.Titles.CollectionsLabelGroupEmpty
 "CollectionsTagEmpty" = "Select a tag or create a new one";  // ^String.Titles.collectionsTagEmpty
@@ -617,7 +618,7 @@
 "LabelsPrefix" = "Labels: %@"; // ^String.Titles.labelsPrefix
 "EventsNone" = "Events: no events"; // ^String.Titles.eventsNone
 "EventsPrefix" = "Events: %@"; // ^String.Titles.eventsPrefix
-"TimeAndMoment" = "Time: %@ / Moment: %@"; // ^String.Titles.timeAndMoment
+"TimeAndMoment" = "Duration: %@ / Time: %@"; // ^String.Titles.timeAndMoment
 "PlayTag" = "Play tag"; // ^String.Titles.playTag
 "RemoveFromOrganizer" = "Remove from organizer"; // ^String.Titles.removeFromOrganizer
 

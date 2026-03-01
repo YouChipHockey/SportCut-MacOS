@@ -90,6 +90,7 @@
 "CollectionsFieldWidth" = "Ancho del campo (m), vertical:";  // ^String.Titles.collectionsFieldWidth
 "CollectionsFieldHeight" = "Longitud del campo (m), horizontal:";  // ^String.Titles.collectionsFieldHeight
 "CollectionsTagsForMap" = "Etiquetas para usar con mapa";  // ^String.Titles.collectionsTagsForMap
+"CollectionsTagsCount" = "%d de %d";  // ^String.Titles.collectionsTagsCount
 "CollectionsGroupEmpty" = "Selecciona un grupo de etiquetas o crea uno nuevo";  // ^String.Titles.collectionsGroupEmpty
 "CollectionsLabelGroupEmpty" = "Selecciona un grupo de etiquetas o crea uno nuevo";  // ^String.Titles.CollectionsLabelGroupEmpty
 "CollectionsTagEmpty" = "Selecciona una etiqueta o crea una nueva";  // ^String.Titles.collectionsTagEmpty
@@ -617,7 +618,7 @@
 "LabelsPrefix" = "Etiquetas: %@"; // ^String.Titles.labelsPrefix
 "EventsNone" = "Eventos: sin eventos"; // ^String.Titles.eventsNone
 "EventsPrefix" = "Eventos: %@"; // ^String.Titles.eventsPrefix
-"TimeAndMoment" = "Tiempo: %@ / Momento: %@"; // ^String.Titles.timeAndMoment
+"TimeAndMoment" = "Duración: %@ / Tiempo: %@"; // ^String.Titles.timeAndMoment
 "PlayTag" = "Reproducir etiqueta"; // ^String.Titles.playTag
 "RemoveFromOrganizer" = "Eliminar del organizador"; // ^String.Titles.removeFromOrganizer
 

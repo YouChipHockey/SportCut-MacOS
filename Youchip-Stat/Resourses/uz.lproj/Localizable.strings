@@ -90,6 +90,7 @@
 "CollectionsFieldWidth" = "Maydon kengligi (m), vertikal:";  // ^String.Titles.collectionsFieldWidth
 "CollectionsFieldHeight" = "Maydon uzunligi (m), gorizontal:";  // ^String.Titles.collectionsFieldHeight
 "CollectionsTagsForMap" = "Xarita bilan ishlatish uchun teglar";  // ^String.Titles.collectionsTagsForMap
+"CollectionsTagsCount" = "%d / %d";  // ^String.Titles.collectionsTagsCount
 "CollectionsGroupEmpty" = "Teg guruhini tanlang yoki yangisini yarating";  // ^String.Titles.collectionsGroupEmpty
 "CollectionsLabelGroupEmpty" = "Yorliq guruhini tanlang yoki yangisini yarating";  // ^String.Titles.CollectionsLabelGroupEmpty
 "CollectionsTagEmpty" = "Tegni tanlang yoki yangisini yarating";  // ^String.Titles.collectionsTagEmpty
@@ -617,7 +618,7 @@
 "LabelsPrefix" = "Yorliqlar: %@"; // ^String.Titles.labelsPrefix
 "EventsNone" = "Voqealar: voqealar yo'q"; // ^String.Titles.eventsNone
 "EventsPrefix" = "Voqealar: %@"; // ^String.Titles.eventsPrefix
-"TimeAndMoment" = "Vaqt: %@ / Laqha: %@"; // ^String.Titles.timeAndMoment
+"TimeAndMoment" = "Davomiylik: %@ / Vaqt: %@"; // ^String.Titles.timeAndMoment
 "PlayTag" = "Tegni ijro etish"; // ^String.Titles.playTag
 "RemoveFromOrganizer" = "Organizerdan olib tashlash"; // ^String.Titles.removeFromOrganizer
 
