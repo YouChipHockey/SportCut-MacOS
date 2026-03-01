@@ -16,4 +16,8 @@ class URLConstants {
         return collectionFolderUrl
     }
     
+    static var siteHost: String {
+        Locale.current.identifier.hasPrefix("ru") ? "sportcut.youchip.pro" : "sportcut.pro"
+    }
+    
 }
