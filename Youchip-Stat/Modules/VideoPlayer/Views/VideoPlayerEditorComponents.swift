@@ -2725,6 +2725,7 @@ struct TextBoxView: View {
     var onEndEditing: (() -> Void)? = nil
     
     @State private var editText: String = ""
+    @FocusState private var editorFocused: Bool
     
     var body: some View {
         ZStack {
@@ -2746,6 +2747,7 @@ struct TextBoxView: View {
                         .font(.custom(textBox.fontName, size: textBox.fontSize))
                         .foregroundColor(textBox.textColor)
                         .multilineTextAlignment(.center)
+                        .focused($editorFocused)
                         .onChange(of: editText) { new in onTextChange(new) }
                 } else {
                     Text(textBox.text)
@@ -2778,8 +2780,19 @@ struct TextBoxView: View {
             }
         }
         .allowsHitTesting(isEditing) // когда не редактируем — хиты идут в Canvas (поворот по зелёной ручке, перемещение/выделение по области текстбокса)
+        .onAppear {
+            if isEditing {
+                editText = textBox.text
+                DispatchQueue.main.async { editorFocused = true }
+            }
+        }
         .onChange(of: isEditing) { editing in
-            if editing { editText = textBox.text }
+            if editing {
+                editText = textBox.text
+                DispatchQueue.main.async { editorFocused = true }
+            } else {
+                editorFocused = false
+            }
         }
     }
 }

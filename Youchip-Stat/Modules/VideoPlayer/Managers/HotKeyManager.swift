@@ -139,11 +139,6 @@ class HotKeyManager: ObservableObject {
             guard let self = self else { return event }
             // В режиме редактирования Enter = Done/Apply для телестрации, фигур и текстбоксов
             if self.isEditorModeActive, event.keyCode == 36, !self.isEditingTextBox {
-                let window = event.window ?? NSApp.keyWindow
-                if window?.firstResponder is NSTextView {
-                    window?.makeFirstResponder(nil)
-                    return nil
-                }
                 NotificationCenter.default.post(name: .editorEnterKeyPressed, object: nil)
                 return nil
             }

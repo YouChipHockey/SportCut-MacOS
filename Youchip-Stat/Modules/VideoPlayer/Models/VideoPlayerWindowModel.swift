@@ -1024,6 +1024,9 @@ class EditorDrawingState: ObservableObject {
         newTextBox.position = clampTextBoxPosition(newTextBox.position, size: newTextBox.size)
         pendingTextBox = newTextBox
         isCreatingTextBox = false
+        startTextBoxEditing()
+        isEditingTextBox = true
+        NotificationCenter.default.post(name: .textBoxEditingChanged, object: true)
     }
     
     /// Подгоняет размер текстового бокса под текст (с учётом шрифта, многострочности и отступов).
