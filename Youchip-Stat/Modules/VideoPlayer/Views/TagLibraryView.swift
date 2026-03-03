@@ -54,6 +54,8 @@ struct TagLibraryView: View {
     @State private var isEditorModeActive = false
     @State private var isLoadingCollections = false
     
+    @EnvironmentObject private var notificationSubscriptions: ProjectNotificationSubscriptions
+    
     struct ActiveIntervalTag: Identifiable {
         let id: String
         let tag: Tag
@@ -130,6 +132,7 @@ struct TagLibraryView: View {
                     .frame(height: 300)
             }
         }
+        .id(refreshID)
         .background(Color(.controlBackgroundColor))
         .sheet(isPresented: $showLabelSheet) {
             stampLabelSheet
@@ -772,8 +775,7 @@ struct TagLibraryView: View {
                     showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
                     return
                 } else {
-                    // Load playField asynchronously
-                    DispatchQueue.global(qos: .userInitiated).async { 
+                    DispatchQueue.global(qos: .userInitiated).async {
                         let collectionManager = CustomCollectionManager()
                         if collectionManager.loadCollectionFromBookmarks(named: collectionName),
                            let playField = collectionManager.playField,
@@ -782,11 +784,12 @@ struct TagLibraryView: View {
                                 self.cachedPlayField = (name: collectionName, playField: playField)
                                 self.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
                             }
-                            return
+                        } else {
+                            DispatchQueue.main.async {
+                                self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil)
+                            }
                         }
                     }
-                    // Fallback: proceed without field map
-                    proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil)
                     return
                 }
             }
@@ -1033,70 +1036,74 @@ struct TagLibraryView: View {
     }
     
     private func onAppearSetup() {
+        setupNotificationSubscriptions()
         loadUserCollections()
         backupDefaultData()
         restoreDefaultData()
         markupMode = MarkupMode.current
-        
         updateTagCounts()
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
-        
-        NotificationCenter.default.addObserver(forName: .markupModeChanged, object: nil, queue: .main) { notification in
-            if let newMode = notification.object as? MarkupMode {
-                self.markupMode = newMode
-            } else {
-                self.markupMode = MarkupMode.current
-            }
-        }
-        NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
-            let currentSelectedUserCollectionId = userCollections.first { $0.name == self.lastSelectedCollectionName}?.id
-            
-            let allCollectionsInfo = CollectionsBookmarksManager.shared.loadCollections()
-            self.userCollections = allCollectionsInfo.map { info in
-                CollectionBookmark(
-                    id: info.id,
-                    name: info.name,
-                    tagGroupsBookmark: Data(),
-                    tagsBookmark: Data(),
-                    labelGroupsBookmark: Data(),
-                    labelsBookmark: Data(),
-                    timeEventsBookmark: Data(),
-                    playFieldBookmark: nil
-                )
-            }
-            
-            if self.isUserCollectionActive, let currentSelectedUserCollectionId,
-               let updatedCollection = self.userCollections.first(where: { $0.id == currentSelectedUserCollectionId }) {
-                let oldName = self.lastSelectedCollectionName
-                let newName = updatedCollection.name
-                self.lastSelectedCollectionName = newName
-                
-                if oldName != newName {
-                    self.tagLibrary.currentCollectionType = .user(name: newName)
-                    UserDefaults.standard.set(newName, forKey: UserDefaults.Keys.lastSelectedCollection)
+    }
+    
+    private func setupNotificationSubscriptions() {
+        notificationSubscriptions.cancelAll()
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .markupModeChanged)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] notification in
+                    if let newMode = notification.object as? MarkupMode {
+                        markupMode = newMode
+                    } else {
+                        markupMode = MarkupMode.current
+                    }
                 }
-                
-                self.tagLibrary.invalidateCollectionCache(for: newName)
-                self.loadUserCollection(updatedCollection)
-            }
-        }
-        NotificationCenter.default.addObserver(forName: .showLabelSheet, object: nil, queue: .main) { notification in
-            if let tag = notification.object as? Tag {
-                if tag.isInterval ?? false {
-                    if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
-                        let activeTag = activeIntervalTags[index]
-                        let videoDuration = max(1.0, videoManager.timelineDuration)
-                        let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
-                        let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
-                        let timeStart = min(start, end)
-                        let timeFinish = max(start, end)
-                        
-                        selectedTag = tag
-                        showLabelSheet = false
-                        
-                        DispatchQueue.main.async {
+        )
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .collectionDataChanged)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] notification in
+                    let allCollectionsInfo = CollectionsBookmarksManager.shared.loadCollections()
+                    userCollections = allCollectionsInfo.map { info in
+                        CollectionBookmark(
+                            id: info.id, name: info.name,
+                            tagGroupsBookmark: Data(), tagsBookmark: Data(),
+                            labelGroupsBookmark: Data(), labelsBookmark: Data(),
+                            timeEventsBookmark: Data(), playFieldBookmark: nil
+                        )
+                    }
+                    let changedName = notification.userInfo?[Notification.Key.collectionName] as? String
+                    if changedName != nil {
+                        return
+                    }
+                    if isUserCollectionActive, let currentName = lastSelectedCollectionName,
+                       let updatedCollection = userCollections.first(where: { $0.name == currentName }) {
+                        lastSelectedCollectionName = updatedCollection.name
+                        tagLibrary.invalidateCollectionCache(for: updatedCollection.name)
+                        loadUserCollection(updatedCollection)
+                    }
+                }
+        )
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .currentCollectionRefreshed)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] _ in refreshID = UUID() }
+        )
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .showLabelSheet)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] notification in
+                    guard let tag = notification.object as? Tag else { return }
+                    if tag.isInterval ?? false {
+                        if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
+                            let activeTag = activeIntervalTags[index]
+                            let videoDuration = max(1.0, videoManager.videoDuration)
+                            let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
+                            let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
+                            let timeStart = min(start, end)
+                            let timeFinish = max(start, end)
+                            selectedTag = tag
+                            showLabelSheet = false
                             videoManager.player?.pause()
-                            // Optimize label check using Set for O(1) lookup
                             let labelGroupIdsSet = Set(tag.lablesGroup)
                             let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                             if hasLabels {
@@ -1105,61 +1112,59 @@ struct TagLibraryView: View {
                                 activeIntervalTags.remove(at: index)
                                 addTagToTimelineInterval(tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish, selectedLabels: [])
                             }
+                        } else {
+                            guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else { return }
+                            activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
                         }
-                    } else {
-                        guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else {
-                            return
-                        }
-                        activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
+                        return
                     }
-                    return
+                    selectedTag = tag
+                    videoManager.player?.pause()
+                    let labelGroupIdsSet = Set(tag.lablesGroup)
+                    let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
+                    if hasLabels {
+                        showLabelSheet = true
+                    } else {
+                        addTagToTimeline(tag: tag, selectedLabels: [])
+                    }
                 }
-                
-                selectedTag = tag
-                videoManager.player?.pause()
-                
-                // Optimize label check using Set for O(1) lookup - do it immediately
-                let labelGroupIdsSet = Set(tag.lablesGroup)
-                let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
-                
-                if hasLabels {
-                    // Show sheet immediately without delay
-                    showLabelSheet = true
-                } else {
-                    // No labels - add tag immediately without showing sheet
-                    addTagToTimeline(tag: tag, selectedLabels: [])
+        )
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .stampCountsChanged)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] _ in updateTagCounts() }
+        )
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .editorModeChanged)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] notification in
+                    if let isActive = notification.object as? Bool {
+                        isEditorModeActive = isActive
+                    }
                 }
-            }
-        }
-        NotificationCenter.default.addObserver(forName: .stampCountsChanged, object: nil, queue: .main) { _ in
-            DispatchQueue.main.async {
-                self.updateTagCounts()
-            }
-        }
-        NotificationCenter.default.addObserver(forName: .editorModeChanged, object: nil, queue: .main) { notification in
-            if let isActive = notification.object as? Bool {
-                self.isEditorModeActive = isActive
-            }
-        }
-        NotificationCenter.default.addObserver(forName: .collectionsLoadingStarted, object: nil, queue: .main) { _ in
-            self.isLoadingCollections = true
-        }
-        NotificationCenter.default.addObserver(forName: .collectionsLoadingFinished, object: nil, queue: .main) { _ in
-            self.isLoadingCollections = false
-        }
+        )
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .collectionsLoadingStarted)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] _ in isLoadingCollections = true }
+        )
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .collectionsLoadingFinished)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] _ in
+                    isLoadingCollections = false
+                    if isUserCollectionActive, let currentName = lastSelectedCollectionName,
+                       let collection = userCollections.first(where: { $0.name == currentName }) {
+                        loadUserCollection(collection)
+                        refreshID = UUID()
+                    }
+                }
+        )
     }
-    
     
     private func onDisappearCleanup() {
         updateTimer?.invalidate()
         updateTimer = nil
-        NotificationCenter.default.removeObserver(self, name: .collectionDataChanged, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .showLabelSheet, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .markupModeChanged, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .stampCountsChanged, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .editorModeChanged, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .collectionsLoadingStarted, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .collectionsLoadingFinished, object: nil)
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {
@@ -1177,11 +1182,11 @@ struct TagLibraryView: View {
             HotKeyManager.shared.registerHotkeys(from: cachedData.tags, for: .user(name: collection.name))
             UserDefaults.standard.set(collection.name, forKey: UserDefaults.Keys.lastSelectedCollection)
             
-            // Cache playField if available
             cachePlayFieldForCollection(collection.name)
             
             updateTagCounts()
             expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
+            tagLibrary.objectWillChange.send()
         } else {
             // Load asynchronously if not cached
             DispatchQueue.global(qos: .userInitiated).async {
@@ -1204,9 +1209,9 @@ struct TagLibraryView: View {
                             self.cachedPlayField = (name: collection.name, playField: playField)
                         }
                         
-                        // Update UI without changing refreshID to preserve scroll position
                         self.updateTagCounts()
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+                        self.tagLibrary.objectWillChange.send()
                     }
                 } else {
                     DispatchQueue.main.async {
@@ -1318,7 +1323,6 @@ struct TagLibraryView: View {
                     showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
                     return
                 } else {
-                    // Load playField asynchronously
                     DispatchQueue.global(qos: .userInitiated).async {
                         let collectionManager = CustomCollectionManager()
                         if collectionManager.loadCollectionFromBookmarks(named: collectionName),
@@ -1328,11 +1332,12 @@ struct TagLibraryView: View {
                                 self.cachedPlayField = (name: collectionName, playField: playField)
                                 self.showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
                             }
-                            return
+                        } else {
+                            DispatchQueue.main.async {
+                                self.proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
+                            }
                         }
                     }
-                    // Fallback: proceed without field map
-                    proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
                     return
                 }
             }

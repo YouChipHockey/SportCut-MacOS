@@ -500,11 +500,7 @@ struct TimelineLineView: View {
         // 1. Быть связан со скриншотом (через relatedStampIds)
         // 2. Находиться на специальном таймлайне для рисунков
         // 3. Иметь имя, совпадающее с именем скриншота
-        let isDrawingsTimeline = line.name.lowercased().contains("рисунок") ||
-                                 line.name.lowercased().contains("рисунки") ||
-                                 line.name.lowercased().contains("скриншот") ||
-                                 line.name.lowercased().contains("screenshot") ||
-                                 line.name.lowercased().contains("drawing")
+        let isDrawingsTimeline = line.isDrawingsTimeline
         
         let isScreenshotTag = isDrawingsTimeline && ScreenshotsMetadataManager.shared.screenshots.contains { screenshot in
             screenshot.relatedStampIds.contains(stamp.id) &&

@@ -16,4 +16,9 @@ class URLConstants {
         return collectionFolderUrl
     }
     
+    static var siteHost: String {
+        let currentLocale = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+        return currentLocale.hasPrefix("ru") ? "sportcut.youchip.pro" : "sportcut.pro"
+    }
+    
 }

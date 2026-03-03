@@ -22,7 +22,7 @@ struct AuthKeyView: View {
                 
                 Spacer()
                 
-                Link(destination: URL(string: "https://sportcut.youchip.pro/mac-pay")!) {
+                Link(destination: URL(string: "https://\(URLConstants.siteHost)/mac-pay")!) {
                     Text(^String.Titles.buyLicense)
                         .foregroundColor(.blue)
                         .font(.system(size: 12))

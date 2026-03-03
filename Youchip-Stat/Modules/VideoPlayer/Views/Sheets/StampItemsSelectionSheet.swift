@@ -39,6 +39,10 @@ struct StampItemsSelectionSheet: View {
         }
     }
     
+    private var maxSheetContentHeight: CGFloat {
+        (NSScreen.main?.visibleFrame.height ?? 600) * 0.75
+    }
+    
     private let timeEvents: [TimeEvent]
     
     init(sheetType: StampEditSheetType, stampName: String, initialIds: [String], tag: Tag?, tagLibrary: TagLibraryManager, isDop: Bool = false, onDone: @escaping ([String]) -> Void, onCancel: @escaping () -> Void) {
@@ -102,6 +106,8 @@ struct StampItemsSelectionSheet: View {
                     stackForTimeEventsLayout()
                 }
             }
+            .frame(maxHeight: maxSheetContentHeight)
+            
             HStack {
                 Spacer()
                 Button(^String.Titles.collectionsButtonCancel) {
@@ -115,6 +121,7 @@ struct StampItemsSelectionSheet: View {
         }
         .padding()
         .frame(minWidth: 400, minHeight: isDop ? 0 : 400)
+        .fixedSize(horizontal: false, vertical: true)
         .onAppear {
             selectedItems = Set(initialIds)
             setupLabelHotkeys()

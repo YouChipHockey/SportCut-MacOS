@@ -28,7 +28,7 @@ class WindowsManager: NSObject {
             return
         }
         
-        let screenshotsLine = TimelineLine(id: screenshotsID, name: "Рисунки", stamps: [], tagIdForMode: "")
+        let screenshotsLine = TimelineLine(id: screenshotsID, name: ScreenshotConstants.screenshotsGroupName, stamps: [], tagIdForMode: "")
         timelineData.lines.insert(screenshotsLine, at: 0)
         timelineData.updateTimelines()
     }
@@ -68,6 +68,8 @@ class WindowsManager: NSObject {
     }
     
     func closeAll() {
+        tagLibraryWindow?.cancelNotificationSubscriptions()
+        
         videoWindow?.window?.delegate = nil
         controlWindow?.window?.delegate = nil
         tagLibraryWindow?.window?.delegate = nil
@@ -93,6 +95,9 @@ class WindowsManager: NSObject {
         reviewVideoWindow = nil
         
         ScreenshotsMetadataManager.shared.clearScreenshots()
+        
+        HotKeyManager.shared.clearHotkeys()
+        HotKeyManager.shared.suspendKeyboardMonitoring()
         
         // If this was a live session, finalize the recording and import the video
         if isLiveSession {
@@ -442,6 +447,8 @@ class WindowsManager: NSObject {
         
         VideoPlayerManager.shared.loadVideo(from: file)
         
+        HotKeyManager.shared.resumeKeyboardMonitoring()
+        
         videoWindow = VideoPlayerWindowController(id: id)
         controlWindow = FullControlWindowController()
         tagLibraryWindow = TagLibraryWindowController()
@@ -541,7 +548,7 @@ class WindowsManager: NSObject {
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
-        window.title = "ИИ Отчет: \(teamName) vs \(opponentName)"
+        window.title = String.Titles.aiReportTitle.format(teamName, opponentName)
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         
         if let screen = NSScreen.main {
@@ -644,5 +651,14 @@ class ActiveWindowManager {
     
     func isViewerWindowActive() -> Bool {
         return currentActiveWindow?.windowController == WindowsManager.shared.viewerWindow
+    }
+    
+    /// Проверяет, является ли активное окно окном разметчика (VideoPlayerWindowController, FullControlWindowController или TagLibraryWindowController)
+    func isMarkerWindowActive() -> Bool {
+        guard let activeWindow = currentActiveWindow else { return false }
+        let windowsManager = WindowsManager.shared
+        return activeWindow.windowController === windowsManager.videoWindow || 
+               activeWindow.windowController === windowsManager.controlWindow ||
+               activeWindow.windowController === windowsManager.tagLibraryWindow
     }
 }

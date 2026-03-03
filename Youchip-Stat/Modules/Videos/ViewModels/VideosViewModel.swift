@@ -204,7 +204,7 @@ class VideosViewModel: ObservableObject {
         case .downloadFiles:
             cloudFilesHelper.downloadFiles()
         case .openGuide:
-            let url = URL(string: "https://sportcut.youchip.pro/guides")!
+            let url = URL(string: "https://\(URLConstants.siteHost)/guides")!
             NSWorkspace.shared.open(url)
         case let .importFile(file):
             break

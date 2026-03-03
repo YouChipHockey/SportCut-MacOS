@@ -9,11 +9,16 @@ import SwiftUI
 
 struct VideoThumbnailView: View {
     let file: FilesFile
-    let id: String
-    let viewModel: VideosViewModel
+    @ObservedObject var viewModel: VideosViewModel
     
     @State private var isHovered = false
-    @State private var isFavorite: Bool = false
+    
+    private var isFavorite: Bool {
+        file.videoData.isFavorite ?? false
+    }
+    private var id: String {
+        file.videoData.id
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -163,12 +168,6 @@ struct VideoThumbnailView: View {
             .contextMenu {
                 contextMenuContent
             }
-            .onAppear {
-                updateFavoriteState()
-            }
-            .onChange(of: viewModel.state.files) { _ in
-                updateFavoriteState()
-            }
         }
     }
     
@@ -246,19 +245,6 @@ struct VideoThumbnailView: View {
         }
     }
     
-    private func updateFavoriteState() {
-        if let updatedFile = viewModel.state.files.first(where: { $0.id == file.id }) {
-            let newFavoriteState = viewModel.filesManager.isFavorite(updatedFile)
-            if isFavorite != newFavoriteState {
-                isFavorite = newFavoriteState
-            }
-        } else {
-            let newFavoriteState = viewModel.filesManager.isFavorite(file)
-            if isFavorite != newFavoriteState {
-                isFavorite = newFavoriteState
-            }
-        }
-    }
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()

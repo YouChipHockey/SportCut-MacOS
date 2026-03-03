@@ -33,6 +33,12 @@ class AuthManager: ObservableObject {
     }
     
     func checkAuthStatus() {
+        
+        if AppConfig.isDebug {
+            isAuthValid = true
+            return;
+        }
+
         if UserDefaults.standard.string(forKey: deviceIDKey) == nil {
             let deviceID = UUID().uuidString
             UserDefaults.standard.set(deviceID, forKey: deviceIDKey)

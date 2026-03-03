@@ -103,7 +103,7 @@ struct FullControlView: View {
     @State private var showEventSelectionSheet: Bool = false
     @State private var showAiReportSheet: Bool = false
     @State private var showSimpleReportSheet: Bool = false
-    @State private var exportWithScreenshots: Bool = false
+    @State private var exportWithDrawings: Bool = false
     
     @State private var showLabelSelectionSheet: Bool = false
     @State private var showMultiLabelSelectionSheet: Bool = false
@@ -573,8 +573,10 @@ struct FullControlView: View {
             match_date: matchDate
         )
         
-        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-interactive-report") else {
-            print("Invalid URL")
+        let appLocale = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+        let locale = appLocale.hasPrefix("ru") ? "ru" : "en"
+        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-interactive-report?locale=\(locale)") else {
+            print("FullControlView: Invalid URL for generate-interactive-report")
             return
         }
         
@@ -594,13 +596,13 @@ struct FullControlView: View {
                     self.isExporting = false
                     
                     if let error = error {
-                        self.errorMessage = "Ошибка генерации AI отчета: \(error.localizedDescription)"
+                        self.errorMessage = String.Titles.fullControlAiReportErrorGeneration.format(error.localizedDescription)
                         self.showErrorAlert = true
                         return
                     }
                     
                     guard let data = data, let httpResponse = response as? HTTPURLResponse else {
-                        self.errorMessage = "Ошибка: нет данных от сервера"
+                        self.errorMessage = ^String.Titles.fullControlErrorNoServerData
                         self.showErrorAlert = true
                         return
                     }
@@ -608,7 +610,7 @@ struct FullControlView: View {
                     if httpResponse.statusCode == 200 {
                         self.showHtmlReportInWebView(data: data, teamName: teamName, opponentName: opponentName)
                     } else {
-                        var errorMsg = "Ошибка сервера: \(httpResponse.statusCode)"
+                        var errorMsg = String.Titles.fullControlErrorServer.format(String(httpResponse.statusCode))
                         if let responseString = String(data: data, encoding: .utf8) {
                             errorMsg += "\n\(responseString)"
                         }
@@ -620,7 +622,7 @@ struct FullControlView: View {
         } catch {
             DispatchQueue.main.async {
                 self.isExporting = false
-                self.errorMessage = "Ошибка кодирования запроса: \(error.localizedDescription)"
+                self.errorMessage = String.Titles.fullControlErrorEncodingRequest.format(error.localizedDescription)
                 self.showErrorAlert = true
             }
         }
@@ -649,8 +651,10 @@ struct FullControlView: View {
             match_date: matchDate
         )
         
-        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-match-report") else {
-            print("Invalid URL")
+        let appLocale = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+        let locale = appLocale.hasPrefix("ru") ? "ru" : "en"
+        guard let url = URL(string: "https://razmetka.youchip.pro/api/generate-match-report?locale=\(locale)") else {
+            print("FullControlView: Invalid URL for generate-match-report")
             return
         }
         
@@ -670,13 +674,13 @@ struct FullControlView: View {
                     self.isExporting = false
                     
                     if let error = error {
-                        self.errorMessage = "Ошибка генерации простого отчета: \(error.localizedDescription)"
+                        self.errorMessage = String.Titles.fullControlSimpleReportErrorGeneration.format(error.localizedDescription)
                         self.showErrorAlert = true
                         return
                     }
                     
                     guard let data = data, let httpResponse = response as? HTTPURLResponse else {
-                        self.errorMessage = "Ошибка: нет данных от сервера"
+                        self.errorMessage = ^String.Titles.fullControlErrorNoServerData
                         self.showErrorAlert = true
                         return
                     }
@@ -684,7 +688,7 @@ struct FullControlView: View {
                     if httpResponse.statusCode == 200 {
                         self.saveReportFile(data: data, teamName: teamName, opponentName: opponentName)
                     } else {
-                        var errorMsg = "Ошибка сервера: \(httpResponse.statusCode)"
+                        var errorMsg = String.Titles.fullControlErrorServer.format(String(httpResponse.statusCode))
                         if let responseString = String(data: data, encoding: .utf8) {
                             errorMsg += "\n\(responseString)"
                         }
@@ -696,7 +700,7 @@ struct FullControlView: View {
         } catch {
             DispatchQueue.main.async {
                 self.isExporting = false
-                self.errorMessage = "Ошибка кодирования запроса: \(error.localizedDescription)"
+                self.errorMessage = String.Titles.fullControlErrorEncodingRequest.format(error.localizedDescription)
                 self.showErrorAlert = true
             }
         }
@@ -704,7 +708,7 @@ struct FullControlView: View {
     
     func showHtmlReportInWebView(data: Data, teamName: String, opponentName: String) {
         guard let htmlString = String(data: data, encoding: .utf8) else {
-            errorMessage = "Ошибка: не удалось преобразовать данные в HTML"
+            errorMessage = ^String.Titles.fullControlErrorDataToHtml
             showErrorAlert = true
             return
         }
@@ -719,13 +723,13 @@ struct FullControlView: View {
     func saveReportFile(data: Data, teamName: String, opponentName: String) {
         let panel = NSSavePanel()
         panel.allowedFileTypes = ["pdf"]
-        panel.nameFieldStringValue = "ИИ_Отчет_\(teamName)_vs_\(opponentName).pdf"
+        panel.nameFieldStringValue = String.Titles.aiReportFileNameFormat.format(teamName, opponentName)
         
         if panel.runModal() == .OK, let url = panel.url {
             do {
                 try data.write(to: url)
             } catch {
-                errorMessage = "Ошибка сохранения отчета: \(error.localizedDescription)"
+                errorMessage = String.Titles.aiReportSaveError.format(error.localizedDescription)
                 showErrorAlert = true
             }
         }
@@ -790,7 +794,11 @@ struct FullControlView: View {
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .help("Пересмотр — анализ записи с возможностью разметки")
+                        .disabled(liveStreamManager.reviewFileVersion == 0)
+                        .opacity(liveStreamManager.reviewFileVersion == 0 ? 0.35 : 1.0)
+                        .help(liveStreamManager.reviewFileVersion == 0
+                              ? "Пересмотр станет доступен после первой записи сегмента (~5 сек)"
+                              : "Пересмотр — анализ записи с возможностью разметки")
                     }
                 }
                 .padding(.horizontal, 12)
@@ -858,7 +866,7 @@ struct FullControlView: View {
                                     HStack(spacing: 2) {
                                         Image(systemName: "list.bullet")
                                             .font(.system(size: 10))
-                                        Text("Standard")
+                                        Text(^String.Titles.fullControlLabelStandard)
                                             .font(.system(size: 10, weight: .medium))
                                     }
                                     .padding(.horizontal, 8)
@@ -875,7 +883,7 @@ struct FullControlView: View {
                                     HStack(spacing: 2) {
                                         Image(systemName: "tag")
                                             .font(.system(size: 10))
-                                        Text("Tags")
+                                        Text(^String.Titles.tags)
                                             .font(.system(size: 10, weight: .medium))
                                     }
                                     .padding(.horizontal, 8)
@@ -891,7 +899,7 @@ struct FullControlView: View {
                         }
                         
                         HStack(spacing: 4) {
-                            Text("Zoom")
+                            Text(^String.Titles.fullControlLabelZoom)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.secondary)
                             
@@ -941,7 +949,7 @@ struct FullControlView: View {
                                 HStack(spacing: 2) {
                                     Image(systemName: "list.bullet")
                                         .font(.system(size: 10))
-                                    Text("Standard")
+                                    Text(^String.Titles.fullControlLabelStandard)
                                         .font(.system(size: 10, weight: .medium))
                                 }
                                 .padding(.horizontal, 8)
@@ -958,7 +966,7 @@ struct FullControlView: View {
                                 HStack(spacing: 2) {
                                     Image(systemName: "tag")
                                         .font(.system(size: 10))
-                                    Text("Tags")
+                                    Text(^String.Titles.tags)
                                         .font(.system(size: 10, weight: .medium))
                                 }
                                 .padding(.horizontal, 8)
@@ -972,7 +980,7 @@ struct FullControlView: View {
                         .help(^String.Titles.fullControlModeHelp)
                         
                         HStack(spacing: 4) {
-                            Text("Zoom")
+                            Text(^String.Titles.fullControlLabelZoom)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.secondary)
                             
@@ -1026,7 +1034,7 @@ struct FullControlView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "doc.text")
                                         .font(.system(size: 12, weight: .medium))
-                                    Text("JSON")
+                                    Text(^String.Titles.fullControlMenuJSON)
                                         .font(.system(size: 10, weight: .medium))
                                     Image(systemName: "chevron.down")
                                         .font(.system(size: 8))
@@ -1065,7 +1073,7 @@ struct FullControlView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "video")
                                         .font(.system(size: 12, weight: .medium))
-                                    Text("Export")
+                                    Text(^String.Titles.export)
                                         .font(.system(size: 10, weight: .medium))
                                     Image(systemName: "chevron.down")
                                         .font(.system(size: 8))
@@ -1111,7 +1119,7 @@ struct FullControlView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "doc.text")
                                     .font(.system(size: 12, weight: .medium))
-                                Text("JSON")
+                                Text(^String.Titles.fullControlMenuJSON)
                                     .font(.system(size: 10, weight: .medium))
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 8))
@@ -1150,7 +1158,7 @@ struct FullControlView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "video")
                                     .font(.system(size: 12, weight: .medium))
-                                Text("Export")
+                                Text(^String.Titles.export)
                                     .font(.system(size: 10, weight: .medium))
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 8))
@@ -1205,21 +1213,14 @@ struct FullControlView: View {
                         }
                         
                         HStack(spacing: 8) {
-                            Menu {
-                                Button(^String.Titles.configureVisualization) {
-                                    WindowsManager.shared.showFieldMapConfigurationWindow()
-                                }
-                                Button(^String.Titles.fullControlButtonMap) {
-                                    WindowsManager.shared.showFieldMapVisualizationPicker()
-                                }
+                            Button {
+                                WindowsManager.shared.showFieldMapVisualizationPicker()
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "map")
                                         .font(.system(size: 12, weight: .medium))
                                     Text(^String.Titles.map)
                                         .font(.system(size: 10, weight: .medium))
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 8))
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 6)
@@ -1238,21 +1239,14 @@ struct FullControlView: View {
                         }
                         .buttonStyle(CompactButtonStyle(icon: "camera", color: .teal, showText: true, text: ^String.Titles.screenshots))
                         
-                        Menu {
-                            Button(^String.Titles.configureVisualization) {
-                                WindowsManager.shared.showFieldMapConfigurationWindow()
-                            }
-                            Button(^String.Titles.fullControlButtonMap) {
-                                WindowsManager.shared.showFieldMapVisualizationPicker()
-                            }
+                        Button {
+                            WindowsManager.shared.showFieldMapVisualizationPicker()
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "map")
                                     .font(.system(size: 12, weight: .medium))
                                 Text(^String.Titles.map)
                                     .font(.system(size: 10, weight: .medium))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 8))
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
@@ -1280,12 +1274,12 @@ struct FullControlView: View {
             let data = try encoder.encode(timelineData.lines)
             let panel = NSSavePanel()
             panel.allowedFileTypes = ["json"]
-            panel.nameFieldStringValue = "timelines_simple.json"
+            panel.nameFieldStringValue = ^String.Titles.fullControlExportSimpleJsonFileName
             if panel.runModal() == .OK, let url = panel.url {
                 try data.write(to: url)
             }
         } catch {
-            errorMessage = "Ошибка сохранения JSON: \(error.localizedDescription)"
+            errorMessage = String.Titles.fullControlExportJsonSaveError.format(error.localizedDescription)
             showErrorAlert = true
         }
     }
@@ -1299,12 +1293,12 @@ struct FullControlView: View {
             let data = try encoder.encode(wrapper)
             let panel = NSSavePanel()
             panel.allowedFileTypes = ["json"]
-            panel.nameFieldStringValue = "timelines_full.json"
+            panel.nameFieldStringValue = ^String.Titles.fullControlExportFullJsonFileName
             if panel.runModal() == .OK, let url = panel.url {
                 try data.write(to: url)
             }
         } catch {
-            errorMessage = "Ошибка сохранения полного JSON: \(error.localizedDescription)"
+            errorMessage = String.Titles.fullControlExportFullJsonSaveError.format(error.localizedDescription)
             showErrorAlert = true
         }
     }
@@ -1454,7 +1448,7 @@ struct FullControlView: View {
             ExportModeSelectionSheet(
                 onSelect: { mode in
                     isExporting = true
-                    exportHelper.performExport(selectedExportType: selectedExportType, mode: mode, withScreenshots: exportWithScreenshots) { error in
+                    exportHelper.performExport(selectedExportType: selectedExportType, mode: mode, withScreenshots: exportWithDrawings) { error in
                         isExporting = false
                         showExportModeSheet = false
                         if let error {
@@ -1463,7 +1457,7 @@ struct FullControlView: View {
                         }
                     }
                 },
-                exportWithScreenshots: $exportWithScreenshots
+                exportWithDrawings: $exportWithDrawings
             )
         }
         .sheet(isPresented: $showLabelSelectionSheet) {
@@ -1564,9 +1558,9 @@ struct FullControlView: View {
         }
         .alert(isPresented: $showErrorAlert) {
             Alert(
-                title: Text("Ошибка"),
+                title: Text(^String.Titles.alertsErrorTitle),
                 message: Text(errorMessage),
-                dismissButton: .default(Text("OK"))
+                dismissButton: .default(Text(^String.Titles.alertsOkTitle))
             )
         }
     }
@@ -2319,22 +2313,22 @@ struct ScreenshotMarkersView: View {
                     .foregroundColor(hasRelatedTags ? Color.blue.opacity(0.7) : Color.gray.opacity(0.6))
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Перейти к скриншоту: \(formatTime(screenshot.videoTime))")
+            .help(String.Titles.fullControlScreenshotGoToHelp.format(formatTime(screenshot.videoTime)))
             .padding(.bottom, 2)
             .contextMenu {
-                Button("Редактировать") {
+                Button(^String.Titles.fullControlEdit) {
                     openScreenshotInEditor(screenshot)
                 }
                 
                 let availableStamps = getAvailableStampsForScreenshot(screenshot)
                 if !availableStamps.isEmpty {
-                    Button("Редактировать привязанные теги") {
+                    Button(^String.Titles.fullControlEditBoundTags) {
                         editingScreenshot = screenshot
                         showScreenshotTagEditor = true
                     }
                 }
                 
-                Button("Удалить") {
+                Button(^String.Titles.deleteButtonTitle) {
                     deleteScreenshot(screenshot)
                 }
             }
@@ -2361,7 +2355,7 @@ struct ScreenshotMarkersView: View {
     
     private func screenshotTagsPopover(for screenshot: ScreenshotMetadata) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Связанные теги")
+            Text(^String.Titles.relatedTags)
                 .font(.headline)
                 .padding(.bottom, 4)
             
@@ -2409,14 +2403,7 @@ struct ScreenshotMarkersView: View {
         var availableStamps: [(line: TimelineLine, stamp: TimelineStamp)] = []
         
         for line in timelineData.lines {
-            // Исключаем таймлайн "Рисунки" (ранее "скриншоты")
-            if line.name.lowercased().contains("рисунок") || 
-               line.name.lowercased().contains("рисунки") ||
-               line.name.lowercased().contains("скриншот") || 
-               line.name.lowercased().contains("screenshot") ||
-               line.name.lowercased().contains("drawing") {
-                continue
-            }
+            if line.isDrawingsTimeline { continue }
             
             for stamp in line.stamps {
                 let screenshotTime = screenshot.videoTime
@@ -2431,7 +2418,7 @@ struct ScreenshotMarkersView: View {
     
     private func deleteScreenshot(_ screenshot: ScreenshotMetadata) {
         guard let screenshotsFolder = getCurrentScreenshotsFolder() else {
-            print("❌ Не найдена папка скриншотов для удаления")
+            print("FullControlView: screenshots folder not found for deletion")
             return
         }
         let imageFileName = screenshot.screenshotName.hasSuffix(".png") ? screenshot.screenshotName : "\(screenshot.screenshotName).png"
@@ -2441,30 +2428,28 @@ struct ScreenshotMarkersView: View {
         do {
             if FileManager.default.fileExists(atPath: imageURL.path) {
                 try FileManager.default.removeItem(at: imageURL)
-                print("✅ Удален файл изображения: \(imageFileName)")
+                print("FullControlView: Removed image file: \(imageFileName)")
             }
             
             if FileManager.default.fileExists(atPath: jsonURL.path) {
                 try FileManager.default.removeItem(at: jsonURL)
-                print("✅ Удален файл метаданных: \(screenshot.screenshotName).json")
+                print("FullControlView: Removed metadata file: \(screenshot.screenshotName).json")
             }
         } catch {
-            print("❌ Ошибка удаления файлов скриншота: \(error.localizedDescription)")
+            print("FullControlView: Error deleting screenshot files: \(error.localizedDescription)")
             return
         }
         
-        // Удаляем штамп с таймлайна "скриншоты"
         deleteScreenshotStampFromTimeline(screenshotName: screenshot.screenshotName)
         
-        // Удаляем из менеджера
         screenshotsManager.removeScreenshot(screenshotName: screenshot.screenshotName)
     }
     
-    /// Перематывает видео на момент скриншота и открывает редактор с восстановлением состояния из метаданных (все объекты снова редактируемые).
+    /// Seeks video to screenshot time and opens editor with state restored from metadata (all objects editable again).
     private func openScreenshotInEditor(_ screenshot: ScreenshotMetadata) {
         guard let screenshotsFolder = getCurrentScreenshotsFolder(),
               let videoId = getCurrentVideoId() else {
-            print("❌ Не найдена папка скриншотов или videoId для открытия редактора")
+            print("FullControlView: screenshots folder or videoId not found for opening editor")
             return
         }
         let payload = OpenEditorForScreenshotPayload(
@@ -2476,41 +2461,31 @@ struct ScreenshotMarkersView: View {
     }
     
     private func deleteScreenshotStampFromTimeline(screenshotName: String) {
-        // Ищем таймлайн "Рисунки" (ранее "скриншоты")
-        guard let screenshotLine = timelineData.lines.first(where: { line in
-            line.name.lowercased().contains("рисунок") || 
-            line.name.lowercased().contains("рисунки") ||
-            line.name.lowercased().contains("скриншот") || 
-            line.name.lowercased().contains("screenshot") ||
-            line.name.lowercased().contains("drawing")
-        }) else {
-            print("ℹ️ Таймлайн рисунков не найден")
+        guard let screenshotLine = timelineData.lines.first(where: { $0.isDrawingsTimeline }) else {
+            print("FullControlView: Drawings timeline not found")
             return
         }
         
-        // Проверяем, существует ли файл скриншота (если файл удален, значит можно удалять штамп)
         guard let screenshotsFolder = getCurrentScreenshotsFolder() else {
-            print("❌ Не найдена папка скриншотов для проверки")
+            print("FullControlView: screenshots folder not found for stamp check")
             return
         }
         let imageFileName = screenshotName.hasSuffix(".png") ? screenshotName : "\(screenshotName).png"
         let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
         
-        // Если файл скриншота не существует, удаляем штамп с таймлайна
         if !FileManager.default.fileExists(atPath: imageURL.path) {
-            // Ищем штамп с именем, совпадающим с именем скриншота
             if let stamp = screenshotLine.stamps.first(where: { stamp in
                 stamp.label == screenshotName || stamp.label.contains(screenshotName)
             }) {
                 let stampID = stamp.id
                 let stampLabel = stamp.label
                 timelineData.removeStamp(lineID: screenshotLine.id, stampID: stampID)
-                print("✅ Удален штамп '\(stampLabel)' с таймлайна скриншотов (файл не существует)")
+                print("FullControlView: Removed stamp '\(stampLabel)' from drawings timeline (file does not exist)")
             } else {
-                print("ℹ️ Штамп с именем '\(screenshotName)' не найден на таймлайне скриншотов")
+                print("FullControlView: Stamp named '\(screenshotName)' not found on drawings timeline")
             }
         } else {
-            print("ℹ️ Файл скриншота '\(screenshotName)' существует, штамп не удаляется")
+            print("FullControlView: Screenshot file '\(screenshotName)' exists, stamp not removed")
         }
     }
     
@@ -2541,19 +2516,11 @@ struct ScreenshotTagEditorSheet: View {
         _selectedStampIds = State(initialValue: Set(screenshot.relatedStampIds))
     }
     
-    // Вычисляем доступные штампы динамически
     private var availableStamps: [(line: TimelineLine, stamp: TimelineStamp)] {
         var stamps: [(line: TimelineLine, stamp: TimelineStamp)] = []
         
         for line in timelineData.lines {
-            // Исключаем таймлайн "Рисунки"
-            if line.name.lowercased().contains("рисунок") || 
-               line.name.lowercased().contains("рисунки") ||
-               line.name.lowercased().contains("скриншот") || 
-               line.name.lowercased().contains("screenshot") ||
-               line.name.lowercased().contains("drawing") {
-                continue
-            }
+            if line.isDrawingsTimeline { continue }
             
             for stamp in line.stamps {
                 // Проверяем пересечение времени
@@ -2569,18 +2536,18 @@ struct ScreenshotTagEditorSheet: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            Text("Редактирование привязанных тегов")
+            Text(^String.Titles.fullControlEditBoundTagsTitle)
                 .font(.headline)
                 .padding(.top)
             
-            Text("Скриншот: \(formatTime(screenshot.videoTime))")
+            Text(String.Titles.fullControlScreenshotLabel.format(formatTime(screenshot.videoTime)))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
             Divider()
             
             if availableStamps.isEmpty {
-                Text("Нет доступных тегов для привязки")
+                Text(^String.Titles.fullControlNoTagsForBinding)
                     .foregroundColor(.secondary)
                     .padding()
             } else {
@@ -2611,7 +2578,7 @@ struct ScreenshotTagEditorSheet: View {
                                         }
                                     }
                                     
-                                    Text("Таймлайн: \(line.name)")
+                                    Text(String.Titles.fullControlTimelineLabel.format(line.name))
                                         .font(.system(size: 11))
                                         .foregroundColor(.secondary)
                                     
@@ -2645,14 +2612,14 @@ struct ScreenshotTagEditorSheet: View {
             Divider()
             
             HStack(spacing: 12) {
-                Button("Отмена") {
+                Button(^String.Titles.collectionsButtonCancel) {
                     onCancel()
                 }
                 .keyboardShortcut(.escape, modifiers: [])
                 
                 Spacer()
                 
-                Button("Сохранить") {
+                Button(^String.Titles.saveButtonTitle) {
                     onSave(Array(selectedStampIds))
                 }
                 .keyboardShortcut(.return, modifiers: [])

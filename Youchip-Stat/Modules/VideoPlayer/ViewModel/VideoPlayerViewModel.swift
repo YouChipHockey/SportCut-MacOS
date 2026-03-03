@@ -1137,7 +1137,7 @@ class VideoPlayerViewModel: ObservableObject {
             return existingLine.id
         }
         
-        let screenshotsLine = TimelineLine(id: screenshotsID, name: "Рисунки", stamps: [], tagIdForMode: "")
+        let screenshotsLine = TimelineLine(id: screenshotsID, name: ScreenshotConstants.screenshotsGroupName, stamps: [], tagIdForMode: "")
         timelineData.lines.insert(screenshotsLine, at: 0)
         timelineData.updateTimelines()
         

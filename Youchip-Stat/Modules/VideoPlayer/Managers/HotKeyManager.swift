@@ -15,7 +15,6 @@ class HotKeyManager: ObservableObject {
     static let shared = HotKeyManager()
     
     private var localMonitorForKeyEvents: Any?
-    private var globalMonitorForKeyEvents: Any?
     var registeredHotkeys: [String: Tag] = [:]
     var registeredLabelHotkeys: [String: (labelId: String, tagId: String)] = [:]
     
@@ -158,9 +157,11 @@ class HotKeyManager: ObservableObject {
                     return nil
                 }
             }
-            // Когда в фокусе окно таймлайна, библиотеки тегов или пересмотра — пробел всегда play/pause
+            // Когда в фокусе окно таймлайна, библиотеки тегов или пересмотра — пробел всегда play/pause.
+            // Работает только на экране разметчика (или когда активно окно пересмотра в рамках лайв-сессии).
             if event.keyCode == 49,
-               (WindowsManager.shared.isControlOrTagLibraryWindowKey() || WindowsManager.shared.isReviewWindowKey()),
+               (WindowsManager.shared.isControlOrTagLibraryWindowKey() && ActiveWindowManager.shared.isMarkerWindowActive())
+                   || WindowsManager.shared.isReviewWindowKey(),
                self.isEnabled,
                !self.blockedSheetActive {
                 if VideoPlayerManager.shared.isReviewMode {
@@ -188,10 +189,12 @@ class HotKeyManager: ObservableObject {
     }
     
     private func handleHotkey(_ event: NSEvent) -> Bool {
+        let isMarkerWindowActive = ActiveWindowManager.shared.isMarkerWindowActive()
         let isViewerWindowActive = ActiveWindowManager.shared.isViewerWindowActive()
-        guard ActiveWindowManager.shared.isAllowedWindowActive() || isViewerWindowActive else {
+        guard isMarkerWindowActive || isViewerWindowActive  else {
             return false
         }
+        
         let isViewerMode = WindowsManager.shared.viewerWindow != nil && isViewerWindowActive
         
         if event.keyCode == 49 {
@@ -283,6 +286,14 @@ class HotKeyManager: ObservableObject {
     func clearHotkeys() {
         registeredHotkeys.removeAll()
         registeredLabelHotkeys.removeAll()
+    }
+    
+    func suspendKeyboardMonitoring() {
+        removeMonitors()
+    }
+    
+    func resumeKeyboardMonitoring() {
+        setupKeyboardMonitoring()
     }
     
     func hotkeyStringFromEvent(_ event: NSEvent) -> String {

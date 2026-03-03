@@ -14,7 +14,7 @@ import UniformTypeIdentifiers
 struct ExportModeSelectionSheet: View {
     
     let onSelect: (ExportMode) -> Void
-    @Binding var exportWithScreenshots: Bool
+    @Binding var exportWithDrawings: Bool
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
@@ -22,9 +22,9 @@ struct ExportModeSelectionSheet: View {
             Text(^String.Titles.exportAs)
                 .font(.headline)
             
-            Toggle("Экспортировать с картинками", isOn: $exportWithScreenshots)
+            Toggle(^String.Titles.exportWithDrawings, isOn: $exportWithDrawings)
                 .padding(.horizontal)
-                .help("При включении скриншоты будут вставлены в соответствующие моменты видео. Длительность показа каждого скриншота задаётся при его создании.")
+                .help(^String.Titles.exportWithDrawingsHelp)
             
             HStack(spacing: 20) {
                 Button(^String.Titles.movie) {

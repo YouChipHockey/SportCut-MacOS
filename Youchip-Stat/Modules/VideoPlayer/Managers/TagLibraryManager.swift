@@ -76,26 +76,69 @@ class TagLibraryManager: ObservableObject {
     private var isReloadingCollections = false
     private var lastCollectionCount = 0
     
-    @objc private func handleCollectionDataChanged() {
-        guard !isReloadingCollections else {
-            print("⚠️ TagLibraryManager: Already reloading collections, skipping")
+    @objc private func handleCollectionDataChanged(_ notification: Notification) {
+        let changedCollectionName = notification.userInfo?[Notification.Key.collectionName] as? String
+        
+        if let name = changedCollectionName {
+            invalidateCollectionCache(for: name)
+            guard let data = getCollectionData(for: name) else { return }
+            let apply: () -> Void = { [weak self] in
+                guard let self = self else { return }
+                if case .user(name) = self.currentCollectionType {
+                    self.tags = data.tags
+                    self.tagGroups = data.tagGroups
+                    self.labelGroups = data.labelGroups
+                    self.labels = data.labels
+                    self.timeEvents = data.timeEvents
+                    self.selectedTimeEvents.removeAll()
+                    self.objectWillChange.send()
+                    HotKeyManager.shared.clearHotkeys()
+                    HotKeyManager.shared.registerHotkeys(from: data.tags, for: .user(name: name))
+                    NotificationCenter.default.post(name: .currentCollectionRefreshed, object: nil)
+                }
+            }
+            if Thread.isMainThread {
+                apply()
+            } else {
+                DispatchQueue.main.async(execute: apply)
+            }
             return
         }
         
         let currentCollections = CollectionsBookmarksManager.shared.loadCollections()
         let currentCount = currentCollections.count
-        
         if currentCount != lastCollectionCount {
-            print("📚 TagLibraryManager: Collection count changed (\(lastCollectionCount) -> \(currentCount)), reloading all")
             lastCollectionCount = currentCount
-        } else {
-            print("📚 TagLibraryManager: Collection data modified, reloading")
         }
         
         cacheLock.lock()
         loadedCollectionsCache.removeAll()
         cacheLock.unlock()
         
+        if case .user(let collectionName) = currentCollectionType,
+           let data = getCollectionData(for: collectionName) {
+            let name = collectionName
+            let apply: () -> Void = { [weak self] in
+                guard let self = self else { return }
+                self.tags = data.tags
+                self.tagGroups = data.tagGroups
+                self.labelGroups = data.labelGroups
+                self.labels = data.labels
+                self.timeEvents = data.timeEvents
+                self.selectedTimeEvents.removeAll()
+                self.objectWillChange.send()
+                HotKeyManager.shared.clearHotkeys()
+                HotKeyManager.shared.registerHotkeys(from: data.tags, for: .user(name: name))
+                NotificationCenter.default.post(name: .currentCollectionRefreshed, object: nil)
+            }
+            if Thread.isMainThread {
+                apply()
+            } else {
+                DispatchQueue.main.async(execute: apply)
+            }
+        }
+        
+        guard !isReloadingCollections else { return }
         isReloadingCollections = true
         
         DispatchQueue.main.async {
@@ -105,14 +148,14 @@ class TagLibraryManager: ObservableObject {
         loadAllUserCollections()
     }
         
-    private func getSystemLanguage() -> String {
-        let preferredLanguage = Locale.preferredLanguages.first ?? "en"
-        if preferredLanguage.hasPrefix("ru") {
+    private func getAppCollectionLanguage() -> String {
+        let appLanguage = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+        if appLanguage.hasPrefix("ru") {
             return "ru"
-        } else if preferredLanguage.hasPrefix("en") {
+        } else if appLanguage.hasPrefix("uz") {
+            return "ru"
+        } else if appLanguage.hasPrefix("en") {
             return "en"
-        } else if preferredLanguage.hasPrefix("uz") {
-            return "ru"
         } else {
             return "en"
         }
@@ -128,7 +171,7 @@ class TagLibraryManager: ObservableObject {
         
         guard let languageCollectionsData: LanguageCollectionsData = loadJSON(url: namesUrl) else { return }
         
-        let currentLanguage = getSystemLanguage()
+        let currentLanguage = getAppCollectionLanguage()
         
         guard let currentLanguageCollection = languageCollectionsData.collections.first(where: { $0.language == currentLanguage }) else {
             guard let fallbackCollection = languageCollectionsData.collections.first(where: { $0.language == "en" }) else { return }

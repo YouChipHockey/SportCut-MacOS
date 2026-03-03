@@ -282,6 +282,12 @@ struct VideoPlayerView: View {
                 EditorSettingsPanel(drawingState: viewModel.state.editorDrawingState)
             }
         }
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded { _ in
+            if NSApp.keyWindow?.firstResponder is NSTextView {
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            }
+        })
         .onReceive(NotificationCenter.default.publisher(for: .editorEnterKeyPressed)) { _ in
             viewModel.state.editorDrawingState.handleEditorEnterKey()
         }
