@@ -86,14 +86,13 @@ class ExportHelper: ObservableObject {
             effectiveWithScreenshots = withScreenshots
         }
         
-        // В режиме трансляции: финализируем текущий фрагмент записи и экспортируем его (работает и при паузе, и во время записи)
+        // В режиме трансляции: берём снимок уже готовых сегментов (без остановки записи) как основу для нарезки.
         if videoManager.isLiveMode {
-            LiveStreamManager.shared.prepareCurrentRecordingForExport { exportURL in
-                guard let url = exportURL else {
+            LiveStreamManager.shared.snapshotCompositionForExport { asset in
+                guard let asset = asset else {
                     DispatchQueue.main.async { completion(NSError.getErrorWithDescription(^String.Titles.fullControlExportErrorAsset)) }
                     return
                 }
-                let asset = AVURLAsset(url: url)
                 self.performExportWithAsset(asset, segments: segments, selectedType: selectedType, mode: mode, effectiveWithScreenshots: effectiveWithScreenshots, completion: completion)
             }
             return

@@ -159,7 +159,7 @@ struct ViewerTimelineView: View {
                         }
                         .onEnded { value in
                             let newScale = timelineScale * value
-                            let duration = max(1.0, videoManager.videoDuration)
+                            let duration = max(1.0, videoManager.timelineDuration)
                             let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
                             
                             if potentialInterval >= 0.5 {
@@ -229,7 +229,7 @@ struct ViewerTimelineView: View {
             
             GeometryReader { geo in
                 let effectiveScale = timelineScale * magnifyScale
-                let duration = max(1.0, videoManager.videoDuration)
+                let duration = max(1.0, videoManager.timelineDuration)
                 let interval = calculateTimeGridInterval(scale: effectiveScale, totalDuration: duration)
                 let gridWidth = geo.size.width * max(effectiveScale, 1.0)
                 
@@ -350,7 +350,7 @@ struct ViewerTimelineLineView: View {
     }
     
     var body: some View {
-        let totalDuration = max(1.0, videoManager.videoDuration)
+        let totalDuration = max(1.0, videoManager.timelineDuration)
         
         guard let actualLine = timelineData.lines.first(where: { $0.id == line.id }) else {
             return AnyView(Rectangle().fill(Color.clear).frame(width: widthMax, height: 30))

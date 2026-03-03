@@ -44,12 +44,20 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     // MARK: - Recording state
     
+    /// Incremented each time a new review snapshot is ready; triggers review player refresh.
+    @Published var reviewFileVersion: Int = 0
+    /// All finalized recording segments (stop-restart per refresh cycle). Used for composition.
+    private(set) var allSegmentURLs: [URL] = []
+    private var isReviewRefreshInProgress: Bool = false
+    
     private var durationTimer: DispatchSourceTimer?
+    private var reviewRefreshTimer: DispatchSourceTimer?
     private var recordingStartDate: Date?
     private var accumulatedDurationBeforePause: Double = 0.0
     
     private var tempFileURL: URL?
     private var currentVideoId: String?
+    private var isAudioAttached: Bool = false
     
     /// Unique session ID to prevent stale async callbacks from overwriting a newer session.
     private var sessionId: UUID = UUID()
@@ -152,8 +160,15 @@ class LiveStreamManager: NSObject, ObservableObject {
         // ── Create new session ──
         let newMixer = MediaMixer(useManualCapture: true)
         
-        let view = MTHKView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
-        view.videoGravity = .resizeAspect
+        // Reuse existing preview view if it already exists in the SwiftUI hierarchy.
+        let view: MTHKView
+        if let existingView = self.previewView {
+            view = existingView
+        } else {
+            let createdView = MTHKView(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
+            createdView.videoGravity = .resizeAspect
+            view = createdView
+        }
         
         if let format = format {
             do {
@@ -173,6 +188,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
         let activeFormat = format ?? videoDevice.activeFormat
         let initialFrameRate = activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30
+        isAudioAttached = false
         Task {
             do {
                 await newMixer.setFrameRate(initialFrameRate)
@@ -192,8 +208,18 @@ class LiveStreamManager: NSObject, ObservableObject {
                 } catch { /* keep initialFrameRate */ }
                 await newMixer.setFrameRate(actualFps)
                 
-                if let audioDevice = audioDevice {
-                    try await newMixer.attachAudio(audioDevice, track: 0)
+                // Always use system microphone (MacBook mic) for now.
+                var audioAttached = false
+                if let systemAudio = AVCaptureDevice.default(for: .audio)
+                    ?? self.availableAudioDevices.first(where: { $0.deviceType == .builtInMicrophone })
+                    ?? self.availableAudioDevices.first {
+                    do {
+                        try await newMixer.attachAudio(systemAudio, track: 0)
+                        audioAttached = true
+                        print("LiveStreamManager: Using system audio device: \(systemAudio.localizedName)")
+                    } catch {
+                        print("LiveStreamManager: Failed to attach system audio device: \(error)")
+                    }
                 }
                 
                 var videoMixerSettings = await newMixer.videoMixerSettings
@@ -211,6 +237,7 @@ class LiveStreamManager: NSObject, ObservableObject {
                     self.previewView = view
                     self.latestFrameCapture = frameCapture
                     self.isSessionConfigured = true
+                    self.isAudioAttached = audioAttached
                 }
             } catch {
                 print("LiveStreamManager: Failed to configure HaishinKit mixer: \(error)")
@@ -244,7 +271,7 @@ class LiveStreamManager: NSObject, ObservableObject {
             try? fileManager.removeItem(at: url)
         }
         
-        let newRecorder = LiveStreamRecorder(outputURL: tempFileURL!)
+        let newRecorder = LiveStreamRecorder(outputURL: tempFileURL!, enableAudio: isAudioAttached)
         self.recorder = newRecorder
         
         Task {
@@ -258,6 +285,9 @@ class LiveStreamManager: NSObject, ObservableObject {
                 self.liveDuration = 0.0
                 self.accumulatedDurationBeforePause = 0.0
                 self.recordingStartDate = Date()
+                self.allSegmentURLs = []
+                self.isReviewRefreshInProgress = false
+                self.reviewFileVersion = 0
                 self.startDurationTimer()
                 self.performStartupPauseResume()
             }
@@ -267,13 +297,15 @@ class LiveStreamManager: NSObject, ObservableObject {
     // MARK: - Startup stabilization
     
     private func performStartupPauseResume() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self, self.isLive else { return }
-            self.recorder?.pauseRecording()
+        // Simulate user pressing "pause broadcast" and then "continue"
+        // to stabilize the first frames and avoid black video on new sessions.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            guard LiveStreamManager.shared.isLive else { return }
+            VideoPlayerManager.shared.stopBroadcast()
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self = self, self.isLive else { return }
-                self.recorder?.resumeRecording()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                guard LiveStreamManager.shared.isLive else { return }
+                VideoPlayerManager.shared.resumeBroadcast()
             }
         }
     }
@@ -343,6 +375,47 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
     }
     
+    /// Строит composition из уже завершённых сегментов без остановки текущей записи.
+    /// Безопасен для вызова в любой момент — запись не прерывается.
+    func snapshotCompositionForExport(completion: @escaping (AVAsset?) -> Void) {
+        let segments = allSegmentURLs
+        guard !segments.isEmpty else {
+            DispatchQueue.main.async { completion(nil) }
+            return
+        }
+        Task { [weak self] in
+            guard let self = self else { DispatchQueue.main.async { completion(nil) }; return }
+            let composition = await self.buildCompositionFromSegments(segments)
+            await MainActor.run { completion(composition) }
+        }
+    }
+
+    /// Финализирует все накопленные сегменты + текущий, строит composition из всей записи и возвращает его как AVAsset для экспорта.
+    /// Затем запускает новый рекордер для продолжения записи.
+    func prepareFullCompositionForExport(completion: @escaping (AVAsset?) -> Void) {
+        guard isLive, let currentRecorder = recorder, let _ = currentVideoId else {
+            DispatchQueue.main.async { completion(nil) }
+            return
+        }
+        let sessionId = self.sessionId
+        currentRecorder.stopRecording { [weak self] in
+            guard let self = self, self.sessionId == sessionId else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            if let currentURL = self.tempFileURL {
+                self.allSegmentURLs.append(currentURL)
+            }
+            let allSegments = self.allSegmentURLs
+            Task { [weak self] in
+                guard let self = self else { DispatchQueue.main.async { completion(nil) }; return }
+                let composition = await self.buildCompositionFromSegments(allSegments)
+                DispatchQueue.main.async { completion(composition) }
+                await self.replaceRecorderAfterExport()
+            }
+        }
+    }
+
     /// После экспорта при паузе: подменяем рекордер на новый (пишем в новый файл при возобновлении).
     private func replaceRecorderAfterExport() async {
         guard let mixer = mixer, let videoId = currentVideoId else { return }
@@ -373,11 +446,13 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
         
         stopDurationTimer()
+        stopReviewRefresher()
         
         let mixerToStop = self.mixer
         let recorderToStop = self.recorder
         let previewToRemove = self.previewView
         let finalizeSessionId = self.sessionId
+        let currentTempURL = self.tempFileURL
         
         DispatchQueue.main.async { [weak self] in
             guard let self = self, self.sessionId == finalizeSessionId else { return }
@@ -391,9 +466,21 @@ class LiveStreamManager: NSObject, ObservableObject {
                 return
             }
             
-            let finalURL = self.moveToPermanentLocation()
+            // Add the last segment to the list.
+            if let url = currentTempURL {
+                self.allSegmentURLs.append(url)
+            }
+            let allSegments = self.allSegmentURLs
             
             Task {
+                // Concatenate all segments if there are multiple; otherwise just move the single file.
+                let finalURL: URL?
+                if allSegments.count <= 1 {
+                    finalURL = self.moveToPermanentLocation()
+                } else {
+                    finalURL = await self.concatenateSegmentsToFinalLocation(segments: allSegments)
+                }
+                
                 if let mixerToStop = mixerToStop {
                     if let recorderToStop = recorderToStop {
                         await mixerToStop.removeOutput(recorderToStop)
@@ -411,10 +498,79 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
     }
     
+    // MARK: - Segment Concatenation
+    
+    /// Builds an AVMutableComposition from the given segment URLs (no export, for direct playback).
+    func buildCompositionFromSegments(_ urls: [URL]) async -> AVMutableComposition {
+        let composition = AVMutableComposition()
+        guard let videoTrack = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else { return composition }
+        let audioTrack = composition.addMutableTrack(
+            withMediaType: .audio,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        )
+        var insertTime = CMTime.zero
+        for url in urls {
+            let asset = AVURLAsset(url: url)
+            do {
+                let duration = try await asset.load(.duration)
+                guard duration.isValid && duration.seconds > 0 else { continue }
+                let timeRange = CMTimeRange(start: .zero, duration: duration)
+                if let vt = try? await asset.loadTracks(withMediaType: .video).first {
+                    try? videoTrack.insertTimeRange(timeRange, of: vt, at: insertTime)
+                }
+                if let at = try? await asset.loadTracks(withMediaType: .audio).first {
+                    try? audioTrack?.insertTimeRange(timeRange, of: at, at: insertTime)
+                }
+                insertTime = CMTimeAdd(insertTime, duration)
+            } catch {
+                print("LiveStreamManager: Failed to load segment \(url.lastPathComponent): \(error)")
+            }
+        }
+        return composition
+    }
+    
+    private func concatenateSegmentsToFinalLocation(segments: [URL]) async -> URL? {
+        guard let videoId = currentVideoId else { return nil }
+        let fileManager = FileManager.default
+        let documentsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let recordingsDir = documentsDir.appendingPathComponent("Recordings")
+        if !fileManager.fileExists(atPath: recordingsDir.path) {
+            try? fileManager.createDirectory(at: recordingsDir, withIntermediateDirectories: true)
+        }
+        let finalURL = recordingsDir.appendingPathComponent("\(videoId).mov")
+        if fileManager.fileExists(atPath: finalURL.path) {
+            try? fileManager.removeItem(at: finalURL)
+        }
+        
+        let composition = await buildCompositionFromSegments(segments)
+        
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
+            return moveToPermanentLocation()
+        }
+        exporter.outputURL = finalURL
+        exporter.outputFileType = .mov
+        await exporter.export()
+        
+        if exporter.status == .completed {
+            // Remove intermediate segment files.
+            for url in segments {
+                try? fileManager.removeItem(at: url)
+            }
+            return finalURL
+        } else {
+            print("LiveStreamManager: Concatenation export failed: \(exporter.error?.localizedDescription ?? "unknown")")
+            return moveToPermanentLocation()
+        }
+    }
+    
     func abort() {
         let abortSessionId = self.sessionId
         
         stopDurationTimer()
+        stopReviewRefresher()
         
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -500,6 +656,78 @@ class LiveStreamManager: NSObject, ObservableObject {
         durationTimer = nil
     }
     
+    // MARK: - Review Mode Refresh
+    
+    func startReviewRefresher() {
+        stopReviewRefresher()
+        // Trigger an immediate snapshot so the review window has content right away.
+        refreshReviewSnapshot()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 5.0, repeating: .seconds(5))
+        timer.setEventHandler { [weak self] in
+            self?.refreshReviewSnapshot()
+        }
+        reviewRefreshTimer = timer
+        timer.resume()
+    }
+    
+    func stopReviewRefresher() {
+        reviewRefreshTimer?.cancel()
+        reviewRefreshTimer = nil
+    }
+    
+    /// Finalizes the current recording segment, adds it to the segments list, then starts a fresh recorder.
+    /// This ensures the review player always gets a properly finalized MOV with correct duration.
+    private func refreshReviewSnapshot() {
+        guard isLive, !isBroadcastPaused, !isReviewRefreshInProgress,
+              let currentRecorder = recorder, let videoId = currentVideoId,
+              let currentTempURL = tempFileURL else { return }
+        
+        isReviewRefreshInProgress = true
+        let sessionId = self.sessionId
+        
+        currentRecorder.stopRecording { [weak self] in
+            guard let self = self, self.sessionId == sessionId else { return }
+            
+            self.allSegmentURLs.append(currentTempURL)
+            self.reviewFileVersion += 1
+            
+            Task { [weak self] in
+                await self?.startNewSegmentRecorder(videoId: videoId, sessionId: sessionId)
+                await MainActor.run { [weak self] in
+                    self?.isReviewRefreshInProgress = false
+                }
+            }
+        }
+    }
+    
+    private func startNewSegmentRecorder(videoId: String, sessionId: UUID) async {
+        guard let mixer = mixer, self.sessionId == sessionId else { return }
+        let fileManager = FileManager.default
+        let liveDir = fileManager.temporaryDirectory.appendingPathComponent("LiveRecordings")
+        if !fileManager.fileExists(atPath: liveDir.path) {
+            try? fileManager.createDirectory(at: liveDir, withIntermediateDirectories: true)
+        }
+        let segIndex = allSegmentURLs.count
+        let newTempURL = liveDir.appendingPathComponent("\(videoId)_seg\(segIndex).mov")
+        let oldRecorder = recorder
+        let newRecorder = LiveStreamRecorder(outputURL: newTempURL, enableAudio: isAudioAttached)
+        if let oldRecorder = oldRecorder {
+            await mixer.removeOutput(oldRecorder)
+        }
+        await mixer.addOutput(newRecorder)
+        await MainActor.run { [weak self] in
+            guard let self = self, self.sessionId == sessionId else { return }
+            self.recorder = newRecorder
+            self.tempFileURL = newTempURL
+            newRecorder.startRecording()
+            // Restore paused state if broadcast was paused before the refresh.
+            if self.isBroadcastPaused {
+                newRecorder.pauseRecording()
+            }
+        }
+    }
+    
     // MARK: - Cleanup
     
     private func cleanupSession() {
@@ -509,7 +737,6 @@ class LiveStreamManager: NSObject, ObservableObject {
             guard self.sessionId == cleanupSessionId else { return }
             self.mixer = nil
             self.recorder = nil
-            self.previewView = nil
             self.isSessionConfigured = false
             self.currentVideoId = nil
         }
@@ -519,6 +746,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         let cleanupSessionId = self.sessionId
         
         stopDurationTimer()
+        stopReviewRefresher()
         
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -526,6 +754,9 @@ class LiveStreamManager: NSObject, ObservableObject {
             self.isLive = false
             self.isBroadcastPaused = false
             self.liveDuration = 0.0
+            self.reviewFileVersion = 0
+            self.allSegmentURLs = []
+            self.isReviewRefreshInProgress = false
         }
         
         let mixerToStop = mixer
@@ -547,39 +778,41 @@ class LiveStreamManager: NSObject, ObservableObject {
 // MARK: - LiveFrameCaptureOutput
 
 /// Хранит последний видеокадр из микшера для захвата в редактор (Metal-превью через cacheDisplay даёт чёрный экран).
+/// Конвертация в NSImage откладывается до момента реального запроса (takeSnapshot), чтобы не тратить GPU на каждый кадр.
 final class LiveFrameCaptureOutput: MediaMixerOutput {
     
     var videoTrackId: UInt8? { get async { return UInt8.max } }
     var audioTrackId: UInt8? { get async { return UInt8.max } }
     func selectTrack(_ id: UInt8?, mediaType: CMFormatDescription.MediaType) async {}
     
-    private var _latestImage: NSImage?
+    // Store the raw pixel buffer – converted to NSImage only when actually requested.
+    private var _latestPixelBuffer: CVImageBuffer?
+    private let bufferLock = NSLock()
     
     private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     
     nonisolated func mixer(_ mixer: MediaMixer, didOutput sampleBuffer: CMSampleBuffer) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let extent = ciImage.extent
-        guard extent.width >= 1, extent.height >= 1,
-              let cgImage = LiveFrameCaptureOutput.ciContext.createCGImage(ciImage, from: extent) else { return }
-        let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-        DispatchQueue.main.async { [weak self] in
-            self?._latestImage = nsImage
-        }
+        // O(1): just retain the pixel buffer reference; no rendering here.
+        bufferLock.lock()
+        _latestPixelBuffer = pixelBuffer
+        bufferLock.unlock()
     }
     
     nonisolated func mixer(_ mixer: MediaMixer, didOutput buffer: AVAudioPCMBuffer, when: AVAudioTime) {}
     
-    /// Вернуть копию последнего кадра (вызывать с main queue).
+    /// Конвертирует последний сохранённый кадр в NSImage. Вызывать с main queue.
     func takeSnapshot() -> NSImage? {
         assert(Thread.isMainThread)
-        guard let img = _latestImage else { return nil }
-        guard let tiff = img.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff) else { return img }
-        let copy = NSImage(size: img.size)
-        copy.addRepresentation(rep)
-        return copy
+        bufferLock.lock()
+        let pixelBuffer = _latestPixelBuffer
+        bufferLock.unlock()
+        guard let pixelBuffer else { return nil }
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let extent = ciImage.extent
+        guard extent.width >= 1, extent.height >= 1,
+              let cgImage = LiveFrameCaptureOutput.ciContext.createCGImage(ciImage, from: extent) else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
     }
 }
 
@@ -592,7 +825,15 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     func selectTrack(_ id: UInt8?, mediaType: CMFormatDescription.MediaType) async {}
     
     private let outputURL: URL
-    private let writerQueue = DispatchQueue(label: "com.youchip.liveRecorder", qos: .userInitiated)
+    private let enableAudio: Bool
+    // .utility keeps disk writes off the high-priority capture thread pool, reducing preview FPS drops.
+    private let writerQueue = DispatchQueue(label: "com.youchip.liveRecorder", qos: .utility)
+    /// Target FPS for recording (preview can be higher).
+    private let targetVideoFPS: Int = 30
+    
+    // Pre-throttle state – checked BEFORE dispatching to avoid flooding writerQueue with dropped frames.
+    private let preThrottleLock = NSLock()
+    private var _preThrottleLastPTS: CMTime = .invalid
     
     private var assetWriter: AVAssetWriter?
     private var videoWriterInput: AVAssetWriterInput?
@@ -612,17 +853,23 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     private var lastVideoTimestampBeforePause: CMTime = .invalid
     private var lastAudioTimestampBeforePause: CMTime = .invalid
     private var needsOffsetRecalculation = false
+    private var lastVideoWrittenPTS: CMTime = .invalid
     
-    init(outputURL: URL) {
+    init(outputURL: URL, enableAudio: Bool = true) {
         self.outputURL = outputURL
+        self.enableAudio = enableAudio
     }
     
     func startRecording() {
         isPaused = false
+        preThrottleLock.lock()
+        _preThrottleLastPTS = .invalid
+        preThrottleLock.unlock()
         writerQueue.async { [weak self] in
             self?.isRecording = true
             self?.totalPauseOffset = .zero
             self?.pauseStartPTS = .invalid
+            self?.lastVideoWrittenPTS = .invalid
             self?.lastVideoTimestampBeforePause = .invalid
             self?.lastAudioTimestampBeforePause = .invalid
             self?.needsOffsetRecalculation = false
@@ -713,8 +960,10 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     }
     
     nonisolated func mixer(_ mixer: MediaMixer, didOutput sampleBuffer: CMSampleBuffer) {
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        
         guard !isPaused else {
-            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            // Record pause start PTS with minimal queue overhead.
             writerQueue.async { [weak self] in
                 guard let self = self else { return }
                 if !self.pauseStartPTS.isValid {
@@ -724,18 +973,47 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             return
         }
         
+        // Pre-throttle: drop frames before dispatching so writerQueue never accumulates
+        // a backlog of closures for frames that would be discarded anyway.
+        if targetVideoFPS > 0 {
+            preThrottleLock.lock()
+            let last = _preThrottleLastPTS
+            let frameInterval = 1.0 / Double(targetVideoFPS)
+            let shouldDrop: Bool
+            if last.isValid {
+                let delta = CMTimeSubtract(pts, last)
+                shouldDrop = delta.seconds >= 0 && delta.seconds < frameInterval
+            } else {
+                shouldDrop = false
+            }
+            if !shouldDrop { _preThrottleLastPTS = pts }
+            preThrottleLock.unlock()
+            // Always let the very first frame through (isWriterStarted == false) regardless.
+            if shouldDrop && isWriterStarted { return }
+        }
+        
         writerQueue.async { [weak self] in
             guard let self = self, self.isRecording else { return }
             guard !self.isPaused else {
-                let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                 if !self.pauseStartPTS.isValid {
                     self.pauseStartPTS = pts
                 }
                 return
             }
             
+            // Initialize writer on the first frame we actually want to record.
             if !self.isWriterStarted {
                 self.setupWriter(with: sampleBuffer)
+                self.lastVideoWrittenPTS = pts
+            } else {
+                // Secondary in-queue throttle as safety net for timing jitter.
+                if self.targetVideoFPS > 0, self.lastVideoWrittenPTS.isValid {
+                    let frameInterval = 1.0 / Double(self.targetVideoFPS)
+                    let delta = CMTimeSubtract(pts, self.lastVideoWrittenPTS)
+                    if delta.seconds >= 0 && delta.seconds < frameInterval {
+                        return
+                    }
+                }
             }
             
             guard self.isWriterStarted,
@@ -744,8 +1022,7 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                   let input = self.videoWriterInput,
                   input.isReadyForMoreMediaData else { return }
             
-            let originalPTS = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-            let adjustedPTS = self.adjustedTimestamp(for: originalPTS, isVideo: true)
+            let adjustedPTS = self.adjustedTimestamp(for: pts, isVideo: true)
             
             if self.totalPauseOffset == .zero {
                 input.append(sampleBuffer)
@@ -754,11 +1031,13 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                     input.append(adjustedBuffer)
                 }
             }
+            
+            self.lastVideoWrittenPTS = pts
         }
     }
     
     nonisolated func mixer(_ mixer: MediaMixer, didOutput buffer: AVAudioPCMBuffer, when: AVAudioTime) {
-        guard !isPaused else { return }
+        guard enableAudio, !isPaused else { return }
         
         writerQueue.async { [weak self] in
             guard let self = self, self.isRecording, self.isWriterStarted else { return }
@@ -799,9 +1078,14 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                 AVVideoWidthKey: Int(dimensions.width),
                 AVVideoHeightKey: Int(dimensions.height),
                 AVVideoCompressionPropertiesKey: [
-                    AVVideoAverageBitRateKey: 6_000_000,
+                    AVVideoAverageBitRateKey: 4_000_000,
                     AVVideoExpectedSourceFrameRateKey: clampedFrameRate,
-                    AVVideoMaxKeyFrameIntervalKey: clampedFrameRate
+                    // Longer keyframe interval = fewer I-frames = lower encoder CPU load.
+                    AVVideoMaxKeyFrameIntervalKey: clampedFrameRate * 2,
+                    // Baseline profile: no B-frames, least encoder complexity.
+                    AVVideoProfileLevelKey: AVVideoProfileLevelH264BaselineAutoLevel,
+                    // Disable B-frames explicitly – reduces encoder latency and CPU.
+                    AVVideoAllowFrameReorderingKey: false
                 ]
             ]
             

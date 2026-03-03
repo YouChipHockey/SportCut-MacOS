@@ -23,12 +23,8 @@ struct FullControlView: View {
     @StateObject var exportHelper = ExportHelper()
     
     /// Effective video duration - uses live stream duration when in live mode, otherwise AVPlayer duration.
-    /// This computed property explicitly references observed objects so SwiftUI triggers re-renders.
     private var effectiveVideoDuration: Double {
-        if videoManager.isLiveMode {
-            return max(1.0, liveStreamManager.liveDuration)
-        }
-        return max(1.0, videoManager.videoDuration)
+        return max(1.0, videoManager.timelineDuration)
     }
     
     @State private var markupMode: MarkupMode = MarkupMode.current
@@ -736,6 +732,75 @@ struct FullControlView: View {
     }
     
     
+    private func liveReviewToggle() -> some View {
+        Group {
+            if videoManager.isLiveMode {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Режим")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    
+                    HStack(spacing: 2) {
+                        Button(action: {
+                            if videoManager.isReviewMode {
+                                videoManager.exitReviewMode()
+                                WindowsManager.shared.closeReviewWindow()
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(videoManager.isReviewMode ? Color.gray.opacity(0.5) : Color.red)
+                                    .frame(width: 7, height: 7)
+                                Text("Live")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(!videoManager.isReviewMode ? Color.red.opacity(0.15) : Color.gray.opacity(0.08))
+                            .foregroundColor(!videoManager.isReviewMode ? .red : .secondary)
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(!videoManager.isReviewMode ? Color.red.opacity(0.4) : Color.clear, lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Лайв режим — разметка в реальном времени")
+                        
+                        Button(action: {
+                            if !videoManager.isReviewMode {
+                                videoManager.enterReviewMode()
+                                WindowsManager.shared.openReviewWindow()
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "gobackward")
+                                    .font(.system(size: 9, weight: .semibold))
+                                Text("Пересмотр")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(videoManager.isReviewMode ? Color.orange.opacity(0.15) : Color.gray.opacity(0.08))
+                            .foregroundColor(videoManager.isReviewMode ? .orange : .secondary)
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(videoManager.isReviewMode ? Color.orange.opacity(0.4) : Color.clear, lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Пересмотр — анализ записи с возможностью разметки")
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.gray.opacity(0.05))
+                .cornerRadius(8)
+            }
+        }
+    }
+    
     @ViewBuilder
     private func compactControlPanel(width: CGFloat) -> some View {
         let isSmallScreen = width < 1700
@@ -743,17 +808,28 @@ struct FullControlView: View {
         HStack(alignment: .top, spacing: 12) {
             VideoControlPanelView(
                 width: width,
-                playbackSpeed: videoManager.playbackSpeed,
+                playbackSpeed: videoManager.isReviewMode ? videoManager.reviewPlaybackSpeed : videoManager.playbackSpeed,
                 forViewerMode: false,
-                actions: .init(
-                    seekBackward10: { videoManager.seek(by: -10) },
-                    seekBackward5: { videoManager.seek(by: -5) },
-                    togglePlayPause: { videoManager.togglePlayPause() },
-                    seekForward5: { videoManager.seek(by: 5) },
-                    seekForward10: { videoManager.seek(by: 10) },
-                    changeSpeed: { videoManager.changePlaybackSpeed(to: $0) }
-                )
+                actions: videoManager.isReviewMode
+                    ? .init(
+                        seekBackward10: { videoManager.seekReview(by: -10) },
+                        seekBackward5: { videoManager.seekReview(by: -5) },
+                        togglePlayPause: { videoManager.toggleReviewPlayPause() },
+                        seekForward5: { videoManager.seekReview(by: 5) },
+                        seekForward10: { videoManager.seekReview(by: 10) },
+                        changeSpeed: { videoManager.changeReviewPlaybackSpeed(to: $0) }
+                    )
+                    : .init(
+                        seekBackward10: { videoManager.seek(by: -10) },
+                        seekBackward5: { videoManager.seek(by: -5) },
+                        togglePlayPause: { videoManager.togglePlayPause() },
+                        seekForward5: { videoManager.seek(by: 5) },
+                        seekForward10: { videoManager.seek(by: 10) },
+                        changeSpeed: { videoManager.changePlaybackSpeed(to: $0) }
+                    )
             )
+            
+            liveReviewToggle()
             
             VStack(alignment: .leading, spacing: 8) {
                 Text(^String.Titles.timelines)

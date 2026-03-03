@@ -808,7 +808,7 @@ struct TagLibraryView: View {
     
     private func proceedWithTagAddition(tag: Tag, selectedLabels: [String], coordinates: CGPoint?) {
         let currentTime = videoManager.currentTime
-        let videoDuration = max(1.0, videoManager.videoDuration)
+        let videoDuration = max(1.0, videoManager.timelineDuration)
         let startTime = max(0, currentTime - tag.defaultTimeBefore)
         let finishTime = min(videoDuration, startTime + tag.defaultTimeBefore + tag.defaultTimeAfter)
         
@@ -870,7 +870,7 @@ struct TagLibraryView: View {
                         onDone: { selectedLabels in
                             if tag.isInterval == true {
                                 if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
-                                    let videoDuration = max(1.0, videoManager.videoDuration)
+                                    let videoDuration = max(1.0, videoManager.timelineDuration)
                                     let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                     let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                     let timeStart = min(start, end)
@@ -906,7 +906,7 @@ struct TagLibraryView: View {
                             .onAppear {
                                 if tag.isInterval == true {
                                     if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
-                                        let videoDuration = max(1.0, videoManager.videoDuration)
+                                        let videoDuration = max(1.0, videoManager.timelineDuration)
                                         let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                         let timeStart = min(start, end)
@@ -950,7 +950,7 @@ struct TagLibraryView: View {
                         onDone: { selectedLabels in
                             if tag.isInterval == true {
                                 if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
-                                    let videoDuration = max(1.0, videoManager.videoDuration)
+                                    let videoDuration = max(1.0, videoManager.timelineDuration)
                                     let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                     let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                     let timeStart = min(start, end)
@@ -986,7 +986,7 @@ struct TagLibraryView: View {
                             .onAppear {
                                 if tag.isInterval == true {
                                     if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
-                                        let videoDuration = max(1.0, videoManager.videoDuration)
+                                        let videoDuration = max(1.0, videoManager.timelineDuration)
                                         let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                         let timeStart = min(start, end)
@@ -1085,7 +1085,7 @@ struct TagLibraryView: View {
                 if tag.isInterval ?? false {
                     if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                         let activeTag = activeIntervalTags[index]
-                        let videoDuration = max(1.0, videoManager.videoDuration)
+                        let videoDuration = max(1.0, videoManager.timelineDuration)
                         let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
                         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                         let timeStart = min(start, end)
@@ -1263,7 +1263,7 @@ struct TagLibraryView: View {
         if tag.isInterval ?? false {
             if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                 let activeTag = activeIntervalTags[index]
-                let videoDuration = max(1.0, videoManager.videoDuration)
+                let videoDuration = max(1.0, videoManager.timelineDuration)
                 let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
                 let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                 let timeStart = min(start, end)

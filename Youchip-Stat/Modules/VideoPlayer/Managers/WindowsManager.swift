@@ -40,10 +40,12 @@ class WindowsManager: NSObject {
     var screenshotsWindow: ScreenshotsWindowController?
     var fieldMapConfigurationWindow: FieldMapConfigurationWindowController?
     var viewerWindow: ViewerWindowController?
+    var reviewVideoWindow: ReviewVideoWindowController?
 
     private var fieldMapWindow: NSWindowController?
 
     private var editorWindowControllers: [NSWindowController] = []
+    private var momentViewerControllers: [NSWindowController] = []
     private var isClosing = true
     private var isWindowsLocked = false
     
@@ -72,6 +74,7 @@ class WindowsManager: NSObject {
         analyticsWindow?.window?.delegate = nil
         screenshotsWindow?.window?.delegate = nil
         fieldMapConfigurationWindow = nil
+        reviewVideoWindow?.window?.delegate = nil
         
         NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
         viewerWindow?.close()
@@ -83,6 +86,11 @@ class WindowsManager: NSObject {
         tagLibraryWindow?.close()
         analyticsWindow?.close()
         screenshotsWindow?.close()
+        
+        // Close review window without triggering its delegate (to avoid double exitReviewMode).
+        reviewVideoWindow?.window?.delegate = nil
+        reviewVideoWindow?.close()
+        reviewVideoWindow = nil
         
         ScreenshotsMetadataManager.shared.clearScreenshots()
         
@@ -228,6 +236,68 @@ class WindowsManager: NSObject {
                 
                 LiveStreamManager.shared.fullCleanup()
             }
+        }
+    }
+    
+    // MARK: - Review Window
+    
+    func openReviewWindow() {
+        guard reviewVideoWindow == nil else {
+            reviewVideoWindow?.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let controller = ReviewVideoWindowController()
+        reviewVideoWindow = controller
+        
+        // Position the review window: place it alongside the live video window.
+        if let screen = NSScreen.main {
+            let screenFrame = screen.frame
+            let bottomHeight = screenFrame.height * 0.4
+            let topHeight = screenFrame.height - bottomHeight - 40
+            
+            // Split the top-right 2/3 into two equal halves (live left, review right).
+            let halfWidth = (screenFrame.width * 2) / 3 / 2
+            let leftStartX = screenFrame.minX + screenFrame.width / 3
+            
+            // Move live video window to left half.
+            let liveRect = NSRect(
+                x: leftStartX,
+                y: screenFrame.minY + bottomHeight,
+                width: halfWidth,
+                height: topHeight
+            )
+            videoWindow?.window?.setFrame(liveRect, display: true)
+            
+            // Place review window in right half.
+            let reviewRect = NSRect(
+                x: leftStartX + halfWidth,
+                y: screenFrame.minY + bottomHeight,
+                width: halfWidth,
+                height: topHeight
+            )
+            controller.window?.setFrame(reviewRect, display: true)
+        }
+        
+        controller.showWindow(nil)
+    }
+    
+    func closeReviewWindow() {
+        reviewVideoWindow?.window?.delegate = nil
+        reviewVideoWindow?.close()
+        reviewVideoWindow = nil
+        
+        // Restore live video window to its original 2/3 width.
+        if let screen = NSScreen.main {
+            let screenFrame = screen.frame
+            let bottomHeight = screenFrame.height * 0.4
+            let topHeight = screenFrame.height - bottomHeight - 40
+            let videoRect = NSRect(
+                x: screenFrame.minX + screenFrame.width / 3,
+                y: screenFrame.minY + bottomHeight,
+                width: (screenFrame.width * 2) / 3,
+                height: topHeight
+            )
+            videoWindow?.window?.setFrame(videoRect, display: true)
         }
     }
     
@@ -437,6 +507,35 @@ class WindowsManager: NSObject {
         return keyWindow === controlWindow?.window || keyWindow === tagLibraryWindow?.window
     }
     
+    /// Возвращает true, если ключевое окно — окно пересмотра записи.
+    func isReviewWindowKey() -> Bool {
+        guard let keyWindow = NSApplication.shared.keyWindow else { return false }
+        return keyWindow === reviewVideoWindow?.window
+    }
+    
+    // MARK: - Moment Viewer
+    
+    /// Открывает окно просмотра момента для указанного тега. Асинхронно получает подходящий AVAsset из текущего режима.
+    func openMomentViewer(stampStart: Double, stampDuration: Double, tagName: String, lineName: String) {
+        let clipStart = max(0, stampStart)
+        let clipDuration = max(stampDuration, 0.5)
+        
+        VideoPlayerManager.shared.assetForMomentViewer { [weak self] asset in
+            guard let self = self, let asset = asset else { return }
+            DispatchQueue.main.async {
+                let controller = MomentViewerWindowController(
+                    asset: asset,
+                    startTime: clipStart,
+                    duration: clipDuration,
+                    tagName: tagName,
+                    lineName: lineName
+                )
+                self.momentViewerControllers.append(controller)
+                controller.showWindow(nil)
+            }
+        }
+    }
+    
     func showReportWindow(htmlString: String, teamName: String, opponentName: String) {
         let view = WebViewWrapper(htmlString: htmlString)
         let hostingController = NSHostingController(rootView: view)
@@ -462,6 +561,18 @@ class WindowsManager: NSObject {
         
         viewerWindow = ViewerWindowController(videoID: currentVideoId)
         viewerWindow?.showWindow(nil)
+    }
+    
+    func showMomentViewer(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String) {
+        let controller = MomentViewerWindowController(
+            asset: asset,
+            startTime: startTime,
+            duration: duration,
+            tagName: tagName,
+            lineName: lineName
+        )
+        momentViewerControllers.append(controller)
+        controller.showWindow(nil)
     }
 
 }

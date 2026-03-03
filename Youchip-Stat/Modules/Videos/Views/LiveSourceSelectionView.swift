@@ -129,38 +129,19 @@ struct LiveSourceSelectionView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.primary)
             
-            if liveManager.availableAudioDevices.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "speaker.slash")
-                        .foregroundColor(.secondary)
-                    Text(^String.Titles.liveStreamNoAudioDevices)
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(8)
-            } else {
-                // Option for no audio
-                deviceRow(
-                    label: ^String.Titles.liveStreamNoAudio,
-                    isSelected: selectedAudioDevice == nil,
-                    icon: "speaker.slash"
-                ) {
-                    selectedAudioDevice = nil
-                }
-                
-                ForEach(liveManager.availableAudioDevices, id: \.uniqueID) { device in
-                    deviceRow(
-                        device: device,
-                        isSelected: selectedAudioDevice?.uniqueID == device.uniqueID,
-                        icon: "mic.fill"
-                    ) {
-                        selectedAudioDevice = device
-                    }
-                }
+            // Temporary simplified audio selection:
+            // we always use the Mac's built-in microphone (or no audio if it's unavailable).
+            HStack(spacing: 8) {
+                Image(systemName: "mic.fill")
+                    .foregroundColor(.secondary)
+                Text("Источник звука: микрофон компьютера (автоматически)")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
             }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(8)
         }
     }
     

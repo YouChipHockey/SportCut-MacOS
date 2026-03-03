@@ -120,6 +120,24 @@ class VideoPlayerViewModel: ObservableObject {
                   payload.videoId == self.videoId else { return }
             self.openEditorForScreenshot(payload: payload)
         }
+        
+        NotificationCenter.default.addObserver(
+            forName: .takeReviewScreenshotForEditor,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            self.openEditorFromReviewPlayer()
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: .takeReviewScreenshot,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            self.performTakeScreenshotFromReview()
+        }
     }
     
     private func setupScreenshotTimeObserver() {
@@ -142,12 +160,16 @@ class VideoPlayerViewModel: ObservableObject {
         
         // Если скриншот показан и пользователь нажал play, скрываем скриншот и возобновляем воспроизведение
         if state.isShowingScreenshot {
-            if let player = VideoPlayerManager.shared.player, player.rate > 0 {
-                hideScreenshotOverlay(resumePlayback: true)
-                state.lastCheckedVideoTime = currentTime
-                return
+            let isPlaying: Bool
+            if VideoPlayerManager.shared.isReviewMode {
+                isPlaying = VideoPlayerManager.shared.reviewPlayer?.timeControlStatus == .playing
+            } else {
+                isPlaying = (VideoPlayerManager.shared.player?.rate ?? 0) > 0
             }
-            // Если скриншот показан, но видео на паузе - не делаем ничего, ждем действий пользователя
+            if isPlaying {
+                hideScreenshotOverlay(resumePlayback: false)
+                state.lastCheckedVideoTime = currentTime
+            }
             return
         }
         
@@ -180,7 +202,11 @@ class VideoPlayerViewModel: ObservableObject {
         
         guard let image = NSImage(contentsOf: imageURL) else { return }
         
-        VideoPlayerManager.shared.player?.pause()
+        if VideoPlayerManager.shared.isReviewMode {
+            VideoPlayerManager.shared.reviewPlayer?.pause()
+        } else {
+            VideoPlayerManager.shared.player?.pause()
+        }
         
         state.displayedScreenshotImage = image
         state.isShowingScreenshot = true
@@ -201,7 +227,11 @@ class VideoPlayerViewModel: ObservableObject {
         
         NotificationCenter.default.post(name: .screenshotDisplayChanged, object: false)
         if resumePlayback {
-            VideoPlayerManager.shared.player?.play()
+            if VideoPlayerManager.shared.isReviewMode {
+                VideoPlayerManager.shared.reviewPlayer?.play()
+            } else {
+                VideoPlayerManager.shared.player?.play()
+            }
         }
     }
     
@@ -413,6 +443,12 @@ class VideoPlayerViewModel: ObservableObject {
     // MARK: - Screenshot Logic
     
     private func performTakeScreenshot() {
+        // In review mode, capture from the review player.
+        if VideoPlayerManager.shared.isReviewMode {
+            performTakeScreenshotFromReview()
+            return
+        }
+        
         guard let player = VideoPlayerManager.shared.player,
               let asset = player.currentItem?.asset else {
             return
@@ -534,6 +570,10 @@ class VideoPlayerViewModel: ObservableObject {
     }
     
     private func performTakeScreenshotForEditor() {
+        if VideoPlayerManager.shared.isReviewMode {
+            openEditorFromReviewPlayer()
+            return
+        }
         if VideoPlayerManager.shared.isLiveMode {
             openEditorFromLiveFrame()
             return
@@ -566,6 +606,53 @@ class VideoPlayerViewModel: ObservableObject {
             
         } catch {
             print("Error taking screenshot for editor: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Захватывает кадр из reviewPlayer и открывает редактор в главном видео-окне.
+    private func openEditorFromReviewPlayer() {
+        guard let reviewPlayer = VideoPlayerManager.shared.reviewPlayer,
+              let asset = reviewPlayer.currentItem?.asset else { return }
+        
+        let currentTime = reviewPlayer.currentTime()
+        let imageGenerator = AVAssetImageGenerator(asset: asset)
+        imageGenerator.appliesPreferredTrackTransform = true
+        imageGenerator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
+        imageGenerator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
+        
+        do {
+            let cgImage = try imageGenerator.copyCGImage(at: currentTime, actualTime: nil)
+            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+            state.tempScreenshotImage = nsImage
+            state.isEditorMode = true
+            state.editorScreenshotName = "Screenshot_\(Date().timeIntervalSince1970)"
+            state.editorDrawingState.clearDrawing()
+            state.editorDrawingState.currentTool = .pencil
+            state.editorScreenshotVideoTime = VideoPlayerManager.shared.reviewCurrentTime
+            NotificationCenter.default.post(name: .editorModeChanged, object: true)
+        } catch {
+            print("Error capturing review player frame: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Делает скриншот из текущего кадра reviewPlayer (аналог takeScreenshot для режима пересмотра).
+    private func performTakeScreenshotFromReview() {
+        guard let reviewPlayer = VideoPlayerManager.shared.reviewPlayer,
+              let asset = reviewPlayer.currentItem?.asset else { return }
+        
+        let currentTime = reviewPlayer.currentTime()
+        let imageGenerator = AVAssetImageGenerator(asset: asset)
+        imageGenerator.appliesPreferredTrackTransform = true
+        imageGenerator.requestedTimeToleranceBefore = .zero
+        imageGenerator.requestedTimeToleranceAfter = .zero
+        
+        do {
+            let cgImage = try imageGenerator.copyCGImage(at: currentTime, actualTime: nil)
+            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+            state.tempScreenshotImage = nsImage
+            state.showScreenshotNameSheet = true
+        } catch {
+            print("Error capturing review player frame for screenshot: \(error.localizedDescription)")
         }
     }
     
@@ -981,7 +1068,7 @@ class VideoPlayerViewModel: ObservableObject {
         let screenshotsLineID = ensureScreenshotsTimelineExists()
         ensureScreenshotsTagGroupExists()
         
-        let videoDuration = max(1.0, VideoPlayerManager.shared.videoDuration)
+        let videoDuration = max(1.0, VideoPlayerManager.shared.timelineDuration)
         let startTime = max(0, videoTime - 3.0)
         let endTime = min(videoDuration, videoTime + 3.0)
         

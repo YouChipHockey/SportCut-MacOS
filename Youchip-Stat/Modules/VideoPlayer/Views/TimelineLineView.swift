@@ -74,7 +74,7 @@ struct TimelineLineView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            let totalDuration = max(1, videoManager.videoDuration)
+            let totalDuration = max(1, videoManager.timelineDuration)
             
             HStack(spacing: 0) {
                 ZStack(alignment: .topLeading) {
@@ -202,9 +202,22 @@ struct TimelineLineView: View {
         .onTapGesture {
             if resizingStampID == nil {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    videoManager.seek(to: stamp.timeStartSeconds)
                     timelineData.selectStamp(stampID: stamp.id)
-                    videoManager.player?.play()
+                    if videoManager.isReviewMode {
+                        videoManager.seekReview(to: stamp.timeStartSeconds)
+                    } else if videoManager.isLiveMode {
+                        // In live mode LMK opens the moment viewer for that tag.
+                        let stampDuration = max(stamp.timeFinishSeconds - stamp.timeStartSeconds, 1.0)
+                        WindowsManager.shared.openMomentViewer(
+                            stampStart: stamp.timeStartSeconds,
+                            stampDuration: stampDuration,
+                            tagName: stamp.label,
+                            lineName: line.name
+                        )
+                    } else {
+                        videoManager.seek(to: stamp.timeStartSeconds)
+                        videoManager.player?.play()
+                    }
                 }
             }
         }
@@ -464,6 +477,17 @@ struct TimelineLineView: View {
             }
             Divider()
         }
+        
+        Button("Посмотреть момент") {
+            let stampDuration = max(stamp.timeFinishSeconds - stamp.timeStartSeconds, 1.0)
+            WindowsManager.shared.openMomentViewer(
+                stampStart: stamp.timeStartSeconds,
+                stampDuration: stampDuration,
+                tagName: stamp.label,
+                lineName: line.name
+            )
+        }
+        
         Button(^String.Titles.timelineButtonDeleteTag) {
             TimelineDataManager.shared.removeStamp(lineID: line.id, stampID: stamp.id)
             if timelineData.selectedStampID == stamp.id {

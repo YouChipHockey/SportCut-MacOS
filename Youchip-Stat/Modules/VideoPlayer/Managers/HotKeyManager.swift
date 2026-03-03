@@ -158,12 +158,16 @@ class HotKeyManager: ObservableObject {
                     return nil
                 }
             }
-            // Когда в фокусе окно таймлайна или библиотеки тегов — пробел всегда play/pause (если хоткеи не заблокированы)
+            // Когда в фокусе окно таймлайна, библиотеки тегов или пересмотра — пробел всегда play/pause
             if event.keyCode == 49,
-               WindowsManager.shared.isControlOrTagLibraryWindowKey(),
+               (WindowsManager.shared.isControlOrTagLibraryWindowKey() || WindowsManager.shared.isReviewWindowKey()),
                self.isEnabled,
                !self.blockedSheetActive {
-                VideoPlayerManager.shared.togglePlayPause()
+                if VideoPlayerManager.shared.isReviewMode {
+                    VideoPlayerManager.shared.toggleReviewPlayPause()
+                } else {
+                    VideoPlayerManager.shared.togglePlayPause()
+                }
                 return nil
             }
             guard self.isEnabled,
@@ -191,13 +195,12 @@ class HotKeyManager: ObservableObject {
         let isViewerMode = WindowsManager.shared.viewerWindow != nil && isViewerWindowActive
         
         if event.keyCode == 49 {
-            // Don't handle space if editing text box
-            if isEditingTextBox {
-                return false
-            }
+            if isEditingTextBox { return false }
             
             if isViewerMode {
                 NotificationCenter.default.post(name: .toggleViewerPlayer, object: nil)
+            } else if VideoPlayerManager.shared.isReviewMode {
+                VideoPlayerManager.shared.toggleReviewPlayPause()
             } else if isEditorModeActive {
                 NotificationCenter.default.post(name: .editorModeChanged, object: false)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
