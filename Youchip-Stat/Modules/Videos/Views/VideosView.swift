@@ -242,8 +242,9 @@ struct VideosView: View {
         }
         .sheet(isPresented: $viewModel.state.showLiveSourceSelection) {
             LiveSourceSelectionView(
-                onConfigure: { _, _, _ in
-                    viewModel.action.send(.liveSourceConfigured)
+                isAppendMode: viewModel.state.appendVideoFile != nil,
+                onConfigure: { _, _, _, preloadedURL in
+                    viewModel.action.send(.liveSourceConfigured(preloadedURL: preloadedURL))
                 },
                 onCancel: {
                     viewModel.action.send(.cancelLiveSetup)

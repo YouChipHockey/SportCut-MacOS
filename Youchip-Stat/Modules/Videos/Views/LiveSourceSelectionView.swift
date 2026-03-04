@@ -18,8 +18,11 @@ struct LiveSourceSelectionView: View {
     @State private var selectedFormatIndex: Int = 0
     @State private var errorMessage: String?
     @State private var isConfiguring: Bool = false
+    @State private var selectedPreloadURL: URL? = nil
     
-    var onConfigure: (AVCaptureDevice, AVCaptureDevice?, AVCaptureDevice.Format?) -> Void
+    /// When true the sheet was opened via "Append to video" — the preloaded video picker is hidden.
+    var isAppendMode: Bool = false
+    var onConfigure: (AVCaptureDevice, AVCaptureDevice?, AVCaptureDevice.Format?, URL?) -> Void
     var onCancel: () -> Void
     
     var body: some View {
@@ -31,6 +34,9 @@ struct LiveSourceSelectionView: View {
                     videoSourceSection
                     audioSourceSection
                     qualitySection
+                    if !isAppendMode {
+                        preloadedVideoSection
+                    }
                     
                     if let error = errorMessage {
                         errorSection(error)
@@ -42,12 +48,11 @@ struct LiveSourceSelectionView: View {
             
             footerSection
         }
-        .frame(minWidth: 500, maxWidth: 500, minHeight: 480, maxHeight: 600)
+        .frame(minWidth: 500, maxWidth: 500, minHeight: 480, maxHeight: 620)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             liveManager.discoverDevices()
             
-            // Auto-select first device
             if selectedVideoDevice == nil, let first = liveManager.availableVideoDevices.first {
                 selectedVideoDevice = first
                 updateFormats(for: first)
@@ -178,6 +183,81 @@ struct LiveSourceSelectionView: View {
                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                 )
             }
+        }
+    }
+    
+    // MARK: - Preloaded Video Section
+    
+    private var preloadedVideoSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(^String.Titles.liveStreamPreloadedVideo)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+            
+            Text(^String.Titles.liveStreamPreloadedVideoHint)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+            
+            HStack(spacing: 10) {
+                if let url = selectedPreloadURL {
+                    Image(systemName: "film")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 14))
+                    Text(url.lastPathComponent)
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button(action: { selectedPreloadURL = nil }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    Button(action: { pickPreloadFile() }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder")
+                                .font(.system(size: 13))
+                            Text(^String.Titles.liveStreamPickPreloadFile)
+                                .font(.system(size: 13))
+                        }
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.orange.opacity(0.08))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            )
+        }
+    }
+    
+    private func pickPreloadFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
+        panel.title = ^String.Titles.liveStreamPickPreloadFile
+        if panel.runModal() == .OK, let url = panel.url {
+            selectedPreloadURL = url
         }
     }
     
@@ -318,24 +398,22 @@ struct LiveSourceSelectionView: View {
         
         let format = availableFormats.isEmpty ? nil : availableFormats[selectedFormatIndex].format
         
-        // HaishinKit configureSession triggers async Task internally
         _ = liveManager.configureSession(
             videoDevice: videoDevice,
             audioDevice: selectedAudioDevice,
             format: format
         )
         
-        // Poll for configuration result (HaishinKit MediaMixer is an actor, async setup)
         pollForConfiguration(videoDevice: videoDevice, format: format, attempts: 0)
     }
     
     private func pollForConfiguration(videoDevice: AVCaptureDevice, format: AVCaptureDevice.Format?, attempts: Int) {
-        let maxAttempts = 20 // Up to 4 seconds (20 * 200ms)
+        let maxAttempts = 20
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [self] in
             if liveManager.isSessionConfigured {
                 isConfiguring = false
-                onConfigure(videoDevice, selectedAudioDevice, format)
+                onConfigure(videoDevice, selectedAudioDevice, format, selectedPreloadURL)
             } else if attempts >= maxAttempts {
                 isConfiguring = false
                 errorMessage = ^String.Titles.liveStreamConfigError

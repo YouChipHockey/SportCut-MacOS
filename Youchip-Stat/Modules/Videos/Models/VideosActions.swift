@@ -46,8 +46,9 @@ enum VideosActions {
     
     // Live Stream Actions
     case showLiveSourceSelection
-    case liveSourceConfigured
+    case liveSourceConfigured(preloadedURL: URL?)
     case startLiveWithMetadata(team1: String, team2: String, score: String, dateTime: Date)
     case cancelLiveSetup
+    case appendToVideo(file: FilesFile)
     
 }

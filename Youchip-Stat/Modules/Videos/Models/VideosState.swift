@@ -37,4 +37,9 @@ struct VideosState {
     var showLiveMetadataSheet: Bool = false
     var isLiveSessionConfigured: Bool = false
     
+    /// Set when the user triggers "append to existing video" from the video list.
+    var appendVideoFile: FilesFile? = nil
+    /// Pre-loaded video URL selected in the LiveSourceSelectionView (new session with pre-existing base video).
+    var preloadedVideoForLive: URL? = nil
+    
 }

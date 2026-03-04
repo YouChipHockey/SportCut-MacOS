@@ -153,6 +153,7 @@
 "FullControlModeHelp" = "Markup Mode";  // ^String.Titles.fullControlModeHelp
 "FullControlButtonJSONSimple" = "Download Simple JSON";  // ^String.Titles.fullControlButtonJSONSimple
 "FullControlButtonJSONFull" = "Download Full JSON";  // ^String.Titles.fullControlButtonJSONFull
+"FullControlButtonXML" = "Download XML";  // ^String.Titles.fullControlButtonXML
 "FullControlMenuExport" = "Cuts";  // ^String.Titles.fullControlMenuExport
 "FullControlButtonExportTimeline" = "Export Current Timeline";  // ^String.Titles.fullControlButtonExportTimeline
 "FullControlButtonExportAll" = "Export All";  // ^String.Titles.fullControlButtonExportAll
@@ -235,6 +236,7 @@
 "FullControlMenuJSON" = "JSON";  // ^String.Titles.fullControlMenuJSON
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
+"FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
 "FullControlAiReportErrorGeneration" = "AI report generation error: %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "Error: no data from server";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "Server error: %@";  // ^String.Titles.fullControlErrorServer
@@ -744,6 +746,10 @@
 "LiveStreamContinueBroadcast" = "Continue"; // ^String.Titles.liveStreamContinueBroadcast
 "LiveStreamPausedLabel" = "PAUSED"; // ^String.Titles.liveStreamPausedLabel
 "LiveStreamBroadcastPaused" = "Broadcast paused"; // ^String.Titles.liveStreamBroadcastPaused
+"LiveStreamPreloadedVideo" = "Pre-loaded video"; // ^String.Titles.liveStreamPreloadedVideo
+"LiveStreamPreloadedVideoHint" = "Optional. Pick a video from your device to use as the starting base for this session."; // ^String.Titles.liveStreamPreloadedVideoHint
+"LiveStreamPickPreloadFile" = "Choose video..."; // ^String.Titles.liveStreamPickPreloadFile
+"AppendToVideo" = "Append to video"; // ^String.Titles.appendToVideo
 
 // Data Sync & Backup
 "DataManagementTitle" = "Data Management";

@@ -159,6 +159,23 @@ class VideoFilesManager {
         InMemoryStorageManager.shared.saveTimelines(timelines, for: videoData.id)
     }
     
+    /// Updates the video file of an existing project to point to a new URL.
+    /// Used in "append" mode to replace the original video with the combined (old + new recording) file.
+    @discardableResult
+    func updateVideoURL(for file: FilesFile, newURL: URL) -> Bool {
+        guard let newBookmark = newURL.makeBookmark(),
+              let dataIndex = videosData.firstIndex(where: { $0.id == file.id }) else {
+            return false
+        }
+        videosData[dataIndex].bookmark = newBookmark
+        if let fileIndex = files.firstIndex(where: { $0.videoData.id == file.id }) {
+            files[fileIndex].videoData.bookmark = newBookmark
+        }
+        saveBookmarks()
+        updateFiles?(files)
+        return true
+    }
+    
     // MARK: - Timeline File Management
     
     private var timelinesDirectory: URL {

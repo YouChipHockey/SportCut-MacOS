@@ -794,11 +794,7 @@ struct FullControlView: View {
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .disabled(liveStreamManager.reviewFileVersion == 0)
-                        .opacity(liveStreamManager.reviewFileVersion == 0 ? 0.35 : 1.0)
-                        .help(liveStreamManager.reviewFileVersion == 0
-                              ? "Пересмотр станет доступен после первой записи сегмента (~5 сек)"
-                              : "Пересмотр — анализ записи с возможностью разметки")
+                        .help("Пересмотр — анализ записи с возможностью разметки")
                     }
                 }
                 .padding(.horizontal, 12)
@@ -1047,6 +1043,21 @@ struct FullControlView: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                             
+                            Button(action: { exportXML() }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "doc.richtext")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text("XML")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.teal.opacity(0.1))
+                                .foregroundColor(.teal)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
                             Menu {
                                 Button(^String.Titles.fullControlButtonExportTimeline) {
                                     selectedExportType = .currentTimeline
@@ -1128,6 +1139,21 @@ struct FullControlView: View {
                             .padding(.vertical, 6)
                             .background(Color.purple.opacity(0.1))
                             .foregroundColor(.purple)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Button(action: { exportXML() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.richtext")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("XML")
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.teal.opacity(0.1))
+                            .foregroundColor(.teal)
                             .cornerRadius(6)
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -1303,6 +1329,92 @@ struct FullControlView: View {
         }
     }
     
+    private func exportXML() {
+        let tagLibrary = TagLibraryManager.shared
+
+        // Collect all stamps from non-drawings timelines, sorted by start time
+        var allStamps: [(stamp: TimelineStamp, tagName: String, labelNames: [String], colorHex: String)] = []
+        for line in timelineData.lines {
+            if line.isDrawingsTimeline { continue }
+            for stamp in line.stamps {
+                let tag = tagLibrary.findTagById(stamp.idTag)
+                let tagName = tag?.name ?? stamp.label
+                let colorHex = tag?.color ?? stamp.colorHex
+                let labelNames = stamp.labels.compactMap { tagLibrary.findLabelById($0)?.name }
+                allStamps.append((stamp: stamp, tagName: tagName, labelNames: labelNames, colorHex: colorHex))
+            }
+        }
+        allStamps.sort { $0.stamp.timeStartSeconds < $1.stamp.timeStartSeconds }
+
+        // Build unique codes with colors for ROWS section (preserve first-seen order)
+        var seenCodes = Set<String>()
+        var rows: [(code: String, colorHex: String)] = []
+        for entry in allStamps {
+            if seenCodes.insert(entry.tagName).inserted {
+                rows.append((code: entry.tagName, colorHex: entry.colorHex))
+            }
+        }
+
+        // XML builder
+        func esc(_ s: String) -> String {
+            s.replacingOccurrences(of: "&", with: "&amp;")
+             .replacingOccurrences(of: "<", with: "&lt;")
+             .replacingOccurrences(of: ">", with: "&gt;")
+             .replacingOccurrences(of: "\"", with: "&quot;")
+        }
+
+        // Convert hex color "RRGGBB" → 0-65535 components
+        func hexToRGB65k(_ hex: String) -> (r: Int, g: Int, b: Int) {
+            let clean = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+            var value: UInt64 = 0
+            Scanner(string: clean).scanHexInt64(&value)
+            let r = Int((value >> 16) & 0xFF) * 257
+            let g = Int((value >> 8)  & 0xFF) * 257
+            let b = Int( value        & 0xFF) * 257
+            return (r, g, b)
+        }
+
+        var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<file>\n<ALL_INSTANCES>\n"
+
+        for (index, entry) in allStamps.enumerated() {
+            xml += "<instance>\n"
+            xml += "<ID>\(index + 1)</ID>\n"
+            xml += "<start>\(entry.stamp.timeStartSeconds)</start>\n"
+            xml += "<end>\(entry.stamp.timeFinishSeconds)</end>\n"
+            xml += "<code>\(esc(entry.tagName))</code>\n"
+            if !entry.labelNames.isEmpty {
+                xml += "<free_text>\(esc(entry.labelNames.joined(separator: ", ")))</free_text>\n"
+            }
+            xml += "</instance>\n"
+        }
+
+        xml += "</ALL_INSTANCES>\n<ROWS>\n"
+
+        for row in rows {
+            let (r, g, b) = hexToRGB65k(row.colorHex)
+            xml += "<row>\n"
+            xml += "<code>\(esc(row.code))</code>\n"
+            xml += "<R>\(r)</R>\n"
+            xml += "<G>\(g)</G>\n"
+            xml += "<B>\(b)</B>\n"
+            xml += "</row>\n"
+        }
+
+        xml += "</ROWS>\n</file>"
+
+        let panel = NSSavePanel()
+        panel.allowedFileTypes = ["xml"]
+        panel.nameFieldStringValue = ^String.Titles.fullControlExportXmlFileName
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try xml.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                errorMessage = "Error saving XML: \(error.localizedDescription)"
+                showErrorAlert = true
+            }
+        }
+    }
+
     private func stampHoverPopup(stampInfo: String) -> some View {
         let lines = stampInfo.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count >= 4 else { return AnyView(EmptyView()) }

@@ -153,6 +153,7 @@
 "FullControlModeHelp" = "Modo de Marcado";  // ^String.Titles.fullControlModeHelp
 "FullControlButtonJSONSimple" = "Descargar JSON Simple";  // ^String.Titles.fullControlButtonJSONSimple
 "FullControlButtonJSONFull" = "Descargar JSON Completo";  // ^String.Titles.fullControlButtonJSONFull
+"FullControlButtonXML" = "Descargar XML";  // ^String.Titles.fullControlButtonXML
 "FullControlMenuExport" = "Cortes";  // ^String.Titles.fullControlMenuExport
 "FullControlButtonExportTimeline" = "Exportar Línea de Tiempo Actual";  // ^String.Titles.fullControlButtonExportTimeline
 "FullControlButtonExportAll" = "Exportar Todo";  // ^String.Titles.fullControlButtonExportAll
@@ -235,6 +236,7 @@
 "FullControlMenuJSON" = "JSON";  // ^String.Titles.fullControlMenuJSON
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
+"FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
 "FullControlAiReportErrorGeneration" = "Error de generación del informe IA: %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "Error: no hay datos del servidor";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "Error del servidor: %@";  // ^String.Titles.fullControlErrorServer
@@ -718,6 +720,10 @@
 "LiveStreamContinueBroadcast" = "Continuar";
 "LiveStreamPausedLabel" = "PAUSADO";
 "LiveStreamBroadcastPaused" = "Transmisión en pausa";
+"LiveStreamPreloadedVideo" = "Vídeo precargado";
+"LiveStreamPreloadedVideoHint" = "Opcional. Elija un vídeo de su dispositivo como base inicial para esta sesión.";
+"LiveStreamPickPreloadFile" = "Elegir vídeo...";
+"AppendToVideo" = "Agregar al vídeo";
 
 // Data Sync & Backup
 "DataManagementTitle" = "Gestión de Datos";

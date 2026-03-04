@@ -59,6 +59,11 @@ class LiveStreamManager: NSObject, ObservableObject {
     private var currentVideoId: String?
     private var isAudioAttached: Bool = false
     
+    /// URL of the pre-existing video that seeds the beginning of an append session.
+    private(set) var preloadedBaseURL: URL? = nil
+    /// Duration of the pre-existing video (seconds), used as the starting offset for liveDuration.
+    private(set) var preloadedBaseDuration: Double = 0.0
+    
     /// Unique session ID to prevent stale async callbacks from overwriting a newer session.
     private var sessionId: UUID = UUID()
     
@@ -253,7 +258,7 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     // MARK: - Start Live Stream
     
-    func startLiveStream(videoId: String) {
+    func startLiveStream(videoId: String, preloadedVideoURL: URL? = nil) {
         guard let mixer = mixer else { return }
         
         currentVideoId = videoId
@@ -274,6 +279,17 @@ class LiveStreamManager: NSObject, ObservableObject {
         let newRecorder = LiveStreamRecorder(outputURL: tempFileURL!, enableAudio: isAudioAttached)
         self.recorder = newRecorder
         
+        // Calculate preloaded duration synchronously for local files.
+        var calculatedPreloadDuration: Double = 0.0
+        if let preloadURL = preloadedVideoURL {
+            let probeAsset = AVURLAsset(url: preloadURL)
+            let rawDuration = probeAsset.duration
+            if rawDuration.isValid && !rawDuration.isIndefinite && rawDuration.seconds > 0 {
+                calculatedPreloadDuration = rawDuration.seconds
+            }
+        }
+        let baseSegments: [URL] = preloadedVideoURL.map { [$0] } ?? []
+        
         Task {
             await mixer.addOutput(newRecorder)
             await mixer.startRunning()
@@ -282,12 +298,15 @@ class LiveStreamManager: NSObject, ObservableObject {
             await MainActor.run {
                 self.isLive = true
                 self.isBroadcastPaused = false
-                self.liveDuration = 0.0
-                self.accumulatedDurationBeforePause = 0.0
+                self.preloadedBaseURL = preloadedVideoURL
+                self.preloadedBaseDuration = calculatedPreloadDuration
+                self.liveDuration = calculatedPreloadDuration
+                self.accumulatedDurationBeforePause = calculatedPreloadDuration
                 self.recordingStartDate = Date()
-                self.allSegmentURLs = []
+                self.allSegmentURLs = baseSegments
                 self.isReviewRefreshInProgress = false
-                self.reviewFileVersion = 0
+                // If we have a preloaded video, start at version 1 so the review player loads immediately.
+                self.reviewFileVersion = preloadedVideoURL != nil ? 1 : 0
                 self.startDurationTimer()
                 self.performStartupPauseResume()
             }
@@ -555,8 +574,9 @@ class LiveStreamManager: NSObject, ObservableObject {
         await exporter.export()
         
         if exporter.status == .completed {
-            // Remove intermediate segment files.
-            for url in segments {
+            // Remove intermediate segment files, but never the preloaded base video.
+            let baseURL = self.preloadedBaseURL
+            for url in segments where url != baseURL {
                 try? fileManager.removeItem(at: url)
             }
             return finalURL
@@ -757,6 +777,8 @@ class LiveStreamManager: NSObject, ObservableObject {
             self.reviewFileVersion = 0
             self.allSegmentURLs = []
             self.isReviewRefreshInProgress = false
+            self.preloadedBaseURL = nil
+            self.preloadedBaseDuration = 0.0
         }
         
         let mixerToStop = mixer

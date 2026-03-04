@@ -153,6 +153,7 @@
 "FullControlModeHelp" = "Belgilash rejimi";  // ^String.Titles.fullControlModeHelp
 "FullControlButtonJSONSimple" = "Oddiy JSON yuklab olish";  // ^String.Titles.fullControlButtonJSONSimple
 "FullControlButtonJSONFull" = "To'liq JSON yuklab olish";  // ^String.Titles.fullControlButtonJSONFull
+"FullControlButtonXML" = "XML yuklab olish";  // ^String.Titles.fullControlButtonXML
 "FullControlMenuExport" = "Kesimlar";  // ^String.Titles.fullControlMenuExport
 "FullControlButtonExportTimeline" = "Joriy vaqt chiziqini eksport qilish";  // ^String.Titles.fullControlButtonExportTimeline
 "FullControlButtonExportAll" = "Hammasini eksport qilish";  // ^String.Titles.fullControlButtonExportAll
@@ -235,6 +236,7 @@
 "FullControlMenuJSON" = "JSON";  // ^String.Titles.fullControlMenuJSON
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
+"FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
 "FullControlAiReportErrorGeneration" = "AI hisobot yaratish xatosi: %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "Xato: serverdan ma'lumot yo'q";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "Server xatosi: %@";  // ^String.Titles.fullControlErrorServer
@@ -718,6 +720,10 @@
 "LiveStreamContinueBroadcast" = "Davom ettirish";
 "LiveStreamPausedLabel" = "PAUZA";
 "LiveStreamBroadcastPaused" = "Efir to'xtatilgan";
+"LiveStreamPreloadedVideo" = "Oldindan yuklangan video";
+"LiveStreamPreloadedVideoHint" = "Ixtiyoriy. Qurilmangizdan video tanlang — u sessiya uchun asos bo'ladi.";
+"LiveStreamPickPreloadFile" = "Video tanlash...";
+"AppendToVideo" = "Videoga qo'shish";
 
 // Data Sync & Backup
 "DataManagementTitle" = "Ma'lumotlarni Boshqarish";

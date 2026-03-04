@@ -153,6 +153,7 @@
 "FullControlModeHelp" = "Режим разметки";  // ^String.Titles.fullControlModeHelp
 "FullControlButtonJSONSimple" = "Скачать упрощенный JSON";  // ^String.Titles.fullControlButtonJSONSimple
 "FullControlButtonJSONFull" = "Скачать полный JSON";  // ^String.Titles.fullControlButtonJSONFull
+"FullControlButtonXML" = "Скачать XML";  // ^String.Titles.fullControlButtonXML
 "FullControlMenuExport" = "Нарезки";  // ^String.Titles.fullControlMenuExport
 "FullControlButtonExportTimeline" = "Экспорт текущего таймлайна";  // ^String.Titles.fullControlButtonExportTimeline
 "FullControlButtonExportAll" = "Экспорт всего";  // ^String.Titles.fullControlButtonExportAll
@@ -234,6 +235,7 @@
 "FullControlMenuJSON" = "JSON";  // ^String.Titles.fullControlMenuJSON
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
+"FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
 "FullControlAiReportErrorGeneration" = "Ошибка генерации AI отчета: %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "Ошибка: нет данных от сервера";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "Ошибка сервера: %@";  // ^String.Titles.fullControlErrorServer
@@ -745,6 +747,10 @@
 "LiveStreamContinueBroadcast" = "Продолжить"; // ^String.Titles.liveStreamContinueBroadcast
 "LiveStreamPausedLabel" = "ПАУЗА"; // ^String.Titles.liveStreamPausedLabel
 "LiveStreamBroadcastPaused" = "Трансляция приостановлена"; // ^String.Titles.liveStreamBroadcastPaused
+"LiveStreamPreloadedVideo" = "Предзагруженное видео"; // ^String.Titles.liveStreamPreloadedVideo
+"LiveStreamPreloadedVideoHint" = "Необязательно. Выберите видео с устройства — оно станет основой нового сеанса."; // ^String.Titles.liveStreamPreloadedVideoHint
+"LiveStreamPickPreloadFile" = "Выбрать видео..."; // ^String.Titles.liveStreamPickPreloadFile
+"AppendToVideo" = "Дозаписать видео"; // ^String.Titles.appendToVideo
 
 // Data Sync & Backup
 "DataManagementTitle" = "Управление данными";

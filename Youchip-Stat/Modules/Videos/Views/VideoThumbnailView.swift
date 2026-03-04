@@ -222,6 +222,18 @@ struct VideoThumbnailView: View {
             Divider()
             
             Button(action: {
+                viewModel.action.send(.appendToVideo(file: file))
+            }) {
+                HStack {
+                    Image(systemName: "plus.rectangle.on.rectangle")
+                        .foregroundColor(.blue)
+                    Text(^String.Titles.appendToVideo)
+                }
+            }
+            
+            Divider()
+            
+            Button(action: {
                 viewModel.action.send(.exportProject(file: file))
             }) {
                 HStack {

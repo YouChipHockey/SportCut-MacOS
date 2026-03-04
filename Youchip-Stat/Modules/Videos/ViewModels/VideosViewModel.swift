@@ -355,41 +355,68 @@ class VideosViewModel: ObservableObject {
                 self.action.send(.showError(error: ^String.Titles.videoUploadLimitReached))
                 return
             }
+            state.appendVideoFile = nil
+            state.preloadedVideoForLive = nil
             state.showLiveSourceSelection = true
             
-        case .liveSourceConfigured:
+        case .liveSourceConfigured(let preloadedURL):
             state.showLiveSourceSelection = false
-            state.isLiveSessionConfigured = true
-            state.showLiveMetadataSheet = true
+            
+            if let appendFile = state.appendVideoFile {
+                // Append mode: skip metadata sheet, open directly with existing project.
+                state.appendVideoFile = nil
+                state.isLiveSessionConfigured = false
+                WindowsManager.shared.openLiveVideoAppending(file: appendFile)
+            } else {
+                // New session: always show metadata sheet; carry the optional preloaded URL.
+                state.preloadedVideoForLive = preloadedURL
+                state.isLiveSessionConfigured = true
+                state.showLiveMetadataSheet = true
+            }
             
         case .startLiveWithMetadata(let team1, let team2, let score, let dateTime):
             let metadata = VideoMetadata(team1: team1, team2: team2, score: score, dateTime: dateTime)
+            let preloadedURL = state.preloadedVideoForLive
+            state.preloadedVideoForLive = nil
             // Reset flag before closing sheet so onDismiss doesn't trigger cancelLiveSetup
             state.isLiveSessionConfigured = false
-            startLiveStream(with: metadata)
+            startLiveStream(with: metadata, preloadedURL: preloadedURL)
             state.showLiveMetadataSheet = false
             
         case .cancelLiveSetup:
             state.showLiveSourceSelection = false
             state.showLiveMetadataSheet = false
             state.isLiveSessionConfigured = false
+            state.appendVideoFile = nil
+            state.preloadedVideoForLive = nil
             LiveStreamManager.shared.fullCleanup()
+            
+            
+        case .appendToVideo(let file):
+            if file.isBroken {
+                self.action.send(.showError(error: ^String.Titles.videoUnavailable))
+                return
+            }
+            state.appendVideoFile = file
+            state.preloadedVideoForLive = nil
+            state.showLiveSourceSelection = true
         }
     }
     
     // MARK: - Live Stream
     
-    private func startLiveStream(with metadata: VideoMetadata) {
+    private func startLiveStream(with metadata: VideoMetadata, preloadedURL: URL? = nil) {
         let newFileName = metadata.generateFileName()
         let videoId = filesManager.generate32CharacterCode()
-        
-        // Create a placeholder entry in files manager (no bookmark yet, will be set after recording)
-        // For now, we just open the live player
         
         if !authManager.isAuthValid {
             incrementAddedVideosCount()
         }
         
-        WindowsManager.shared.openLiveVideo(videoId: videoId, fileName: newFileName)
+        if let preloadedURL = preloadedURL {
+            WindowsManager.shared.openLiveVideoWithPreload(videoId: videoId, fileName: newFileName, preloadedVideoURL: preloadedURL)
+        } else {
+            WindowsManager.shared.openLiveVideo(videoId: videoId, fileName: newFileName)
+        }
     }
 }

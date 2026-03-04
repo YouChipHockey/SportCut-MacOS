@@ -156,6 +156,7 @@ extension String {
         case fullControlModeHelp
         case fullControlButtonJSONSimple
         case fullControlButtonJSONFull
+        case fullControlButtonXML
         case fullControlMenuExport
         case fullControlButtonExportTimeline
         case fullControlButtonExportAll
@@ -241,6 +242,7 @@ extension String {
         case fullControlMenuJSON
         case fullControlExportSimpleJsonFileName
         case fullControlExportFullJsonFileName
+        case fullControlExportXmlFileName
         case fullControlAiReportErrorGeneration
         case fullControlErrorNoServerData
         case fullControlErrorServer
@@ -748,6 +750,10 @@ extension String {
         case liveStreamContinueBroadcast
         case liveStreamPausedLabel
         case liveStreamBroadcastPaused
+        case liveStreamPreloadedVideo
+        case liveStreamPreloadedVideoHint
+        case liveStreamPickPreloadFile
+        case appendToVideo
         
         // Data Sync & Backup
         case dataManagementTitle

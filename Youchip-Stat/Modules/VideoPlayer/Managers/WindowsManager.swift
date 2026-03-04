@@ -54,6 +54,10 @@ class WindowsManager: NSObject {
     private var liveVideoId: String?
     private var liveFileName: String?
     
+    /// Whether the current live session is appending to an existing video project.
+    private var isAppendingToFile: Bool = false
+    private var appendingFile: FilesFile? = nil
+    
     private var collectionWindowDelegate: CollectionWindowDelegate?
     
     override init() {
@@ -116,6 +120,8 @@ class WindowsManager: NSObject {
         isLiveSession = true
         liveVideoId = videoId
         liveFileName = fileName
+        isAppendingToFile = false
+        appendingFile = nil
         
         guard isClosing else { return }
         
@@ -123,14 +129,11 @@ class WindowsManager: NSObject {
         UserDefaults.standard.set("", forKey: "editingStampID")
         isClosing = false
         
-        // Initialize empty timelines for the live session
         TimelineDataManager.shared.currentBookmark = nil
         TimelineDataManager.shared.lines = []
         TimelineDataManager.shared.selectedLineID = nil
-        
         ensureScreenshotsTimelineExists()
         
-        // Create screenshots folder for this live session
         let fileManager = FileManager.default
         let documentsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
         let screenshotsDir = documentsDir.appendingPathComponent("Screenshots").appendingPathComponent(videoId)
@@ -139,14 +142,89 @@ class WindowsManager: NSObject {
         }
         ScreenshotsMetadataManager.shared.loadScreenshots(from: screenshotsDir)
         
-        // Start live mode in VideoPlayerManager (no AVPlayer - uses preview layer)
         VideoPlayerManager.shared.startLiveMode()
-        
-        // Start the actual capture and recording
         LiveStreamManager.shared.startLiveStream(videoId: videoId)
         
-        // Create windows
-        videoWindow = VideoPlayerWindowController(id: videoId)
+        openLiveWindows()
+    }
+    
+    /// Opens a live session that appends new recording to an existing video project.
+    /// The existing project's timelines are loaded; the preloaded video seeds the review player.
+    func openLiveVideoAppending(file: FilesFile) {
+        guard let videoURL = file.url else { return }
+        
+        let existingId = file.id
+        let existingTimelines = VideoFilesManager.shared.loadTimelines(for: existingId)
+        
+        currentVideoId = existingId
+        isLiveSession = true
+        liveVideoId = existingId
+        liveFileName = file.name
+        isAppendingToFile = true
+        appendingFile = file
+        
+        guard isClosing else { return }
+        
+        UserDefaults.standard.set("", forKey: "editingStampLineID")
+        UserDefaults.standard.set("", forKey: "editingStampID")
+        isClosing = false
+        
+        // Load existing timelines from the project being appended to.
+        TimelineDataManager.shared.currentBookmark = nil
+        TimelineDataManager.shared.lines = existingTimelines
+        TimelineDataManager.shared.selectedLineID = nil
+        ensureScreenshotsTimelineExists()
+        
+        // Use the existing project's screenshots folder.
+        let screenshotsDir = file.screenshotsFolder
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: screenshotsDir.path) {
+            try? fileManager.createDirectory(at: screenshotsDir, withIntermediateDirectories: true)
+        }
+        ScreenshotsMetadataManager.shared.loadScreenshots(from: screenshotsDir)
+        
+        VideoPlayerManager.shared.startLiveMode()
+        LiveStreamManager.shared.startLiveStream(videoId: existingId, preloadedVideoURL: videoURL)
+        
+        openLiveWindows()
+    }
+    
+    /// Opens a new live session (fresh project) with an optional pre-existing video seeding the review player.
+    func openLiveVideoWithPreload(videoId: String, fileName: String, preloadedVideoURL: URL?) {
+        currentVideoId = videoId
+        isLiveSession = true
+        liveVideoId = videoId
+        liveFileName = fileName
+        isAppendingToFile = false
+        appendingFile = nil
+        
+        guard isClosing else { return }
+        
+        UserDefaults.standard.set("", forKey: "editingStampLineID")
+        UserDefaults.standard.set("", forKey: "editingStampID")
+        isClosing = false
+        
+        TimelineDataManager.shared.currentBookmark = nil
+        TimelineDataManager.shared.lines = []
+        TimelineDataManager.shared.selectedLineID = nil
+        ensureScreenshotsTimelineExists()
+        
+        let fileManager = FileManager.default
+        let documentsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let screenshotsDir = documentsDir.appendingPathComponent("Screenshots").appendingPathComponent(videoId)
+        if !fileManager.fileExists(atPath: screenshotsDir.path) {
+            try? fileManager.createDirectory(at: screenshotsDir, withIntermediateDirectories: true)
+        }
+        ScreenshotsMetadataManager.shared.loadScreenshots(from: screenshotsDir)
+        
+        VideoPlayerManager.shared.startLiveMode()
+        LiveStreamManager.shared.startLiveStream(videoId: videoId, preloadedVideoURL: preloadedVideoURL)
+        
+        openLiveWindows()
+    }
+    
+    private func openLiveWindows() {
+        videoWindow = VideoPlayerWindowController(id: currentVideoId)
         controlWindow = FullControlWindowController()
         tagLibraryWindow = TagLibraryWindowController()
         
@@ -155,28 +233,13 @@ class WindowsManager: NSObject {
             let bottomHeight = screenFrame.height * 0.4
             let topHeight = screenFrame.height - bottomHeight - 40
             
-            let timelineRect = NSRect(
-                x: screenFrame.minX,
-                y: screenFrame.minY,
-                width: screenFrame.width,
-                height: bottomHeight
-            )
+            let timelineRect = NSRect(x: screenFrame.minX, y: screenFrame.minY, width: screenFrame.width, height: bottomHeight)
             controlWindow?.window?.setFrame(timelineRect, display: true)
             
-            let libraryRect = NSRect(
-                x: screenFrame.minX,
-                y: screenFrame.minY + bottomHeight,
-                width: screenFrame.width / 3,
-                height: topHeight
-            )
+            let libraryRect = NSRect(x: screenFrame.minX, y: screenFrame.minY + bottomHeight, width: screenFrame.width / 3, height: topHeight)
             tagLibraryWindow?.window?.setFrame(libraryRect, display: true)
             
-            let videoRect = NSRect(
-                x: screenFrame.minX + screenFrame.width / 3,
-                y: screenFrame.minY + bottomHeight,
-                width: (screenFrame.width * 2) / 3,
-                height: topHeight
-            )
+            let videoRect = NSRect(x: screenFrame.minX + screenFrame.width / 3, y: screenFrame.minY + bottomHeight, width: (screenFrame.width * 2) / 3, height: topHeight)
             videoWindow?.window?.setFrame(videoRect, display: true)
         }
         
@@ -207,8 +270,16 @@ class WindowsManager: NSObject {
         }
     }
     
-    /// Finalize the live recording: stop capture, write final file, import as static video.
+    /// Finalize the live recording: stop capture, write final file, import or update the video project.
     private func finalizeLiveSession() {
+        if isAppendingToFile, let file = appendingFile {
+            finalizeAppendSession(existingFile: file)
+        } else {
+            finalizeNewSession()
+        }
+    }
+    
+    private func finalizeNewSession() {
         let videoId = liveVideoId ?? ""
         let fileName = liveFileName ?? "Live_\(Date().timeIntervalSince1970)"
         let timelines = TimelineDataManager.shared.lines
@@ -220,14 +291,11 @@ class WindowsManager: NSObject {
             
             DispatchQueue.main.async {
                 if let url = fileURL {
-                    // Import the recorded video as a regular static video
                     if let filesFile = VideoFilesManager.shared.importFile(url: url, newName: fileName) {
-                        // Restore timelines from the live session
                         VideoFilesManager.shared.updateTimelines(
                             for: filesFile.videoData.bookmark,
                             with: timelines
                         )
-                        // Перенос скриншотов из папки live-сессии в папку импортированного видео (у импорта новый id — иначе иконки и картинки «пропадают»)
                         self.copyLiveScreenshotsToImportedVideo(liveVideoId: videoId, importedScreenshotsFolder: filesFile.screenshotsFolder)
                         print("WindowsManager: Live recording imported as '\(fileName)' with \(timelines.count) timelines")
                     }
@@ -236,6 +304,36 @@ class WindowsManager: NSObject {
                 }
                 
                 self.isLiveSession = false
+                self.liveVideoId = nil
+                self.liveFileName = nil
+                
+                LiveStreamManager.shared.fullCleanup()
+            }
+        }
+    }
+    
+    private func finalizeAppendSession(existingFile: FilesFile) {
+        let timelines = TimelineDataManager.shared.lines
+        
+        VideoPlayerManager.shared.endLiveMode()
+        
+        LiveStreamManager.shared.stopAndFinalize { [weak self] fileURL in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                if let url = fileURL {
+                    // Update the existing project's video to the combined (old + new) file.
+                    VideoFilesManager.shared.updateVideoURL(for: existingFile, newURL: url)
+                    // Save the merged timelines back to the existing project's ID.
+                    VideoFilesManager.shared.saveTimelines(timelines, for: existingFile.id)
+                    print("WindowsManager: Append session finalized for '\(existingFile.name)' with \(timelines.count) timelines")
+                } else {
+                    print("WindowsManager: Append session finalization failed - no file produced")
+                }
+                
+                self.isLiveSession = false
+                self.isAppendingToFile = false
+                self.appendingFile = nil
                 self.liveVideoId = nil
                 self.liveFileName = nil
                 
