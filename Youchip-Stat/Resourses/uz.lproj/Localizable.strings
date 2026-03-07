@@ -107,6 +107,7 @@
 "CollectionsTagTimeBefore" = "Oldingi vaqt:";  // ^String.Titles.collectionsTagTimeBefore
 "CollectionsTagTimeAfter" = "Keyingi vaqt:";  // ^String.Titles.collectionsTagTimeAfter
 "CollectionsTagTimeFormat" = "sek"; //*  // ^String.Titles.collectionsTagTimeFormat
+"CollectionsTagLayout" = "Joylashuv";  // ^String.Titles.collectionsTagLayout
 "CollectionsDialogAddLabel" = "Yangi yorliq qo'shish";  // ^String.Titles.collectionsDialogAddLabel
 "CollectionsButtonCancel" = "Bekor qilish";  // ^String.Titles.collectionsButtonCancel
 "CollectionsButtonAdd" = "Qo'shish";  // ^String.Titles.collectionsButtonAdd

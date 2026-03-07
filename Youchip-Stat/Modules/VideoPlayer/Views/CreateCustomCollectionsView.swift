@@ -111,6 +111,7 @@ struct CreateCustomCollectionsView: View {
     @State private var searchText = ""
     @State private var isSearching = false
     @State private var searchScope: SearchScope = .all
+    @State private var showTagLayoutEditor = false
     
     init() {
         _collectionManager = StateObject(wrappedValue: CustomCollectionManager())
@@ -223,6 +224,13 @@ struct CreateCustomCollectionsView: View {
         .sheet(isPresented: $showAddTimeEventSheet) {
             addTimeEventSheet()
         }
+        .sheet(isPresented: $showTagLayoutEditor) {
+            TagFreeLayoutEditorView(
+                collectionId: collectionManager.collectionID,
+                collectionName: collectionManager.collectionName,
+                tags: collectionManager.tags
+            )
+        }
     }
     
     private func resolveBookmark(_ bookmark: Data) -> URL? {
@@ -330,6 +338,19 @@ struct CreateCustomCollectionsView: View {
             .buttonStyle(PlainButtonStyle())
             
             Spacer()
+            
+            if viewMode == .tagGroups {
+                Button(action: {
+                    showTagLayoutEditor = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "rectangle.3.offgrid")
+                        Text(^String.Titles.collectionsTagLayout)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(collectionManager.tags.isEmpty)
+            }
             
             Picker("", selection: $viewMode) {
                 Text(^String.Titles.tagGroups)

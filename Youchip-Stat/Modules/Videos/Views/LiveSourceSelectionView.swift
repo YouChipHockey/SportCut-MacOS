@@ -13,7 +13,6 @@ struct LiveSourceSelectionView: View {
     @ObservedObject private var liveManager = LiveStreamManager.shared
     
     @State private var selectedVideoDevice: AVCaptureDevice?
-    @State private var selectedAudioDevice: AVCaptureDevice?
     @State private var availableFormats: [(format: AVCaptureDevice.Format, description: String)] = []
     @State private var selectedFormatIndex: Int = 0
     @State private var errorMessage: String?
@@ -32,7 +31,6 @@ struct LiveSourceSelectionView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     videoSourceSection
-                    audioSourceSection
                     qualitySection
                     if !isAppendMode {
                         preloadedVideoSection
@@ -56,9 +54,6 @@ struct LiveSourceSelectionView: View {
             if selectedVideoDevice == nil, let first = liveManager.availableVideoDevices.first {
                 selectedVideoDevice = first
                 updateFormats(for: first)
-            }
-            if selectedAudioDevice == nil, let first = liveManager.availableAudioDevices.first {
-                selectedAudioDevice = first
             }
         }
     }
@@ -123,30 +118,6 @@ struct LiveSourceSelectionView: View {
                     }
                 }
             }
-        }
-    }
-    
-    // MARK: - Audio Source Section
-    
-    private var audioSourceSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(^String.Titles.liveStreamAudioSource)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
-            
-            // Temporary simplified audio selection:
-            // we always use the Mac's built-in microphone (or no audio if it's unavailable).
-            HStack(spacing: 8) {
-                Image(systemName: "mic.fill")
-                    .foregroundColor(.secondary)
-                Text("Источник звука: микрофон компьютера (автоматически)")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(8)
         }
     }
     
@@ -400,7 +371,7 @@ struct LiveSourceSelectionView: View {
         
         _ = liveManager.configureSession(
             videoDevice: videoDevice,
-            audioDevice: selectedAudioDevice,
+            audioDevice: nil,
             format: format
         )
         
@@ -413,7 +384,7 @@ struct LiveSourceSelectionView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [self] in
             if liveManager.isSessionConfigured {
                 isConfiguring = false
-                onConfigure(videoDevice, selectedAudioDevice, format, selectedPreloadURL)
+                onConfigure(videoDevice, nil, format, selectedPreloadURL)
             } else if attempts >= maxAttempts {
                 isConfiguring = false
                 errorMessage = ^String.Titles.liveStreamConfigError

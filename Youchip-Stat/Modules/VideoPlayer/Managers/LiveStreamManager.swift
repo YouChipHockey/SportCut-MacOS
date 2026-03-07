@@ -25,7 +25,6 @@ class LiveStreamManager: NSObject, ObservableObject {
     @Published var isBroadcastPaused: Bool = false
     @Published var liveDuration: Double = 0.0
     @Published var availableVideoDevices: [AVCaptureDevice] = []
-    @Published var availableAudioDevices: [AVCaptureDevice] = []
     @Published var isSessionConfigured: Bool = false
     
     // MARK: - HaishinKit
@@ -57,7 +56,6 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     private var tempFileURL: URL?
     private var currentVideoId: String?
-    private var isAudioAttached: Bool = false
     
     /// URL of the pre-existing video that seeds the beginning of an append session.
     private(set) var preloadedBaseURL: URL? = nil
@@ -83,12 +81,6 @@ class LiveStreamManager: NSObject, ObservableObject {
         )
         availableVideoDevices = videoDiscovery.devices
         
-        let audioDiscovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInMicrophone, .externalUnknown],
-            mediaType: .audio,
-            position: .unspecified
-        )
-        availableAudioDevices = audioDiscovery.devices
     }
     
     func getAvailableFormats(for device: AVCaptureDevice) -> [(format: AVCaptureDevice.Format, description: String)] {
@@ -193,7 +185,6 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
         let activeFormat = format ?? videoDevice.activeFormat
         let initialFrameRate = activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30
-        isAudioAttached = false
         Task {
             do {
                 await newMixer.setFrameRate(initialFrameRate)
@@ -213,19 +204,7 @@ class LiveStreamManager: NSObject, ObservableObject {
                 } catch { /* keep initialFrameRate */ }
                 await newMixer.setFrameRate(actualFps)
                 
-                // Always use system microphone (MacBook mic) for now.
-                var audioAttached = false
-                if let systemAudio = AVCaptureDevice.default(for: .audio)
-                    ?? self.availableAudioDevices.first(where: { $0.deviceType == .builtInMicrophone })
-                    ?? self.availableAudioDevices.first {
-                    do {
-                        try await newMixer.attachAudio(systemAudio, track: 0)
-                        audioAttached = true
-                        print("LiveStreamManager: Using system audio device: \(systemAudio.localizedName)")
-                    } catch {
-                        print("LiveStreamManager: Failed to attach system audio device: \(error)")
-                    }
-                }
+                // Real-time markup recording is video-only (no audio).
                 
                 var videoMixerSettings = await newMixer.videoMixerSettings
                 videoMixerSettings.mode = .passthrough
@@ -242,7 +221,6 @@ class LiveStreamManager: NSObject, ObservableObject {
                     self.previewView = view
                     self.latestFrameCapture = frameCapture
                     self.isSessionConfigured = true
-                    self.isAudioAttached = audioAttached
                 }
             } catch {
                 print("LiveStreamManager: Failed to configure HaishinKit mixer: \(error)")
@@ -276,7 +254,7 @@ class LiveStreamManager: NSObject, ObservableObject {
             try? fileManager.removeItem(at: url)
         }
         
-        let newRecorder = LiveStreamRecorder(outputURL: tempFileURL!, enableAudio: isAudioAttached)
+        let newRecorder = LiveStreamRecorder(outputURL: tempFileURL!, enableAudio: false)
         self.recorder = newRecorder
         
         // Calculate preloaded duration synchronously for local files.
@@ -445,7 +423,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
         let newTempURL = liveDir.appendingPathComponent("\(videoId)_resumed_\(UUID().uuidString).mov")
         let oldRecorder = recorder
-        let newRecorder = LiveStreamRecorder(outputURL: newTempURL)
+        let newRecorder = LiveStreamRecorder(outputURL: newTempURL, enableAudio: false)
         await mixer.removeOutput(oldRecorder!)
         await mixer.addOutput(newRecorder)
         await MainActor.run { [weak self] in
@@ -519,17 +497,13 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     // MARK: - Segment Concatenation
     
-    /// Builds an AVMutableComposition from the given segment URLs (no export, for direct playback).
+    /// Builds an AVMutableComposition from the given segment URLs (video-only, no audio).
     func buildCompositionFromSegments(_ urls: [URL]) async -> AVMutableComposition {
         let composition = AVMutableComposition()
         guard let videoTrack = composition.addMutableTrack(
             withMediaType: .video,
             preferredTrackID: kCMPersistentTrackID_Invalid
         ) else { return composition }
-        let audioTrack = composition.addMutableTrack(
-            withMediaType: .audio,
-            preferredTrackID: kCMPersistentTrackID_Invalid
-        )
         var insertTime = CMTime.zero
         for url in urls {
             let asset = AVURLAsset(url: url)
@@ -539,9 +513,6 @@ class LiveStreamManager: NSObject, ObservableObject {
                 let timeRange = CMTimeRange(start: .zero, duration: duration)
                 if let vt = try? await asset.loadTracks(withMediaType: .video).first {
                     try? videoTrack.insertTimeRange(timeRange, of: vt, at: insertTime)
-                }
-                if let at = try? await asset.loadTracks(withMediaType: .audio).first {
-                    try? audioTrack?.insertTimeRange(timeRange, of: at, at: insertTime)
                 }
                 insertTime = CMTimeAdd(insertTime, duration)
             } catch {
@@ -731,7 +702,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         let segIndex = allSegmentURLs.count
         let newTempURL = liveDir.appendingPathComponent("\(videoId)_seg\(segIndex).mov")
         let oldRecorder = recorder
-        let newRecorder = LiveStreamRecorder(outputURL: newTempURL, enableAudio: isAudioAttached)
+        let newRecorder = LiveStreamRecorder(outputURL: newTempURL, enableAudio: false)
         if let oldRecorder = oldRecorder {
             await mixer.removeOutput(oldRecorder)
         }
@@ -1116,16 +1087,18 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             if writer.canAdd(videoInput) { writer.add(videoInput) }
             self.videoWriterInput = videoInput
             
-            let audioSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 44100,
-                AVNumberOfChannelsKey: 2,
-                AVEncoderBitRateKey: 128000
-            ]
-            let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
-            audioInput.expectsMediaDataInRealTime = true
-            if writer.canAdd(audioInput) { writer.add(audioInput) }
-            self.audioWriterInput = audioInput
+            if enableAudio {
+                let audioSettings: [String: Any] = [
+                    AVFormatIDKey: kAudioFormatMPEG4AAC,
+                    AVSampleRateKey: 44100,
+                    AVNumberOfChannelsKey: 2,
+                    AVEncoderBitRateKey: 128000
+                ]
+                let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+                audioInput.expectsMediaDataInRealTime = true
+                if writer.canAdd(audioInput) { writer.add(audioInput) }
+                self.audioWriterInput = audioInput
+            }
             
             self.assetWriter = writer
             

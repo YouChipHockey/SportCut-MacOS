@@ -107,6 +107,7 @@
 "CollectionsTagTimeBefore" = "之前时间:";  // ^String.Titles.collectionsTagTimeBefore
 "CollectionsTagTimeAfter" = "之后时间:";  // ^String.Titles.collectionsTagTimeAfter
 "CollectionsTagTimeFormat" = "秒"; //*  // ^String.Titles.collectionsTagTimeFormat
+"CollectionsTagLayout" = "布局";  // ^String.Titles.collectionsTagLayout
 "CollectionsDialogAddLabel" = "添加新标签";  // ^String.Titles.collectionsDialogAddLabel
 "CollectionsButtonCancel" = "取消";  // ^String.Titles.collectionsButtonCancel
 "CollectionsButtonAdd" = "添加";  // ^String.Titles.collectionsButtonAdd

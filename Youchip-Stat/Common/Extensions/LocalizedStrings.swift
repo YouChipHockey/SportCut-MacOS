@@ -112,6 +112,7 @@ extension String {
         case collectionsTagTimeBefore // ^String.Titles.collectionsTagTimeBefore
         case collectionsTagTimeAfter // ^String.Titles.collectionsTagTimeAfter
         case collectionsTagTimeFormat // ^String.Titles.collectionsTagTimeFormat
+        case collectionsTagLayout // ^String.Titles.collectionsTagLayout
         case collectionsDialogAddLabel // ^String.Titles.collectionsDialogAddLabel
         case collectionsButtonCancel // ^String.Titles.collectionsButtonCancel
         case collectionsButtonAdd // ^String.Titles.collectionsButtonAdd

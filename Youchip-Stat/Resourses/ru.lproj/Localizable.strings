@@ -107,6 +107,7 @@
 "CollectionsTagTimeBefore" = "Время до:";  // ^String.Titles.collectionsTagTimeBefore
 "CollectionsTagTimeAfter" = "Время после:";  // ^String.Titles.collectionsTagTimeAfter
 "CollectionsTagTimeFormat" = "сек"; //*  // ^String.Titles.collectionsTagTimeFormat
+"CollectionsTagLayout" = "Отображение";  // ^String.Titles.collectionsTagLayout
 "CollectionsDialogAddLabel" = "Добавить новый лейбл";  // ^String.Titles.collectionsDialogAddLabel
 "CollectionsButtonCancel" = "Отмена";  // ^String.Titles.collectionsButtonCancel
 "CollectionsButtonAdd" = "Добавить";  // ^String.Titles.collectionsButtonAdd

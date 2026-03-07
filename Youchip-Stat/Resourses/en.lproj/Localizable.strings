@@ -107,6 +107,7 @@
 "CollectionsTagTimeBefore" = "Time before:";  // ^String.Titles.collectionsTagTimeBefore
 "CollectionsTagTimeAfter" = "Time after:";  // ^String.Titles.collectionsTagTimeAfter
 "CollectionsTagTimeFormat" = "sec"; //*  // ^String.Titles.collectionsTagTimeFormat
+"CollectionsTagLayout" = "Layout";  // ^String.Titles.collectionsTagLayout
 "CollectionsDialogAddLabel" = "Add New Label";  // ^String.Titles.collectionsDialogAddLabel
 "CollectionsButtonCancel" = "Cancel";  // ^String.Titles.collectionsButtonCancel
 "CollectionsButtonAdd" = "Add";  // ^String.Titles.collectionsButtonAdd

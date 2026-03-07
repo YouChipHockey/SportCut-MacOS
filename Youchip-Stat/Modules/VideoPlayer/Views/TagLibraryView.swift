@@ -54,6 +54,17 @@ struct TagLibraryView: View {
     @State private var isEditorModeActive = false
     @State private var isLoadingCollections = false
     
+    @State private var isCollectionsPanelCollapsed = false
+    @State private var isTimeEventsCollapsed = false
+    @State private var isTagsPanelCollapsed = false
+    
+    enum TagDisplayMode: String {
+        case grouped
+        case free
+    }
+    
+    @State private var tagDisplayMode: TagDisplayMode = .grouped
+    
     @EnvironmentObject private var notificationSubscriptions: ProjectNotificationSubscriptions
     
     struct ActiveIntervalTag: Identifiable {
@@ -99,6 +110,7 @@ struct TagLibraryView: View {
         }
         hotkeyManager.registerHotkeys(from: tagLibrary.tags, for: .standard)
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
+        loadDisplayModePreference()
     }
     
     var body: some View {
@@ -112,9 +124,13 @@ struct TagLibraryView: View {
                             .id("timeEvents-\(tagLibrary.timeEvents.count)")
                     }
                     
-                    if !tagLibrary.tagGroups.isEmpty {
-                        tagGroupsSection
-                            .id("tagGroups-\(tagLibrary.tagGroups.count)")
+                    if tagDisplayMode == .grouped {
+                        if !tagLibrary.tagGroups.isEmpty {
+                            tagGroupsSection
+                                .id("tagGroups-\(tagLibrary.tagGroups.count)")
+                        }
+                    } else {
+                        freeTagsSection
                     }
                     
                     if tagLibrary.timeEvents.isEmpty && tagLibrary.tagGroups.isEmpty {
@@ -156,6 +172,16 @@ struct TagLibraryView: View {
                 collectionTitleView
                 Spacer()
                 
+                Picker("", selection: $tagDisplayMode) {
+                    Text("Группы").tag(TagDisplayMode.grouped)
+                    Text("Свободно").tag(TagDisplayMode.free)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 220)
+                .onChange(of: tagDisplayMode) { _ in
+                    saveDisplayModePreference()
+                }
+                
                 if isLoadingCollections {
                     HStack(spacing: 8) {
                         ProgressView()
@@ -165,6 +191,18 @@ struct TagLibraryView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isCollectionsPanelCollapsed.toggle()
+                    }
+                }) {
+                    Image(systemName: isCollectionsPanelCollapsed ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(^String.Titles.collections)
                 
                 Button(action: {
                     WindowsManager.shared.openCustomCollectionsWindow()
@@ -178,11 +216,13 @@ struct TagLibraryView: View {
                 .help(^String.Titles.createCollection)
                 .disabled(!activeIntervalTags.isEmpty || isLoadingCollections)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(Color(.windowBackgroundColor))
             
-            collectionsScrollView
+            if !isCollectionsPanelCollapsed {
+                collectionsScrollView
+            }
             
             Divider()
                 .background(Color(.separatorColor))
@@ -245,16 +285,16 @@ struct TagLibraryView: View {
     }
     
     private var collectionsScrollView: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 4) {
             if !tagLibrary.standardCollections.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(^String.Titles.standardCollections)
-                        .font(.caption)
+                        .font(.system(size: 10, weight: .regular))
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 12)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             ForEach(tagLibrary.standardCollections, id: \.name) { collection in
                                 standardCollectionChip(
                                     collection: collection,
@@ -262,30 +302,30 @@ struct TagLibraryView: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 12)
                     }
                 }
             }
             
             if !userCollections.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(^String.Titles.customCollections)
-                        .font(.caption)
+                        .font(.system(size: 10, weight: .regular))
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 12)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             ForEach(userCollections, id: \.name) { collection in
                                 customCollectionChip(collection: collection)
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 12)
                     }
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .background(Color(.controlBackgroundColor))
     }
     
@@ -677,28 +717,116 @@ struct TagLibraryView: View {
                     .padding(.vertical, 2)
                     .background(Color(.controlBackgroundColor))
                     .cornerRadius(10)
+                
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isTimeEventsCollapsed.toggle()
+                    }
+                }) {
+                    Image(systemName: isTimeEventsCollapsed ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
             }
             
-            FlexibleTimeEventGrid(events: tagLibrary.timeEvents, tagLibrary: tagLibrary, onEventTap: { event in
-                guard !isEditorModeActive else { return }
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    tagLibrary.toggleTimeEvent(id: event.id)
-                }
-            })
+            if !isTimeEventsCollapsed {
+                FlexibleTimeEventGrid(events: tagLibrary.timeEvents, tagLibrary: tagLibrary, onEventTap: { event in
+                    guard !isEditorModeActive else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        tagLibrary.toggleTimeEvent(id: event.id)
+                    }
+                })
+            }
         }
-        .padding(8)
+        .padding(6)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(.windowBackgroundColor))
-                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                .shadow(color: Color.black.opacity(0.03), radius: 1, x: 0, y: 1)
         )
     }
     
     
     private var tagGroupsSection: some View {
-        ForEach(tagLibrary.tagGroups) { group in
-            tagGroupView(for: group)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "tag")
+                    .foregroundColor(.accentColor)
+                    .font(.system(size: 14, weight: .medium))
+                
+                Text(^String.Titles.tagGroups)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isTagsPanelCollapsed.toggle()
+                    }
+                }) {
+                    Image(systemName: isTagsPanelCollapsed ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
+            }
+            
+            if !isTagsPanelCollapsed {
+                ForEach(tagLibrary.tagGroups) { group in
+                    tagGroupView(for: group)
+                }
+            }
         }
+    }
+    
+    @ViewBuilder
+    private var freeTagsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "rectangle.3.offgrid")
+                    .foregroundColor(.accentColor)
+                    .font(.system(size: 14, weight: .medium))
+                
+                Text("Свободное отображение")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isTagsPanelCollapsed.toggle()
+                    }
+                }) {
+                    Image(systemName: isTagsPanelCollapsed ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
+            }
+            
+            if !isTagsPanelCollapsed {
+                FreeTagsCanvasView(
+                    tags: tagLibrary.tags,
+                    onTagTap: handleTagButtonTap,
+                    activeIntervalTags: activeIntervalTags,
+                    hoveredTagID: hoveredTagID,
+                    tagCounts: tagCounts
+                )
+            }
+        }
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.windowBackgroundColor))
+                .shadow(color: Color.black.opacity(0.03), radius: 1, x: 0, y: 1)
+        )
     }
     
     private func tagGroupView(for group: TagGroup) -> some View {
@@ -1411,6 +1539,15 @@ struct TagLibraryView: View {
     
     private func countTagsInTimeline(tagId: String) -> Int {
         return tagCounts[tagId] ?? 0
+    }
+
+    private func loadDisplayModePreference() {
+        let rawValue = UserDefaults.standard.string(forKey: "TagLibraryDisplayMode") ?? TagDisplayMode.grouped.rawValue
+        tagDisplayMode = TagDisplayMode(rawValue: rawValue) ?? .grouped
+    }
+
+    private func saveDisplayModePreference() {
+        UserDefaults.standard.set(tagDisplayMode.rawValue, forKey: "TagLibraryDisplayMode")
     }
 }
 

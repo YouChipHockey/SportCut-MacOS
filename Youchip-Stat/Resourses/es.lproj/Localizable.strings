@@ -107,6 +107,7 @@
 "CollectionsTagTimeBefore" = "Tiempo antes:";  // ^String.Titles.collectionsTagTimeBefore
 "CollectionsTagTimeAfter" = "Tiempo después:";  // ^String.Titles.collectionsTagTimeAfter
 "CollectionsTagTimeFormat" = "seg"; //*  // ^String.Titles.collectionsTagTimeFormat
+"CollectionsTagLayout" = "Disposición";  // ^String.Titles.collectionsTagLayout
 "CollectionsDialogAddLabel" = "Agregar Nueva Etiqueta";  // ^String.Titles.collectionsDialogAddLabel
 "CollectionsButtonCancel" = "Cancelar";  // ^String.Titles.collectionsButtonCancel
 "CollectionsButtonAdd" = "Agregar";  // ^String.Titles.collectionsButtonAdd
