@@ -43,6 +43,16 @@ struct KeyCaptureView: NSViewRepresentable {
         }
         override func draw(_ dirtyRect: NSRect) {}
         
+        override func resignFirstResponder() -> Bool {
+            let result = super.resignFirstResponder()
+            if result {
+                DispatchQueue.main.async {
+                    self.isCapturing?.wrappedValue = false
+                }
+            }
+            return result
+        }
+        
         override func hitTest(_ point: NSPoint) -> NSView? {
             return isCapturing?.wrappedValue == true ? self : nil
         }
