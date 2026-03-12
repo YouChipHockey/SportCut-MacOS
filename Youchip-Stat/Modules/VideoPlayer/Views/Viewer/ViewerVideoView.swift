@@ -397,7 +397,7 @@ struct ViewerVideoView: View {
             let stamp = TimelineDataManager.shared.lines
                 .flatMap { $0.stamps }
                 .first { $0.id == stampID }
-            let tag = tagLibrary.allTags.first { $0.id == currentPlayingStamp.mainTagID }
+            let resolvedTag = tagLibrary.allTags.first { $0.id == currentPlayingStamp.mainTagID }
             let stampLabels = currentPlayingStamp.labelIDs.compactMap { labelID in
                 tagLibrary.allLabels.first(where: { $0.id == labelID })
             }
@@ -408,6 +408,7 @@ struct ViewerVideoView: View {
                 guard let group = group else { return nil }
                 return OverlayLabelGroupItem(group: group, selectedLabels: labels)
             }
+            let tag = resolvedTag ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
             if let tag, let stamp {
                 let overlayItem = OverlayItem(tag: tag, stamp: stamp, selectedLabelGroups: selectedLabelGroups, start: .zero, duration: .zero, videoSize: nil)
                 let attributedString = NSAttributedString.attributedStringForTagInfo(overlayItem: overlayItem) ?? NSAttributedString(string: "")

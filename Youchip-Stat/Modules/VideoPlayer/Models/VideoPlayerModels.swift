@@ -27,6 +27,27 @@ struct Tag: Identifiable, Codable {
     var isInterval: Bool?
 }
 
+extension Tag {
+    static func syntheticDrawingTag(for stamp: TimelineStamp) -> Tag? {
+        guard stamp.idTag.hasPrefix("screenshot_"), !stamp.label.isEmpty else { return nil }
+        return Tag(
+            id: stamp.idTag,
+            primaryID: nil,
+            name: stamp.label,
+            description: "",
+            color: "808080",
+            defaultTimeBefore: 3.0,
+            defaultTimeAfter: 3.0,
+            collection: nil,
+            lablesGroup: [],
+            hotkey: nil,
+            labelHotkeys: nil,
+            mapEnabled: nil,
+            isInterval: nil
+        )
+    }
+}
+
 struct PlayFieldData: Codable {
     let field: PlayField
     

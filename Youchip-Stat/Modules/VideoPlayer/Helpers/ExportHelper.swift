@@ -273,7 +273,9 @@ class ExportHelper: ObservableObject {
             let transform = videoTrack.preferredTransform
             let naturalSize = videoTrack.naturalSize.applying(transform)
             let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
-            if let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag }) {
+            let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
+                ?? Tag.syntheticDrawingTag(for: segment.stamp)
+            if let tag {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
@@ -513,7 +515,9 @@ class ExportHelper: ObservableObject {
             let naturalSize = videoTrack.naturalSize.applying(transform)
             let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
             let overlayVideoComposition: AVVideoComposition?
-            if let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag }) {
+            let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
+                ?? Tag.syntheticDrawingTag(for: segment.stamp)
+            if let tag {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
