@@ -286,13 +286,7 @@ class CustomCollectionManager: ObservableObject {
     
     func saveCollectionToFiles() -> Bool {
         collectionName = collectionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        if !isEditingExisting && originalName.isEmpty {
-            if collectionName.isEmpty || collectionName == ^String.Titles.myCollection {
-                collectionName = collectionID
-            }
-        }
-        
+                
         if collectionName == originalName || collectionName.isEmpty {
             collectionName = originalName.isEmpty ? collectionID : originalName
         } else {
