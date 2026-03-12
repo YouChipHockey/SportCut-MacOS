@@ -19,6 +19,7 @@ struct ViewerVideoView: View {
     @State private var isPlayerReady = false
     @State private var timeObserver: Any?
     @State private var videoSize: CGSize = .zero
+    @State private var currentScreenshotImage: NSImage?
     
     private var videoAspectRatio: CGFloat {
         guard videoSize.width > 0 && videoSize.height > 0 else { return 16/9 }
@@ -128,6 +129,19 @@ struct ViewerVideoView: View {
                             DrawingOverlay(drawingState: drawingState)
                                 .allowsHitTesting(drawingState.isDrawingMode)
                         )
+                        .overlay {
+                            if let screenshotImage = currentScreenshotImage {
+                                Image(nsImage: screenshotImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(Color.black)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        resumeFromScreenshot()
+                                    }
+                            }
+                        }
                         .overlay(alignment: .bottom) {
                             videoOverlayText()
                                 .padding(.bottom, 45)
@@ -170,12 +184,29 @@ struct ViewerVideoView: View {
         .onChange(of: playlistManager.currentComposition) { _ in
             currentComposition = playlistManager.currentComposition
         }
+        .onChange(of: playlistManager.isPlaying) { isPlaying in
+            if isPlaying && currentScreenshotImage != nil {
+                currentScreenshotImage = nil
+            }
+        }
+        .onChange(of: overlayViewModel.currentScreenshot) { screenshot in
+            guard let screenshot = screenshot,
+                  let folder = ScreenshotsMetadataManager.shared.currentScreenshotsFolder else {
+                currentScreenshotImage = nil
+                return
+            }
+            let imageURL = folder.appendingPathComponent("\(screenshot.screenshotName).png")
+            guard let image = NSImage(contentsOf: imageURL) else { return }
+            playlistManager.playVideo(false)
+            currentScreenshotImage = image
+        }
         .onReceive(NotificationCenter.default.publisher(for: .createPlaylistComposition)) { _ in
             overlayViewModel.updateSegments(playlistManager.compositionSegments)
             overlayViewModel.attach(to: player)
             drawingState.clearDrawing()
             drawingState.isDrawingMode = false
             drawingState.showDrawingMenu = false
+            currentScreenshotImage = nil
             if let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset {
                 updateVideoSize(from: originalAsset)
             }
@@ -259,6 +290,11 @@ struct ViewerVideoView: View {
     private func removeNotifications() {
         NotificationCenter.default.removeObserver(self, name: .playSingleTag, object: nil)
         NotificationCenter.default.removeObserver(self, name: .stopViewerPlayer, object: nil)
+    }
+    
+    private func resumeFromScreenshot() {
+        currentScreenshotImage = nil
+        playlistManager.playVideo(true)
     }
     
     func forceStopPlayer() {
