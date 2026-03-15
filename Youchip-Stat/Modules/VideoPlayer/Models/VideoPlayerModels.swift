@@ -95,6 +95,14 @@ struct LabelGroupData: Codable, Identifiable, Hashable {
     var lables: [String]
 }
 
+extension Array where Element == LabelGroupData {
+    
+    var sortedByName: [LabelGroupData] {
+        sorted(by: { $0.name < $1.name })
+    }
+    
+}
+
 struct LabelGroupsData: Codable {
     let labelGroups: [LabelGroupData]
 }

@@ -30,12 +30,14 @@ struct StampItemsSelectionSheet: View {
     @State private var hotkeyObserver: Any? = nil
     
     private var filteredLabelGroups: [LabelGroupData] {
-        if let tag = tag {
+        if let tag {
             // Optimize using Set for O(1) lookup
             let labelGroupIdsSet = Set(tag.lablesGroup)
-            return tagLibrary.allLabelGroups.filter { labelGroupIdsSet.contains($0.id) }
-        } else {
             return tagLibrary.allLabelGroups
+                .filter { labelGroupIdsSet.contains($0.id) }
+                .sortedByName
+        } else {
+            return tagLibrary.allLabelGroups.sortedByName
         }
     }
     
