@@ -265,8 +265,10 @@ class VideosViewModel: ObservableObject {
             }
             
         case .showProjectImportSheet(let projectData):
-            state.importedProjectData = projectData
-            state.showProjectImportSheet = true
+            if let projectData {
+                state.importedProjectData = projectData
+            }
+            state.showProjectImportSheet = projectData != nil
             
         case .bindVideoToProject(let projectData, let videoURL):
             state.importedProjectData = projectData

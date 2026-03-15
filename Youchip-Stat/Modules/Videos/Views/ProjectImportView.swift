@@ -120,7 +120,7 @@ struct ProjectImportView: View {
             
             HStack(spacing: 12) {
                 Button(^String.Titles.cancelButtonTitle) {
-                    viewModel.action.send(.showProjectImportSheet(projectData: projectData))
+                    viewModel.action.send(.showProjectImportSheet(projectData: nil))
                 }
                 .buttonStyle(.bordered)
                 
