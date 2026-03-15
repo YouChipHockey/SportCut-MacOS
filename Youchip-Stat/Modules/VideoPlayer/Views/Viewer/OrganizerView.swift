@@ -562,9 +562,9 @@ struct OrganizerView: View {
             let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
             let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
             let labelIds = segment.labels.map(\.id)
-            if let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }),
-               let stamp
-            {
+            let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId })
+                ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
+            if let tag, let stamp {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: stamp,
@@ -672,9 +672,9 @@ struct OrganizerView: View {
             let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
             let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
             let labelIds = segment.labels.map(\.id)
-            if let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }),
-               let stamp
-            {
+            let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId })
+                ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
+            if let tag, let stamp {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: stamp,

@@ -144,6 +144,7 @@ struct ViewerVideoView: View {
                         }
                         .overlay(alignment: .bottom) {
                             videoOverlayText()
+                                .allowsHitTesting(false)
                         }
                 } else {
                     VStack(spacing: 12) {

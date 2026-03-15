@@ -243,10 +243,15 @@ class ExportHelper: ObservableObject {
                 continue
             }
             
+            let transform = videoTrack.preferredTransform
+            let naturalSize = videoTrack.naturalSize.applying(transform)
+            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
+
             // Handle screenshots insertion if enabled
             if withScreenshots {
                 let screenshots = getScreenshotsInSegment(segment)
                 if !screenshots.isEmpty {
+                    let timeBefore = currentTime
                     currentTime = insertScreenshotsIntoComposition(
                         composition: composition,
                         videoTrack: videoTrack,
@@ -255,6 +260,19 @@ class ExportHelper: ObservableObject {
                         screenshots: screenshots,
                         startTime: currentTime
                     )
+                    let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
+                        ?? Tag.syntheticDrawingTag(for: segment.stamp)
+                    if let tag {
+                        let overlayItem = OverlayItem(
+                            tag: tag,
+                            stamp: segment.stamp,
+                            selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labels),
+                            start: timeBefore,
+                            duration: currentTime - timeBefore,
+                            videoSize: videoSize
+                        )
+                        overlayItems.append(overlayItem)
+                    }
                     continue
                 }
             }
@@ -270,9 +288,6 @@ class ExportHelper: ObservableObject {
                 return
             }
             
-            let transform = videoTrack.preferredTransform
-            let naturalSize = videoTrack.naturalSize.applying(transform)
-            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
             let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
                 ?? Tag.syntheticDrawingTag(for: segment.stamp)
             if let tag {
