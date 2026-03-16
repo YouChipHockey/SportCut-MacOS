@@ -1725,7 +1725,7 @@ struct EditorStateSnapshot: Codable {
 
 // MARK: - Screenshot Metadata
 
-struct ScreenshotMetadata: Codable {
+struct ScreenshotMetadata: Codable, Equatable {
     let screenshotName: String
     let videoTime: Double
     let createdAt: Date
@@ -1733,6 +1733,11 @@ struct ScreenshotMetadata: Codable {
     let displayDuration: Double // How long to show screenshot during export (default 3.0 for backward compatibility)
     let relatedStampIds: [UUID] // IDs of timeline stamps this screenshot is associated with
     let editorState: EditorStateSnapshot? // Optional: full editor state to restore drawing layers
+
+    static func == (lhs: ScreenshotMetadata, rhs: ScreenshotMetadata) -> Bool {
+        lhs.screenshotName == rhs.screenshotName &&
+        lhs.createdAt == rhs.createdAt
+    }
     
     var fileName: String {
         return "\(screenshotName).json"

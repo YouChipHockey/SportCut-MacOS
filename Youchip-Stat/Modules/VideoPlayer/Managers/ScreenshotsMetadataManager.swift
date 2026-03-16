@@ -12,10 +12,12 @@ class ScreenshotsMetadataManager: ObservableObject {
     static let shared = ScreenshotsMetadataManager()
     
     @Published var screenshots: [ScreenshotMetadata] = []
+    private(set) var currentScreenshotsFolder: URL?
     
     private init() {}
     
     func loadScreenshots(from screenshotsFolder: URL) {
+        currentScreenshotsFolder = screenshotsFolder
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let fileURLs = try FileManager.default.contentsOfDirectory(at: screenshotsFolder,

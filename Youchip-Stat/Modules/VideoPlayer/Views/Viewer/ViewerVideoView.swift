@@ -19,6 +19,7 @@ struct ViewerVideoView: View {
     @State private var isPlayerReady = false
     @State private var timeObserver: Any?
     @State private var videoSize: CGSize = .zero
+    @State private var currentScreenshotImage: NSImage?
     
     private var videoAspectRatio: CGFloat {
         guard videoSize.width > 0 && videoSize.height > 0 else { return 16/9 }
@@ -128,9 +129,22 @@ struct ViewerVideoView: View {
                             DrawingOverlay(drawingState: drawingState)
                                 .allowsHitTesting(drawingState.isDrawingMode)
                         )
+                        .overlay {
+                            if let screenshotImage = currentScreenshotImage {
+                                Image(nsImage: screenshotImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(Color.black)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        resumeFromScreenshot()
+                                    }
+                            }
+                        }
                         .overlay(alignment: .bottom) {
                             videoOverlayText()
-                                .padding(.bottom, 45)
+                                .allowsHitTesting(false)
                         }
                 } else {
                     VStack(spacing: 12) {
@@ -170,12 +184,29 @@ struct ViewerVideoView: View {
         .onChange(of: playlistManager.currentComposition) { _ in
             currentComposition = playlistManager.currentComposition
         }
+        .onChange(of: playlistManager.isPlaying) { isPlaying in
+            if isPlaying && currentScreenshotImage != nil {
+                currentScreenshotImage = nil
+            }
+        }
+        .onChange(of: overlayViewModel.currentScreenshot) { screenshot in
+            guard let screenshot = screenshot,
+                  let folder = ScreenshotsMetadataManager.shared.currentScreenshotsFolder else {
+                currentScreenshotImage = nil
+                return
+            }
+            let imageURL = folder.appendingPathComponent("\(screenshot.screenshotName).png")
+            guard let image = NSImage(contentsOf: imageURL) else { return }
+            playlistManager.playVideo(false)
+            currentScreenshotImage = image
+        }
         .onReceive(NotificationCenter.default.publisher(for: .createPlaylistComposition)) { _ in
             overlayViewModel.updateSegments(playlistManager.compositionSegments)
             overlayViewModel.attach(to: player)
             drawingState.clearDrawing()
             drawingState.isDrawingMode = false
             drawingState.showDrawingMenu = false
+            currentScreenshotImage = nil
             if let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset {
                 updateVideoSize(from: originalAsset)
             }
@@ -259,6 +290,11 @@ struct ViewerVideoView: View {
     private func removeNotifications() {
         NotificationCenter.default.removeObserver(self, name: .playSingleTag, object: nil)
         NotificationCenter.default.removeObserver(self, name: .stopViewerPlayer, object: nil)
+    }
+    
+    private func resumeFromScreenshot() {
+        currentScreenshotImage = nil
+        playlistManager.playVideo(true)
     }
     
     func forceStopPlayer() {
@@ -361,7 +397,7 @@ struct ViewerVideoView: View {
             let stamp = TimelineDataManager.shared.lines
                 .flatMap { $0.stamps }
                 .first { $0.id == stampID }
-            let tag = tagLibrary.allTags.first { $0.id == currentPlayingStamp.mainTagID }
+            let resolvedTag = tagLibrary.allTags.first { $0.id == currentPlayingStamp.mainTagID }
             let stampLabels = currentPlayingStamp.labelIDs.compactMap { labelID in
                 tagLibrary.allLabels.first(where: { $0.id == labelID })
             }
@@ -372,6 +408,7 @@ struct ViewerVideoView: View {
                 guard let group = group else { return nil }
                 return OverlayLabelGroupItem(group: group, selectedLabels: labels)
             }
+            let tag = resolvedTag ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
             if let tag, let stamp {
                 let overlayItem = OverlayItem(tag: tag, stamp: stamp, selectedLabelGroups: selectedLabelGroups, start: .zero, duration: .zero, videoSize: nil)
                 let attributedString = NSAttributedString.attributedStringForTagInfo(overlayItem: overlayItem) ?? NSAttributedString(string: "")

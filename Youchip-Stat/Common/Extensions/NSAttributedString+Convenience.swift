@@ -15,7 +15,7 @@ extension NSAttributedString {
         let tagLibrary = TagLibraryManager.shared
         
         let tagName = overlayItem.tag.name
-        let tagGroupName = (tagLibrary.allTagGroups.first { $0.tags.contains(overlayItem.tag.id) }?.name ?? "Group").uppercased()
+        let tagGroupNameOptional = tagLibrary.allTagGroups.first { $0.tags.contains(overlayItem.tag.id) }?.name
         let timeEvents = tagLibrary.allTimeEvents.filter { overlayItem.stamp.timeEvents.contains($0.id) }
         
         let allStamps: [TimelineStamp] = timelineManager.lines.flatMap { $0.stamps }.sortedByStartTime
@@ -48,7 +48,14 @@ extension NSAttributedString {
             .foregroundColor: NSColor.white
         ]
         
-        let tagGroupAndNameString = "\(tagGroupName): \(tagName)_\(tagIndex+1)" + (timeEvents.isEmpty ? "" : ", ")
+        let tagGroupAndNameString: String
+        if let groupName = tagGroupNameOptional {
+            let uppercasedGroup = groupName.uppercased()
+            tagGroupAndNameString = "\(uppercasedGroup): \(tagName)_\(tagIndex+1)" + (timeEvents.isEmpty ? "" : ", ")
+        } else {
+            // Если группа не найдена, показываем только имя тега/скриншота
+            tagGroupAndNameString = "\(tagName)_\(tagIndex+1)" + (timeEvents.isEmpty ? "" : ", ")
+        }
         let timeEventsString = timeEvents.enumerated().map { index, event in
             event.name + (index < timeEvents.count - 1 ? ", " : "")
         }.joined() + "\n"

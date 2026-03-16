@@ -262,8 +262,11 @@ struct TagLibraryView: View {
     private var collectionActionButtons: some View {
         HStack(spacing: 8) {
             Button(action: {
-                guard let collectionBookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == lastSelectedCollectionName }) else { return }
-                WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: collectionBookmark)
+                guard let name = lastSelectedCollectionName,
+                      let collection = userCollections.first(where: { $0.name == name }) else { return }
+                let bookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == name })
+                    ?? collection
+                WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: bookmark)
             }) {
                 Image(systemName: "pencil.circle")
                     .foregroundColor(.blue)
@@ -272,8 +275,9 @@ struct TagLibraryView: View {
             .help(^String.Titles.editCollection)
             
             Button(action: {
-                guard let collectionBookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == lastSelectedCollectionName }) else { return }
-                collectionToDelete = collectionBookmark
+                guard let name = lastSelectedCollectionName,
+                      let collection = userCollections.first(where: { $0.name == name }) else { return }
+                collectionToDelete = collection
                 showDeleteAlert = true
             }) {
                 Image(systemName: "trash.circle")

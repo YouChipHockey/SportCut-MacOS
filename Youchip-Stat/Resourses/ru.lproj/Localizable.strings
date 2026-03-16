@@ -610,7 +610,7 @@
 "PlaylistName" = "Название плейлиста"; // ^String.Titles.playlistName
 "EnterName" = "Введите название"; // ^String.Titles.enterName
 "PlaylistInfo" = "Информация о плейлисте:"; // ^String.Titles.playlistInfo
-"Tags" = "Тегов:"; // ^String.Titles.tags
+"Tags" = "По тегам:"; // ^String.Titles.tags
 "Duration" = "Длительность:"; // ^String.Titles.duration
 "Cancel" = "Отмена"; // ^String.Titles.cancel
 "Save" = "Сохранить"; // ^String.Titles.save

@@ -260,18 +260,36 @@ class ExportHelper: ObservableObject {
                 continue
             }
             
+            let transform = videoTrack.preferredTransform
+            let naturalSize = videoTrack.naturalSize.applying(transform)
+            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
+
             // Handle screenshots insertion if enabled
             if withScreenshots {
                 let screenshots = getScreenshotsInSegment(segment)
                 if !screenshots.isEmpty {
+                    let timeBefore = currentTime
                     currentTime = insertScreenshotsIntoComposition(
                         composition: composition,
                         videoTrack: videoTrack,
                         audioTrack: audioTrack,
-                        segment: segment,
+                        segmentTimeRange: segment.timeRange,
                         screenshots: screenshots,
                         startTime: currentTime
                     )
+                    let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
+                        ?? Tag.syntheticDrawingTag(for: segment.stamp)
+                    if let tag {
+                        let overlayItem = OverlayItem(
+                            tag: tag,
+                            stamp: segment.stamp,
+                            selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labels),
+                            start: timeBefore,
+                            duration: currentTime - timeBefore,
+                            videoSize: videoSize
+                        )
+                        overlayItems.append(overlayItem)
+                    }
                     continue
                 }
             }
@@ -287,10 +305,9 @@ class ExportHelper: ObservableObject {
                 return
             }
             
-            let transform = videoTrack.preferredTransform
-            let naturalSize = videoTrack.naturalSize.applying(transform)
-            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
-            if let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag }) {
+            let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
+                ?? Tag.syntheticDrawingTag(for: segment.stamp)
+            if let tag {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
@@ -448,7 +465,7 @@ class ExportHelper: ObservableObject {
                         composition: composition,
                         videoTrack: videoTrack,
                         audioTrack: audioTrack,
-                        segment: segment,
+                        segmentTimeRange: segment.timeRange,
                         screenshots: screenshots,
                         startTime: .zero
                     )
@@ -530,7 +547,9 @@ class ExportHelper: ObservableObject {
             let naturalSize = videoTrack.naturalSize.applying(transform)
             let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
             let overlayVideoComposition: AVVideoComposition?
-            if let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag }) {
+            let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
+                ?? Tag.syntheticDrawingTag(for: segment.stamp)
+            if let tag {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
@@ -1094,33 +1113,39 @@ class ExportHelper: ObservableObject {
         return VideoFilesManager.shared.files.first(where: { $0.videoData.bookmark == currentBookmark })
     }
     
-    private func getScreenshotsInSegment(_ segment: ExportSegment) -> [ScreenshotMetadata] {
-        let screenshots = ScreenshotsMetadataManager.shared.screenshots
-        let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
-        let segmentEnd = segmentStart + CMTimeGetSeconds(segment.timeRange.duration)
-        
-        // Filter screenshots that are in the time range
-        let screenshotsInTimeRange = screenshots.filter { screenshot in
-            screenshot.videoTime >= segmentStart && screenshot.videoTime <= segmentEnd
+    /// Returns screenshots linked to the given stamp that fall within the time range.
+    func screenshots(in timeRange: CMTimeRange, stampId: UUID) -> [ScreenshotMetadata] {
+        let all = ScreenshotsMetadataManager.shared.screenshots
+        let segmentStart = CMTimeGetSeconds(timeRange.start)
+        let segmentEnd = segmentStart + CMTimeGetSeconds(timeRange.duration)
+        return all.filter {
+            $0.videoTime >= segmentStart &&
+            $0.videoTime <= segmentEnd &&
+            $0.relatedStampIds.contains(stampId)
         }
-        
-        // If segment has a stampId, only include screenshots that are related to that stamp
-        if let stampId = segment.stampId {
-            return screenshotsInTimeRange.filter { screenshot in
-                screenshot.relatedStampIds.contains(stampId)
-            }
-        }
-        
-        // If no stampId, return all screenshots in time range (backward compatibility)
-        return screenshotsInTimeRange
     }
-    
-    private func insertScreenshotsIntoComposition(composition: AVMutableComposition, 
-                                                 videoTrack: AVAssetTrack,
-                                                 audioTrack: AVAssetTrack?,
-                                                 segment: ExportSegment,
-                                                 screenshots: [ScreenshotMetadata],
-                                                 startTime: CMTime) -> CMTime {
+
+    private func getScreenshotsInSegment(_ segment: ExportSegment) -> [ScreenshotMetadata] {
+        guard let stampId = segment.stampId else {
+            let all = ScreenshotsMetadataManager.shared.screenshots
+            let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
+            let segmentEnd = segmentStart + CMTimeGetSeconds(segment.timeRange.duration)
+            return all.filter { $0.videoTime >= segmentStart && $0.videoTime <= segmentEnd }
+        }
+        return screenshots(in: segment.timeRange, stampId: stampId)
+    }
+
+    /// Inserts video frames and screenshot still-image clips into the composition.
+    /// Returns the updated composition time after all insertions.
+    @discardableResult
+    func insertScreenshotsIntoComposition(
+        composition: AVMutableComposition,
+        videoTrack: AVAssetTrack,
+        audioTrack: AVAssetTrack?,
+        segmentTimeRange: CMTimeRange,
+        screenshots: [ScreenshotMetadata],
+        startTime: CMTime
+    ) -> CMTime {
         guard let compVideoTrack = composition.tracks(withMediaType: .video).first,
               let filesFile = getCurrentFile() else {
             return startTime
@@ -1132,7 +1157,7 @@ class ExportHelper: ObservableObject {
         let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
         
         let screenshotsFolder = filesFile.screenshotsFolder
-        let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
+        let segmentStart = CMTimeGetSeconds(segmentTimeRange.start)
         var currentTime = startTime
         var lastVideoTime = segmentStart
         
@@ -1203,7 +1228,7 @@ class ExportHelper: ObservableObject {
             lastVideoTime = screenshotTimeInSegment
         }
         
-        let segmentEnd = segmentStart + CMTimeGetSeconds(segment.timeRange.duration)
+        let segmentEnd = segmentStart + CMTimeGetSeconds(segmentTimeRange.duration)
         if lastVideoTime < segmentEnd {
             let remainingDuration = segmentEnd - lastVideoTime
             let videoRange = CMTimeRange(

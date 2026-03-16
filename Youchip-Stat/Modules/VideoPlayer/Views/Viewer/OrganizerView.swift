@@ -545,6 +545,40 @@ struct OrganizerView: View {
         var overlayItems: [OverlayItem] = []
         var currentTime = CMTime.zero
         for segment in segments {
+            let transform = videoTrack.preferredTransform
+            let naturalSize = videoTrack.naturalSize.applying(transform)
+            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
+            let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
+            let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
+            let labelIds = segment.labels.map(\.id)
+
+            let segmentScreenshots = exportHelper.screenshots(in: segment.timeRange, stampId: segment.stampId)
+            if !segmentScreenshots.isEmpty {
+                let timeBefore = currentTime
+                currentTime = exportHelper.insertScreenshotsIntoComposition(
+                    composition: composition,
+                    videoTrack: videoTrack,
+                    audioTrack: audioTrack,
+                    segmentTimeRange: segment.timeRange,
+                    screenshots: segmentScreenshots,
+                    startTime: currentTime
+                )
+                let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId })
+                    ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
+                if let tag, let stamp {
+                    let overlayItem = OverlayItem(
+                        tag: tag,
+                        stamp: stamp,
+                        selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
+                        start: timeBefore,
+                        duration: currentTime - timeBefore,
+                        videoSize: videoSize
+                    )
+                    overlayItems.append(overlayItem)
+                }
+                continue
+            }
+
             do {
                 try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: currentTime)
                 if let compAudio = compAudioTrack, let aTrack = audioTrack {
@@ -555,16 +589,10 @@ struct OrganizerView: View {
                 completion(.failure(error))
                 return
             }
-            
-            let transform = videoTrack.preferredTransform
-            let naturalSize = videoTrack.naturalSize.applying(transform)
-            let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
-            let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
-            let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
-            let labelIds = segment.labels.map(\.id)
-            if let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }),
-               let stamp
-            {
+
+            let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId })
+                ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
+            if let tag, let stamp {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: stamp,
@@ -631,26 +659,34 @@ struct OrganizerView: View {
                 continue
             }
             var compAudioTrack: AVMutableCompositionTrack? = nil
-            if let aTrack = audioTrack {
+            if audioTrack != nil {
                 compAudioTrack = composition.addMutableTrack(withMediaType: .audio,
                                                              preferredTrackID: kCMPersistentTrackID_Invalid)
+            }
+
+            let segmentScreenshots = exportHelper.screenshots(in: segment.timeRange, stampId: segment.stampId)
+            if !segmentScreenshots.isEmpty {
+                exportHelper.insertScreenshotsIntoComposition(
+                    composition: composition,
+                    videoTrack: videoTrack,
+                    audioTrack: audioTrack,
+                    segmentTimeRange: segment.timeRange,
+                    screenshots: segmentScreenshots,
+                    startTime: .zero
+                )
+            } else {
                 do {
-                    try compAudioTrack?.insertTimeRange(segment.timeRange, of: aTrack, at: .zero)
+                    if let compAudio = compAudioTrack, let aTrack = audioTrack {
+                        try compAudio.insertTimeRange(segment.timeRange, of: aTrack, at: .zero)
+                    }
+                    try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: .zero)
                 } catch {
                     exportError = error
                     group.leave()
                     continue
                 }
             }
-            
-            do {
-                try compVideoTrack.insertTimeRange(segment.timeRange, of: videoTrack, at: .zero)
-            } catch {
-                exportError = error
-                group.leave()
-                continue
-            }
-            
+
             let fileName: String
             let groupName = segment.groupName
             let stampLabels = segment.labels
@@ -672,9 +708,9 @@ struct OrganizerView: View {
             let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
             let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
             let labelIds = segment.labels.map(\.id)
-            if let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }),
-               let stamp
-            {
+            let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId })
+                ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
+            if let tag, let stamp {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: stamp,
