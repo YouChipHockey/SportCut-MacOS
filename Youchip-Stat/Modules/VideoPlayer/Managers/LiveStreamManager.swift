@@ -41,6 +41,11 @@ class LiveStreamManager: NSObject, ObservableObject {
     /// Output that keeps the latest video frame for editor capture (Metal view doesn't give a valid bitmap).
     private var latestFrameCapture: LiveFrameCaptureOutput?
     
+    /// Separate AVCaptureSession for direct camera preview, independent of HaishinKit recording pipeline.
+    /// Prevents recording back-pressure from degrading preview FPS during long sessions.
+    private(set) var directPreviewSession: AVCaptureSession?
+    private var configuredVideoDevice: AVCaptureDevice?
+    
     // MARK: - Recording state
     
     /// Incremented each time a new review snapshot is ready; triggers review player refresh.
@@ -119,6 +124,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         format: AVCaptureDevice.Format?
     ) -> Bool {
         AVCaptureDevice.applyFrameDurationPatchIfNeeded(for: videoDevice)
+        self.configuredVideoDevice = videoDevice
         let thisSessionId = UUID()
         self.sessionId = thisSessionId
         
@@ -127,11 +133,13 @@ class LiveStreamManager: NSObject, ObservableObject {
         let oldRecorder = self.recorder
         let oldPreview = self.previewView
         let oldFrameCapture = self.latestFrameCapture
+        let oldDirectSession = self.directPreviewSession
         
         self.mixer = nil
         self.recorder = nil
         self.previewView = nil
         self.latestFrameCapture = nil
+        self.directPreviewSession = nil
         self.isSessionConfigured = false
         self.isLive = false
         self.isBroadcastPaused = false
@@ -153,6 +161,11 @@ class LiveStreamManager: NSObject, ObservableObject {
             }
         }
         oldRecorder?.cancelRecording()
+        if let oldDirectSession = oldDirectSession {
+            DispatchQueue.global(qos: .userInitiated).async {
+                oldDirectSession.stopRunning()
+            }
+        }
         
         // ── Create new session ──
         let newMixer = MediaMixer(useManualCapture: true)
@@ -210,16 +223,34 @@ class LiveStreamManager: NSObject, ObservableObject {
                 videoMixerSettings.mode = .passthrough
                 await newMixer.setVideoMixerSettings(videoMixerSettings)
                 
-                await newMixer.addOutput(view)
-                
                 let frameCapture = LiveFrameCaptureOutput()
                 await newMixer.addOutput(frameCapture)
                 
+                // Direct AVCaptureSession for recording-independent camera preview.
+                // Uses a separate capture pipeline so H.264 encoding back-pressure
+                // from long recordings never affects preview FPS.
+                var directSession: AVCaptureSession? = nil
+                do {
+                    let session = AVCaptureSession()
+                    let directInput = try AVCaptureDeviceInput(device: videoDevice)
+                    if session.canAddInput(directInput) {
+                        session.addInput(directInput)
+                        session.startRunning()
+                        directSession = session
+                    }
+                } catch {
+                    print("LiveStreamManager: Direct preview session setup failed: \(error)")
+                }
+                
                 await MainActor.run {
-                    guard self.sessionId == thisSessionId else { return }
+                    guard self.sessionId == thisSessionId else {
+                        directSession?.stopRunning()
+                        return
+                    }
                     self.mixer = newMixer
                     self.previewView = view
                     self.latestFrameCapture = frameCapture
+                    self.directPreviewSession = directSession
                     self.isSessionConfigured = true
                 }
             } catch {
@@ -444,6 +475,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         
         stopDurationTimer()
         stopReviewRefresher()
+        stopDirectPreview()
         
         let mixerToStop = self.mixer
         let recorderToStop = self.recorder
@@ -562,6 +594,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         
         stopDurationTimer()
         stopReviewRefresher()
+        stopDirectPreview()
         
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -719,6 +752,19 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
     }
     
+    // MARK: - Direct Preview
+    
+    private func stopDirectPreview() {
+        let session = directPreviewSession
+        directPreviewSession = nil
+        configuredVideoDevice = nil
+        if let session = session {
+            DispatchQueue.global(qos: .userInitiated).async {
+                session.stopRunning()
+            }
+        }
+    }
+    
     // MARK: - Cleanup
     
     private func cleanupSession() {
@@ -738,6 +784,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         
         stopDurationTimer()
         stopReviewRefresher()
+        stopDirectPreview()
         
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }

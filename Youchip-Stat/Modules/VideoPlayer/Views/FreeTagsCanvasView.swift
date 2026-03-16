@@ -81,79 +81,92 @@ private struct FreeTagRuntimeItemView: View {
     let onTap: () -> Void
     
     var body: some View {
-        let baseColor = Color(hex: tag.color)
-        let foreground = baseColor.isDark ? Color.white : Color.black
+        let baseColor = Color(hex: tag.color).opacity(item.fillOpacity)
+        let foreground: Color = {
+            if let hex = item.textColor { return Color(hex: hex) }
+            return Color(hex: tag.color).isDark ? Color.white : Color.black
+        }()
+        let strokeCol: Color = {
+            if isActive { return Color.accentColor }
+            if isHovered { return Color.accentColor.opacity(0.6) }
+            if let hex = item.strokeColor { return Color(hex: hex) }
+            return Color.black.opacity(0.25)
+        }()
+        let strokeStyle = StrokeStyle(
+            lineWidth: isActive ? 2 : item.strokeWidth,
+            dash: item.strokeDashed ? [4, 3] : []
+        )
+        let swiftWeight: Font.Weight = {
+            if isActive { return .semibold }
+            switch item.fontWeight {
+            case .regular: return .regular
+            case .medium: return .medium
+            case .bold: return .bold
+            }
+        }()
         
         ZStack {
-            TagFreeShapeView(shape: item.shape)
+            TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
                 .fill(baseColor)
-                .shadow(
-                    color: Color.black.opacity(0.15),
-                    radius: isHovered || isActive ? 6 : 3,
-                    x: 0,
-                    y: 2
-                )
                 .overlay(
-                    TagFreeShapeView(shape: item.shape)
-                        .stroke(
-                            isActive ? Color.accentColor :
-                                (isHovered ? Color.accentColor.opacity(0.6) : Color.black.opacity(0.25)),
-                            lineWidth: isActive ? 2 : 1
-                        )
+                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                        .stroke(strokeCol, style: strokeStyle)
                 )
             
-            VStack(spacing: 2) {
-                Text(tag.name)
-                    .font(.system(size: 12, weight: isActive ? .semibold : .medium))
-                    .foregroundColor(foreground)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.6)
-                
-                HStack(spacing: 4) {
-                    if tagCount > 0 {
-                        Text("\(tagCount)")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(foreground)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(
-                                Capsule()
-                                    .fill(Color.black.opacity(0.25))
-                            )
-                    }
-                    
-                    if tag.isInterval == true {
-                        Image(systemName: "timer")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(foreground.opacity(0.9))
-                    }
-                    
-                    if tag.mapEnabled == true {
-                        Image(systemName: "map")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(foreground.opacity(0.9))
-                    }
-                    
-                    if let hotkey = tag.hotkey, !hotkey.isEmpty {
-                        HStack(spacing: 3) {
-                            Image(systemName: "keyboard")
-                                .font(.system(size: 9, weight: .medium))
-                            Text(hotkey)
-                                .font(.system(size: 9, weight: .medium))
-                        }
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(
-                            Capsule()
-                                .fill(Color.black.opacity(0.25))
-                        )
+            if item.showLabel {
+                VStack(spacing: 2) {
+                    Text(tag.name)
+                        .font(.system(size: item.fontSize, weight: swiftWeight))
                         .foregroundColor(foreground)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .minimumScaleFactor(0.6)
+                    
+                    HStack(spacing: 4) {
+                        if tagCount > 0 {
+                            Text("\(tagCount)")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(foreground)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(Color.black.opacity(0.25)))
+                        }
+                        
+                        if tag.isInterval == true {
+                            Image(systemName: "timer")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(foreground.opacity(0.9))
+                        }
+                        
+                        if tag.mapEnabled == true {
+                            Image(systemName: "map")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(foreground.opacity(0.9))
+                        }
+                        
+                        if let hotkey = tag.hotkey, !hotkey.isEmpty {
+                            HStack(spacing: 3) {
+                                Image(systemName: "keyboard")
+                                    .font(.system(size: 9, weight: .medium))
+                                Text(hotkey)
+                                    .font(.system(size: 9, weight: .medium))
+                            }
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.black.opacity(0.25)))
+                            .foregroundColor(foreground)
+                        }
                     }
                 }
+                .padding(4)
             }
-            .padding(4)
         }
+        .shadow(
+            color: item.shadowEnabled ? Color.black.opacity(item.shadowIntensity * 0.3) : Color.clear,
+            radius: item.shadowEnabled ? (isHovered || isActive ? 6 : 3) : 0,
+            x: 0,
+            y: item.shadowEnabled ? 2 : 0
+        )
         .rotationEffect(.degrees(item.rotation))
         .contentShape(Rectangle())
         .onTapGesture {

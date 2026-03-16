@@ -207,12 +207,10 @@ struct VideoPlayerView: View {
     private func liveStreamContent(geometry: GeometryProxy) -> some View {
         ZStack {
             if videoManager.isBroadcastActive {
-                // Show smooth camera preview via HaishinKit's Metal-based MTHKView
-                LivePreviewView()
+                DirectCameraPreviewView()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
-                // Broadcast paused - show a paused indicator over last frame
-                LivePreviewView()
+                DirectCameraPreviewView()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         ZStack {
@@ -260,8 +258,8 @@ struct VideoPlayerView: View {
                             Text("LIVE")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.red)
-                            LivePreviewView()
-                                .frame(width: 160, height: 120)
+                        DirectCameraPreviewView()
+                            .frame(width: 160, height: 120)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8)
@@ -718,6 +716,59 @@ struct LivePreviewView: NSViewRepresentable {
     
     func updateNSView(_ nsView: MTHKView, context: Context) {
         nsView.videoGravity = .resizeAspect
+    }
+}
+
+// MARK: - Direct Camera Preview (recording-independent)
+
+/// Wraps AVCaptureVideoPreviewLayer in SwiftUI for smooth camera preview
+/// independent of HaishinKit recording pipeline. Uses a separate AVCaptureSession
+/// so H.264 encoding back-pressure never affects preview FPS.
+struct DirectCameraPreviewView: NSViewRepresentable {
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        if let session = LiveStreamManager.shared.directPreviewSession {
+            let previewLayer = AVCaptureVideoPreviewLayer(session: session)
+            previewLayer.videoGravity = .resizeAspect
+            previewLayer.frame = view.bounds
+            previewLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+            view.layer?.addSublayer(previewLayer)
+            context.coordinator.previewLayer = previewLayer
+        }
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let existing = context.coordinator.previewLayer,
+           existing.session !== LiveStreamManager.shared.directPreviewSession {
+            existing.removeFromSuperlayer()
+            context.coordinator.previewLayer = nil
+        }
+        
+        if context.coordinator.previewLayer == nil,
+           let session = LiveStreamManager.shared.directPreviewSession {
+            let previewLayer = AVCaptureVideoPreviewLayer(session: session)
+            previewLayer.videoGravity = .resizeAspect
+            previewLayer.frame = nsView.bounds
+            previewLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+            nsView.layer?.addSublayer(previewLayer)
+            context.coordinator.previewLayer = previewLayer
+        }
+        
+        if let layer = context.coordinator.previewLayer {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.frame = nsView.bounds
+            CATransaction.commit()
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    
+    class Coordinator {
+        var previewLayer: AVCaptureVideoPreviewLayer?
     }
 }
 
