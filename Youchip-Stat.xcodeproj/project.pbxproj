@@ -18,6 +18,7 @@
 		BFE8416E2F3CD7CF005458F4 /* CollectionsBackupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE8416C2F3CD7CF005458F4 /* CollectionsBackupManager.swift */; };
 		BFE847242F3CFAD8005458F4 /* CollectionsBookmarksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE847232F3CFAD8005458F4 /* CollectionsBookmarksManager.swift */; };
 		BFE84A002F3DD033005458F4 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE849FF2F3DD033005458F4 /* KeychainHelper.swift */; };
+		AA00000130000001AAAAAAAA /* TimelineMigrationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000030000001AAAAAAAA /* TimelineMigrationManager.swift */; };
 		BFE84FBC2F3FA95C005458F4 /* InMemoryStorageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE84FBB2F3FA95C005458F4 /* InMemoryStorageManager.swift */; };
 		BFFEC8772F1D32AF00464BF0 /* CircularPercentProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFFEC8762F1D32AF00464BF0 /* CircularPercentProgressView.swift */; };
 		DD1BF67F2DBAFB8A00CB2AE0 /* (null) in Sources */ = {isa = PBXBuildFile; };
@@ -92,6 +93,7 @@
 		BFE8416C2F3CD7CF005458F4 /* CollectionsBackupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionsBackupManager.swift; sourceTree = "<group>"; };
 		BFE847232F3CFAD8005458F4 /* CollectionsBookmarksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionsBookmarksManager.swift; sourceTree = "<group>"; };
 		BFE849FF2F3DD033005458F4 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		AA00000030000001AAAAAAAA /* TimelineMigrationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineMigrationManager.swift; sourceTree = "<group>"; };
 		BFE84FBB2F3FA95C005458F4 /* InMemoryStorageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryStorageManager.swift; sourceTree = "<group>"; };
 		BFFEC8762F1D32AF00464BF0 /* CircularPercentProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularPercentProgressView.swift; sourceTree = "<group>"; };
 		D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Youchip_Stat.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -218,6 +220,7 @@
 				BFE849FF2F3DD033005458F4 /* KeychainHelper.swift */,
 				BFE847232F3CFAD8005458F4 /* CollectionsBookmarksManager.swift */,
 				BFE8416C2F3CD7CF005458F4 /* CollectionsBackupManager.swift */,
+				AA00000030000001AAAAAAAA /* TimelineMigrationManager.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -599,6 +602,7 @@
 				BF6715C02EF6E69700A71E47 /* NSAttributedString+Convenience.swift in Sources */,
 				BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */,
 				BFE84FBC2F3FA95C005458F4 /* InMemoryStorageManager.swift in Sources */,
+				AA00000130000001AAAAAAAA /* TimelineMigrationManager.swift in Sources */,
 				BF37EEBC2F4F65A70048E583 /* AppConfig.swift in Sources */,
 				BFE8375C2F3C670A005458F4 /* OrphanedTimelinesManager.swift in Sources */,
 				BFE8375D2F3C670A005458F4 /* OrphanedTimelinesRecoveryView.swift in Sources */,

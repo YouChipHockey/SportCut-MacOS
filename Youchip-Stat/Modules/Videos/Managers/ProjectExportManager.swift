@@ -176,7 +176,7 @@ class ProjectExportManager {
         var usedTagIds = Set<String>()
         for timeline in timelines {
             for stamp in timeline.stamps {
-                usedTagIds.insert(stamp.idTag)
+                stamp.idTags.forEach { usedTagIds.insert($0) }
             }
         }
         
@@ -330,9 +330,8 @@ class ProjectExportManager {
         var updatedTimelines = timelines
         for timelineIndex in 0..<updatedTimelines.count {
             for stampIndex in 0..<updatedTimelines[timelineIndex].stamps.count {
-                let oldTagId = updatedTimelines[timelineIndex].stamps[stampIndex].idTag
-                if let newTagId = tagIdMapping[oldTagId] {
-                    updatedTimelines[timelineIndex].stamps[stampIndex].idTag = newTagId
+                updatedTimelines[timelineIndex].stamps[stampIndex].tagRefs = updatedTimelines[timelineIndex].stamps[stampIndex].tagRefs.map { ref in
+                    StampTagRef(id: tagIdMapping[ref.id] ?? ref.id, tagGroupId: ref.tagGroupId)
                 }
                 
                 var newTimeEvents: [String] = []

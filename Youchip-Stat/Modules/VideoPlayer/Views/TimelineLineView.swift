@@ -457,8 +457,8 @@ struct TimelineLineView: View {
         }
         
         if !stamp.labels.isEmpty {
-            ForEach(stamp.labels, id: \.self) { labelID in
-                if let label = tagLibrary.findLabelById(labelID) {
+            ForEach(stamp.labels, id: \.id) { labelItem in
+                if let label = tagLibrary.findLabelById(labelItem.id) {
                     if let group = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(label.id) }) {
                         Text("\(label.name) (\(group.name))")
                     } else {
@@ -529,7 +529,7 @@ struct TimelineLineView: View {
         
         let newStamp = TimelineStamp(
             id: UUID(),
-            idTag: stamp.idTag,
+            tagRefs: stamp.tagRefs,
             primaryID: stamp.primaryID,
             timeStartSeconds: stamp.timeStartSeconds,
             timeFinishSeconds: stamp.timeFinishSeconds,

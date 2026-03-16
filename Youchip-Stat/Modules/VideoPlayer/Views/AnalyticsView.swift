@@ -101,7 +101,7 @@ struct AnalyticsView: View {
                 stats[stamp.label] = [:]
             }
             
-            for labelId in stamp.labels {
+            for labelId in stamp.labelIDs {
                 if let label = tagLibrary.labels.first(where: { $0.id == labelId }) {
                     stats[stamp.label]?[label.name, default: 0] += 1
                 }

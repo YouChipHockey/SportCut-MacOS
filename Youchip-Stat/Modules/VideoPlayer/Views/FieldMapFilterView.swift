@@ -133,9 +133,11 @@ struct FieldMapFilterView: View {
         var tagGroupIDs = Set<String>()
         
         stamps.forEach { stamp in
-            tagIDs.insert(stamp.idTag)
-            if let group = TagLibraryManager.shared.findTagGroupForTag(stamp.idTag) {
-                tagGroupIDs.insert(group.id)
+            stamp.idTags.forEach { tagID in
+                tagIDs.insert(tagID)
+                if let group = TagLibraryManager.shared.findTagGroupForTag(tagID) {
+                    tagGroupIDs.insert(group.id)
+                }
             }
         }
         
@@ -155,7 +157,7 @@ struct FieldMapFilterView: View {
         var labelGroupIDs = Set<String>()
         
         stamps.forEach { stamp in
-            stamp.labels.forEach { labelID in
+            stamp.labelIDs.forEach { labelID in
                 labelIDs.insert(labelID)
                 for group in TagLibraryManager.shared.allLabelGroups {
                     if group.lables.contains(labelID) {

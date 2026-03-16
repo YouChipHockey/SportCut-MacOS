@@ -283,7 +283,7 @@ class ExportHelper: ObservableObject {
                         let overlayItem = OverlayItem(
                             tag: tag,
                             stamp: segment.stamp,
-                            selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labels),
+                            selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labelIDs),
                             start: timeBefore,
                             duration: currentTime - timeBefore,
                             videoSize: videoSize
@@ -311,7 +311,7 @@ class ExportHelper: ObservableObject {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
-                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labels),
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labelIDs),
                     start: currentTime - segment.timeRange.duration,
                     duration: segment.timeRange.duration,
                     videoSize: videoSize
@@ -520,7 +520,7 @@ class ExportHelper: ObservableObject {
                 
             case .tagWithLabels(let selectedTag, let selectedLabels):
                 let groupName = segment.groupName ?? "group"
-                let stampLabels = segment.stamp.labels.compactMap { labelID in
+                let stampLabels = segment.stamp.labelIDs.compactMap { labelID in
                     tagLibrary.allLabels.first(where: { $0.id == labelID })
                 }
                 if !stampLabels.isEmpty {
@@ -553,7 +553,7 @@ class ExportHelper: ObservableObject {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
-                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labels),
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labelIDs),
                     start: .zero,
                     duration: segment.timeRange.duration,
                     videoSize: videoSize
@@ -676,7 +676,7 @@ class ExportHelper: ObservableObject {
                     let start = CMTime(seconds: correctedTime.start, preferredTimescale: 600)
                     let duration = CMTime(seconds: correctedTime.duration, preferredTimescale: 600)
                     let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(stamp.idTag) })
-                    let labels = stamp.labels.compactMap { labelID in
+                    let labels = stamp.labelIDs.compactMap { labelID in
                         tagLibrary.findLabelById(labelID)?.name
                     }
                     let tagNameWithLabels = labels.isEmpty ? stamp.label : "\(stamp.label)(\(labels.joined(separator: "_")))"
@@ -700,7 +700,7 @@ class ExportHelper: ObservableObject {
             
             for line in timelineData.lines {
                 for stamp in line.stamps {
-                    guard stamp.idTag == selectedTag.id else {
+                    guard stamp.idTags.contains(selectedTag.id) else {
                         continue
                     }
                     
@@ -782,7 +782,7 @@ class ExportHelper: ObservableObject {
             
             for line in timelineData.lines {
                 for stamp in line.stamps {
-                    if stamp.labels.contains(selectedLabel.id) {
+                    if stamp.labelIDs.contains(selectedLabel.id) {
                         guard let correctedTime = correctTimeRange(
                             startSeconds: stamp.timeStartSeconds,
                             durationSeconds: stamp.duration,
@@ -815,7 +815,7 @@ class ExportHelper: ObservableObject {
             let labelIDs = Set(selectedLabels.map { $0.id })
             for line in timelineData.lines {
                 for stamp in line.stamps {
-                    if stamp.idTag == selectedTag.id && !Set(stamp.labels).isDisjoint(with: labelIDs) {
+                    if stamp.idTags.contains(selectedTag.id) && !Set(stamp.labelIDs).isDisjoint(with: labelIDs) {
                         guard let correctedTime = correctTimeRange(
                             startSeconds: stamp.timeStartSeconds,
                             durationSeconds: stamp.duration,
@@ -856,7 +856,7 @@ class ExportHelper: ObservableObject {
             let tagIDs = Set(selectedTags.map { $0.id })
             for line in timelineData.lines {
                 for stamp in line.stamps {
-                    if stamp.labels.contains(selectedLabel.id) && tagIDs.contains(stamp.idTag) {
+                    if stamp.labelIDs.contains(selectedLabel.id) && !tagIDs.isDisjoint(with: stamp.idTags) {
                         guard let correctedTime = correctTimeRange(
                             startSeconds: stamp.timeStartSeconds,
                             durationSeconds: stamp.duration,

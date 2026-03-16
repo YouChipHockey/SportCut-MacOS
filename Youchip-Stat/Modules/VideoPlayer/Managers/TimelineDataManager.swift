@@ -118,8 +118,9 @@ class TimelineDataManager: ObservableObject {
         
         for lineIndex in 0..<lines.count {
             for stampIndex in 0..<lines[lineIndex].stamps.count {
-                if lines[lineIndex].stamps[stampIndex].idTag == originalID {
-                    lines[lineIndex].stamps[stampIndex].idTag = newID
+                if let tagIdx = lines[lineIndex].stamps[stampIndex].tagRefs.firstIndex(where: { $0.id == originalID }) {
+                    let ref = lines[lineIndex].stamps[stampIndex].tagRefs[tagIdx]
+                    lines[lineIndex].stamps[stampIndex].tagRefs[tagIdx] = StampTagRef(id: newID, tagGroupId: ref.tagGroupId)
                     updated = true
                 }
             }
@@ -135,7 +136,7 @@ class TimelineDataManager: ObservableObject {
         }
     }
     
-    func addStampToSelectedLine(idTag: String, primaryId: String?, name: String, timeStartSeconds: Double, timeFinishSeconds: Double, color: String, labels: [String], position: CGPoint? = nil) {
+    func addStampToSelectedLine(tagRefs: [StampTagRef], primaryId: String?, name: String, timeStartSeconds: Double, timeFinishSeconds: Double, color: String, labels: [FullLabelWithGroup], position: CGPoint? = nil) {
         if MarkupMode.current == .standard {
             guard let lineID = selectedLineID,
                   let idx = lines.firstIndex(where: { $0.id == lineID }) else { return }
@@ -143,7 +144,7 @@ class TimelineDataManager: ObservableObject {
             let selectedEvents = Array(TagLibraryManager.shared.selectedTimeEvents)
             
             let stamp = TimelineStamp(
-                idTag: idTag,
+                tagRefs: tagRefs,
                 primaryID: primaryId,
                 timeStartSeconds: timeStartSeconds,
                 timeFinishSeconds: timeFinishSeconds,
@@ -157,14 +158,14 @@ class TimelineDataManager: ObservableObject {
             lines[idx].stamps.append(stamp)
             
         } else {
-            if let tag = TagLibraryManager.shared.findTagById(idTag) {
+            if let tag = TagLibraryManager.shared.findTagById(tagRefs.first?.id ?? "") {
                 let lineID = findOrCreateTimelineForTag(tag: tag)
                 
                 if let idx = lines.firstIndex(where: { $0.id == lineID }) {
                     let selectedEvents = Array(TagLibraryManager.shared.selectedTimeEvents)
                     
                     let stamp = TimelineStamp(
-                        idTag: idTag,
+                        tagRefs: tagRefs,
                         primaryID: primaryId,
                         timeStartSeconds: timeStartSeconds,
                         timeFinishSeconds: timeFinishSeconds,
@@ -185,7 +186,7 @@ class TimelineDataManager: ObservableObject {
         NotificationCenter.default.post(name: .stampCountsChanged, object: nil)
     }
     
-    func updateStampLabels(lineID: UUID, stampID: UUID, newLabels: [String]) {
+    func updateStampLabels(lineID: UUID, stampID: UUID, newLabels: [FullLabelWithGroup]) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
         guard let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }
         lines[lineIndex].stamps[stampIndex].labels = newLabels
@@ -259,7 +260,7 @@ class TimelineDataManager: ObservableObject {
         
         for lineIndex in 0..<lines.count {
             for stampIndex in 0..<lines[lineIndex].stamps.count {
-                if lines[lineIndex].stamps[stampIndex].idTag == tagId {
+                if lines[lineIndex].stamps[stampIndex].idTags.contains(tagId) {
                     lines[lineIndex].stamps[stampIndex].label = newName ?? updatedTag.name
                     updated = true
                 }

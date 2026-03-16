@@ -14,6 +14,7 @@ import FirebaseInstallations
 class AppSetupManager {
     
     class func setup() {
+        TimelineMigrationManager.shared.migrateIfNeeded()
         DataSyncManager.shared.synchronizeOnAppLaunch()
         FirebaseApp.configure()
         setupMenu()

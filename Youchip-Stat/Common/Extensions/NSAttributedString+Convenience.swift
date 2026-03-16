@@ -19,8 +19,8 @@ extension NSAttributedString {
         let timeEvents = tagLibrary.allTimeEvents.filter { overlayItem.stamp.timeEvents.contains($0.id) }
         
         let allStamps: [TimelineStamp] = timelineManager.lines.flatMap { $0.stamps }.sortedByStartTime
-        let allStampsInfo: [(id: UUID, tagId: String, name: String)] = allStamps.map { ($0.id, $0.idTag, $0.label) }
-        let stampsOfSingleType = allStampsInfo.filter { $0.tagId == overlayItem.tag.id }
+        let allStampsInfo: [(id: UUID, tagIds: [String], name: String)] = allStamps.map { ($0.id, $0.idTags, $0.label) }
+        let stampsOfSingleType = allStampsInfo.filter { $0.tagIds.contains(overlayItem.tag.id) }
         guard let tagIndex = stampsOfSingleType.firstIndex(where: { $0.id == overlayItem.stamp.id } ) else { return nil }
         
         let fontSize: CGFloat

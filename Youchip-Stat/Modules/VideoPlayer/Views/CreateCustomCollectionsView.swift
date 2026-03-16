@@ -796,7 +796,7 @@ struct CreateCustomCollectionsView: View {
         let currentCollectionName = collectionManager.collectionName
         
         return timelineData.lines.flatMap { $0.stamps }.filter { stamp in
-            guard let tag = collectionManager.tags.first(where: { $0.id == stamp.idTag }) else {
+            guard let tag = collectionManager.tags.first(where: { stamp.idTags.contains($0.id) }) else {
                 return false
             }
             return stamp.position != nil && (stamp.isActiveForMapView ?? false)
@@ -811,7 +811,7 @@ struct CreateCustomCollectionsView: View {
             for stampIndex in timelineData.lines[lineIndex].stamps.indices {
                 let stamp = timelineData.lines[lineIndex].stamps[stampIndex]
                 
-                if collectionManager.tags.contains(where: { $0.id == stamp.idTag }) {
+                if collectionManager.tags.contains(where: { stamp.idTags.contains($0.id) }) {
                     timelineData.lines[lineIndex].stamps[stampIndex].isActiveForMapView = false
                 }
             }

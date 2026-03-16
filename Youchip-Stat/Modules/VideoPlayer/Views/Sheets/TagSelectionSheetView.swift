@@ -77,7 +77,7 @@ struct TagSelectionSheetView: View {
         let timelineData = TimelineDataManager.shared
         return timelineData.lines.contains { line in
             line.stamps.contains { stamp in
-                stamp.idTag == tag.id && !stamp.labels.isEmpty
+                stamp.idTags.contains(tag.id) && !stamp.labelIDs.isEmpty
             }
         }
     }

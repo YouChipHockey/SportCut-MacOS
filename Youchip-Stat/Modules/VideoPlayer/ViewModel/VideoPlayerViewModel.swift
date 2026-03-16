@@ -1079,15 +1079,14 @@ class VideoPlayerViewModel: ObservableObject {
         }
         
         let stamp = TimelineStamp(
-            idTag: tagID,
+            tagRefs: [StampTagRef(id: tagID, tagGroupId: "")],
             primaryID: nil,
             timeStartSeconds: startTime,
             timeFinishSeconds: endTime,
             colorHex: "808080",
             label: screenshotName,
             labels: [],
-            timeEvents: [],
-            position: nil
+            timeEvents: []
         )
         
         timelineData.lines[lineIndex].stamps.append(stamp)

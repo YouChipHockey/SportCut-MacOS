@@ -235,7 +235,7 @@ struct FieldMapVisualizationView: View {
         }
         
         private func tagCompactLabels(_ stamp: TimelineStamp) -> some View {
-            let allLabels = stamp.labels.compactMap { labelId in
+            let allLabels = stamp.labelIDs.compactMap { labelId in
                 TagLibraryManager.shared.findLabelById(labelId)
             }
             
@@ -1013,7 +1013,8 @@ struct FieldMapVisualizationView: View {
         }
     }
     
-    private func getGroupedLabels(for labelIDs: [String]) -> [(String, [Label])] {
+    private func getGroupedLabels(for labelItems: [FullLabelWithGroup]) -> [(String, [Label])] {
+        let labelIDs = labelItems.map(\.id)
         var groupedLabels: [String: [Label]] = [:]
         
         for labelID in labelIDs {

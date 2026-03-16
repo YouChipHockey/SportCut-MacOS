@@ -169,11 +169,11 @@ struct TimelineLine: Identifiable, Codable, Equatable {
     }
 }
 
-struct FullLabelWithGroup: Codable {
+struct FullLabelWithGroup: Codable, Equatable, Hashable {
     let id: String
     let name: String
     let description: String
-    let group: LabelGroupInfo?
+    let lableGroupId: String
 }
 
 enum ActiveAlert: Identifiable {
@@ -216,7 +216,7 @@ struct FullTimelineStamp: Codable {
     let id: UUID
     let timeStart: String
     let timeFinish: String
-    let tag: FullTagWithGroup
+    let tags: [FullTagWithGroup]
     let labels: [FullLabelWithGroup]
     let timeEvents: [TimeEvent]
     let position: CGPoint?

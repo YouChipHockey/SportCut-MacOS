@@ -519,7 +519,7 @@ struct FieldMapConfigurationView: View {
         var allPositionedTags = timelineData.lines.flatMap { line in
             line.stamps.compactMap { stamp -> TagOnMap? in
                 guard let position = stamp.position,
-                      isTagFromCollection(stamp.idTag, collection: collection) else {
+                      stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) else {
                     return nil
                 }
                 

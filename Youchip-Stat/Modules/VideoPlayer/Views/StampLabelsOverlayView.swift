@@ -70,7 +70,7 @@ struct StampLabelsOverlayView: View {
     }
     
     private func updateDisplayedLabels(availableWidth: CGFloat) {
-        let stampLabels = stamp.labels.compactMap { labelID in
+        let stampLabels = stamp.labelIDs.compactMap { labelID in
             tagLibrary.findLabelById(labelID)
         }
         

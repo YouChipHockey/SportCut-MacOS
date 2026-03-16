@@ -898,7 +898,7 @@ struct TagLibraryView: View {
     }
     
     
-    private func addTagToTimeline(tag: Tag, selectedLabels: [String]) {
+    private func addTagToTimeline(tag: Tag, selectedLabels: [FullLabelWithGroup]) {
         if tag.mapEnabled == true {
             // Use cached playField if available, otherwise load
             if let collectionName = tagLibrary.currentCollectionType.name {
@@ -930,7 +930,7 @@ struct TagLibraryView: View {
         proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil)
     }
     
-    private func showFieldMapSelection(tag: Tag, imageBookmark: Data, selectedLabels: [String]) {
+    private func showFieldMapSelection(tag: Tag, imageBookmark: Data, selectedLabels: [FullLabelWithGroup]) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
             proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: coordinates)
             if videoManager.playbackSpeed > 0 {
@@ -941,7 +941,7 @@ struct TagLibraryView: View {
         }
     }
     
-    private func proceedWithTagAddition(tag: Tag, selectedLabels: [String], coordinates: CGPoint?) {
+    private func proceedWithTagAddition(tag: Tag, selectedLabels: [FullLabelWithGroup], coordinates: CGPoint?) {
         let currentTime = videoManager.currentTime
         let videoDuration = max(1.0, videoManager.timelineDuration)
         let startTime = max(0, currentTime - tag.defaultTimeBefore)
@@ -963,8 +963,10 @@ struct TagLibraryView: View {
             }
         }
         
+        let tagGroupId = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.id) })?.id ?? ""
+        
         timelineData.addStampToSelectedLine(
-            idTag: tag.id,
+            tagRefs: [StampTagRef(id: tag.id, tagGroupId: tagGroupId)],
             primaryId: tag.primaryID,
             name: tag.name,
             timeStartSeconds: startTime,
@@ -1002,7 +1004,8 @@ struct TagLibraryView: View {
                         initialIds: [],
                         tag: tag,
                         tagLibrary: TagLibraryManager.shared,
-                        onDone: { selectedLabels in
+                        onDone: { selectedLabelIds in
+                            let fullLabels = Self.buildFullLabels(from: selectedLabelIds)
                             if tag.isInterval == true {
                                 if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
                                     let videoDuration = max(1.0, videoManager.timelineDuration)
@@ -1018,11 +1021,11 @@ struct TagLibraryView: View {
                                         tag: tag,
                                         timeStartSeconds: timeStart,
                                         timeFinishSeconds: timeFinish,
-                                        selectedLabels: selectedLabels
+                                        selectedLabels: fullLabels
                                     )
                                 }
                             } else {
-                                addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                                addTagToTimeline(tag: tag, selectedLabels: fullLabels)
                             }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 showLabelSheet = false
@@ -1082,7 +1085,8 @@ struct TagLibraryView: View {
                         initialIds: [],
                         tag: tag,
                         tagLibrary: TagLibraryManager.shared,
-                        onDone: { selectedLabels in
+                        onDone: { selectedLabelIds in
+                            let fullLabels = Self.buildFullLabels(from: selectedLabelIds)
                             if tag.isInterval == true {
                                 if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
                                     let videoDuration = max(1.0, videoManager.timelineDuration)
@@ -1098,11 +1102,11 @@ struct TagLibraryView: View {
                                         tag: tag,
                                         timeStartSeconds: timeStart,
                                         timeFinishSeconds: timeFinish,
-                                        selectedLabels: selectedLabels
+                                        selectedLabels: fullLabels
                                     )
                                 }
                             } else {
-                                addTagToTimeline(tag: tag, selectedLabels: selectedLabels)
+                                addTagToTimeline(tag: tag, selectedLabels: fullLabels)
                             }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 showLabelSheet = false
@@ -1446,7 +1450,7 @@ struct TagLibraryView: View {
         }
     }
     
-    private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [String]) {
+    private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup]) {
         if tag.mapEnabled == true {
             // Use cached playField if available, otherwise load
             if let collectionName = tagLibrary.currentCollectionType.name {
@@ -1477,7 +1481,7 @@ struct TagLibraryView: View {
         proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
     }
     
-    private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [String]) {
+    private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup]) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
             proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: coordinates, selectedLabels: selectedLabels)
             if videoManager.playbackSpeed > 0 {
@@ -1488,7 +1492,7 @@ struct TagLibraryView: View {
         }
     }
     
-    private func proceedWithTagAdditionInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, coordinates: CGPoint?, selectedLabels: [String]) {
+    private func proceedWithTagAdditionInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, coordinates: CGPoint?, selectedLabels: [FullLabelWithGroup]) {
         
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {
@@ -1504,8 +1508,10 @@ struct TagLibraryView: View {
             }
         }
         
+        let tagGroupId = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.id) })?.id ?? ""
+        
         timelineData.addStampToSelectedLine(
-            idTag: tag.id,
+            tagRefs: [StampTagRef(id: tag.id, tagGroupId: tagGroupId)],
             primaryId: tag.primaryID,
             name: tag.name,
             timeStartSeconds: timeStartSeconds,
@@ -1529,12 +1535,23 @@ struct TagLibraryView: View {
         }
     }
     
+    static func buildFullLabels(from labelIds: [String]) -> [FullLabelWithGroup] {
+        let tagLibrary = TagLibraryManager.shared
+        return labelIds.compactMap { labelID -> FullLabelWithGroup? in
+            guard let label = tagLibrary.findLabelById(labelID) else { return nil }
+            let groupId = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(labelID) })?.id ?? ""
+            return FullLabelWithGroup(id: label.id, name: label.name, description: label.description, lableGroupId: groupId)
+        }
+    }
+    
     private func updateTagCounts() {
         var counts: [String: Int] = [:]
         
         for line in timelineData.lines {
             for stamp in line.stamps {
-                counts[stamp.idTag, default: 0] += 1
+                for tagID in stamp.idTags {
+                    counts[tagID, default: 0] += 1
+                }
             }
         }
         

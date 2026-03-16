@@ -191,7 +191,7 @@ struct TableRowView: View {
     }
     
     private var labels: [Label] {
-        stampWithLine.stamp.labels.compactMap { labelID in
+        stampWithLine.stamp.labelIDs.compactMap { labelID in
             TagLibraryManager.shared.findLabelById(labelID)
         }
     }
@@ -360,7 +360,7 @@ struct TableRowView: View {
             duration: stampWithLine.stamp.duration,
             color: tag?.color ?? "FFFFFF",
             tagGroupName: tagGroup?.name,
-            labelIDs: stampWithLine.stamp.labels,
+            labelIDs: stampWithLine.stamp.labelIDs,
             eventIDs: stampWithLine.stamp.timeEvents
         )
     }
@@ -395,7 +395,7 @@ struct TableRowView: View {
                     duration: stampWithLine.stamp.duration,
                     color: tag?.color ?? "FFFFFF",
                     tagGroupName: tagGroup?.name,
-                    labelIDs: stampWithLine.stamp.labels,
+                    labelIDs: stampWithLine.stamp.labelIDs,
                     eventIDs: stampWithLine.stamp.timeEvents
                 )
             }

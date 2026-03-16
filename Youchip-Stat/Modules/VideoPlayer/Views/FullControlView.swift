@@ -1340,7 +1340,7 @@ struct FullControlView: View {
                 let tag = tagLibrary.findTagById(stamp.idTag)
                 let tagName = tag?.name ?? stamp.label
                 let colorHex = tag?.color ?? stamp.colorHex
-                let labelNames = stamp.labels.compactMap { tagLibrary.findLabelById($0)?.name }
+                let labelNames = stamp.labelIDs.compactMap { tagLibrary.findLabelById($0)?.name }
                 allStamps.append((stamp: stamp, tagName: tagName, labelNames: labelNames, colorHex: colorHex))
             }
         }
@@ -1690,9 +1690,9 @@ struct FullControlView: View {
                 if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
                    let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) {
                     
-                    let currentIds = switch sheetType {
+                    let currentIds: [String] = switch sheetType {
                     case .lables:
-                        timelineData.lines[lineIndex].stamps[stampIndex].labels
+                        timelineData.lines[lineIndex].stamps[stampIndex].labelIDs
                     case .timeEvents:
                         timelineData.lines[lineIndex].stamps[stampIndex].timeEvents
                     }
@@ -1710,10 +1710,16 @@ struct FullControlView: View {
                             onDone: { newIds in
                                 switch sheetType {
                                 case .lables:
+                                    let tagLibrary = TagLibraryManager.shared
+                                    let fullLabels = newIds.compactMap { labelID -> FullLabelWithGroup? in
+                                        guard let label = tagLibrary.findLabelById(labelID) else { return nil }
+                                        let groupId = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(labelID) })?.id ?? ""
+                                        return FullLabelWithGroup(id: label.id, name: label.name, description: label.description, lableGroupId: groupId)
+                                    }
                                     timelineData.updateStampLabels(
                                         lineID: lineID,
                                         stampID: stampID,
-                                        newLabels: newIds
+                                        newLabels: fullLabels
                                     )
                                 case .timeEvents:
                                     timelineData.updateStampTimeEvents(
@@ -1763,47 +1769,27 @@ struct FullControlView: View {
         
         return TimelineDataManager.shared.lines.map { line in
             let fullStamps = line.stamps.map { stamp -> FullTimelineStamp in
-                let tag = tagLibrary.findTagById(stamp.idTag)
-                var tagGroup: TagGroupInfo? = nil
-                if let tagID = tag?.id {
+                let fullTags: [FullTagWithGroup] = stamp.idTags.compactMap { tagID in
+                    guard let tag = tagLibrary.findTagById(tagID) else { return nil }
+                    var tagGroup: TagGroupInfo? = nil
                     for group in tagLibrary.allTagGroups {
                         if group.tags.contains(tagID) {
                             tagGroup = TagGroupInfo(id: group.id, name: group.name)
                             break
                         }
                     }
-                }
-                
-                let fullTag = FullTagWithGroup(
-                    id: tag?.id ?? "",
-                    primaryID: tag?.primaryID,
-                    name: tag?.name ?? stamp.label,
-                    description: tag?.description ?? "",
-                    color: tag?.color ?? "FFFFFF",
-                    defaultTimeBefore: tag?.defaultTimeBefore ?? 0,
-                    defaultTimeAfter: tag?.defaultTimeAfter ?? 0,
-                    collection: tag?.collection ?? "",
-                    hotkey: tag?.hotkey,
-                    labelHotkeys: tag?.labelHotkeys,
-                    group: tagGroup
-                )
-                
-                let fullLabels = stamp.labels.compactMap { labelID -> FullLabelWithGroup? in
-                    guard let label = tagLibrary.findLabelById(labelID) else { return nil }
-                    
-                    var labelGroup: LabelGroupInfo? = nil
-                    for group in tagLibrary.allLabelGroups {
-                        if group.lables.contains(labelID) {
-                            labelGroup = LabelGroupInfo(id: group.id, name: group.name)
-                            break
-                        }
-                    }
-                    
-                    return FullLabelWithGroup(
-                        id: label.id,
-                        name: label.name,
-                        description: label.description,
-                        group: labelGroup
+                    return FullTagWithGroup(
+                        id: tag.id,
+                        primaryID: tag.primaryID,
+                        name: tag.name,
+                        description: tag.description,
+                        color: tag.color,
+                        defaultTimeBefore: tag.defaultTimeBefore,
+                        defaultTimeAfter: tag.defaultTimeAfter,
+                        collection: tag.collection ?? "",
+                        hotkey: tag.hotkey,
+                        labelHotkeys: tag.labelHotkeys,
+                        group: tagGroup
                     )
                 }
                 
@@ -1815,8 +1801,8 @@ struct FullControlView: View {
                     id: stamp.id,
                     timeStart: stamp.timeStartString,
                     timeFinish: stamp.timeFinishString,
-                    tag: fullTag,
-                    labels: fullLabels,
+                    tags: fullTags,
+                    labels: stamp.labels,
                     timeEvents: fullTimeEvents,
                     position: stamp.position
                 )
@@ -1829,7 +1815,7 @@ struct FullControlView: View {
     func uniqueLabelsFromTimelines() -> [Label] {
         let labelIDs = timelineData.lines.flatMap { line in
             line.stamps.flatMap { stamp in
-                stamp.labels
+                stamp.labelIDs
             }
         }
         
@@ -1844,8 +1830,8 @@ struct FullControlView: View {
 
     func labelsForTag(_ tag: Tag) -> [Label] {
         let labelIDs = timelineData.lines.flatMap { line in
-            line.stamps.filter { $0.idTag == tag.id }
-                .flatMap { $0.labels }
+            line.stamps.filter { $0.idTags.contains(tag.id) }
+                .flatMap { $0.labelIDs }
         }
         
         let uniqueLabelIDs = Array(Set(labelIDs))
@@ -1856,10 +1842,10 @@ struct FullControlView: View {
 
     func tagsForLabel(_ label: Label) -> [Tag] {
         let tagIDs = timelineData.lines.flatMap { line in
-            line.stamps.filter { $0.labels.contains(label.id) }
-                .map { $0.idTag }
+            line.stamps.filter { $0.labelIDs.contains(label.id) }
+                .flatMap { $0.idTags }
         }
-        
+
         let uniqueTagIDs = Array(Set(tagIDs))
         
         let tags = TagLibraryManager.shared.allTags.filter { uniqueTagIDs.contains($0.id) }
@@ -1869,7 +1855,7 @@ struct FullControlView: View {
     func uniqueTagsFromTimelines() -> [Tag] {
         let tagIDs = timelineData.lines.flatMap { line in
             line.stamps.flatMap { stamp in
-                [stamp.idTag]
+                stamp.idTags
             }
         }
         
@@ -2265,7 +2251,7 @@ struct TimelineMouseTracker: NSViewRepresentable {
                 let tag = tagLibrary.findTagById(stamp.idTag)
                 let tagName = tag?.name ?? stamp.label
                 
-                let labelNames = stamp.labels.compactMap { labelID in
+                let labelNames = stamp.labelIDs.compactMap { labelID in
                     tagLibrary.findLabelById(labelID)?.name
                 }
                 let labelsString = labelNames.isEmpty ? "—" : labelNames.joined(separator: ", ")

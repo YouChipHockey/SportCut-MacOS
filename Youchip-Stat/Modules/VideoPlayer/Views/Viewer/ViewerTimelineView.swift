@@ -313,7 +313,7 @@ struct ViewerTimelineView: View {
                     duration: stamp.duration,
                     color: tag?.color ?? "FFFFFF",
                     tagGroupName: tagGroup?.name,
-                    labelIDs: stamp.labels,
+                    labelIDs: stamp.labelIDs,
                     eventIDs: stamp.timeEvents
                 )
                 organizer.addTag(organizerTag)
@@ -654,7 +654,7 @@ struct ViewerStampView: View {
             duration: stamp.duration,
             color: tag?.color ?? "FFFFFF",
             tagGroupName: tagGroup?.name,
-            labelIDs: stamp.labels,
+            labelIDs: stamp.labelIDs,
             eventIDs: stamp.timeEvents
         )
     }
@@ -674,7 +674,7 @@ struct TimelineFilterSheet: View {
     
     private var availableTags: [Tag] {
         let tagIDs = TimelineDataManager.shared.lines.flatMap { line in
-            line.stamps.map { $0.idTag }
+            line.stamps.flatMap { $0.idTags }
         }
         let uniqueTagIDs = Array(Set(tagIDs))
         return TagLibraryManager.shared.allTags.filter { uniqueTagIDs.contains($0.id) }
@@ -682,7 +682,7 @@ struct TimelineFilterSheet: View {
     
     private var availableLabels: [Label] {
         let labelIDs = TimelineDataManager.shared.lines.flatMap { line in
-            line.stamps.flatMap { $0.labels }
+            line.stamps.flatMap { $0.labelIDs }
         }
         let uniqueLabelIDs = Array(Set(labelIDs))
         return TagLibraryManager.shared.allLabels.filter { uniqueLabelIDs.contains($0.id) }

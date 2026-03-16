@@ -389,11 +389,11 @@ class TimelineFilter: ObservableObject {
             return true
         }
         
-        if !selectedTags.isEmpty && !selectedTags.contains(stamp.idTag) {
+        if !selectedTags.isEmpty && selectedTags.isDisjoint(with: stamp.idTags) {
             return false
         }
         
-        if !selectedLabels.isEmpty && selectedLabels.isDisjoint(with: stamp.labels) {
+        if !selectedLabels.isEmpty && selectedLabels.isDisjoint(with: stamp.labelIDs) {
             return false
         }
         

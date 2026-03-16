@@ -252,11 +252,11 @@ struct FieldMapVisualizationPicker: View {
         let allTags = timelineData.lines.flatMap { line in
             line.stamps.filter { stamp in
                 stamp.position != nil &&
-                isTagFromCollection(stamp.idTag, collection: collection) &&
+                stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
                 (stamp.isActiveForMapView == true)
             }
         }
-        
+
         var uniqueTags: [String: TimelineStamp] = [:]
         for tag in allTags {
             if uniqueTags[tag.idTag] == nil {
@@ -272,7 +272,7 @@ struct FieldMapVisualizationPicker: View {
         return timelineData.lines.filter { line in
             line.stamps.contains { stamp in
                 stamp.position != nil &&
-                isTagFromCollection(stamp.idTag, collection: collection) &&
+                stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
                 (stamp.isActiveForMapView == true)
             }
         }
@@ -283,7 +283,7 @@ struct FieldMapVisualizationPicker: View {
         
         return timeline.stamps.filter { stamp in
             stamp.position != nil &&
-            isTagFromCollection(stamp.idTag, collection: collection) &&
+            stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
             (stamp.isActiveForMapView == true)
         }.count
     }
@@ -294,12 +294,12 @@ struct FieldMapVisualizationPicker: View {
         return timelineData.lines.flatMap { line in
             line.stamps.filter { stamp in
                 stamp.position != nil &&
-                isTagFromCollection(stamp.idTag, collection: collection) &&
+                stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
                 (stamp.isActiveForMapView == true)
             }
         }
     }
-    
+
     private func isTagFromCollection(_ tagId: String, collection: CollectionBookmark) -> Bool {
         let collectionManager = CustomCollectionManager()
         guard collectionManager.loadCollectionFromBookmarks(named: collection.name) else {
@@ -319,7 +319,7 @@ struct FieldMapVisualizationPicker: View {
             }.flatMap { line in
                 line.stamps.filter { stamp in
                     stamp.position != nil &&
-                    isTagFromCollection(stamp.idTag, collection: collection) &&
+                    stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
                     (stamp.isActiveForMapView == true)
                 }
             }

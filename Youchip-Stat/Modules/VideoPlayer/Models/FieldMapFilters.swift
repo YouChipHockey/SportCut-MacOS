@@ -17,11 +17,15 @@ struct FieldMapFilters: Equatable {
         if !selectedTags.isEmpty || !selectedTagGroups.isEmpty {
             var matchesTagFilters = false
             if !selectedTags.isEmpty {
-                matchesTagFilters = selectedTags.contains(stamp.idTag)
+                matchesTagFilters = !selectedTags.isDisjoint(with: stamp.idTags)
             }
             if !matchesTagFilters && !selectedTagGroups.isEmpty {
-                if let tagGroup = TagLibraryManager.shared.findTagGroupForTag(stamp.idTag) {
-                    matchesTagFilters = selectedTagGroups.contains(tagGroup.id)
+                for tagID in stamp.idTags {
+                    if let tagGroup = TagLibraryManager.shared.findTagGroupForTag(tagID),
+                       selectedTagGroups.contains(tagGroup.id) {
+                        matchesTagFilters = true
+                        break
+                    }
                 }
             }
             if (!selectedTags.isEmpty || !selectedTagGroups.isEmpty) && !matchesTagFilters {
@@ -42,7 +46,7 @@ struct FieldMapFilters: Equatable {
         }
         
         if !selectedLabels.isEmpty {
-            let stampLabelSet = Set(stamp.labels)
+            let stampLabelSet = Set(stamp.labelIDs)
             if !selectedLabels.isSubset(of: stampLabelSet) {
                 return false
             }
@@ -54,7 +58,7 @@ struct FieldMapFilters: Equatable {
     private func getStampLabelGroups(_ stamp: TimelineStamp) -> Set<String> {
         var groupIDs = Set<String>()
         
-        for labelID in stamp.labels {
+        for labelID in stamp.labelIDs {
             for group in TagLibraryManager.shared.allLabelGroups {
                 if group.lables.contains(labelID) {
                     groupIDs.insert(group.id)
