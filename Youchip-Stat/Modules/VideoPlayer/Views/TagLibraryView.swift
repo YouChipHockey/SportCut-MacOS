@@ -174,7 +174,7 @@ struct TagLibraryView: View {
                 
                 Picker("", selection: $tagDisplayMode) {
                     Text("Группы").tag(TagDisplayMode.grouped)
-                    Text("Свободно").tag(TagDisplayMode.free)
+                    // Text("Свободно").tag(TagDisplayMode.free)  // Временно закомментировано
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 220)

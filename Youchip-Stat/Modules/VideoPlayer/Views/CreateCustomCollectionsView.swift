@@ -339,18 +339,19 @@ struct CreateCustomCollectionsView: View {
             
             Spacer()
             
-            if viewMode == .tagGroups {
-                Button(action: {
-                    showTagLayoutEditor = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "rectangle.3.offgrid")
-                        Text(^String.Titles.collectionsTagLayout)
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(collectionManager.tags.isEmpty)
-            }
+            // Временно закомментировано: кнопка Layout, открывающая окно редактора раскладки коллекции
+            // if viewMode == .tagGroups {
+            //     Button(action: {
+            //         showTagLayoutEditor = true
+            //     }) {
+            //         HStack(spacing: 6) {
+            //             Image(systemName: "rectangle.3.offgrid")
+            //             Text(^String.Titles.collectionsTagLayout)
+            //         }
+            //     }
+            //     .buttonStyle(PlainButtonStyle())
+            //     .disabled(collectionManager.tags.isEmpty)
+            // }
             
             Picker("", selection: $viewMode) {
                 Text(^String.Titles.tagGroups)
