@@ -105,6 +105,8 @@ struct VideoPlayerView: View {
         HStack(spacing: 12) {
             editorButton
             
+            telestrationModeButton
+            
             // Live broadcast controls
             if videoManager.isLiveMode {
                 liveBroadcastControls
@@ -531,6 +533,20 @@ struct VideoPlayerView: View {
             Text(^String.Titles.editorTitle)
         }
         .help("Открыть редактор")
+    }
+    
+    private var telestrationModeButton: some View {
+        Button {
+            viewModel.action.send(.openTelestrationMode)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "person.3.sequence")
+                    .font(.system(size: 11))
+                Text("Telestration")
+            }
+        }
+        .disabled(!viewModel.hasTelestrationEligibleStamp())
+        .help("Open telestration mode for the current clip")
     }
     
     // MARK: - Zoom Controls

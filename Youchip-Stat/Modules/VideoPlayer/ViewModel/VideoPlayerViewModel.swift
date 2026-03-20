@@ -51,6 +51,9 @@ enum VideoPlayerAction {
     
     // Telestration
     case addTelestrationObject(DrawableObject)
+    
+    // Telestration Mode (video clip annotation with tracking)
+    case openTelestrationMode
 }
 
 // MARK: - Video Player ViewModel
@@ -351,6 +354,9 @@ class VideoPlayerViewModel: ObservableObject {
             // Объект уже добавлен в массив telestrationObjects в confirmTelestrationObjectCreation
             // Здесь ничего не делаем, так как объект уже в состоянии
             break
+            
+        case .openTelestrationMode:
+            performOpenTelestrationMode()
         }
     }
     
@@ -984,6 +990,60 @@ class VideoPlayerViewModel: ObservableObject {
         }
         
         return stamps
+    }
+    
+    // MARK: - Telestration Mode
+    
+    private func performOpenTelestrationMode() {
+        let videoManager = VideoPlayerManager.shared
+        
+        guard let videoURL = videoManager.getCurrentVideoURL() else { return }
+        
+        videoManager.player?.pause()
+        let currentTime = videoManager.currentTime
+        
+        let timelineData = TimelineDataManager.shared
+        var bestStamp: TimelineStamp?
+        
+        for line in timelineData.lines {
+            if line.id == ScreenshotConstants.screenshotsTimelineID { continue }
+            for stamp in line.stamps {
+                if currentTime >= stamp.timeStartSeconds && currentTime <= stamp.timeFinishSeconds {
+                    if bestStamp == nil || stamp.duration < bestStamp!.duration {
+                        bestStamp = stamp
+                    }
+                }
+            }
+        }
+        
+        guard let stamp = bestStamp else { return }
+        
+        WindowsManager.shared.openTelestrationMode(
+            videoURL: videoURL,
+            clipStartTime: stamp.timeStartSeconds,
+            clipEndTime: stamp.timeFinishSeconds,
+            stampLabel: stamp.label
+        )
+    }
+    
+    /// Whether there is an intersecting stamp at the current video time (for enabling the telestration button)
+    func hasTelestrationEligibleStamp() -> Bool {
+        let videoManager = VideoPlayerManager.shared
+        guard !videoManager.isLiveMode else { return false }
+        guard videoManager.player != nil else { return false }
+        
+        let currentTime = videoManager.currentTime
+        let timelineData = TimelineDataManager.shared
+        
+        for line in timelineData.lines {
+            if line.id == ScreenshotConstants.screenshotsTimelineID { continue }
+            for stamp in line.stamps {
+                if currentTime >= stamp.timeStartSeconds && currentTime <= stamp.timeFinishSeconds {
+                    return true
+                }
+            }
+        }
+        return false
     }
     
     private func saveScreenshotMetadata(screenshotName: String, videoTime: Double, displayDuration: Double, relatedStampIds: [UUID], screenshotsFolder: URL, editorState: EditorStateSnapshot? = nil) {

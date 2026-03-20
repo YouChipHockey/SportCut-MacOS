@@ -46,6 +46,7 @@ class WindowsManager: NSObject {
 
     private var editorWindowControllers: [NSWindowController] = []
     private var momentViewerControllers: [NSWindowController] = []
+    private var telestrationControllers: [NSWindowController] = []
     private var isClosing = true
     private var isWindowsLocked = false
     
@@ -677,6 +678,19 @@ class WindowsManager: NSObject {
             lineName: lineName
         )
         momentViewerControllers.append(controller)
+        controller.showWindow(nil)
+    }
+    
+    // MARK: - Telestration Mode
+    
+    func openTelestrationMode(videoURL: URL, clipStartTime: Double, clipEndTime: Double, stampLabel: String) {
+        let controller = TelestrationModeWindowController(
+            videoURL: videoURL,
+            clipStartTime: clipStartTime,
+            clipEndTime: clipEndTime,
+            stampLabel: stampLabel
+        )
+        telestrationControllers.append(controller)
         controller.showWindow(nil)
     }
 
