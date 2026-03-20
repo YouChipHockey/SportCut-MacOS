@@ -17,6 +17,11 @@ class PixelTemplateTracker {
     private let ovalMask: [Bool]
     private let maskPixelCount: Int
     
+    private let scaleRate = 0.002
+    private let minScale = 0.5
+    private let maxScale = 2.0
+    private let maxScaleChangePerFrame = 0.06
+    
     init(templateWidth: Int = 22, templateHeight: Int = 36, searchRadius: Int = 40) {
         self.templateWidth = templateWidth
         self.templateHeight = templateHeight
@@ -41,17 +46,24 @@ class PixelTemplateTracker {
     
     // MARK: - Template Capture
     
-    func captureTemplate(from image: CGImage, at center: CGPoint) -> PixelTemplate? {
-        let halfW = templateWidth / 2
-        let halfH = templateHeight / 2
-        let x = max(0, min(Int(center.x) - halfW, image.width - templateWidth))
-        let y = max(0, min(Int(center.y) - halfH, image.height - templateHeight))
+    func captureTemplate(from image: CGImage, at center: CGPoint, scale: Double = 1.0) -> PixelTemplate? {
+        let cropW = Int(ceil(Double(templateWidth) * scale))
+        let cropH = Int(ceil(Double(templateHeight) * scale))
+        let halfW = cropW / 2
+        let halfH = cropH / 2
+        let x = max(0, min(Int(center.x) - halfW, image.width - cropW))
+        let y = max(0, min(Int(center.y) - halfH, image.height - cropH))
         
-        let cropRect = CGRect(x: x, y: y, width: templateWidth, height: templateHeight)
+        let cropRect = CGRect(x: x, y: y, width: cropW, height: cropH)
         guard let cropped = image.cropping(to: cropRect) else { return nil }
-        guard let rgb = extractRGB(from: cropped) else { return nil }
         
-        return PixelTemplate(rgbData: rgb, width: templateWidth, height: templateHeight)
+        if abs(scale - 1.0) > 0.01 {
+            guard let rgb = extractRGBResized(from: cropped, toWidth: templateWidth, height: templateHeight) else { return nil }
+            return PixelTemplate(rgbData: rgb, width: templateWidth, height: templateHeight)
+        } else {
+            guard let rgb = extractRGB(from: cropped) else { return nil }
+            return PixelTemplate(rgbData: rgb, width: templateWidth, height: templateHeight)
+        }
     }
     
     // MARK: - Template Matching (RGB SSD with oval mask, crop-first)
@@ -59,31 +71,50 @@ class PixelTemplateTracker {
     func findBestMatch(
         template: PixelTemplate,
         in image: CGImage,
-        searchCenter: CGPoint
+        searchCenter: CGPoint,
+        scale: Double = 1.0
     ) -> (position: CGPoint, score: Double)? {
-        let halfW = templateWidth / 2
-        let halfH = templateHeight / 2
         let tw = templateWidth
         let th = templateHeight
+        let scaledHalfW = Int(ceil(Double(tw) * scale / 2.0))
+        let scaledHalfH = Int(ceil(Double(th) * scale / 2.0))
+        let effectiveRadius = max(20, Int(round(Double(searchRadius) * scale)))
         
-        let regionX = max(0, Int(searchCenter.x) - searchRadius - halfW)
-        let regionY = max(0, Int(searchCenter.y) - searchRadius - halfH)
-        let regionRight = min(image.width, Int(searchCenter.x) + searchRadius + halfW)
-        let regionBottom = min(image.height, Int(searchCenter.y) + searchRadius + halfH)
+        let regionX = max(0, Int(searchCenter.x) - effectiveRadius - scaledHalfW)
+        let regionY = max(0, Int(searchCenter.y) - effectiveRadius - scaledHalfH)
+        let regionRight = min(image.width, Int(searchCenter.x) + effectiveRadius + scaledHalfW)
+        let regionBottom = min(image.height, Int(searchCenter.y) + effectiveRadius + scaledHalfH)
         let regionW = regionRight - regionX
         let regionH = regionBottom - regionY
         
-        guard regionW > tw, regionH > th else { return nil }
+        let minCropW = Int(ceil(Double(tw) * scale))
+        let minCropH = Int(ceil(Double(th) * scale))
+        guard regionW > minCropW, regionH > minCropH else { return nil }
         
         guard let regionImage = image.cropping(to: CGRect(x: regionX, y: regionY, width: regionW, height: regionH)) else { return nil }
-        guard let regionPixels = extractRGB(from: regionImage) else { return nil }
         
-        let searchW = regionW - tw
-        let searchH = regionH - th
+        let matchW: Int
+        let matchH: Int
+        let regionPixels: [UInt8]
+        
+        if abs(scale - 1.0) > 0.01 {
+            matchW = max(tw + 1, Int(round(Double(regionW) / scale)))
+            matchH = max(th + 1, Int(round(Double(regionH) / scale)))
+            guard let pixels = extractRGBResized(from: regionImage, toWidth: matchW, height: matchH) else { return nil }
+            regionPixels = pixels
+        } else {
+            matchW = regionW
+            matchH = regionH
+            guard let pixels = extractRGB(from: regionImage) else { return nil }
+            regionPixels = pixels
+        }
+        
+        let searchW = matchW - tw
+        let searchH = matchH - th
         guard searchW > 0, searchH > 0 else { return nil }
         
         let tData = template.rgbData
-        let rw3 = regionW * 3
+        let rw3 = matchW * 3
         let tw3 = tw * 3
         
         var bestSSD: Int64 = .max
@@ -174,8 +205,8 @@ class PixelTemplateTracker {
         let avgDiff = sqrt(Double(bestSSD) / Double(maskPixelCount * 3))
         if avgDiff > 50 { return nil }
         
-        let globalX = CGFloat(regionX + bestX + halfW)
-        let globalY = CGFloat(regionY + bestY + halfH)
+        let globalX = CGFloat(regionX) + (CGFloat(bestX) + CGFloat(tw) / 2.0) * CGFloat(scale)
+        let globalY = CGFloat(regionY) + (CGFloat(bestY) + CGFloat(th) / 2.0) * CGFloat(scale)
         
         return (CGPoint(x: globalX, y: globalY), avgDiff)
     }
@@ -199,13 +230,19 @@ class PixelTemplateTracker {
         let total = frames.count
         var goodMatchCount = 0
         var consecutiveFailures = 0
-        let maxJumpDistance: CGFloat = 25.0
+        let baseMaxJump: CGFloat = 25.0
+        var currentScale = 1.0
         
         for (offset, frame) in frames.enumerated() {
             let frameIndex = startFrameIndex + offset
+            let effectiveMaxJump = baseMaxJump * CGFloat(currentScale)
             
             if let existing = positions[frameIndex], existing.isManualOverride {
                 if offset > 0, let prev = positions[startFrameIndex + offset - 1] {
+                    let manualDy = existing.center.y - prev.center.y
+                    let rawChange = Double(manualDy) * scaleRate
+                    let clampedChange = max(-maxScaleChangePerFrame, min(maxScaleChangePerFrame, rawChange))
+                    currentScale = max(minScale, min(maxScale, currentScale + clampedChange))
                     velocity = CGPoint(
                         x: existing.center.x - prev.center.x,
                         y: existing.center.y - prev.center.y
@@ -213,7 +250,7 @@ class PixelTemplateTracker {
                 }
                 lastPos = existing.center
                 consecutiveFailures = 0
-                if let refreshed = captureTemplate(from: frame, at: existing.center) {
+                if let refreshed = captureTemplate(from: frame, at: existing.center, scale: currentScale) {
                     currentTemplate = refreshed
                 }
                 progress(Float(offset + 1) / Float(total))
@@ -230,17 +267,23 @@ class PixelTemplateTracker {
                 y: lastPos.y + velocity.y
             )
             
-            if let (newPos, score) = findBestMatch(template: currentTemplate, in: frame, searchCenter: predicted) {
+            if let (newPos, score) = findBestMatch(template: currentTemplate, in: frame, searchCenter: predicted, scale: currentScale) {
                 let dx = newPos.x - lastPos.x
                 let dy = newPos.y - lastPos.y
                 let dist = hypot(dx, dy)
                 let clampedPos: CGPoint
-                if dist > maxJumpDistance {
-                    let scale = maxJumpDistance / dist
-                    clampedPos = CGPoint(x: lastPos.x + dx * scale, y: lastPos.y + dy * scale)
+                if dist > effectiveMaxJump {
+                    let s = effectiveMaxJump / dist
+                    clampedPos = CGPoint(x: lastPos.x + dx * s, y: lastPos.y + dy * s)
                 } else {
                     clampedPos = newPos
                 }
+                
+                // Update scale from vertical displacement: down = bigger, up = smaller
+                let verticalDelta = Double(clampedPos.y - lastPos.y)
+                let rawScaleChange = verticalDelta * scaleRate
+                let clampedScaleChange = max(-maxScaleChangePerFrame, min(maxScaleChangePerFrame, rawScaleChange))
+                currentScale = max(minScale, min(maxScale, currentScale + clampedScaleChange))
                 
                 let newVel = CGPoint(x: clampedPos.x - lastPos.x, y: clampedPos.y - lastPos.y)
                 velocity = CGPoint(
@@ -253,7 +296,7 @@ class PixelTemplateTracker {
                 goodMatchCount += 1
                 
                 if goodMatchCount % 15 == 0 && score < 25 {
-                    if let refreshed = captureTemplate(from: frame, at: clampedPos) {
+                    if let refreshed = captureTemplate(from: frame, at: clampedPos, scale: currentScale) {
                         currentTemplate = refreshed
                     }
                 }
@@ -267,18 +310,24 @@ class PixelTemplateTracker {
                 let fbDx = fallback.x - lastPos.x
                 let fbDy = fallback.y - lastPos.y
                 let fbDist = hypot(fbDx, fbDy)
-                if fbDist > maxJumpDistance {
-                    let scale = maxJumpDistance / fbDist
-                    fallback = CGPoint(x: lastPos.x + fbDx * scale, y: lastPos.y + fbDy * scale)
+                if fbDist > effectiveMaxJump {
+                    let s = effectiveMaxJump / fbDist
+                    fallback = CGPoint(x: lastPos.x + fbDx * s, y: lastPos.y + fbDy * s)
                 }
                 fallback.x = max(0, min(fallback.x, CGFloat(frame.width)))
                 fallback.y = max(0, min(fallback.y, CGFloat(frame.height)))
+                
+                let verticalDelta = Double(fallback.y - lastPos.y)
+                let rawScaleChange = verticalDelta * scaleRate
+                let clampedScaleChange = max(-maxScaleChangePerFrame, min(maxScaleChangePerFrame, rawScaleChange))
+                currentScale = max(minScale, min(maxScale, currentScale + clampedScaleChange))
+                
                 positions[frameIndex] = TrackedPosition(center: fallback, isManualOverride: false)
                 lastPos = fallback
                 velocity = CGPoint(x: velocity.x * 0.7, y: velocity.y * 0.7)
                 
                 if consecutiveFailures == 5 {
-                    if let refreshed = captureTemplate(from: frame, at: fallback) {
+                    if let refreshed = captureTemplate(from: frame, at: fallback, scale: currentScale) {
                         currentTemplate = refreshed
                     }
                 }
@@ -311,6 +360,38 @@ class PixelTemplateTracker {
         guard let data = context.data else { return nil }
         
         let totalPixels = w * h
+        let rgba = data.bindMemory(to: UInt8.self, capacity: totalPixels * 4)
+        
+        var rgb = [UInt8](repeating: 0, count: totalPixels * 3)
+        rgb.withUnsafeMutableBufferPointer { rgbBuf in
+            let dst = rgbBuf.baseAddress!
+            for i in 0..<totalPixels {
+                dst[i * 3]     = rgba[i * 4]
+                dst[i * 3 + 1] = rgba[i * 4 + 1]
+                dst[i * 3 + 2] = rgba[i * 4 + 2]
+            }
+        }
+        return rgb
+    }
+    
+    private func extractRGBResized(from image: CGImage, toWidth width: Int, height: Int) -> [UInt8]? {
+        guard width > 0, height > 0 else { return nil }
+        
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        
+        context.interpolationQuality = .low
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let data = context.data else { return nil }
+        
+        let totalPixels = width * height
         let rgba = data.bindMemory(to: UInt8.self, capacity: totalPixels * 4)
         
         var rgb = [UInt8](repeating: 0, count: totalPixels * 3)
