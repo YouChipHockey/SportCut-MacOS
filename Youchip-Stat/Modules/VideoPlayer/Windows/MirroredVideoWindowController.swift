@@ -5,12 +5,14 @@
 
 import SwiftUI
 import AppKit
+import AVFoundation
 
 final class MirroredVideoWindowController: NSWindowController, NSWindowDelegate {
     
     enum Mode {
         case markup
         case viewer(VideoPlaylistManager)
+        case sportCut(SportCutPlayerManager)
     }
     
     private let mode: Mode
@@ -24,6 +26,8 @@ final class MirroredVideoWindowController: NSWindowController, NSWindowDelegate 
             rootView = AnyView(MirrorMarkupVideoContentView())
         case .viewer(let pm):
             rootView = AnyView(MirrorViewerVideoContentView(playlistManager: pm))
+        case .sportCut(let playerManager):
+            rootView = AnyView(MirrorSportCutVideoContentView(playerManager: playerManager))
         }
         
         let hosting = NSHostingController(rootView: rootView)

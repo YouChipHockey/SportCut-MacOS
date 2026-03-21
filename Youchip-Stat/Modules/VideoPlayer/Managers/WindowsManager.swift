@@ -40,9 +40,11 @@ class WindowsManager: NSObject {
     var screenshotsWindow: ScreenshotsWindowController?
     var fieldMapConfigurationWindow: FieldMapConfigurationWindowController?
     var viewerWindow: ViewerWindowController?
+    var sportCutWindow: SportCutWindowController?
     var reviewVideoWindow: ReviewVideoWindowController?
     var markupMirrorVideoWindow: MirroredVideoWindowController?
     var viewerMirrorVideoWindow: MirroredVideoWindowController?
+    var sportCutMirrorVideoWindow: MirroredVideoWindowController?
 
     private var fieldMapWindow: NSWindowController?
 
@@ -98,6 +100,18 @@ class WindowsManager: NSObject {
         positionMirrorWindow(controller.window, beside: viewerWindow?.window)
         controller.showWindow(nil)
     }
+
+    func toggleSportCutMirrorVideoWindow(playerManager: SportCutPlayerManager) {
+        if let existing = sportCutMirrorVideoWindow {
+            existing.close()
+            sportCutMirrorVideoWindow = nil
+            return
+        }
+        let controller = MirroredVideoWindowController(mode: .sportCut(playerManager))
+        sportCutMirrorVideoWindow = controller
+        positionMirrorWindow(controller.window, beside: sportCutWindow?.window)
+        controller.showWindow(nil)
+    }
     
     func mirroredVideoWindowDidClose(mode: MirroredVideoWindowController.Mode) {
         switch mode {
@@ -105,7 +119,15 @@ class WindowsManager: NSObject {
             markupMirrorVideoWindow = nil
         case .viewer:
             viewerMirrorVideoWindow = nil
+        case .sportCut:
+            sportCutMirrorVideoWindow = nil
         }
+    }
+
+    func sportCutWindowDidClose() {
+        sportCutMirrorVideoWindow?.close()
+        sportCutMirrorVideoWindow = nil
+        sportCutWindow = nil
     }
     
     private func positionMirrorWindow(_ window: NSWindow?, beside host: NSWindow?) {
@@ -141,10 +163,13 @@ class WindowsManager: NSObject {
         
         markupMirrorVideoWindow?.window?.delegate = nil
         viewerMirrorVideoWindow?.window?.delegate = nil
+        sportCutMirrorVideoWindow?.window?.delegate = nil
         markupMirrorVideoWindow?.close()
         viewerMirrorVideoWindow?.close()
+        sportCutMirrorVideoWindow?.close()
         markupMirrorVideoWindow = nil
         viewerMirrorVideoWindow = nil
+        sportCutMirrorVideoWindow = nil
         
         let momentControllers = momentViewerControllers
         momentViewerControllers.removeAll()
@@ -737,6 +762,26 @@ class WindowsManager: NSObject {
         
         viewerWindow = ViewerWindowController(videoID: currentVideoId)
         viewerWindow?.showWindow(nil)
+    }
+    
+    func showSportCutFromMarkup() {
+        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else {
+            return
+        }
+        
+        sportCutWindow?.close()
+        sportCutWindow = nil
+        
+        let sessionName = filesFile.name
+        var session = SportCutSessionManager.shared.createSession(name: sessionName)
+        SportCutSessionManager.shared.addProjectSource(to: &session, file: filesFile)
+        
+        if session.playlistGroups.isEmpty {
+            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
+        }
+        
+        sportCutWindow = SportCutWindowController(session: session)
+        sportCutWindow?.showWindow(nil)
     }
     
     func showMomentViewer(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String) {

@@ -1111,7 +1111,7 @@ struct FullControlView: View {
                         .buttonStyle(CompactButtonStyle(icon: "doc.text", color: .pink, showText: true, text: ^String.Titles.simpleReport))
                         
                         Button(^String.Titles.view) {
-                            WindowsManager.shared.showViewerWindow()
+                            WindowsManager.shared.showSportCutFromMarkup()
                         }
                         .buttonStyle(CompactButtonStyle(icon: "eye", color: .purple, showText: true, text: ^String.Titles.view))
                             Spacer()
@@ -1210,7 +1210,7 @@ struct FullControlView: View {
                         .buttonStyle(CompactButtonStyle(icon: "doc.text", color: .pink, showText: true, text: ^String.Titles.simpleReport))
                         
                         Button(^String.Titles.view) {
-                            WindowsManager.shared.showViewerWindow()
+                            WindowsManager.shared.showSportCutFromMarkup()
                         }
                         .buttonStyle(CompactButtonStyle(icon: "eye", color: .purple, showText: true, text: ^String.Titles.view))
                     }

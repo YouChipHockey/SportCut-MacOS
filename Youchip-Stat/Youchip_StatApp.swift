@@ -108,13 +108,71 @@ struct Youchip_StatApp: App {
     }
 }
 
+enum MainTab: String, CaseIterable {
+    case markup
+    case viewing
+    
+    var title: String {
+        switch self {
+        case .markup: return "Разметка"
+        case .viewing: return "Просмотр"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .markup: return "pencil.and.ruler"
+        case .viewing: return "play.rectangle.on.rectangle"
+        }
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
+    @State private var selectedTab: MainTab = .markup
     
     var body: some View {
-        VideosView()
-            .environmentObject(VideosViewModel())
-            .environmentObject(authManager)
+        VStack(spacing: 0) {
+            mainTabBar
+            
+            switch selectedTab {
+            case .markup:
+                VideosView()
+                    .environmentObject(VideosViewModel())
+                    .environmentObject(authManager)
+            case .viewing:
+                SportCutListView()
+            }
+        }
+    }
+    
+    private var mainTabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(MainTab.allCases, id: \.self) { tab in
+                Button(action: { selectedTab = tab }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 14))
+                        Text(tab.title)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(selectedTab == tab ? Color.blue : Color.clear)
+                    .foregroundColor(selectedTab == tab ? .white : .primary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            
+            Spacer()
+        }
+        .background(Color(NSColor.windowBackgroundColor))
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color(NSColor.separatorColor)),
+            alignment: .bottom
+        )
     }
 }
 
