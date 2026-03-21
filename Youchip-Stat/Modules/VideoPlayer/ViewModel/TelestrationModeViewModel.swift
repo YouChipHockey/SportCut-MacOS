@@ -344,8 +344,10 @@ class TelestrationModeViewModel: ObservableObject {
                     }
                 }
                 
+                let smoothedPositions = self.tracker.smoothPositions(trackedPositions)
+                
                 lock.lock()
-                allResults.append((idx: idx, positions: trackedPositions))
+                allResults.append((idx: idx, positions: smoothedPositions))
                 lock.unlock()
             }
             

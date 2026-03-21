@@ -532,18 +532,68 @@ struct TelestrationOverlayCanvas: View {
                 context.stroke(Path(ellipseIn: highlightRect), with: .color(.white), lineWidth: 2)
             }
             
-            // Draw markers
+            // Draw markers as perspective ground rings
             for marker in viewModel.markers {
                 guard let pos = marker.position(at: frameIndex) else { continue }
                 let vp = toView(pos)
                 let r = marker.radius * scaleX
                 
-                let outerRect = CGRect(x: vp.x - r, y: vp.y - r, width: r * 2, height: r * 2)
-                context.fill(Path(ellipseIn: outerRect), with: .color(marker.color.opacity(0.3)))
-                context.stroke(Path(ellipseIn: outerRect), with: .color(marker.color), lineWidth: 2.5)
+                let ringWidth = r * 2.0
+                let ringHeight = r * 0.8
+                let yOffset = r * 0.75
+                let ringCenter = CGPoint(x: vp.x, y: vp.y + yOffset)
                 
-                let innerRect = CGRect(x: vp.x - 4, y: vp.y - 4, width: 8, height: 8)
-                context.fill(Path(ellipseIn: innerRect), with: .color(marker.color))
+                let perspectiveSkew: CGFloat = 0.18
+                let topWidth = ringWidth * (1.0 - perspectiveSkew)
+                let bottomWidth = ringWidth * (1.0 + perspectiveSkew)
+                let gapHalfAngle: CGFloat = 0.35
+                
+                let segments = 48
+                var ringPoints: [CGPoint] = []
+                for i in 0...segments {
+                    let t = CGFloat(i) / CGFloat(segments)
+                    let angle = t * 2.0 * .pi - .pi / 2.0
+                    let blendBottom = (sin(angle) + 1.0) / 2.0
+                    let currentWidth = topWidth + (bottomWidth - topWidth) * blendBottom
+                    let px = ringCenter.x + cos(angle) * currentWidth / 2.0
+                    let py = ringCenter.y + sin(angle) * ringHeight / 2.0
+                    ringPoints.append(CGPoint(x: px, y: py))
+                }
+                
+                let gapStart = Int(CGFloat(segments) * (1.0 - gapHalfAngle / .pi) / 2.0)
+                let gapEnd = Int(CGFloat(segments) * (1.0 + gapHalfAngle / .pi) / 2.0)
+                
+                var backPath = Path()
+                if gapEnd + 1 < ringPoints.count {
+                    backPath.move(to: ringPoints[gapEnd + 1])
+                    for i in (gapEnd + 1)..<ringPoints.count {
+                        backPath.addLine(to: ringPoints[i])
+                    }
+                }
+                
+                context.stroke(backPath, with: .color(marker.color.opacity(0.4)), lineWidth: 2.5)
+                
+                var frontPath = Path()
+                let frontStart = segments / 4
+                let frontEnd = segments * 3 / 4
+                if frontStart < ringPoints.count {
+                    frontPath.move(to: ringPoints[frontStart])
+                    for i in frontStart...min(frontEnd, ringPoints.count - 1) {
+                        frontPath.addLine(to: ringPoints[i])
+                    }
+                }
+                
+                context.stroke(frontPath, with: .color(marker.color), lineWidth: 3.0)
+                
+                var shadowPath = Path()
+                let shadowRect = CGRect(
+                    x: ringCenter.x - ringWidth * 0.35,
+                    y: ringCenter.y - ringHeight * 0.15,
+                    width: ringWidth * 0.7,
+                    height: ringHeight * 0.3
+                )
+                shadowPath.addEllipse(in: shadowRect)
+                context.fill(shadowPath, with: .color(marker.color.opacity(0.1)))
             }
             
             // Draw arrows

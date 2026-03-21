@@ -308,7 +308,7 @@ class TelestrationExporter: ObservableObject {
             context.strokePath()
         }
         
-        // Draw markers
+        // Draw markers as perspective ground rings
         for marker in viewModel.markers {
             guard let pos = marker.position(at: frameIndex) else { continue }
             let r = marker.radius
@@ -321,17 +321,66 @@ class TelestrationExporter: ObservableObject {
                 alpha: markerComponents.count > 3 ? markerComponents[3] : 1
             )
             
-            let outerRect = CGRect(x: pos.x - r, y: pos.y - r, width: r * 2, height: r * 2)
-            context.setFillColor(cgMarkerColor.copy(alpha: 0.3)!)
-            context.fillEllipse(in: outerRect)
+            let ringWidth = r * 2.0
+            let ringHeight = r * 0.8
+            let yOffset = r * 0.75
+            let ringCenter = CGPoint(x: pos.x, y: pos.y + yOffset)
             
-            context.setStrokeColor(cgMarkerColor)
+            let perspectiveSkew: CGFloat = 0.18
+            let topWidth = ringWidth * (1.0 - perspectiveSkew)
+            let bottomWidth = ringWidth * (1.0 + perspectiveSkew)
+            let gapHalfAngle: CGFloat = 0.35
+            
+            let segments = 48
+            var ringPoints: [CGPoint] = []
+            for i in 0...segments {
+                let t = CGFloat(i) / CGFloat(segments)
+                let angle = t * 2.0 * .pi - .pi / 2.0
+                let blendBottom = (sin(angle) + 1.0) / 2.0
+                let currentWidth = topWidth + (bottomWidth - topWidth) * blendBottom
+                let px = ringCenter.x + cos(angle) * currentWidth / 2.0
+                let py = ringCenter.y + sin(angle) * ringHeight / 2.0
+                ringPoints.append(CGPoint(x: px, y: py))
+            }
+            
+            let gapStart = Int(CGFloat(segments) * (1.0 - gapHalfAngle / .pi) / 2.0)
+            let gapEnd = Int(CGFloat(segments) * (1.0 + gapHalfAngle / .pi) / 2.0)
+            
+            // Back arc (behind player, semi-transparent)
+            context.setStrokeColor(cgMarkerColor.copy(alpha: 0.4)!)
             context.setLineWidth(2.5)
-            context.strokeEllipse(in: outerRect)
+            if gapEnd + 1 < ringPoints.count {
+                context.beginPath()
+                context.move(to: ringPoints[gapEnd + 1])
+                for i in (gapEnd + 1)..<ringPoints.count {
+                    context.addLine(to: ringPoints[i])
+                }
+                context.strokePath()
+            }
             
-            let innerRect = CGRect(x: pos.x - 4, y: pos.y - 4, width: 8, height: 8)
-            context.setFillColor(cgMarkerColor)
-            context.fillEllipse(in: innerRect)
+            // Front arc (in front of player, full opacity)
+            let frontStart = segments / 4
+            let frontEnd = segments * 3 / 4
+            context.setStrokeColor(cgMarkerColor)
+            context.setLineWidth(3.0)
+            if frontStart < ringPoints.count {
+                context.beginPath()
+                context.move(to: ringPoints[frontStart])
+                for i in frontStart...min(frontEnd, ringPoints.count - 1) {
+                    context.addLine(to: ringPoints[i])
+                }
+                context.strokePath()
+            }
+            
+            // Subtle ground shadow
+            let shadowRect = CGRect(
+                x: ringCenter.x - ringWidth * 0.35,
+                y: ringCenter.y - ringHeight * 0.15,
+                width: ringWidth * 0.7,
+                height: ringHeight * 0.3
+            )
+            context.setFillColor(cgMarkerColor.copy(alpha: 0.1)!)
+            context.fillEllipse(in: shadowRect)
         }
         
         // Draw arrows

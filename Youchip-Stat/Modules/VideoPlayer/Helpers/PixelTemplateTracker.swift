@@ -339,6 +339,50 @@ class PixelTemplateTracker {
         return positions
     }
     
+    // MARK: - Post-Tracking Smoothing (Moving Average)
+    
+    func smoothPositions(
+        _ positions: [Int: TrackedPosition],
+        windowSize: Int = 5
+    ) -> [Int: TrackedPosition] {
+        let sortedKeys = positions.keys.sorted()
+        guard sortedKeys.count > windowSize else { return positions }
+        
+        var smoothed = positions
+        let halfWindow = windowSize / 2
+        
+        for i in 0..<sortedKeys.count {
+            let key = sortedKeys[i]
+            if positions[key]?.isManualOverride == true { continue }
+            
+            let windowStart = max(0, i - halfWindow)
+            let windowEnd = min(sortedKeys.count - 1, i + halfWindow)
+            
+            var sumX: CGFloat = 0
+            var sumY: CGFloat = 0
+            var count: CGFloat = 0
+            
+            for j in windowStart...windowEnd {
+                let neighborKey = sortedKeys[j]
+                guard let pos = positions[neighborKey] else { continue }
+                
+                let distance = abs(j - i)
+                let weight: CGFloat = 1.0 / CGFloat(1 + distance)
+                sumX += pos.center.x * weight
+                sumY += pos.center.y * weight
+                count += weight
+            }
+            
+            guard count > 0 else { continue }
+            smoothed[key] = TrackedPosition(
+                center: CGPoint(x: sumX / count, y: sumY / count),
+                isManualOverride: false
+            )
+        }
+        
+        return smoothed
+    }
+    
     // MARK: - RGB Pixel Extraction
     
     private func extractRGB(from image: CGImage) -> [UInt8]? {
