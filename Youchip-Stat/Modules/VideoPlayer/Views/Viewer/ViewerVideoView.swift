@@ -40,6 +40,18 @@ struct ViewerVideoView: View {
                 
                 HStack(spacing: 8) {
                     Button(action: {
+                        WindowsManager.shared.toggleViewerMirrorVideoWindow(playlistManager: playlistManager)
+                    }) {
+                        Image(systemName: "rectangle.on.rectangle")
+                            .font(.system(size: 16))
+                            .foregroundColor(.gray)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(playlistManager.mirrorPlayer == nil)
+                    .opacity(playlistManager.mirrorPlayer == nil ? 0.35 : 1)
+                    .help(^String.Titles.videoMirrorToggleHelp)
+                    
+                    Button(action: {
                         playlistManager.playVideo(false)
                         drawingState.showDrawingMenu.toggle()
                     }) {

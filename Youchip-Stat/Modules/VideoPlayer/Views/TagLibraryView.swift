@@ -172,15 +172,10 @@ struct TagLibraryView: View {
                 collectionTitleView
                 Spacer()
                 
-                Picker("", selection: $tagDisplayMode) {
-                    Text("Группы").tag(TagDisplayMode.grouped)
-                    // Text("Свободно").tag(TagDisplayMode.free)  // Временно закомментировано
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 220)
-                .onChange(of: tagDisplayMode) { _ in
-                    saveDisplayModePreference()
-                }
+                Text(^String.Titles.groups)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .frame(minWidth: 88, alignment: .leading)
                 
                 if isLoadingCollections {
                     HStack(spacing: 8) {
@@ -976,6 +971,8 @@ struct TagLibraryView: View {
             position: fieldPosition
         )
         
+        VideoMarkupActivityBanner.shared.notifyInstantTagAdded(tagName: tag.name)
+        
         DispatchQueue.main.async {
             self.updateTagCounts()
         }
@@ -1035,6 +1032,7 @@ struct TagLibraryView: View {
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                                VideoMarkupActivityBanner.shared.cancelIntervalRecording()
                             }
                         }
                     )
@@ -1116,6 +1114,7 @@ struct TagLibraryView: View {
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                                VideoMarkupActivityBanner.shared.cancelIntervalRecording()
                             }
                         }
                     )
@@ -1251,6 +1250,7 @@ struct TagLibraryView: View {
                         } else {
                             guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else { return }
                             activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
+                            VideoMarkupActivityBanner.shared.startIntervalRecording(tagName: tag.name)
                         }
                         return
                     }
@@ -1430,6 +1430,7 @@ struct TagLibraryView: View {
                     return
                 }
                 activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
+                VideoMarkupActivityBanner.shared.startIntervalRecording(tagName: tag.name)
             }
             return
         }
@@ -1521,6 +1522,7 @@ struct TagLibraryView: View {
             position: fieldPosition
         )
         
+        VideoMarkupActivityBanner.shared.completeIntervalRecording(tagName: tag.name)
         
         DispatchQueue.main.async {
             self.updateTagCounts()
@@ -1563,12 +1565,12 @@ struct TagLibraryView: View {
     }
 
     private func loadDisplayModePreference() {
-        let rawValue = UserDefaults.standard.string(forKey: "TagLibraryDisplayMode") ?? TagDisplayMode.grouped.rawValue
-        tagDisplayMode = TagDisplayMode(rawValue: rawValue) ?? .grouped
+        tagDisplayMode = .grouped
+        UserDefaults.standard.set(TagDisplayMode.grouped.rawValue, forKey: "TagLibraryDisplayMode")
     }
 
     private func saveDisplayModePreference() {
-        UserDefaults.standard.set(tagDisplayMode.rawValue, forKey: "TagLibraryDisplayMode")
+        UserDefaults.standard.set(TagDisplayMode.grouped.rawValue, forKey: "TagLibraryDisplayMode")
     }
 }
 

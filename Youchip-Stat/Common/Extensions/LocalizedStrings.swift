@@ -79,6 +79,8 @@ extension String {
         case videoPlayerScreenshotMissing // ^String.Titles.videoPlayerScreenshotMissing
         case videoPlayerScreenshotHelp // ^String.Titles.videoPlayerScreenshotHelp
         case videoPlayerVideoNotLoaded // ^String.Titles.videoPlayerVideoNotLoaded
+        case videoMirrorWindowTitle
+        case videoMirrorToggleHelp
         case videoPlayerErrorScreenshot // ^String.Titles.videoPlayerErrorScreenshot
         case analyticsTagDensityPeak // ^String.Titles.analyticsTagDensityPeak
         case analyticsTagDensityAverage // ^String.Titles.analyticsTagDensityAverage
@@ -598,6 +600,20 @@ extension String {
         case exportError
         case failedToSaveProject
         case selectProjectFileForImport
+        case projectImportChooseFormatTitle
+        case projectImportChooseFormatMessage
+        case projectImportSportcutFormat
+        case projectImportSportcodeXmlFormat
+        case selectSportcodeXmlForImport
+        case xmlImportNoInstancesError
+        case xmlImportParseFailedError
+        case xmlImportCollectionDisplayName
+        case xmlImportTagGroupName
+        case xmlImportNotesLabelGroupName
+        case xmlImportTimelineLineName
+        case videoMarkupToastTagAdded
+        case videoMarkupToastIntervalRecording
+        case videoMarkupToastIntervalSaved
         case importError
         case failedToLoadProject
         case videoUnavailableMessage

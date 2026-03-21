@@ -420,6 +420,8 @@ class VideoPlaylistManager: ObservableObject {
     private(set) var compositionSegments: [CompositionSegment] = []
     
     private var player: AVPlayer?
+    /// Same instance as the viewer’s player — for a mirrored window (synced playback).
+    private(set) var mirrorPlayer: AVPlayer?
     private var timeObserver: Any?
     private var startViewerPlayerObserver: Any?
     private var seekForwardPlayerObserver: Any?
@@ -478,11 +480,13 @@ class VideoPlaylistManager: ObservableObject {
     
     func setPlayer(_ player: AVPlayer?) {
         self.player = player
+        mirrorPlayer = player
         if player == nil {
             cancellables.removeAll()
         } else {
             observePlayerState()
         }
+        objectWillChange.send()
     }
     
     func setPlaylist(_ tags: [OrganizerTag]) {

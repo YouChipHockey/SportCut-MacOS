@@ -41,6 +41,8 @@ class WindowsManager: NSObject {
     var fieldMapConfigurationWindow: FieldMapConfigurationWindowController?
     var viewerWindow: ViewerWindowController?
     var reviewVideoWindow: ReviewVideoWindowController?
+    var markupMirrorVideoWindow: MirroredVideoWindowController?
+    var viewerMirrorVideoWindow: MirroredVideoWindowController?
 
     private var fieldMapWindow: NSWindowController?
 
@@ -68,7 +70,62 @@ class WindowsManager: NSObject {
             queue: .main
         ) { [weak self] _ in
             self?.viewerWindow = nil
+            self?.viewerMirrorVideoWindow?.close()
+            self?.viewerMirrorVideoWindow = nil
         }
+    }
+    
+    func toggleMarkupMirrorVideoWindow() {
+        if let existing = markupMirrorVideoWindow {
+            existing.close()
+            markupMirrorVideoWindow = nil
+            return
+        }
+        let controller = MirroredVideoWindowController(mode: .markup)
+        markupMirrorVideoWindow = controller
+        positionMirrorWindow(controller.window, beside: videoWindow?.window)
+        controller.showWindow(nil)
+    }
+    
+    func toggleViewerMirrorVideoWindow(playlistManager: VideoPlaylistManager) {
+        if let existing = viewerMirrorVideoWindow {
+            existing.close()
+            viewerMirrorVideoWindow = nil
+            return
+        }
+        let controller = MirroredVideoWindowController(mode: .viewer(playlistManager))
+        viewerMirrorVideoWindow = controller
+        positionMirrorWindow(controller.window, beside: viewerWindow?.window)
+        controller.showWindow(nil)
+    }
+    
+    func mirroredVideoWindowDidClose(mode: MirroredVideoWindowController.Mode) {
+        switch mode {
+        case .markup:
+            markupMirrorVideoWindow = nil
+        case .viewer:
+            viewerMirrorVideoWindow = nil
+        }
+    }
+    
+    private func positionMirrorWindow(_ window: NSWindow?, beside host: NSWindow?) {
+        guard let mirror = window else { return }
+        let hostFrame = host?.frame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 120, y: 120, width: 900, height: 600)
+        let targetContentWidth = min(max(hostFrame.width * 0.55, 480), 960)
+        let targetContentHeight = targetContentWidth * 9 / 16
+        mirror.setContentSize(NSSize(width: targetContentWidth, height: targetContentHeight))
+        let size = mirror.frame.size
+        var origin = NSPoint(
+            x: hostFrame.maxX + 12,
+            y: hostFrame.midY - size.height / 2
+        )
+        if let screen = host?.screen ?? NSScreen.main {
+            let vf = screen.visibleFrame
+            origin.x = min(origin.x, vf.maxX - size.width - 8)
+            origin.x = max(origin.x, vf.minX + 8)
+            origin.y = max(vf.minY + 8, min(origin.y, vf.maxY - size.height - 8))
+        }
+        mirror.setFrame(NSRect(origin: origin, size: size), display: true)
     }
     
     func closeAll() {
@@ -81,6 +138,20 @@ class WindowsManager: NSObject {
         screenshotsWindow?.window?.delegate = nil
         fieldMapConfigurationWindow = nil
         reviewVideoWindow?.window?.delegate = nil
+        
+        markupMirrorVideoWindow?.window?.delegate = nil
+        viewerMirrorVideoWindow?.window?.delegate = nil
+        markupMirrorVideoWindow?.close()
+        viewerMirrorVideoWindow?.close()
+        markupMirrorVideoWindow = nil
+        viewerMirrorVideoWindow = nil
+        
+        let momentControllers = momentViewerControllers
+        momentViewerControllers.removeAll()
+        for mc in momentControllers {
+            (mc as? MomentViewerWindowController)?.stopPlaybackForClose()
+            mc.close()
+        }
         
         NotificationCenter.default.post(name: .stopViewerPlayer, object: nil)
         viewerWindow?.close()
@@ -678,6 +749,10 @@ class WindowsManager: NSObject {
         )
         momentViewerControllers.append(controller)
         controller.showWindow(nil)
+    }
+    
+    func unregisterMomentViewer(_ controller: NSWindowController) {
+        momentViewerControllers.removeAll { $0 === controller }
     }
 
 }

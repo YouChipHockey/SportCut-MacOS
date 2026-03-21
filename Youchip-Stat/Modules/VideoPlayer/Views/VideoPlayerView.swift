@@ -105,6 +105,8 @@ struct VideoPlayerView: View {
         HStack(spacing: 12) {
             editorButton
             
+            duplicateVideoWindowButton
+            
             // Live broadcast controls
             if videoManager.isLiveMode {
                 liveBroadcastControls
@@ -233,6 +235,9 @@ struct VideoPlayerView: View {
             if viewModel.state.videoScale > 1.0 {
                 joystickView(geometry: geometry)
             }
+            
+            VideoMarkupActivityOverlay()
+                .zIndex(6)
         }
     }
     
@@ -468,6 +473,9 @@ struct VideoPlayerView: View {
             if viewModel.state.videoScale > 1.0 {
                 joystickView(geometry: geometry)
             }
+            
+            VideoMarkupActivityOverlay()
+                .zIndex(6)
         }
     }
     
@@ -531,6 +539,19 @@ struct VideoPlayerView: View {
             Text(^String.Titles.editorTitle)
         }
         .help("Открыть редактор")
+    }
+    
+    private var duplicateVideoWindowButton: some View {
+        Button {
+            WindowsManager.shared.toggleMarkupMirrorVideoWindow()
+        } label: {
+            Image(systemName: "rectangle.on.rectangle")
+                .font(.system(size: 15, weight: .medium))
+        }
+        .buttonStyle(.borderless)
+        .disabled(!videoManager.isLiveMode && videoManager.player == nil)
+        .opacity((!videoManager.isLiveMode && videoManager.player == nil) ? 0.35 : 1)
+        .help(^String.Titles.videoMirrorToggleHelp)
     }
     
     // MARK: - Zoom Controls

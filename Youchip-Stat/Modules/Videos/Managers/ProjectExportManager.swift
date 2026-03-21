@@ -98,6 +98,27 @@ class ProjectExportManager {
     }
     
     func importProject(completion: @escaping (ProjectImportModel?) -> Void) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = ^String.Titles.projectImportChooseFormatTitle
+            alert.informativeText = ^String.Titles.projectImportChooseFormatMessage
+            alert.addButton(withTitle: ^String.Titles.projectImportSportcutFormat)
+            alert.addButton(withTitle: ^String.Titles.projectImportSportcodeXmlFormat)
+            alert.addButton(withTitle: ^String.Titles.cancelButtonTitle)
+            
+            let response = alert.runModal()
+            switch response {
+            case .alertFirstButtonReturn:
+                self.presentSportcutJSONImportPanel(completion: completion)
+            case .alertSecondButtonReturn:
+                self.presentSportcodeXMLImportPanel(completion: completion)
+            default:
+                completion(nil)
+            }
+        }
+    }
+    
+    private func presentSportcutJSONImportPanel(completion: @escaping (ProjectImportModel?) -> Void) {
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [UTType.json]
         openPanel.title = ^String.Titles.projectImportTitle
@@ -110,6 +131,40 @@ class ProjectExportManager {
             } else {
                 completion(nil)
             }
+        }
+    }
+    
+    private func presentSportcodeXMLImportPanel(completion: @escaping (ProjectImportModel?) -> Void) {
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = [UTType.xml]
+        openPanel.title = ^String.Titles.projectImportTitle
+        openPanel.message = ^String.Titles.selectSportcodeXmlForImport
+        openPanel.allowsMultipleSelection = false
+        
+        openPanel.begin { response in
+            if response == .OK, let url = openPanel.url {
+                self.loadProjectFromSportcodeXML(url: url, completion: completion)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+    
+    private func loadProjectFromSportcodeXML(url: URL, completion: @escaping (ProjectImportModel?) -> Void) {
+        do {
+            let data = try Data(contentsOf: url)
+            let model = try SportcodeXMLProjectImporter.makeProjectImport(from: data, fileName: url.lastPathComponent)
+            completion(model)
+        } catch {
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = ^String.Titles.importError
+                alert.informativeText = error.localizedDescription
+                alert.alertStyle = .critical
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
+            completion(nil)
         }
     }
     

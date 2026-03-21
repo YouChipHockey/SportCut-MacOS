@@ -7,16 +7,21 @@ import Cocoa
 import SwiftUI
 import AVFoundation
 
-class MomentViewerWindowController: NSWindowController {
+class MomentViewerWindowController: NSWindowController, NSWindowDelegate {
+    
+    private let session: MomentViewerSession
     
     init(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String) {
-        let view = MomentViewerView(
+        let session = MomentViewerSession(
             asset: asset,
             startTime: startTime,
             duration: duration,
             tagName: tagName,
             lineName: lineName
         )
+        self.session = session
+        
+        let view = MomentViewerView(session: session)
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
@@ -35,6 +40,7 @@ class MomentViewerWindowController: NSWindowController {
         }
         
         super.init(window: window)
+        window.delegate = self
     }
     
     required init?(coder: NSCoder) {
@@ -44,5 +50,15 @@ class MomentViewerWindowController: NSWindowController {
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
         window?.makeKeyAndOrderFront(nil)
+    }
+    
+    /// Stops audio and releases the player (e.g. when closing the whole markup session).
+    func stopPlaybackForClose() {
+        session.invalidate()
+    }
+    
+    func windowWillClose(_ notification: Notification) {
+        session.invalidate()
+        WindowsManager.shared.unregisterMomentViewer(self)
     }
 }
