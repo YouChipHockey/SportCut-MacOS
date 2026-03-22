@@ -171,6 +171,7 @@ struct SportCutPlaylist: Identifiable, Codable {
     var isHidden: Bool
     var hiddenEventKeys: Set<String>
     var eventComments: [String: String]
+    var eventDrawings: [String: [SportCutEventDrawing]]
     let createdAt: Date
     
     init(
@@ -180,6 +181,7 @@ struct SportCutPlaylist: Identifiable, Codable {
         isHidden: Bool = false,
         hiddenEventKeys: Set<String> = [],
         eventComments: [String: String] = [:],
+        eventDrawings: [String: [SportCutEventDrawing]] = [:],
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -188,6 +190,7 @@ struct SportCutPlaylist: Identifiable, Codable {
         self.isHidden = isHidden
         self.hiddenEventKeys = hiddenEventKeys
         self.eventComments = eventComments
+        self.eventDrawings = eventDrawings
         self.createdAt = createdAt
     }
     
@@ -199,6 +202,14 @@ struct SportCutPlaylist: Identifiable, Codable {
         isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
         hiddenEventKeys = try container.decodeIfPresent(Set<String>.self, forKey: .hiddenEventKeys) ?? []
         eventComments = try container.decodeIfPresent([String: String].self, forKey: .eventComments) ?? [:]
+        // Backward compat: try array format first, then single-drawing format
+        if let arr = try? container.decodeIfPresent([String: [SportCutEventDrawing]].self, forKey: .eventDrawings) {
+            eventDrawings = arr ?? [:]
+        } else if let single = try? container.decodeIfPresent([String: SportCutEventDrawing].self, forKey: .eventDrawings) {
+            eventDrawings = (single ?? [:]).mapValues { [$0] }
+        } else {
+            eventDrawings = [:]
+        }
         createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
     
@@ -209,6 +220,15 @@ struct SportCutPlaylist: Identifiable, Codable {
     var eventCount: Int {
         events.count
     }
+}
+
+// MARK: - Event Drawing (per playlist event)
+
+struct SportCutEventDrawing: Codable {
+    let imageName: String
+    let videoTime: Double
+    var displayDuration: Double
+    var editorState: EditorStateSnapshot?
 }
 
 // MARK: - Playlist Event Drag Data

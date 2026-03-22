@@ -64,6 +64,7 @@ struct TagLibraryView: View {
     }
     
     @State private var tagDisplayMode: TagDisplayMode = .grouped
+    @State private var showFreeModeMissingAlert = false
     
     @EnvironmentObject private var notificationSubscriptions: ProjectNotificationSubscriptions
     
@@ -170,6 +171,11 @@ struct TagLibraryView: View {
         VStack(spacing: 0) {
             HStack {
                 collectionTitleView
+
+                if isUserCollectionActive {
+                    tagDisplayModePicker
+                }
+
                 Spacer()
                 
                 Text(^String.Titles.groups)
@@ -181,7 +187,7 @@ struct TagLibraryView: View {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
-                        Text("Загрузка...")
+                        Text(^String.Titles.sportCutLoading)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -254,6 +260,49 @@ struct TagLibraryView: View {
         }
     }
     
+    private var tagDisplayModePicker: some View {
+        HStack(spacing: 4) {
+            Button(action: {
+                tagDisplayMode = .grouped
+                saveDisplayModePreference()
+            }) {
+                Image(systemName: "list.bullet")
+                    .font(.system(size: 11))
+                    .foregroundColor(tagDisplayMode == .grouped ? .accentColor : .secondary)
+                    .frame(width: 24, height: 24)
+                    .background(tagDisplayMode == .grouped ? Color.accentColor.opacity(0.15) : Color.clear)
+                    .cornerRadius(4)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help(^String.Titles.freeTagModeGrouped)
+            
+            Button(action: {
+                if isFreeLayoutConfigured {
+                    tagDisplayMode = .free
+                    saveDisplayModePreference()
+                } else {
+                    showFreeModeMissingAlert = true
+                }
+            }) {
+                Image(systemName: "rectangle.3.offgrid")
+                    .font(.system(size: 11))
+                    .foregroundColor(tagDisplayMode == .free ? .accentColor : .secondary)
+                    .frame(width: 24, height: 24)
+                    .background(tagDisplayMode == .free ? Color.accentColor.opacity(0.15) : Color.clear)
+                    .cornerRadius(4)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help(^String.Titles.freeTagModeFree)
+        }
+        .alert(isPresented: $showFreeModeMissingAlert) {
+            Alert(
+                title: Text(^String.Titles.freeTagModeNotConfiguredTitle),
+                message: Text(^String.Titles.freeTagModeNotConfiguredMessage),
+                dismissButton: .default(Text(^String.Titles.alertsOkTitle))
+            )
+        }
+    }
+
     private var collectionActionButtons: some View {
         HStack(spacing: 8) {
             Button(action: {
@@ -334,8 +383,9 @@ struct TagLibraryView: View {
             guard !isLoadingCollections else { return }
             isUserCollectionActive = false
             lastSelectedCollectionName = collection.name
-            cachedPlayField = nil // Clear cached playField when switching to standard collection
+            cachedPlayField = nil
             tagLibrary.applyStandardCollection(named: collection.name)
+            tagDisplayMode = .grouped
             DispatchQueue.main.async {
                 self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
             }
@@ -376,6 +426,7 @@ struct TagLibraryView: View {
             lastSelectedCollectionName = collection.name
             isUserCollectionActive = true
             loadUserCollection(collection)
+            loadDisplayModePreference()
         }) {
             HStack(spacing: 6) {
                 Text(collection.name)
@@ -790,7 +841,7 @@ struct TagLibraryView: View {
                     .foregroundColor(.accentColor)
                     .font(.system(size: 14, weight: .medium))
                 
-                Text("Свободное отображение")
+                Text(^String.Titles.freeTagModeDisplay)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.primary)
                     .minimumScaleFactor(0.5)
@@ -1565,12 +1616,33 @@ struct TagLibraryView: View {
     }
 
     private func loadDisplayModePreference() {
-        tagDisplayMode = .grouped
-        UserDefaults.standard.set(TagDisplayMode.grouped.rawValue, forKey: "TagLibraryDisplayMode")
+        if let raw = UserDefaults.standard.string(forKey: displayModeKey),
+           let mode = TagDisplayMode(rawValue: raw) {
+            if mode == .free && !isFreeLayoutConfigured {
+                tagDisplayMode = .grouped
+            } else {
+                tagDisplayMode = mode
+            }
+        } else {
+            tagDisplayMode = .grouped
+        }
     }
 
     private func saveDisplayModePreference() {
-        UserDefaults.standard.set(TagDisplayMode.grouped.rawValue, forKey: "TagLibraryDisplayMode")
+        UserDefaults.standard.set(tagDisplayMode.rawValue, forKey: displayModeKey)
+    }
+
+    private var displayModeKey: String {
+        let suffix = lastSelectedCollectionName ?? "__standard__"
+        return "TagLibraryDisplayMode_\(suffix)"
+    }
+
+    private var isFreeLayoutConfigured: Bool {
+        guard case .user(let name) = TagLibraryManager.shared.currentCollectionType,
+              let info = CollectionsBookmarksManager.shared.loadCollections().first(where: { $0.name == name }) else {
+            return false
+        }
+        return TagFreeLayoutStorage.loadLayoutIfExists(collectionId: info.id, tags: tagLibrary.tags) != nil
     }
 }
 

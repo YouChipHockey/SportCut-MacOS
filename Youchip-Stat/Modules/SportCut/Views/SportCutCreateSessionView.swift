@@ -30,7 +30,7 @@ struct SportCutCreateSessionView: View {
                         .foregroundColor(.blue)
                         .font(.system(size: 20))
                     
-                    Text("Создание сессии просмотра")
+                    Text(^String.Titles.sportCutCreateSession)
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
@@ -38,7 +38,7 @@ struct SportCutCreateSessionView: View {
                     Spacer()
                 }
                 
-                Text("Добавьте проекты разметки или видеофайлы для просмотра")
+                Text(^String.Titles.sportCutAddProjectsDescription)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -52,16 +52,16 @@ struct SportCutCreateSessionView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Название сессии")
+                        Text(^String.Titles.sportCutSessionName)
                             .font(.system(size: 14, weight: .medium))
                         
-                        TextField("Введите название", text: $sessionName)
+                        TextField(^String.Titles.sportCutEnterName, text: $sessionName)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                     }
                     
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Проекты разметки")
+                            Text(^String.Titles.sportCutMarkupProjects)
                                 .font(.system(size: 14, weight: .semibold))
                             
                             Spacer()
@@ -69,7 +69,7 @@ struct SportCutCreateSessionView: View {
                             Button(action: { showProjectPicker = true }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "plus")
-                                    Text("Добавить проект")
+                                    Text(^String.Titles.sportCutAddProject)
                                 }
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.blue)
@@ -79,7 +79,7 @@ struct SportCutCreateSessionView: View {
                         }
                         
                         if selectedProjects.isEmpty {
-                            Text("Нет добавленных проектов")
+                            Text(^String.Titles.sportCutNoAddedProjects)
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                                 .padding(.vertical, 8)
@@ -95,7 +95,7 @@ struct SportCutCreateSessionView: View {
                                     Spacer()
                                     
                                     let stampCount = file.timelines.flatMap(\.stamps).count
-                                    Text("\(stampCount) событий")
+                                    Text(String.Titles.sportCutEventsCount.format(stampCount))
                                         .font(.system(size: 11))
                                         .foregroundColor(.secondary)
                                     
@@ -117,7 +117,7 @@ struct SportCutCreateSessionView: View {
                     
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Видеофайлы")
+                            Text(^String.Titles.sportCutVideoFiles)
                                 .font(.system(size: 14, weight: .semibold))
                             
                             Spacer()
@@ -125,7 +125,7 @@ struct SportCutCreateSessionView: View {
                             Button(action: addVideoFiles) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "plus")
-                                    Text("Добавить видео")
+                                    Text(^String.Titles.sportCutAddVideo)
                                 }
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.green)
@@ -134,7 +134,7 @@ struct SportCutCreateSessionView: View {
                         }
                         
                         if selectedVideoURLs.isEmpty {
-                            Text("Нет добавленных видео")
+                            Text(^String.Titles.sportCutNoAddedVideos)
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                                 .padding(.vertical, 8)
@@ -173,7 +173,7 @@ struct SportCutCreateSessionView: View {
             
             HStack(spacing: 12) {
                 Button(action: onCancel) {
-                    Text("Отмена")
+                    Text(^String.Titles.cancelButtonTitle)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 24)
@@ -192,7 +192,7 @@ struct SportCutCreateSessionView: View {
                 Button(action: createSession) {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark")
-                        Text("Создать")
+                        Text(^String.Titles.sportCutCreate)
                     }
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white)
@@ -239,7 +239,7 @@ struct SportCutCreateSessionView: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
-        panel.title = "Выберите видеофайлы"
+        panel.title = ^String.Titles.sportCutSelectVideoFiles
         
         if panel.runModal() == .OK {
             for url in panel.urls {
@@ -251,7 +251,7 @@ struct SportCutCreateSessionView: View {
     }
     
     private func createSession() {
-        let name = sessionName.isEmpty ? "Сессия \(Date().formatted(.dateTime.day().month().hour().minute()))" : sessionName
+        let name = sessionName.isEmpty ? String.Titles.sportCutSessionPrefix.format(Date().formatted(.dateTime.day().month().hour().minute())) : sessionName
         var session = SportCutSessionManager.shared.createSession(name: name)
         
         for file in selectedProjects {
@@ -263,7 +263,7 @@ struct SportCutCreateSessionView: View {
         }
         
         if session.playlistGroups.isEmpty {
-            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
+            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: ^String.Titles.sportCutDefaultGroupName)
         }
         
         onCreated(session)
@@ -281,7 +281,7 @@ struct ProjectPickerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Выберите проекты")
+                Text(^String.Titles.sportCutSelectProjects)
                     .font(.headline)
                 Spacer()
             }
@@ -293,7 +293,7 @@ struct ProjectPickerSheet: View {
             
             if availableFiles.isEmpty {
                 VStack(spacing: 8) {
-                    Text("Нет доступных проектов")
+                    Text(^String.Titles.sportCutNoAvailableProjects)
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
@@ -312,7 +312,7 @@ struct ProjectPickerSheet: View {
                                     Text(file.name)
                                         .font(.system(size: 13, weight: .medium))
                                     let count = file.timelines.flatMap(\.stamps).count
-                                    Text("\(file.timelines.count) таймлайнов • \(count) событий")
+                                    Text(String.Titles.sportCutTimelinesAndEvents.format(file.timelines.count, count))
                                         .font(.system(size: 11))
                                         .foregroundColor(.secondary)
                                 }
@@ -339,12 +339,12 @@ struct ProjectPickerSheet: View {
             Divider()
             
             HStack {
-                Button("Отмена") { onCancel() }
+                Button(^String.Titles.cancelButtonTitle) { onCancel() }
                     .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
-                Button("Добавить (\(selectedBookmarks.count))") {
+                Button(String.Titles.sportCutAddCount.format(selectedBookmarks.count)) {
                     let selected = availableFiles.filter { selectedBookmarks.contains($0.videoData.bookmark) }
                     onAdd(selected)
                 }

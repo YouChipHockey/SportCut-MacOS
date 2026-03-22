@@ -6,6 +6,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import AppKit
 
 class SportCutPlayerManager: ObservableObject {
     @Published var player: AVPlayer = AVPlayer()
@@ -20,6 +21,17 @@ class SportCutPlayerManager: ObservableObject {
     @Published var currentPlaylistID: UUID?
     @Published var showCommentsWatermark: Bool = true
     @Published var showEventDataWatermark: Bool = true
+    
+    // Drawing editor state
+    @Published var isEditorMode: Bool = false
+    @Published var editorDrawingState = EditorDrawingState()
+    @Published var tempScreenshotImage: NSImage?
+    @Published var editorScreenshotVideoTime: Double = 0
+    @Published var isShowingDrawing: Bool = false
+    @Published var displayedDrawingImage: NSImage?
+    @Published var showDrawingWatermark: Bool = true
+    private var shownDrawingNames: Set<String> = []
+    private var drawingCheckTimer: AnyCancellable?
     
     var sessionID: UUID?
     
@@ -204,6 +216,10 @@ class SportCutPlayerManager: ObservableObject {
     }
     
     func play() {
+        if isShowingDrawing {
+            isShowingDrawing = false
+            displayedDrawingImage = nil
+        }
         player.rate = Float(playbackSpeed)
         isPlaying = true
     }
@@ -242,6 +258,7 @@ class SportCutPlayerManager: ObservableObject {
     
     private func loadSourceAndPlay(event: SportCutEvent) {
         currentEvent = event
+        shownDrawingNames.removeAll()
         
         if currentSourceID == event.sourceID, player.currentItem != nil {
             let seekTime = CMTime(seconds: event.startTime, preferredTimescale: 600)
@@ -317,11 +334,198 @@ class SportCutPlayerManager: ObservableObject {
         }
     }
 
+    // MARK: - Drawing editor
+
+    func captureFrameForEditor() {
+        guard currentPlaylistID != nil else { return }
+        guard let item = player.currentItem else { return }
+        let asset = item.asset
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        
+        let time = player.currentTime()
+        guard let cgImage = try? generator.copyCGImage(at: time, actualTime: nil) else { return }
+        
+        pause()
+        let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        tempScreenshotImage = nsImage
+        editorScreenshotVideoTime = time.seconds
+        editorDrawingState.clearDrawing()
+        editorDrawingState.currentTool = .pencil
+        isEditorMode = true
+    }
+
+    func editExistingDrawing(drawing: SportCutEventDrawing) {
+        guard let sessionID = sessionID else { return }
+        let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
+        let imgURL = folder.appendingPathComponent(drawing.imageName)
+        
+        pause()
+        editorScreenshotVideoTime = drawing.videoTime
+        editorDrawingState.clearDrawing()
+        
+        if let snapshot = drawing.editorState {
+            // Re-capture the base frame at drawing time to restore editor layers on top
+            if let item = player.currentItem {
+                let gen = AVAssetImageGenerator(asset: item.asset)
+                gen.appliesPreferredTrackTransform = true
+                gen.requestedTimeToleranceBefore = .zero
+                gen.requestedTimeToleranceAfter = .zero
+                let cmTime = CMTime(seconds: drawing.videoTime, preferredTimescale: 600)
+                if let cg = try? gen.copyCGImage(at: cmTime, actualTime: nil) {
+                    tempScreenshotImage = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+                }
+            }
+            snapshot.apply(to: editorDrawingState)
+        } else {
+            tempScreenshotImage = NSImage(contentsOf: imgURL)
+        }
+        isEditorMode = true
+    }
+
+    func saveDrawing(displayDuration: Double = 3.0) {
+        guard let baseImage = tempScreenshotImage,
+              let sessionID = sessionID,
+              let event = currentEvent,
+              let playlistID = currentPlaylistID else { return }
+        
+        let finalImage = DrawingImageMerger.merge(baseImage: baseImage, drawingState: editorDrawingState)
+        let editorSnapshot = EditorStateSnapshot.from(drawingState: editorDrawingState)
+        
+        let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        
+        let ts = Int(Date().timeIntervalSince1970 * 1000)
+        let imageName = "drawing_\(playlistID.uuidString.prefix(8))_\(ts).png"
+        let fileURL = folder.appendingPathComponent(imageName)
+        
+        if let tiffData = finalImage.tiffRepresentation,
+           let rep = NSBitmapImageRep(data: tiffData),
+           let pngData = rep.representation(using: .png, properties: [:]) {
+            try? pngData.write(to: fileURL)
+        }
+        
+        let drawing = SportCutEventDrawing(
+            imageName: imageName,
+            videoTime: editorScreenshotVideoTime,
+            displayDuration: displayDuration,
+            editorState: editorSnapshot
+        )
+        
+        if var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) {
+            for gi in session.playlistGroups.indices {
+                if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == playlistID }) {
+                    var arr = session.playlistGroups[gi].playlists[pi].eventDrawings[event.hiddenKey] ?? []
+                    arr.append(drawing)
+                    session.playlistGroups[gi].playlists[pi].eventDrawings[event.hiddenKey] = arr
+                    SportCutSessionManager.shared.updateSession(session)
+                    break
+                }
+            }
+        }
+        
+        cancelEditor()
+    }
+
+    func cancelEditor() {
+        isEditorMode = false
+        tempScreenshotImage = nil
+        editorDrawingState.clearDrawing()
+    }
+
+    func hideDrawingOverlay(resume: Bool = true) {
+        isShowingDrawing = false
+        displayedDrawingImage = nil
+        if resume { play() }
+    }
+
+    func currentEventDrawings() -> [SportCutEventDrawing] {
+        guard let sessionID = sessionID,
+              let playlistID = currentPlaylistID,
+              let event = currentEvent,
+              let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+              let playlist = session.playlistGroups.flatMap(\.playlists).first(where: { $0.id == playlistID }) else { return [] }
+        return playlist.eventDrawings[event.hiddenKey] ?? []
+    }
+
+    func startDrawingCheckTimer() {
+        drawingCheckTimer?.cancel()
+        drawingCheckTimer = Timer.publish(every: 0.1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.checkForDrawingAtCurrentTime()
+            }
+    }
+
+    func stopDrawingCheckTimer() {
+        drawingCheckTimer?.cancel()
+        drawingCheckTimer = nil
+    }
+
+    private func checkForDrawingAtCurrentTime() {
+        guard !isEditorMode, !isShowingDrawing, currentPlaylistID != nil else { return }
+        guard let sessionID = sessionID else { return }
+        
+        let ct = player.currentTime().seconds
+        let drawings = currentEventDrawings()
+        guard !drawings.isEmpty else { return }
+        
+        guard let matched = drawings.first(where: {
+            abs($0.videoTime - ct) < 0.15 && !shownDrawingNames.contains($0.imageName)
+        }) else { return }
+        
+        let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
+        let imgURL = folder.appendingPathComponent(matched.imageName)
+        guard let nsImage = NSImage(contentsOf: imgURL) else { return }
+        
+        pause()
+        displayedDrawingImage = nsImage
+        isShowingDrawing = true
+        shownDrawingNames.insert(matched.imageName)
+    }
+
+    func deleteDrawing(_ drawing: SportCutEventDrawing) {
+        guard let sessionID = sessionID,
+              let playlistID = currentPlaylistID,
+              let event = currentEvent else { return }
+
+        if var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) {
+            for gi in session.playlistGroups.indices {
+                if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == playlistID }) {
+                    var arr = session.playlistGroups[gi].playlists[pi].eventDrawings[event.hiddenKey] ?? []
+                    arr.removeAll { $0.imageName == drawing.imageName }
+                    if arr.isEmpty {
+                        session.playlistGroups[gi].playlists[pi].eventDrawings.removeValue(forKey: event.hiddenKey)
+                    } else {
+                        session.playlistGroups[gi].playlists[pi].eventDrawings[event.hiddenKey] = arr
+                    }
+                    let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
+                    try? FileManager.default.removeItem(at: folder.appendingPathComponent(drawing.imageName))
+                    SportCutSessionManager.shared.updateSession(session)
+                    break
+                }
+            }
+        }
+    }
+
+    static func drawingsFolder(sessionID: UUID) -> URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return docs.appendingPathComponent("SportCutDrawings").appendingPathComponent(sessionID.uuidString)
+    }
+
     private func observePlayerState() {
         player.publisher(for: \.timeControlStatus)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
-                self?.isPlaying = (status == .playing)
+                guard let self = self else { return }
+                let playing = (status == .playing)
+                self.isPlaying = playing
+                if playing && self.isShowingDrawing {
+                    self.isShowingDrawing = false
+                    self.displayedDrawingImage = nil
+                }
             }
             .store(in: &cancellables)
     }
@@ -329,5 +533,6 @@ class SportCutPlayerManager: ObservableObject {
     deinit {
         removeTimeObserver()
         removeEndObserver()
+        stopDrawingCheckTimer()
     }
 }

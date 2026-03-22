@@ -29,7 +29,7 @@ struct SportCutExportSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Экспорт плейлистов")
+                Text(^String.Titles.sportCutExportTitle)
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
@@ -43,7 +43,7 @@ struct SportCutExportSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Тип экспорта")
+                        Text(^String.Titles.sportCutExportType)
                             .font(.system(size: 14, weight: .semibold))
                         
                         ForEach(SportCutExportType.allCases, id: \.rawValue) { type in
@@ -62,12 +62,12 @@ struct SportCutExportSheet: View {
                     
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Выберите плейлисты")
+                            Text(^String.Titles.sportCutSelectPlaylists)
                                 .font(.system(size: 14, weight: .semibold))
                             
                             Spacer()
                             
-                            Button("Выбрать все") {
+                            Button(^String.Titles.sportCutSelectAll) {
                                 selectedPlaylistIDs = Set(allPlaylists.map(\.id))
                             }
                             .font(.system(size: 11))
@@ -89,7 +89,7 @@ struct SportCutExportSheet: View {
                                     Text(playlist.name)
                                         .font(.system(size: 12))
                                     Spacer()
-                                    Text("\(playlist.eventCount) событий")
+                                    Text(String.Titles.sportCutEventsCount.format(playlist.eventCount))
                                         .font(.system(size: 10))
                                         .foregroundColor(.secondary)
                                 }
@@ -98,7 +98,9 @@ struct SportCutExportSheet: View {
                         }
                     }
                     
-                    Toggle("Добавить водяной знак с названием плейлиста", isOn: $addWatermark)
+                    Toggle(isOn: $addWatermark) {
+                        Text(^String.Titles.sportCutAddWatermark)
+                    }
                         .font(.system(size: 13))
                 }
                 .padding(.horizontal, 24)
@@ -108,7 +110,7 @@ struct SportCutExportSheet: View {
             if isExporting {
                 VStack(spacing: 8) {
                     ProgressView(value: exportProgress)
-                    Text("Экспорт: \(Int(exportProgress * 100))%")
+                    Text(String.Titles.sportCutExportProgress.format(Int(exportProgress * 100)))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -118,13 +120,13 @@ struct SportCutExportSheet: View {
             Divider()
             
             HStack {
-                Button("Отмена") { dismiss() }
+                Button(^String.Titles.cancelButtonTitle) { dismiss() }
                     .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
                 Button(action: startExport) {
-                    Text("Экспорт")
+                    Text(^String.Titles.sportCutExportAction)
                         .foregroundColor(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 8)

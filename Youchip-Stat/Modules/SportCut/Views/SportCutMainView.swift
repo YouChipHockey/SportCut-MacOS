@@ -60,6 +60,7 @@ struct SportCutMainView: View {
                     playerManager.sessionID = sessionID
                     playerManager.configure(sources: session.sources)
                     playerManager.setupTimeObserver()
+                    playerManager.startDrawingCheckTimer()
                 }
                 .onChange(of: session.sources.count) { _ in
                     if let session = self.session {
@@ -69,10 +70,11 @@ struct SportCutMainView: View {
                 .onDisappear {
                     playerManager.stopPlayback()
                     playerManager.removeTimeObserver()
+                    playerManager.stopDrawingCheckTimer()
                 }
             } else {
                 VStack {
-                    Text("Сессия не найдена")
+                    Text(^String.Titles.sportCutSessionNotFound)
                         .font(.title2)
                         .foregroundColor(.secondary)
                 }

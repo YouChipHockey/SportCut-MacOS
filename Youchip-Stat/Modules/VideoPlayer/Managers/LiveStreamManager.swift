@@ -700,6 +700,37 @@ class LiveStreamManager: NSObject, ObservableObject {
         reviewRefreshTimer = nil
     }
     
+    /// Finalizes the current buffer once so that moment viewer can use the latest segments.
+    func finalizeCurrentSegment(completion: @escaping () -> Void) {
+        guard isLive, !isBroadcastPaused, !isReviewRefreshInProgress,
+              let currentRecorder = recorder, let videoId = currentVideoId,
+              let currentTempURL = tempFileURL else {
+            completion()
+            return
+        }
+        
+        isReviewRefreshInProgress = true
+        let sessionId = self.sessionId
+        
+        currentRecorder.stopRecording { [weak self] in
+            guard let self = self, self.sessionId == sessionId else {
+                completion()
+                return
+            }
+            
+            self.allSegmentURLs.append(currentTempURL)
+            self.reviewFileVersion += 1
+            
+            Task { [weak self] in
+                await self?.startNewSegmentRecorder(videoId: videoId, sessionId: sessionId)
+                await MainActor.run { [weak self] in
+                    self?.isReviewRefreshInProgress = false
+                    completion()
+                }
+            }
+        }
+    }
+
     /// Finalizes the current recording segment, adds it to the segments list, then starts a fresh recorder.
     /// This ensures the review player always gets a properly finalized MOV with correct duration.
     private func refreshReviewSnapshot() {

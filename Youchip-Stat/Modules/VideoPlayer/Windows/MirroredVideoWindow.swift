@@ -131,6 +131,17 @@ struct MirrorSportCutVideoContentView: View {
                 }
                 .allowsHitTesting(false)
             }
+
+            if playerManager.isShowingDrawing, let drawingImage = playerManager.displayedDrawingImage {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    Image(nsImage: drawingImage)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .zIndex(10)
+            }
         }
     }
 }

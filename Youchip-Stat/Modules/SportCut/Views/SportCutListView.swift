@@ -44,11 +44,11 @@ struct SportCutListView: View {
                 }
             )
         }
-        .alert("Удалить сессию?", isPresented: $showDeleteAlert) {
-            Button("Отмена", role: .cancel) {
+        .alert(^String.Titles.sportCutDeleteSessionQuestion, isPresented: $showDeleteAlert) {
+            Button(^String.Titles.cancelButtonTitle, role: .cancel) {
                 sessionToDelete = nil
             }
-            Button("Удалить", role: .destructive) {
+            Button(^String.Titles.deleteButtonTitle, role: .destructive) {
                 if let session = sessionToDelete {
                     sessionManager.deleteSession(session)
                     sessionToDelete = nil
@@ -56,7 +56,7 @@ struct SportCutListView: View {
             }
         } message: {
             if let session = sessionToDelete {
-                Text("Сессия \"\(session.name)\" будет удалена")
+                Text(String.Titles.sportCutSessionWillBeDeleted.format(session.name))
             }
         }
     }
@@ -69,7 +69,7 @@ struct SportCutListView: View {
                         .foregroundColor(.secondary)
                         .font(.system(size: 16))
                     
-                    TextField("Поиск сессий...", text: $searchText)
+                    TextField(^String.Titles.sportCutSearchSessions, text: $searchText)
                         .textFieldStyle(PlainTextFieldStyle())
                         .font(.system(size: 14))
                 }
@@ -86,7 +86,7 @@ struct SportCutListView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "plus")
                             .font(.system(size: 14, weight: .medium))
-                        Text("Новая сессия")
+                        Text(^String.Titles.sportCutNewSession)
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(.white)
@@ -146,12 +146,12 @@ struct SportCutListView: View {
                 .foregroundColor(.secondary)
             
             VStack(spacing: 8) {
-                Text("Нет сессий просмотра")
+                Text(^String.Titles.sportCutNoSessions)
                     .font(.title2)
                     .fontWeight(.semibold)
                     .foregroundColor(.primary)
                 
-                Text("Создайте сессию, чтобы начать работу с плейлистами")
+                Text(^String.Titles.sportCutCreateSessionHint)
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -160,7 +160,7 @@ struct SportCutListView: View {
             Button(action: { showCreateSheet = true }) {
                 HStack(spacing: 8) {
                     Image(systemName: "plus")
-                    Text("Создать сессию")
+                    Text(^String.Titles.sportCutCreateSessionButton)
                 }
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.white)
@@ -211,9 +211,9 @@ struct SessionCardView: View {
                     Spacer()
                     
                     Menu {
-                        Button("Открыть") { onOpen() }
+                        Button(^String.Titles.sportCutOpen) { onOpen() }
                         Divider()
-                        Button("Удалить", role: .destructive) { onDelete() }
+                        Button(^String.Titles.deleteButtonTitle, role: .destructive) { onDelete() }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.system(size: 16))
@@ -260,9 +260,9 @@ struct SessionCardView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
         .onTapGesture { onOpen() }
         .contextMenu {
-            Button("Открыть") { onOpen() }
+            Button(^String.Titles.sportCutOpen) { onOpen() }
             Divider()
-            Button("Удалить", role: .destructive) { onDelete() }
+            Button(^String.Titles.deleteButtonTitle, role: .destructive) { onDelete() }
         }
     }
 }

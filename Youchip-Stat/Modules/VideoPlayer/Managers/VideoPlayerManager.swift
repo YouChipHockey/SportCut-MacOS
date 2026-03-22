@@ -153,11 +153,14 @@ class VideoPlayerManager: ObservableObject {
         if isReviewMode {
             completion(reviewPlayer?.currentItem?.asset)
         } else if isLiveMode {
-            let segments = LiveStreamManager.shared.allSegmentURLs
-            guard !segments.isEmpty else { completion(nil); return }
-            Task {
-                let composition = await LiveStreamManager.shared.buildCompositionFromSegments(segments)
-                await MainActor.run { completion(composition) }
+            LiveStreamManager.shared.finalizeCurrentSegment { [weak self] in
+                guard self != nil else { completion(nil); return }
+                let segments = LiveStreamManager.shared.allSegmentURLs
+                guard !segments.isEmpty else { completion(nil); return }
+                Task {
+                    let composition = await LiveStreamManager.shared.buildCompositionFromSegments(segments)
+                    await MainActor.run { completion(composition) }
+                }
             }
         } else {
             completion(player?.currentItem?.asset)

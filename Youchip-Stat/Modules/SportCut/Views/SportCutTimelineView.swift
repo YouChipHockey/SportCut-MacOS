@@ -12,7 +12,7 @@ struct SportCutTimelineView: View {
     @ObservedObject var sessionManager = SportCutSessionManager.shared
     
     @State private var displayMode: TimelineDisplayMode = .timeline
-    @State private var selectedSourceIndex: Int = -1 // -1 = "Все"
+    @State private var selectedSourceIndex: Int = -1 // -1 = all tab
     @State private var showFilterSheet = false
     @State private var showAddSourceSheet = false
     @StateObject private var filter = TimelineFilter()
@@ -39,7 +39,7 @@ struct SportCutTimelineView: View {
             
             if displayMode == .timeline {
                 if selectedSourceIndex == -1 {
-                    Text("Выберите проект для отображения таймлайна")
+                    Text(^String.Titles.sportCutSelectProjectForTimeline)
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -92,7 +92,7 @@ struct SportCutTimelineView: View {
                     selectedSourceIndex = -1
                     if displayMode == .timeline { displayMode = .table }
                 }) {
-                    Text("Все")
+                    Text(^String.Titles.sportCutAllTab)
                         .font(.system(size: 11, weight: .medium))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -117,7 +117,7 @@ struct SportCutTimelineView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .contextMenu {
-                        Button("Удалить из сессии", role: .destructive) {
+                        Button(^String.Titles.sportCutDeleteFromSession, role: .destructive) {
                             removeSource(source)
                         }
                     }
@@ -131,7 +131,7 @@ struct SportCutTimelineView: View {
             HStack(spacing: 4) {
                 Image(systemName: "plus.rectangle.on.folder")
                     .font(.system(size: 11))
-                Text("Добавить все")
+                Text(^String.Titles.sportCutAddAll)
                     .font(.system(size: 10, weight: .medium))
             }
             .padding(.horizontal, 8)
@@ -174,7 +174,7 @@ struct SportCutTimelineView: View {
             HStack(spacing: 4) {
                 Image(systemName: filter.hasActiveFilters() ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                     .font(.system(size: 11))
-                Text("Фильтр")
+                Text(^String.Titles.sportCutFilterTitle)
                     .font(.system(size: 10, weight: .medium))
             }
             .padding(.horizontal, 8)
@@ -213,7 +213,7 @@ struct SportCutTimelineView: View {
                 .foregroundColor(.blue)
         }
         .buttonStyle(PlainButtonStyle())
-        .help("Добавить видео или проект")
+        .help(^String.Titles.sportCutAddVideoOrProject)
     }
     
     @ViewBuilder
@@ -430,10 +430,10 @@ struct SportCutStampView: View {
                 playerManager.playEvent(event)
             }
             .contextMenu {
-                Button("Воспроизвести") {
+                Button(^String.Titles.sportCutPlayAction) {
                     playerManager.playEvent(createEvent())
                 }
-                Button("Добавить в плейлист") {
+                Button(^String.Titles.sportCutAddToPlaylist) {
                     addToCurrentPlaylist()
                 }
             }
@@ -479,7 +479,7 @@ struct SportCutAddSourceSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Добавить источники")
+                Text(^String.Titles.sportCutAddSources)
                     .font(.title3.weight(.semibold))
                 Spacer()
             }
@@ -502,7 +502,7 @@ struct SportCutAddSourceSheet: View {
             
             HStack {
                 Spacer()
-                Button("Готово") { onDone() }
+                Button(^String.Titles.done) { onDone() }
                     .buttonStyle(PlainButtonStyle())
                     .foregroundColor(.blue)
                     .font(.system(size: 14, weight: .medium))
@@ -536,7 +536,7 @@ struct SportCutAddSourceSheet: View {
                 HStack(spacing: 6) {
                     Image(systemName: "film.stack")
                         .font(.system(size: 14))
-                    Text("Добавить проект разметки")
+                    Text(^String.Titles.sportCutAddMarkupProject)
                         .font(.system(size: 13, weight: .medium))
                 }
                 .foregroundColor(.blue)
@@ -558,7 +558,7 @@ struct SportCutAddSourceSheet: View {
                 HStack(spacing: 6) {
                     Image(systemName: "video.badge.plus")
                         .font(.system(size: 14))
-                    Text("Добавить видеофайл")
+                    Text(^String.Titles.sportCutAddVideoFile)
                         .font(.system(size: 13, weight: .medium))
                 }
                 .foregroundColor(.green)
@@ -575,7 +575,7 @@ struct SportCutAddSourceSheet: View {
     
     private var currentSourcesList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Текущие источники")
+            Text(^String.Titles.sportCutCurrentSources)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.secondary)
             
@@ -595,7 +595,7 @@ struct SportCutAddSourceSheet: View {
                                 Spacer()
                                 
                                 let eventCount = source.timelines.flatMap(\.stamps).count
-                                Text("\(eventCount) событий")
+                                Text(String.Titles.sportCutEventsCount.format(eventCount))
                                     .font(.system(size: 10))
                                     .foregroundColor(.secondary)
                             }
@@ -616,7 +616,7 @@ struct SportCutAddSourceSheet: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
-        panel.title = "Выберите видеофайлы"
+        panel.title = ^String.Titles.sportCutSelectVideoFiles
         
         if panel.runModal() == .OK {
             guard var session = session else { return }

@@ -65,12 +65,12 @@ struct SportCutFilterSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Фильтры")
+                Text(^String.Titles.sportCutFilters)
                     .font(.headline)
                 
                 Spacer()
                 
-                Button("Сбросить") { filter.clearFilters() }
+                Button(^String.Titles.reset) { filter.clearFilters() }
                     .buttonStyle(PlainButtonStyle())
                     .foregroundColor(.red)
             }
@@ -82,7 +82,7 @@ struct SportCutFilterSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if !availableTagGroups.isEmpty {
-                        filterSection(title: "Группы тегов") {
+                        filterSection(title: ^String.Titles.sportCutTagGroups) {
                             ForEach(availableTagGroups, id: \.id) { group in
                                 let groupTags = group.tags
                                 let allSelected = groupTags.allSatisfy { filter.selectedTags.contains($0) }
@@ -112,7 +112,7 @@ struct SportCutFilterSheet: View {
                     }
                     
                     if !availableTags.isEmpty {
-                        filterSection(title: "Теги") {
+                        filterSection(title: ^String.Titles.sportCutTags) {
                             ForEach(availableTags, id: \.id) { tag in
                                 tagFilterButton(tag: tag)
                             }
@@ -120,7 +120,7 @@ struct SportCutFilterSheet: View {
                     }
                     
                     if !availableLabelGroups.isEmpty {
-                        filterSection(title: "Группы лейблов") {
+                        filterSection(title: ^String.Titles.sportCutLabelGroups) {
                             ForEach(availableLabelGroups, id: \.id) { group in
                                 let groupLabels = group.lables
                                 let allSelected = groupLabels.allSatisfy { filter.selectedLabels.contains($0) }
@@ -150,7 +150,7 @@ struct SportCutFilterSheet: View {
                     }
                     
                     if !availableLabels.isEmpty {
-                        filterSection(title: "Лейблы") {
+                        filterSection(title: ^String.Titles.sportCutLabels) {
                             ForEach(availableLabels, id: \.id) { label in
                                 labelFilterButton(label: label)
                             }
@@ -158,7 +158,7 @@ struct SportCutFilterSheet: View {
                     }
                     
                     if !availableEvents.isEmpty {
-                        filterSection(title: "Общие события") {
+                        filterSection(title: ^String.Titles.sportCutCommonEvents) {
                             ForEach(availableEvents, id: \.id) { event in
                                 eventFilterButton(event: event)
                             }
@@ -171,10 +171,10 @@ struct SportCutFilterSheet: View {
             Divider()
             
             HStack {
-                Button("Отмена") { presentationMode.wrappedValue.dismiss() }
+                Button(^String.Titles.cancelButtonTitle) { presentationMode.wrappedValue.dismiss() }
                     .buttonStyle(PlainButtonStyle())
                 Spacer()
-                Button("Применить") { presentationMode.wrappedValue.dismiss() }
+                Button(^String.Titles.apply) { presentationMode.wrappedValue.dismiss() }
                     .buttonStyle(PlainButtonStyle())
                     .foregroundColor(.blue)
                     .keyboardShortcut(.defaultAction)

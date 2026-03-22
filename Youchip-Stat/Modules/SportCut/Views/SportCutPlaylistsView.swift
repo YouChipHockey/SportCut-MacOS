@@ -50,9 +50,9 @@ struct SportCutPlaylistsView: View {
         .sheet(isPresented: $showExportSheet) {
             SportCutExportSheet(sessionID: sessionID, playerManager: playerManager)
         }
-        .alert("Удалить плейлист?", isPresented: $showDeleteAlert) {
-            Button("Отмена", role: .cancel) { playlistToDelete = nil }
-            Button("Удалить", role: .destructive) {
+        .alert(^String.Titles.sportCutDeletePlaylistQuestion, isPresented: $showDeleteAlert) {
+            Button(^String.Titles.cancelButtonTitle, role: .cancel) { playlistToDelete = nil }
+            Button(^String.Titles.deleteButtonTitle, role: .destructive) {
                 if let id = playlistToDelete {
                     deletePlaylist(id)
                     playlistToDelete = nil
@@ -70,7 +70,7 @@ struct SportCutPlaylistsView: View {
     
     private var headerView: some View {
         HStack {
-            Text("Плейлисты")
+            Text(^String.Titles.playlists)
                 .font(.system(size: 14, weight: .semibold))
             Spacer()
             Button(action: { showNewPlaylistSheet = true }) {
@@ -79,7 +79,7 @@ struct SportCutPlaylistsView: View {
                     .foregroundColor(.blue)
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Новый плейлист")
+            .help(^String.Titles.sportCutNewPlaylistHelp)
             
             Button(action: { showExportSheet = true }) {
                 Image(systemName: "square.and.arrow.up")
@@ -87,7 +87,7 @@ struct SportCutPlaylistsView: View {
                     .foregroundColor(.blue)
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Экспорт плейлистов")
+            .help(^String.Titles.sportCutExportPlaylists)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -122,7 +122,7 @@ struct SportCutPlaylistsView: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Новая группа плейлистов")
+            .help(^String.Titles.sportCutNewGroupHelp)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -138,10 +138,10 @@ struct SportCutPlaylistsView: View {
                         Image(systemName: "tray")
                             .font(.system(size: 28))
                             .foregroundColor(.gray)
-                        Text("Нет плейлистов")
+                        Text(^String.Titles.sportCutNoPlaylists)
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
-                        Text("Перетащите события сюда или нажмите +")
+                        Text(^String.Titles.sportCutDragEventsHint)
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                     }
@@ -203,7 +203,7 @@ struct SportCutPlaylistsView: View {
             HStack(spacing: 4) {
                 Image(systemName: "trash")
                     .font(.system(size: 10))
-                Text("Перетащите сюда для удаления")
+                Text(^String.Titles.sportCutDragToDelete)
                     .font(.system(size: 10))
             }
             .foregroundColor(trashTargeted ? .white : .secondary)
@@ -346,7 +346,7 @@ struct SportCutPlaylistsView: View {
     // MARK: - Sheets
     
     private var newPlaylistSheet: some View {
-        SportCutNameInputSheet(title: "Новый плейлист", placeholder: "Название (необязательно)") { name in
+        SportCutNameInputSheet(title: ^String.Titles.sportCutNewPlaylist, placeholder: ^String.Titles.sportCutNameOptional) { name in
             guard var session = session else { return }
             SportCutSessionManager.shared.addPlaylist(to: &session, groupIndex: selectedGroupIndex, name: name.isEmpty ? nil : name)
             showNewPlaylistSheet = false
@@ -356,9 +356,9 @@ struct SportCutPlaylistsView: View {
     }
     
     private var newGroupSheet: some View {
-        SportCutNameInputSheet(title: "Новая группа плейлистов", placeholder: "Название группы") { name in
+        SportCutNameInputSheet(title: ^String.Titles.sportCutNewGroup, placeholder: ^String.Titles.sportCutGroupNamePlaceholder) { name in
             guard var session = session else { return }
-            let groupName = name.isEmpty ? "Группа \(session.playlistGroups.count + 1)" : name
+            let groupName = name.isEmpty ? String.Titles.sportCutGroupPrefix.format(session.playlistGroups.count + 1) : name
             SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: groupName)
             selectedGroupIndex = session.playlistGroups.count - 1
             showNewGroupSheet = false
@@ -368,7 +368,7 @@ struct SportCutPlaylistsView: View {
     }
     
     private var renamePlaylistSheet: some View {
-        SportCutNameInputSheet(title: "Переименовать плейлист", placeholder: "Новое название") { name in
+        SportCutNameInputSheet(title: ^String.Titles.sportCutRenamePlaylist, placeholder: ^String.Titles.sportCutNewNamePlaceholder) { name in
             guard var session = session, let id = renamingPlaylistID else { return }
             if let idx = session.playlistGroups[selectedGroupIndex].playlists.firstIndex(where: { $0.id == id }) {
                 session.playlistGroups[selectedGroupIndex].playlists[idx].name = name
@@ -479,7 +479,7 @@ struct SportCutPlaylistCardView: View {
                     .foregroundColor(playlist.isHidden ? .secondary : .blue.opacity(0.7))
             }
             .buttonStyle(PlainButtonStyle())
-            .help(playlist.isHidden ? "Показать плейлист" : "Скрыть плейлист")
+            .help(playlist.isHidden ? ^String.Titles.sportCutShowPlaylist : ^String.Titles.sportCutHidePlaylist)
             
             Text(playlist.name)
                 .font(.system(size: 12, weight: .semibold))
@@ -496,7 +496,7 @@ struct SportCutPlaylistCardView: View {
             }
             .buttonStyle(PlainButtonStyle())
             .disabled(!canMoveUp)
-            .help("Переместить выше")
+            .help(^String.Titles.sportCutMoveUp)
 
             Button(action: onMoveDown) {
                 Image(systemName: "chevron.down")
@@ -507,7 +507,7 @@ struct SportCutPlaylistCardView: View {
             }
             .buttonStyle(PlainButtonStyle())
             .disabled(!canMoveDown)
-            .help("Переместить ниже")
+            .help(^String.Titles.sportCutMoveDown)
             
             Button(action: onPlay) {
                 Image(systemName: isCurrentlyPlaying ? "pause.circle.fill" : "play.circle.fill")
@@ -525,29 +525,62 @@ struct SportCutPlaylistCardView: View {
             let totalDuration = playlist.totalDuration
             let w = geo.size.width
             
-            HStack(spacing: 1) {
-                ForEach(Array(playlist.events.enumerated()), id: \.element.id) { index, event in
-                    let ratio = totalDuration > 0 ? event.duration / totalDuration : 1.0 / Double(playlist.events.count)
-                    let segW = max(w * ratio, 4)
-                    let isCurrent = playerManager.currentPlaylistID == playlist.id && playerManager.currentEvent == event
-                    let isHidden = playlist.hiddenEventKeys.contains(event.hiddenKey)
-                    
-                    Rectangle()
-                        .fill(Color(hex: event.color).opacity(isHidden ? 0.2 : (isCurrent ? 1.0 : 0.7)))
-                        .frame(width: segW)
-                        .overlay(Rectangle().stroke(isCurrent ? Color.white : Color.clear, lineWidth: 1))
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            guard let start = visibleEvents.firstIndex(of: event) else { return }
-                            playerManager.sessionID = sessionID
-                            playerManager.playPlaylist(visibleEvents, startIndex: start, playlistID: playlist.id)
-                        }
+            ZStack(alignment: .leading) {
+                HStack(spacing: 1) {
+                    ForEach(Array(playlist.events.enumerated()), id: \.element.id) { index, event in
+                        let ratio = totalDuration > 0 ? event.duration / totalDuration : 1.0 / Double(playlist.events.count)
+                        let segW = max(w * ratio, 4)
+                        let isCurrent = playerManager.currentPlaylistID == playlist.id && playerManager.currentEvent == event
+                        let isHidden = playlist.hiddenEventKeys.contains(event.hiddenKey)
+                        
+                        Rectangle()
+                            .fill(Color(hex: event.color).opacity(isHidden ? 0.2 : (isCurrent ? 1.0 : 0.7)))
+                            .frame(width: segW)
+                            .overlay(Rectangle().stroke(isCurrent ? Color.white : Color.clear, lineWidth: 1))
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                guard let start = visibleEvents.firstIndex(of: event) else { return }
+                                playerManager.sessionID = sessionID
+                                playerManager.playPlaylist(visibleEvents, startIndex: start, playlistID: playlist.id)
+                            }
+                    }
                 }
+
+                drawingMarkers(totalWidth: w, totalDuration: totalDuration)
             }
         }
         .frame(height: 14)
         .cornerRadius(3)
         .clipped()
+    }
+
+    private func drawingMarkers(totalWidth: CGFloat, totalDuration: Double) -> some View {
+        let markers = drawingMarkerPositions(totalWidth: totalWidth, totalDuration: totalDuration)
+        return ForEach(markers, id: \.offset) { marker in
+            Rectangle()
+                .fill(Color.white)
+                .frame(width: 2, height: 14)
+                .offset(x: marker.offset)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func drawingMarkerPositions(totalWidth: CGFloat, totalDuration: Double) -> [DrawingMarker] {
+        guard totalDuration > 0 else { return [] }
+        var markers: [DrawingMarker] = []
+        var accumulatedTime: Double = 0
+        
+        for event in playlist.events {
+            let drawings = playlist.eventDrawings[event.hiddenKey] ?? []
+            for drawing in drawings {
+                let relTime = drawing.videoTime - event.startTime
+                let absTime = accumulatedTime + max(0, min(relTime, event.duration))
+                let x = totalWidth * (absTime / totalDuration)
+                markers.append(DrawingMarker(offset: x))
+            }
+            accumulatedTime += event.duration
+        }
+        return markers
     }
     
     // MARK: - Event List (interactive: drag, reorder, delete)
@@ -567,6 +600,7 @@ struct SportCutPlaylistCardView: View {
                     isCurrent: isCurrent,
                     isHidden: isHidden,
                     isDropTarget: isDropTarget,
+                    hasDrawing: !(playlist.eventDrawings[event.hiddenKey] ?? []).isEmpty,
                     onTap: {
                         guard let start = visibleEvents.firstIndex(of: event) else { return }
                         playerManager.sessionID = sessionID
@@ -610,18 +644,18 @@ struct SportCutPlaylistCardView: View {
     
     @ViewBuilder
     private var cardContextMenu: some View {
-        Button("Воспроизвести") { onPlay() }
-        Button("Дублировать") { onDuplicate() }
-        Button("Переименовать") { onRename() }
+        Button(^String.Titles.sportCutPlayAction) { onPlay() }
+        Button(^String.Titles.sportCutDuplicate) { onDuplicate() }
+        Button(^String.Titles.sportCutRenameAction) { onRename() }
         Divider()
-        Button("Переместить выше") { onMoveUp() }
+        Button(^String.Titles.sportCutMoveUp) { onMoveUp() }
             .disabled(!canMoveUp)
-        Button("Переместить ниже") { onMoveDown() }
+        Button(^String.Titles.sportCutMoveDown) { onMoveDown() }
             .disabled(!canMoveDown)
         Divider()
-        Button(playlist.isHidden ? "Показать" : "Скрыть") { onToggleHidden() }
+        Button(playlist.isHidden ? ^String.Titles.sportCutShowPlaylist : ^String.Titles.sportCutHidePlaylist) { onToggleHidden() }
         Divider()
-        Button("Удалить", role: .destructive) { onDelete() }
+        Button(^String.Titles.deleteButtonTitle, role: .destructive) { onDelete() }
     }
     
     // MARK: - Drop Handling
@@ -682,6 +716,12 @@ struct SportCutPlaylistCardView: View {
             let removed = session.playlistGroups[groupIndex].playlists[pi].events.remove(at: index)
             session.playlistGroups[groupIndex].playlists[pi].hiddenEventKeys.remove(removed.hiddenKey)
             session.playlistGroups[groupIndex].playlists[pi].eventComments.removeValue(forKey: removed.hiddenKey)
+            if let drawings = session.playlistGroups[groupIndex].playlists[pi].eventDrawings.removeValue(forKey: removed.hiddenKey) {
+                let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
+                for drawing in drawings {
+                    try? FileManager.default.removeItem(at: folder.appendingPathComponent(drawing.imageName))
+                }
+            }
             SportCutSessionManager.shared.updateSession(session)
         }
     }
@@ -774,6 +814,7 @@ struct PlaylistEventRowView: View {
     let isCurrent: Bool
     let isHidden: Bool
     let isDropTarget: Bool
+    let hasDrawing: Bool
     let onTap: () -> Void
     let onDelete: () -> Void
     let onComment: () -> Void
@@ -802,7 +843,13 @@ struct PlaylistEventRowView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
-            
+
+            if hasDrawing {
+                Image(systemName: "pencil.tip.crop.circle.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.green)
+            }
+
             Circle()
                 .fill(Color(hex: event.color))
                 .frame(width: 8, height: 8)
@@ -856,15 +903,15 @@ struct PlaylistEventRowView: View {
         .onTapGesture { onTap() }
         .onDrag(dragProvider)
         .contextMenu {
-            Button(hasComment ? "Редактировать комментарий" : "Добавить комментарий") { onComment() }
-            Button(isHidden ? "Показать событие" : "Скрыть событие") { onToggleHidden() }
+            Button(hasComment ? ^String.Titles.sportCutEditComment : ^String.Titles.sportCutAddComment) { onComment() }
+            Button(isHidden ? ^String.Titles.sportCutShowEvent : ^String.Titles.sportCutHideEvent) { onToggleHidden() }
             Divider()
-            Button("Переместить выше") { onMoveUp() }
+            Button(^String.Titles.sportCutMoveUp) { onMoveUp() }
                 .disabled(!canMoveUp)
-            Button("Переместить ниже") { onMoveDown() }
+            Button(^String.Titles.sportCutMoveDown) { onMoveDown() }
                 .disabled(!canMoveDown)
             Divider()
-            Button("Удалить из плейлиста", role: .destructive) { onDelete() }
+            Button(^String.Titles.sportCutDeleteFromPlaylist, role: .destructive) { onDelete() }
         }
     }
     
@@ -873,6 +920,11 @@ struct PlaylistEventRowView: View {
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
     }
+}
+
+private struct DrawingMarker: Identifiable {
+    let offset: CGFloat
+    var id: CGFloat { offset }
 }
 
 private struct EventCommentEditorState: Identifiable {
@@ -891,7 +943,7 @@ struct SportCutEventCommentSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Комментарий")
+            Text(^String.Titles.sportCutComment)
                 .font(.headline)
             Text(title)
                 .font(.system(size: 12))
@@ -907,10 +959,10 @@ struct SportCutEventCommentSheet: View {
                 )
 
             HStack {
-                Button("Отмена") { onCancel() }
+                Button(^String.Titles.cancelButtonTitle) { onCancel() }
                     .buttonStyle(PlainButtonStyle())
                 Spacer()
-                Button("Сохранить") { onSave(text) }
+                Button(^String.Titles.saveButtonTitle) { onSave(text) }
                     .buttonStyle(PlainButtonStyle())
                     .foregroundColor(.blue)
                     .keyboardShortcut(.defaultAction)
@@ -1016,10 +1068,10 @@ struct SportCutNameInputSheet: View {
                 .onSubmit { onSave(name) }
             
             HStack {
-                Button("Отмена") { onCancel() }
+                Button(^String.Titles.cancelButtonTitle) { onCancel() }
                     .buttonStyle(PlainButtonStyle())
                 Spacer()
-                Button("OK") { onSave(name) }
+                Button(^String.Titles.alertsOkTitle) { onSave(name) }
                     .buttonStyle(PlainButtonStyle())
                     .foregroundColor(.blue)
                     .keyboardShortcut(.defaultAction)

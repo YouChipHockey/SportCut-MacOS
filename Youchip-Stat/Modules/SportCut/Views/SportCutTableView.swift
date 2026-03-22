@@ -50,13 +50,13 @@ struct SportCutTableView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Таблица событий")
+                Text(^String.Titles.sportCutEventsTable)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
                 
                 Spacer()
                 
-                Text("\(filteredStamps.count) событий")
+                Text(String.Titles.sportCutEventsCount.format(filteredStamps.count))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -70,7 +70,7 @@ struct SportCutTableView: View {
                     Image(systemName: "tablecells")
                         .font(.system(size: 32))
                         .foregroundColor(.gray)
-                    Text("Нет событий")
+                    Text(^String.Titles.sportCutNoEvents)
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
@@ -105,28 +105,28 @@ struct SportCutTableView: View {
     
     private var tableHeader: some View {
         HStack(spacing: 0) {
-            headerCell("Проект", width: 100)
+            headerCell(^String.Titles.sportCutProjectColumn, width: 100)
             Divider().frame(height: 20)
             
-            headerCell("Таймлайн", width: 100)
+            headerCell(^String.Titles.sportCutTimelineColumn, width: 100)
             Divider().frame(height: 20)
             
-            headerCell("Тег", width: 120)
+            headerCell(^String.Titles.sportCutTagColumn, width: 120)
             Divider().frame(height: 20)
             
-            headerCell("Начало", width: 80)
+            headerCell(^String.Titles.sportCutStartColumn, width: 80)
             Divider().frame(height: 20)
             
-            headerCell("Конец", width: 80)
+            headerCell(^String.Titles.sportCutEndColumn, width: 80)
             Divider().frame(height: 20)
             
-            headerCell("Длит.", width: 60)
+            headerCell(^String.Titles.sportCutDurationColumn, width: 60)
             Divider().frame(height: 20)
             
-            headerCell("Лейблы")
+            headerCell(^String.Titles.sportCutLabelsColumn)
             Divider().frame(height: 20)
             
-            headerCell("События", width: 120)
+            headerCell(^String.Titles.sportCutEventsColumn, width: 120)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
@@ -310,10 +310,10 @@ struct SportCutTableRowView: View {
             }
         }
         .contextMenu {
-            Button("Воспроизвести") {
+            Button(^String.Titles.sportCutPlayAction) {
                 playerManager.playEvent(createEvent())
             }
-            Button("Добавить в плейлист") {
+            Button(^String.Titles.sportCutAddToPlaylist) {
                 addToCurrentPlaylist()
             }
         }

@@ -27,31 +27,43 @@ struct SportCutVideoPlayerView: View {
     private var eventDataWatermarkText: String? {
         guard let event = playerManager.currentEvent else { return nil }
         let labels = playerManager.currentEventLabelNames
-        if labels.isEmpty {
-            return event.tagName
-        }
+        if labels.isEmpty { return event.tagName }
         return "\(event.tagName) • \(labels.joined(separator: ", "))"
+    }
+
+    private var hasDrawings: Bool {
+        !playerManager.currentEventDrawings().isEmpty
+    }
+
+    private var isPlaylistEvent: Bool {
+        playerManager.currentPlaylistID != nil && playerManager.currentEvent != nil
     }
     
     var body: some View {
         VStack(spacing: 0) {
-            headerView
-            Divider()
-            videoContentView
-            Divider()
-            controlsView
+            if playerManager.isEditorMode {
+                editorModeView
+            } else {
+                headerView
+                Divider()
+                videoContentView
+                Divider()
+                controlsView
+            }
         }
     }
+    
+    // MARK: - Normal Mode Header
     
     private var headerView: some View {
         HStack(spacing: 8) {
             Button(action: { showPlaylistPanel.toggle() }) {
-                Image(systemName: showPlaylistPanel ? "sidebar.left" : "sidebar.left")
+                Image(systemName: "sidebar.left")
                     .font(.system(size: 14))
                     .foregroundColor(showPlaylistPanel ? .blue : .secondary)
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Показать/скрыть плейлисты")
+            .help(^String.Titles.sportCutShowHidePlaylists)
             
             Button(action: { showTimelinePanel.toggle() }) {
                 Image(systemName: showTimelinePanel ? "rectangle.bottomhalf.filled" : "rectangle.bottomhalf.inset.filled")
@@ -59,7 +71,7 @@ struct SportCutVideoPlayerView: View {
                     .foregroundColor(showTimelinePanel ? .blue : .secondary)
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Показать/скрыть события")
+            .help(^String.Titles.sportCutShowHideEvents)
             
             if let event = playerManager.currentEvent {
                 Text("— \(event.tagName)")
@@ -94,21 +106,23 @@ struct SportCutVideoPlayerView: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Полный экран")
+            .help(^String.Titles.sportCutFullscreen)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.gray.opacity(0.05))
     }
     
+    // MARK: - Video Content
+    
     private var videoContentView: some View {
         ZStack {
             VideoPlayer(player: playerManager.player)
                 .background(Color.black)
 
-            if playerManager.showEventDataWatermark, let eventDataText = eventDataWatermarkText {
+            if playerManager.showEventDataWatermark, let text = eventDataWatermarkText {
                 VStack {
-                    Text(eventDataText)
+                    Text(text)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
@@ -141,114 +155,119 @@ struct SportCutVideoPlayerView: View {
                 }
                 .allowsHitTesting(false)
             }
+
+            if playerManager.isShowingDrawing, let drawingImage = playerManager.displayedDrawingImage {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    ZStack(alignment: .topTrailing) {
+                        Image(nsImage: drawingImage)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .onTapGesture {
+                                playerManager.hideDrawingOverlay()
+                            }
+                        Button(action: { playerManager.hideDrawingOverlay() }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .zIndex(10)
+            }
             
             if playerManager.currentEvent == nil {
                 VStack(spacing: 12) {
                     Image(systemName: "play.circle")
                         .font(.system(size: 48))
                         .foregroundColor(.gray)
-                    
-                    Text("Выберите событие для воспроизведения")
+                    Text(^String.Titles.sportCutSelectEventToPlay)
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.black.opacity(0.7))
             }
-            
         }
     }
+    
+    // MARK: - Controls
     
     private var controlsView: some View {
         HStack(spacing: 12) {
             Button(action: { playerManager.seek(by: -10) }) {
-                Image(systemName: "gobackward.10")
-                    .font(.system(size: 14))
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("-10 сек")
+                Image(systemName: "gobackward.10").font(.system(size: 14))
+            }.buttonStyle(PlainButtonStyle()).help(^String.Titles.sportCutSeekBack10)
             
             Button(action: { playerManager.seek(by: -5) }) {
-                Image(systemName: "gobackward.5")
-                    .font(.system(size: 14))
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("-5 сек")
+                Image(systemName: "gobackward.5").font(.system(size: 14))
+            }.buttonStyle(PlainButtonStyle()).help(^String.Titles.sportCutSeekBack5)
             
             Button(action: { playerManager.seek(by: -2) }) {
-                Text("-2")
-                    .font(.system(size: 10, weight: .bold))
+                Text("-2").font(.system(size: 10, weight: .bold))
                     .frame(width: 24, height: 24)
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(4)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("-2 сек")
+                    .background(Color.gray.opacity(0.2)).cornerRadius(4)
+            }.buttonStyle(PlainButtonStyle()).help(^String.Titles.sportCutSeekBack2)
             
             Button(action: { playerManager.togglePlayPause() }) {
                 Image(systemName: playerManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(.blue)
-            }
-            .buttonStyle(PlainButtonStyle())
+                    .font(.system(size: 28)).foregroundColor(.blue)
+            }.buttonStyle(PlainButtonStyle())
             
             Button(action: { playerManager.seek(by: 2) }) {
-                Text("+2")
-                    .font(.system(size: 10, weight: .bold))
+                Text("+2").font(.system(size: 10, weight: .bold))
                     .frame(width: 24, height: 24)
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(4)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("+2 сек")
+                    .background(Color.gray.opacity(0.2)).cornerRadius(4)
+            }.buttonStyle(PlainButtonStyle()).help(^String.Titles.sportCutSeekForward2)
             
             Button(action: { playerManager.seek(by: 5) }) {
-                Image(systemName: "goforward.5")
-                    .font(.system(size: 14))
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("+5 сек")
+                Image(systemName: "goforward.5").font(.system(size: 14))
+            }.buttonStyle(PlainButtonStyle()).help(^String.Titles.sportCutSeekForward5)
             
             Button(action: { playerManager.seek(by: 10) }) {
-                Image(systemName: "goforward.10")
-                    .font(.system(size: 14))
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("+10 сек")
+                Image(systemName: "goforward.10").font(.system(size: 14))
+            }.buttonStyle(PlainButtonStyle()).help(^String.Titles.sportCutSeekForward10)
 
             speedMenu
 
+            if isPlaylistEvent {
+                Button(action: {
+                    playerManager.captureFrameForEditor()
+                }) {
+                    Image(systemName: hasDrawings ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(hasDrawings ? .orange : .secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(^String.Titles.sportCutCreateDrawing)
+            }
+
             Button(action: { playerManager.showEventDataWatermark.toggle() }) {
                 HStack(spacing: 4) {
-                    Image(systemName: "tag")
-                        .font(.system(size: 10))
-                    Image(systemName: playerManager.showEventDataWatermark ? "eye.fill" : "eye.slash.fill")
-                        .font(.system(size: 10))
+                    Image(systemName: "tag").font(.system(size: 10))
+                    Image(systemName: playerManager.showEventDataWatermark ? "eye.fill" : "eye.slash.fill").font(.system(size: 10))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.gray.opacity(0.2))
-                .cornerRadius(4)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(Color.gray.opacity(0.2)).cornerRadius(4)
                 .foregroundColor(playerManager.showEventDataWatermark ? .blue : .secondary)
             }
             .buttonStyle(PlainButtonStyle())
-            .help(playerManager.showEventDataWatermark ? "Скрыть вотермарк события" : "Показать вотермарк события")
+            .help(playerManager.showEventDataWatermark ? ^String.Titles.sportCutHideEventWatermark : ^String.Titles.sportCutShowEventWatermark)
 
             Button(action: { playerManager.showCommentsWatermark.toggle() }) {
                 HStack(spacing: 4) {
-                    Image(systemName: "text.bubble")
-                        .font(.system(size: 10))
-                    Image(systemName: playerManager.showCommentsWatermark ? "eye.fill" : "eye.slash.fill")
-                        .font(.system(size: 10))
+                    Image(systemName: "text.bubble").font(.system(size: 10))
+                    Image(systemName: playerManager.showCommentsWatermark ? "eye.fill" : "eye.slash.fill").font(.system(size: 10))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.gray.opacity(0.2))
-                .cornerRadius(4)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(Color.gray.opacity(0.2)).cornerRadius(4)
                 .foregroundColor(playerManager.showCommentsWatermark ? .blue : .secondary)
             }
             .buttonStyle(PlainButtonStyle())
-            .help(playerManager.showCommentsWatermark ? "Скрыть комментарии" : "Показать комментарии")
+            .help(playerManager.showCommentsWatermark ? ^String.Titles.sportCutHideComments : ^String.Titles.sportCutShowComments)
             
             Spacer()
             
@@ -260,6 +279,83 @@ struct SportCutVideoPlayerView: View {
         .padding(.vertical, 8)
         .background(Color.gray.opacity(0.05))
     }
+
+    // MARK: - Editor Mode
+
+    private var editorModeView: some View {
+        VStack(spacing: 0) {
+            editorToolbar
+            Divider()
+            HStack(spacing: 0) {
+                VStack(alignment: .leading) {
+                    EditorToolsPanel(drawingState: playerManager.editorDrawingState) { tool in
+                        playerManager.editorDrawingState.currentTool = tool
+                    }
+                }
+                .frame(minWidth: 180)
+                Divider()
+                editorCanvasView
+                Divider()
+                EditorSettingsPanel(drawingState: playerManager.editorDrawingState)
+                    .frame(width: 180)
+            }
+        }
+    }
+
+    private var editorToolbar: some View {
+        HStack(spacing: 12) {
+            Text(^String.Titles.sportCutDrawing)
+                .font(.system(size: 14, weight: .semibold))
+
+            Spacer()
+
+            Button(^String.Titles.cancelButtonTitle) {
+                playerManager.cancelEditor()
+            }
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.secondary)
+            .keyboardShortcut(.escape, modifiers: [])
+
+            Button(^String.Titles.saveButtonTitle) {
+                playerManager.saveDrawing()
+            }
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.blue)
+            .keyboardShortcut(.return, modifiers: .command)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.gray.opacity(0.05))
+    }
+
+    private var editorCanvasView: some View {
+        GeometryReader { geo in
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let screenshot = playerManager.tempScreenshotImage {
+                    let imgSize = screenshot.size
+                    let displaySize = calculateDisplaySize(imageSize: imgSize, containerSize: geo.size)
+                    
+                    Image(nsImage: screenshot)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: displaySize.width, height: displaySize.height)
+                        .overlay(
+                            DrawingCanvasView(drawingState: playerManager.editorDrawingState)
+                                .frame(width: displaySize.width, height: displaySize.height)
+                        )
+                        .onAppear {
+                            playerManager.editorDrawingState.updateViewSize(displaySize)
+                        }
+                        .onChange(of: displaySize) { newSize in
+                            playerManager.editorDrawingState.updateViewSize(newSize)
+                        }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helpers
     
     private var speedMenu: some View {
         Menu {
@@ -275,28 +371,31 @@ struct SportCutVideoPlayerView: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "speedometer")
-                    .font(.system(size: 10))
+                Image(systemName: "speedometer").font(.system(size: 10))
                 Text("\(playerManager.playbackSpeed, specifier: "%.1f")x")
                     .font(.system(size: 11, weight: .medium))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.gray.opacity(0.2))
-            .cornerRadius(4)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(Color.gray.opacity(0.2)).cornerRadius(4)
         }
         .buttonStyle(PlainButtonStyle())
     }
     
     private func toggleFullscreen() {
-        if let window = NSApp.keyWindow {
-            window.toggleFullScreen(nil)
-        }
+        if let window = NSApp.keyWindow { window.toggleFullScreen(nil) }
     }
     
     private func formatTime(_ seconds: Double) -> String {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
+    }
+
+    private func calculateDisplaySize(imageSize: CGSize, containerSize: CGSize) -> CGSize {
+        guard imageSize.width > 0 && imageSize.height > 0 else { return containerSize }
+        let widthRatio = containerSize.width / imageSize.width
+        let heightRatio = containerSize.height / imageSize.height
+        let ratio = min(widthRatio, heightRatio)
+        return CGSize(width: imageSize.width * ratio, height: imageSize.height * ratio)
     }
 }
