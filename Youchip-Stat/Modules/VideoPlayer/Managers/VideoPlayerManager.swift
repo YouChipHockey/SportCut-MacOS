@@ -37,6 +37,7 @@ class VideoPlayerManager: ObservableObject {
     private var reviewItemStatusObserver: AnyCancellable?
     /// Strong reference that keeps the pending review player alive until it reaches readyToPlay and is swapped in.
     private var pendingReviewPlayer: AVPlayer?
+    private var shouldSeekReviewToEndOnNextReady = false
     
     var videoDuration: Double {
         if isLiveMode {
@@ -91,6 +92,7 @@ class VideoPlayerManager: ObservableObject {
     func enterReviewMode() {
         guard isLiveMode else { return }
         isReviewMode = true
+        shouldSeekReviewToEndOnNextReady = true
         LiveStreamManager.shared.startReviewRefresher()
         
         reviewFileVersionCancellable = LiveStreamManager.shared.$reviewFileVersion
@@ -98,10 +100,12 @@ class VideoPlayerManager: ObservableObject {
             .sink { [weak self] _ in
                 self?.refreshReviewPlayerItem()
             }
+        refreshReviewPlayerItem()
     }
     
     func exitReviewMode() {
         isReviewMode = false
+        shouldSeekReviewToEndOnNextReady = false
         reviewFileVersionCancellable?.cancel()
         reviewFileVersionCancellable = nil
         reviewItemStatusObserver?.cancel()
@@ -208,7 +212,18 @@ class VideoPlayerManager: ObservableObject {
                             return
                         }
                         
-                        let seekTarget = CMTime(seconds: self.reviewCurrentTime, preferredTimescale: 600)
+                        let itemDuration = pending.currentItem?.duration.seconds ?? 0
+                        let shouldSeekToEnd = self.shouldSeekReviewToEndOnNextReady && itemDuration > 0
+                        let targetSeconds: Double
+                        if shouldSeekToEnd {
+                            targetSeconds = max(0, itemDuration - 0.05)
+                            self.reviewCurrentTime = targetSeconds
+                            self.currentTime = targetSeconds
+                            self.shouldSeekReviewToEndOnNextReady = false
+                        } else {
+                            targetSeconds = self.reviewCurrentTime
+                        }
+                        let seekTarget = CMTime(seconds: targetSeconds, preferredTimescale: 600)
                         pending.seek(
                             to: seekTarget,
                             toleranceBefore: CMTime(seconds: 0.5, preferredTimescale: 600),

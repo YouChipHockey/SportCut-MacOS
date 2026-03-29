@@ -31,7 +31,7 @@ class ReviewVideoWindowController: NSWindowController, NSWindowDelegate {
         // When user manually closes review window, exit review mode.
         if VideoPlayerManager.shared.isReviewMode {
             VideoPlayerManager.shared.exitReviewMode()
-            WindowsManager.shared.reviewVideoWindow = nil
+            WindowsManager.shared.reviewWindowDidCloseByUser()
         }
     }
 }

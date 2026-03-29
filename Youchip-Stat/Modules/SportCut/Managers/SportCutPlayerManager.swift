@@ -30,8 +30,13 @@ class SportCutPlayerManager: ObservableObject {
     @Published var isShowingDrawing: Bool = false
     @Published var displayedDrawingImage: NSImage?
     @Published var showDrawingWatermark: Bool = true
+    /// User-positionable combined watermark (shared with mirror window via UserDefaults).
+    @Published var watermarkDragOffset: CGSize = .zero
     private var shownDrawingNames: Set<String> = []
     private var drawingCheckTimer: AnyCancellable?
+    
+    private static let wmOffsetXKey = "SportCutWatermarkOffsetX"
+    private static let wmOffsetYKey = "SportCutWatermarkOffsetY"
     
     var sessionID: UUID?
     
@@ -44,7 +49,20 @@ class SportCutPlayerManager: ObservableObject {
     private var playlistEvents: [SportCutEvent] = []
 
     init() {
+        let x = UserDefaults.standard.double(forKey: Self.wmOffsetXKey)
+        let y = UserDefaults.standard.double(forKey: Self.wmOffsetYKey)
+        watermarkDragOffset = CGSize(width: x, height: y)
         observePlayerState()
+    }
+    
+    func commitWatermarkDrag(delta: CGSize) {
+        let next = CGSize(
+            width: watermarkDragOffset.width + delta.width,
+            height: watermarkDragOffset.height + delta.height
+        )
+        watermarkDragOffset = next
+        UserDefaults.standard.set(next.width, forKey: Self.wmOffsetXKey)
+        UserDefaults.standard.set(next.height, forKey: Self.wmOffsetYKey)
     }
 
     var currentEventLabelNames: [String] {
@@ -75,7 +93,6 @@ class SportCutPlayerManager: ObservableObject {
     // MARK: - Single event playback
     
     func playEvent(_ event: SportCutEvent) {
-        currentEvent = event
         playlistPlaybackActive = false
         currentPlaylistID = nil
         loadSourceAndPlay(event: event)
@@ -85,13 +102,20 @@ class SportCutPlayerManager: ObservableObject {
     
     func playPlaylist(_ events: [SportCutEvent], startIndex: Int = 0, playlistID: UUID? = nil) {
         guard !events.isEmpty, startIndex < events.count else { return }
-        playlistEvents = events
+        let mapped: [SportCutEvent]
+        if let sessionID,
+           let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) {
+            mapped = events.map { session.timelineResolvedEvent(for: $0) }
+        } else {
+            mapped = events
+        }
+        playlistEvents = mapped
         currentPlaylistIndex = startIndex
         playlistPlaybackActive = true
         if let playlistID = playlistID {
             currentPlaylistID = playlistID
         }
-        loadSourceAndPlay(event: events[startIndex])
+        loadSourceAndPlay(event: mapped[startIndex])
     }
     
     func advanceToNextEvent() {
@@ -242,9 +266,22 @@ class SportCutPlayerManager: ObservableObject {
     
     func seek(by seconds: Double) {
         let current = player.currentTime().seconds
-        let target = max(0, current + seconds)
+        let target = max(0, min(current + seconds, videoDuration > 0 ? videoDuration : .infinity))
         let cmTime = CMTime(seconds: target, preferredTimescale: 600)
         player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    /// Предпросмотр при ресайзе тега на таймлайне SportCut: время в **исходном видео**, плеер крутит локальное время внутри текущего клипа.
+    func seekPreviewDuringResize(absoluteVideoTime: Double, stampID: UUID, sourceID: UUID) {
+        guard currentSourceID == sourceID,
+              currentEvent?.stampID == stampID else { return }
+        guard let ev = currentEvent else { return }
+        let clipLocal = absoluteVideoTime - ev.startTime
+        let maxLocal = max(ev.duration, 0.01)
+        let t = max(0, min(clipLocal, maxLocal))
+        let cm = CMTime(seconds: t, preferredTimescale: 600)
+        let tol = CMTime(seconds: 0.08, preferredTimescale: 600)
+        player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
     }
     
     func changePlaybackSpeed(to speed: Double) {
@@ -256,24 +293,25 @@ class SportCutPlayerManager: ObservableObject {
     
     // MARK: - Source loading
     
+    private func resolvedAgainstSession(_ event: SportCutEvent) -> SportCutEvent {
+        guard let sessionID,
+              let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else {
+            return event
+        }
+        return session.timelineResolvedEvent(for: event)
+    }
+
     private func loadSourceAndPlay(event: SportCutEvent) {
+        let event = resolvedAgainstSession(event)
         currentEvent = event
         shownDrawingNames.removeAll()
-        
-        if currentSourceID == event.sourceID, player.currentItem != nil {
-            let seekTime = CMTime(seconds: event.startTime, preferredTimescale: 600)
-            player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
-            setupEndObserver(for: event)
-            play()
-            return
-        }
-        
+
         guard let source = sources.first(where: { $0.id == event.sourceID }),
               let url = source.resolveVideoURL() else {
             advanceToNextEvent()
             return
         }
-        
+
         let asset: AVAsset
         if let cached = loadedAssets[event.sourceID] {
             asset = cached
@@ -281,40 +319,70 @@ class SportCutPlayerManager: ObservableObject {
             asset = AVAsset(url: url)
             loadedAssets[event.sourceID] = asset
         }
-        
+
         currentSourceID = event.sourceID
-        let playerItem = AVPlayerItem(asset: asset)
+
+        let composition = AVMutableComposition()
+        let assetDuration = CMTimeGetSeconds(asset.duration)
+        let safeStart = max(0.0, min(event.startTime, assetDuration))
+        let maxAvailable = max(0.0, assetDuration - safeStart)
+        let safeDuration = min(max(0.0, event.duration), maxAvailable)
+
+        guard safeDuration > 0,
+              let sourceVideoTrack = asset.tracks(withMediaType: .video).first,
+              let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            advanceToNextEvent()
+            return
+        }
+
+        let startCM = CMTime(seconds: safeStart, preferredTimescale: 600)
+        let durationCM = CMTime(seconds: safeDuration, preferredTimescale: 600)
+        let timeRange = CMTimeRange(start: startCM, duration: durationCM)
+
+        do {
+            try compVideoTrack.insertTimeRange(timeRange, of: sourceVideoTrack, at: .zero)
+            if let sourceAudioTrack = asset.tracks(withMediaType: .audio).first,
+               let compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                try compAudioTrack.insertTimeRange(timeRange, of: sourceAudioTrack, at: .zero)
+            }
+        } catch {
+            advanceToNextEvent()
+            return
+        }
+
+        let playerItem = AVPlayerItem(asset: composition)
         player.replaceCurrentItem(with: playerItem)
-        
-        let seekTime = CMTime(seconds: event.startTime, preferredTimescale: 600)
-        player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
-        videoDuration = CMTimeGetSeconds(asset.duration)
-        
-        setupEndObserver(for: event)
-        play()
+        videoDuration = safeDuration
+
+        setupEndObserver(item: playerItem)
+        player.pause()
+        isPlaying = false
+        let start = CMTime.zero
+        player.seek(to: start, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            guard let self, finished else { return }
+            self.play()
+        }
     }
-    
-    private func setupEndObserver(for event: SportCutEvent) {
+
+    private func setupEndObserver(item: AVPlayerItem) {
         removeEndObserver()
-        
-        let endTime = CMTime(seconds: event.startTime + event.duration, preferredTimescale: 600)
-        let times = [NSValue(time: endTime)]
-        
-        endObserver = player.addBoundaryTimeObserver(forTimes: times, queue: .main) { [weak self] in
-            guard let self = self else { return }
-            DispatchQueue.main.async {
-                if self.playlistPlaybackActive {
-                    self.advanceToNextEvent()
-                } else {
-                    self.pause()
-                }
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            if self.playlistPlaybackActive {
+                self.advanceToNextEvent()
+            } else {
+                self.pause()
             }
         }
     }
-    
+
     private func removeEndObserver() {
         if let observer = endObserver {
-            player.removeTimeObserver(observer)
+            NotificationCenter.default.removeObserver(observer)
             endObserver = nil
         }
     }

@@ -26,6 +26,8 @@ private final class MutableInstance {
     var start: Double = 0
     var end: Double = 0
     var code: String = ""
+    /// Wyscout-style event name from nested label/text.
+    var labelText: String = ""
     var freeText: String?
 }
 
@@ -42,6 +44,7 @@ private final class SportcodeXMLParserDelegate: NSObject, XMLParserDelegate {
     
     private var currentText = ""
     private var inInstance = false
+    private var inLabel = false
     private var inRow = false
     private var currentInstance: MutableInstance?
     private var currentRow = RowColor()
@@ -58,7 +61,10 @@ private final class SportcodeXMLParserDelegate: NSObject, XMLParserDelegate {
         switch elementName {
         case "instance":
             inInstance = true
+            inLabel = false
             currentInstance = MutableInstance()
+        case "label":
+            if inInstance { inLabel = true }
         case "row":
             inRow = true
             currentRow = RowColor()
@@ -74,13 +80,22 @@ private final class SportcodeXMLParserDelegate: NSObject, XMLParserDelegate {
         switch elementName {
         case "instance":
             if let m = currentInstance {
-                let trimmedCode = m.code.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmedCode.isEmpty, m.end >= m.start {
-                    instances.append((m.start, m.end, trimmedCode, m.freeText))
+                let codeTrim = m.code.trimmingCharacters(in: .whitespacesAndNewlines)
+                let labelTrim = m.labelText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let effectiveCode = codeTrim.isEmpty ? labelTrim : codeTrim
+                let note: String? = {
+                    if let ft = m.freeText, !ft.isEmpty { return ft }
+                    if !codeTrim.isEmpty && !labelTrim.isEmpty { return labelTrim }
+                    return nil
+                }()
+                if !effectiveCode.isEmpty, m.end >= m.start {
+                    instances.append((m.start, m.end, effectiveCode, note))
                 }
             }
             currentInstance = nil
             inInstance = false
+        case "label":
+            inLabel = false
         case "row":
             let trimmed = currentRow.code.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
@@ -100,6 +115,10 @@ private final class SportcodeXMLParserDelegate: NSObject, XMLParserDelegate {
         case "free_text":
             if inInstance, !text.isEmpty {
                 currentInstance?.freeText = text
+            }
+        case "text":
+            if inInstance, inLabel, !text.isEmpty {
+                currentInstance?.labelText = text
             }
         case "R":
             if inRow { currentRow.r = Int(text) ?? 0 }
@@ -125,9 +144,49 @@ enum SportcodeXMLProjectImporter {
     
     private static let defaultImportedTagColor = "4A90D9"
     
+    /// `XMLParser` expects UTF-8. Sportcode exports and some tools save XML as UTF-16 (with or without BOM).
+    private static func xmlDataAsUTF8(_ data: Data) -> Data {
+        guard data.count >= 2 else { return data }
+        // UTF-8 BOM
+        if data.count >= 3, data[0] == 0xEF, data[1] == 0xBB, data[2] == 0xBF {
+            return Data(data.dropFirst(3))
+        }
+        // UTF-16 LE BOM
+        if data[0] == 0xFF, data[1] == 0xFE {
+            if let s = String(data: data, encoding: .utf16LittleEndian) {
+                return Data(Self.stripXMLBOMCharacter(s).utf8)
+            }
+        }
+        // UTF-16 BE BOM
+        if data[0] == 0xFE, data[1] == 0xFF {
+            if let s = String(data: data, encoding: .utf16BigEndian) {
+                return Data(Self.stripXMLBOMCharacter(s).utf8)
+            }
+        }
+        // UTF-16 without BOM: `<` is 0x3C 0x00 (LE) or 0x00 0x3C (BE)
+        if data[0] == 0x3C, data[1] == 0x00 {
+            if let s = String(data: data, encoding: .utf16LittleEndian) {
+                return Data(s.utf8)
+            }
+        }
+        if data[0] == 0x00, data[1] == 0x3C {
+            if let s = String(data: data, encoding: .utf16BigEndian) {
+                return Data(s.utf8)
+            }
+        }
+        return data
+    }
+    
+    private static func stripXMLBOMCharacter(_ string: String) -> String {
+        if string.first == "\u{FEFF}" {
+            return String(string.dropFirst())
+        }
+        return string
+    }
+    
     static func makeProjectImport(from xmlData: Data, fileName: String) throws -> ProjectImportModel {
         let delegate = SportcodeXMLParserDelegate()
-        let parser = XMLParser(data: xmlData)
+        let parser = XMLParser(data: Self.xmlDataAsUTF8(xmlData))
         parser.delegate = delegate
         guard parser.parse() else {
             throw SportcodeXMLImportError.parseFailed

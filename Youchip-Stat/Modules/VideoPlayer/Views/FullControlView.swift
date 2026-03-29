@@ -114,11 +114,21 @@ struct FullControlView: View {
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
     @State private var hoveredStampInfo: String? = nil
-    @State private var isHoveringOnPopup = false
 
     @State private var isLoading = false
     @State private var availableTags: [Tag] = []
     @State private var availableLabels: [Label] = []
+    
+    private enum TimelineLineSortMode {
+        case original
+        case nameAsc
+        case nameDesc
+        case tagCountDesc
+        case tagCountAsc
+    }
+    
+    @State private var timelineLineSortMode: TimelineLineSortMode = .original
+    @State private var originalLineOrderIDs: [UUID]? = nil
     
     @State private var multiTagSelectionItem: MultiSelectionItem?
     @State private var multiLabelSelectionItem: MultiSelectionItem?
@@ -138,57 +148,95 @@ struct FullControlView: View {
     private func scrollBlock() -> some View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 0) {
-                ScrollView(.vertical) {
-                    ScrollViewReader { scrollProxy in
-                        timelineContent(proxy: scrollProxy)
-                    }
+                if !timelineData.stampsSelectedForSportCut.isEmpty {
+                    sportCutBulkSelectionBar
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.1))
-                        .shadow(
-                            color: Color.black.opacity(0.1),
-                            radius: 8,
-                            x: 0,
-                            y: 2
-                        )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                )
-                .gesture(
-                    MagnificationGesture()
-                        .updating($magnifyScale) { currentState, gestureState, _ in
-                            gestureState = max(1.0, currentState)
+                if #available(macOS 13.0, *) {
+                    ScrollView(.vertical) {
+                        ScrollViewReader { scrollProxy in
+                            timelineContent(proxy: scrollProxy)
                         }
-                        .onEnded { value in
-                            let newScale = timelineScale * value
-                            let duration = effectiveVideoDuration
-                            let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
-                            if potentialInterval >= 0.5 {
-                                timelineScale = max(1.0, newScale)
-                            } else {
-                                let baseInterval = 5.0
-                                let maxScale = baseInterval / 0.5
-                                timelineScale = maxScale
+                    }
+                    .scrollIndicators(.hidden)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.1))
+                            .shadow(
+                                color: Color.black.opacity(0.1),
+                                radius: 8,
+                                x: 0,
+                                y: 2
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
+                    .gesture(
+                        MagnificationGesture()
+                            .updating($magnifyScale) { currentState, gestureState, _ in
+                                gestureState = max(1.0, currentState)
                             }
+                            .onEnded { value in
+                                let newScale = timelineScale * value
+                                let duration = effectiveVideoDuration
+                                let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
+                                if potentialInterval >= 0.5 {
+                                    timelineScale = max(1.0, newScale)
+                                } else {
+                                    let baseInterval = 5.0
+                                    let maxScale = baseInterval / 0.5
+                                    timelineScale = maxScale
+                                }
+                            }
+                    )
+                    .disabled(isEditorModeActive || isScreenshotDisplayActive)
+                    .opacity(isEditorModeActive || isScreenshotDisplayActive ? 0.5 : 1.0)
+                } else {
+                    ScrollView(.vertical) {
+                        ScrollViewReader { scrollProxy in
+                            timelineContent(proxy: scrollProxy)
                         }
-                )
-                .disabled(isEditorModeActive || isScreenshotDisplayActive)
-                .opacity(isEditorModeActive || isScreenshotDisplayActive ? 0.5 : 1.0)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.1))
+                            .shadow(
+                                color: Color.black.opacity(0.1),
+                                radius: 8,
+                                x: 0,
+                                y: 2
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
+                    .gesture(
+                        MagnificationGesture()
+                            .updating($magnifyScale) { currentState, gestureState, _ in
+                                gestureState = max(1.0, currentState)
+                            }
+                            .onEnded { value in
+                                let newScale = timelineScale * value
+                                let duration = effectiveVideoDuration
+                                let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
+                                if potentialInterval >= 0.5 {
+                                    timelineScale = max(1.0, newScale)
+                                } else {
+                                    let baseInterval = 5.0
+                                    let maxScale = baseInterval / 0.5
+                                    timelineScale = maxScale
+                                }
+                            }
+                    )
+                    .disabled(isEditorModeActive || isScreenshotDisplayActive)
+                    .opacity(isEditorModeActive || isScreenshotDisplayActive ? 0.5 : 1.0)
+                }
             }
             
-            if let stampInfo = hoveredStampInfo {
-                stampHoverPopup(stampInfo: stampInfo)
-                    .padding(.top, 16)
-                    .padding(.trailing, 20)
-                    .allowsHitTesting(false)
-                    .onHover { hovering in
-                        isHoveringOnPopup = hovering
-                    }
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -199,22 +247,69 @@ struct FullControlView: View {
         
         return max(0.5, baseInterval)
     }
+
+    private var sportCutBulkSelectionBar: some View {
+        HStack(spacing: 10) {
+            Text("Выбрано тегов: \(timelineData.stampsSelectedForSportCut.count)")
+                .font(.system(size: 11, weight: .semibold))
+            Button("Открыть в режиме просмотра") {
+                WindowsManager.shared.openSportCutFromSelectedStamps()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            Button("Снять выделение") {
+                timelineData.clearSportCutExportSelection()
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.green.opacity(0.15))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.green.opacity(0.35), lineWidth: 1)
+        )
+        .cornerRadius(8)
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
     
     private func timelineScrollView(geo: GeometryProxy, effectiveScale: CGFloat, duration: Double, popupInfo: String?, popupLocation: CGPoint?) -> some View {
         let interval = calculateTimeGridInterval(scale: effectiveScale, totalDuration: duration)
         let gridWidth = geo.size.width * max(effectiveScale, 1.0)
         
-        return ScrollView(.horizontal) {
-            HStack(spacing: 0) {
-                timelineZStackContent(
-                    duration: duration,
-                    interval: interval,
-                    gridWidth: gridWidth,
-                    effectiveScale: effectiveScale
-                )
-            }
+        if #available(macOS 13.0, *) {
+            return AnyView(
+                ScrollView(.horizontal) {
+                    HStack(spacing: 0) {
+                        timelineZStackContent(
+                            duration: duration,
+                            interval: interval,
+                            gridWidth: gridWidth,
+                            effectiveScale: effectiveScale
+                        )
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            )
+        } else {
+            return AnyView(
+                ScrollView(.horizontal) {
+                    HStack(spacing: 0) {
+                        timelineZStackContent(
+                            duration: duration,
+                            interval: interval,
+                            gridWidth: gridWidth,
+                            effectiveScale: effectiveScale
+                        )
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            )
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
 
     }
     
@@ -314,25 +409,37 @@ struct FullControlView: View {
         }
         .frame(width: gridWidth)
         .coordinateSpace(name: "timelineSpace")
+        .contextMenu {
+            if !timelineData.stampsSelectedForSportCut.isEmpty {
+                Button("Открыть в режиме просмотра") {
+                    WindowsManager.shared.openSportCutFromSelectedStamps()
+                }
+            }
+        }
     }
     
     @ViewBuilder
     private func timelineContent(proxy: ScrollViewProxy) -> some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color.gray.opacity(0.05),
-                        Color.gray.opacity(0.02)
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(width: 195, height: 30, alignment: .leading)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 0)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
-                )
+                ZStack(alignment: .leading) {
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.gray.opacity(0.05),
+                            Color.gray.opacity(0.02)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: 195, height: 30, alignment: .leading)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 0)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                    )
+                    
+                    timelineTableCornerControls()
+                        .frame(width: 195, height: 30, alignment: .leading)
+                }
                 .id("header-row")
                 
                 ForEach(timelineData.lines) { line in
@@ -735,564 +842,156 @@ struct FullControlView: View {
         }
     }
     
-    
-    private func liveReviewToggle() -> some View {
-        Group {
-            if videoManager.isLiveMode {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Режим")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                    
-                    HStack(spacing: 2) {
-                        Button(action: {
-                            if videoManager.isReviewMode {
-                                videoManager.exitReviewMode()
-                                WindowsManager.shared.closeReviewWindow()
-                            }
-                        }) {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(videoManager.isReviewMode ? Color.gray.opacity(0.5) : Color.red)
-                                    .frame(width: 7, height: 7)
-                                Text("Live")
-                                    .font(.system(size: 11, weight: .semibold))
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(!videoManager.isReviewMode ? Color.red.opacity(0.15) : Color.gray.opacity(0.08))
-                            .foregroundColor(!videoManager.isReviewMode ? .red : .secondary)
-                            .cornerRadius(6)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(!videoManager.isReviewMode ? Color.red.opacity(0.4) : Color.clear, lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .help("Лайв режим — разметка в реальном времени")
-                        
-                        Button(action: {
-                            if !videoManager.isReviewMode {
-                                videoManager.enterReviewMode()
-                                WindowsManager.shared.openReviewWindow()
-                            }
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "gobackward")
-                                    .font(.system(size: 9, weight: .semibold))
-                                Text("Пересмотр")
-                                    .font(.system(size: 11, weight: .semibold))
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(videoManager.isReviewMode ? Color.orange.opacity(0.15) : Color.gray.opacity(0.08))
-                            .foregroundColor(videoManager.isReviewMode ? .orange : .secondary)
-                            .cornerRadius(6)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(videoManager.isReviewMode ? Color.orange.opacity(0.4) : Color.clear, lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .help("Пересмотр — анализ записи с возможностью разметки")
+    /// Live / review switch for the timelines header bar (no extra «Режим» caption).
+    @ViewBuilder
+    private func liveReviewToggleCompact() -> some View {
+        if videoManager.isLiveMode {
+            HStack(spacing: 4) {
+                Button(action: {
+                    if videoManager.isReviewMode {
+                        videoManager.exitReviewMode()
+                        WindowsManager.shared.closeReviewWindow()
                     }
+                }) {
+                    HStack(spacing: 3) {
+                        Circle()
+                            .fill(videoManager.isReviewMode ? Color.gray.opacity(0.5) : Color.red)
+                            .frame(width: 6, height: 6)
+                        Text("Live")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundColor(!videoManager.isReviewMode ? .red : .secondary)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.gray.opacity(0.05))
-                .cornerRadius(8)
+                .buttonStyle(PlainButtonStyle())
+                .help("Лайв режим — разметка в реальном времени")
+                
+                Button(action: {
+                    if !videoManager.isReviewMode {
+                        videoManager.enterReviewMode()
+                        WindowsManager.shared.openReviewWindow()
+                    }
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "gobackward")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text("Пересмотр")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundColor(videoManager.isReviewMode ? .orange : .secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Пересмотр — анализ записи с возможностью разметки")
             }
         }
     }
     
     @ViewBuilder
-    private func compactControlPanel(width: CGFloat) -> some View {
-        let isSmallScreen = width < 1700
-        
-        HStack(alignment: .top, spacing: 12) {
-            VideoControlPanelView(
-                width: width,
-                playbackSpeed: videoManager.isReviewMode ? videoManager.reviewPlaybackSpeed : videoManager.playbackSpeed,
-                forViewerMode: false,
-                actions: videoManager.isReviewMode
-                    ? .init(
-                        seekBackward10: { videoManager.seekReview(by: -10) },
-                        seekBackward5: { videoManager.seekReview(by: -5) },
-                        togglePlayPause: { videoManager.toggleReviewPlayPause() },
-                        seekForward5: { videoManager.seekReview(by: 5) },
-                        seekForward10: { videoManager.seekReview(by: 10) },
-                        changeSpeed: { videoManager.changeReviewPlaybackSpeed(to: $0) }
-                    )
-                    : .init(
-                        seekBackward10: { videoManager.seek(by: -10) },
-                        seekBackward5: { videoManager.seek(by: -5) },
-                        togglePlayPause: { videoManager.togglePlayPause() },
-                        seekForward5: { videoManager.seek(by: 5) },
-                        seekForward10: { videoManager.seek(by: 10) },
-                        changeSpeed: { videoManager.changePlaybackSpeed(to: $0) }
-                    )
-            )
-            
-            liveReviewToggle()
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text(^String.Titles.timelines)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                
-                if isSmallScreen {
-                    VStack(spacing: 4) {
-                        HStack(spacing: 8) {
-                            if markupMode == .standard {
-                                Button {
-                                    showAddLineSheet = true
-                                } label: {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.green)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .help(^String.Titles.fullControlButtonAddTimeline)
-                            }
-                            
-                            HStack(spacing: 2) {
-                                Button(action: {
-                                    WindowsManager.shared.setMarkupMode(.standard)
-                                }) {
-                                    HStack(spacing: 2) {
-                                        Image(systemName: "list.bullet")
-                                            .font(.system(size: 10))
-                                        Text(^String.Titles.fullControlLabelStandard)
-                                            .font(.system(size: 10, weight: .medium))
-                                    }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(markupMode == .standard ? Color.blue : Color.gray.opacity(0.1))
-                                    .foregroundColor(markupMode == .standard ? .white : .primary)
-                                    .cornerRadius(6)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                
-                                Button(action: {
-                                    WindowsManager.shared.setMarkupMode(.tagBased)
-                                }) {
-                                    HStack(spacing: 2) {
-                                        Image(systemName: "tag")
-                                            .font(.system(size: 10))
-                                        Text(^String.Titles.tags)
-                                            .font(.system(size: 10, weight: .medium))
-                                    }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(markupMode == .tagBased ? Color.blue : Color.gray.opacity(0.1))
-                                    .foregroundColor(markupMode == .tagBased ? .white : .primary)
-                                    .cornerRadius(6)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                            .help(^String.Titles.fullControlModeHelp)
-                            Spacer()
-                        }
-                        
-                        HStack(spacing: 4) {
-                            Text(^String.Titles.fullControlLabelZoom)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary)
-                            
-                            Button {
-                                timelineScale = max(1.0, timelineScale - 0.5)
-                            } label: {
-                                Image(systemName: "minus.magnifyingglass")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .buttonStyle(CompactButtonStyle(icon: "minus.magnifyingglass", color: .gray))
-                            .help(^String.Titles.fullControlButtonTimelineZoomOut)
-                            
-                            Text(String(format: "%.1fx", timelineScale))
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 4)
-                            
-                            Button {
-                                timelineScale += 0.5
-                            } label: {
-                                Image(systemName: "plus.magnifyingglass")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .buttonStyle(CompactButtonStyle(icon: "plus.magnifyingglass", color: .gray))
-                            .help(^String.Titles.fullControlButtonTimelineZoomIn)
-                            Spacer()
-                        }
-                    }
-                } else {
-                    HStack(spacing: 8) {
-                        if markupMode == .standard {
-                            Button {
-                                showAddLineSheet = true
-                            } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.green)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .help(^String.Titles.fullControlButtonAddTimeline)
-                        }
-                        
-                        HStack(spacing: 2) {
-                            Button(action: {
-                                WindowsManager.shared.setMarkupMode(.standard)
-                            }) {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "list.bullet")
-                                        .font(.system(size: 10))
-                                    Text(^String.Titles.fullControlLabelStandard)
-                                        .font(.system(size: 10, weight: .medium))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(markupMode == .standard ? Color.blue : Color.gray.opacity(0.1))
-                                .foregroundColor(markupMode == .standard ? .white : .primary)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: {
-                                WindowsManager.shared.setMarkupMode(.tagBased)
-                            }) {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "tag")
-                                        .font(.system(size: 10))
-                                    Text(^String.Titles.tags)
-                                        .font(.system(size: 10, weight: .medium))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(markupMode == .tagBased ? Color.blue : Color.gray.opacity(0.1))
-                                .foregroundColor(markupMode == .tagBased ? .white : .primary)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                        .help(^String.Titles.fullControlModeHelp)
-                        
-                        HStack(spacing: 4) {
-                            Text(^String.Titles.fullControlLabelZoom)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary)
-                            
-                            Button {
-                                timelineScale = max(1.0, timelineScale - 0.5)
-                            } label: {
-                                Image(systemName: "minus.magnifyingglass")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .buttonStyle(CompactButtonStyle(icon: "minus.magnifyingglass", color: .gray))
-                            .help(^String.Titles.fullControlButtonTimelineZoomOut)
-                            
-                            Text(String(format: "%.1fx", timelineScale))
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 4)
-                            
-                            Button {
-                                timelineScale += 0.5
-                            } label: {
-                                Image(systemName: "plus.magnifyingglass")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .buttonStyle(CompactButtonStyle(icon: "plus.magnifyingglass", color: .gray))
-                            .help(^String.Titles.fullControlButtonTimelineZoomIn)
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.gray.opacity(0.05))
-            .cornerRadius(8)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text(^String.Titles.exportReports)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                
-                if isSmallScreen {
-                    VStack(spacing: 4) {
-                        HStack(spacing: 8) {
-                            Menu {
-                                Button(^String.Titles.fullControlButtonJSONSimple) {
-                                    exportSimpleJSON()
-                                }
-                                Button(^String.Titles.fullControlButtonJSONFull) {
-                                    exportFullJSON()
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "doc.text")
-                                        .font(.system(size: 12, weight: .medium))
-                                    Text(^String.Titles.fullControlMenuJSON)
-                                        .font(.system(size: 10, weight: .medium))
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 8))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.purple.opacity(0.1))
-                                .foregroundColor(.purple)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Button(action: { exportXML() }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "doc.richtext")
-                                        .font(.system(size: 12, weight: .medium))
-                                    Text("XML")
-                                        .font(.system(size: 10, weight: .medium))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.teal.opacity(0.1))
-                                .foregroundColor(.teal)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            Menu {
-                                Button(^String.Titles.fullControlButtonExportTimeline) {
-                                    selectedExportType = .currentTimeline
-                                    showExportModeSheet = true
-                                }
-                                Button(^String.Titles.fullControlButtonExportAll) {
-                                    selectedExportType = .allTimelines
-                                    showExportModeSheet = true
-                                }
-                                Button(^String.Titles.fullControlButtonExportDrawings) {
-                                    selectedExportType = .drawingsTimeline
-                                    showExportModeSheet = true
-                                }
-                                Button(^String.Titles.fullControlButtonExportTags) {
-                                    showTagSelectionSheet = true
-                                }
-                                Button(^String.Titles.fullControlButtonExportLabels) {
-                                    showLabelSelectionSheet = true
-                                }
-                                Button(^String.Titles.fullControlButtonExportEvents) {
-                                    showEventSelectionSheet = true
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "video")
-                                        .font(.system(size: 12, weight: .medium))
-                                    Text(^String.Titles.export)
-                                        .font(.system(size: 10, weight: .medium))
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 8))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.red.opacity(0.1))
-                                .foregroundColor(.red)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            Spacer()
-                        }
-                        
-                        HStack(spacing: 8) {
-                            Button(^String.Titles.aIReports) {
-                                showAiReportSheet = true
-                            }
-                            .buttonStyle(CompactButtonStyle(icon: "brain", color: .indigo, showText: true))
-                            
-                        Button(^String.Titles.simpleReport) {
-                            showSimpleReportSheet = true
-                        }
-                        .buttonStyle(CompactButtonStyle(icon: "doc.text", color: .pink, showText: true, text: ^String.Titles.simpleReport))
-                        
-                        Button(^String.Titles.view) {
-                            WindowsManager.shared.showSportCutFromMarkup()
-                        }
-                        .buttonStyle(CompactButtonStyle(icon: "eye", color: .purple, showText: true, text: ^String.Titles.view))
-                            Spacer()
-                        }
-                    }
-                } else {
-                    HStack(spacing: 8) {
-                        Menu {
-                            Button(^String.Titles.fullControlButtonJSONSimple) {
-                                exportSimpleJSON()
-                            }
-                            Button(^String.Titles.fullControlButtonJSONFull) {
-                                exportFullJSON()
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "doc.text")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text(^String.Titles.fullControlMenuJSON)
-                                    .font(.system(size: 10, weight: .medium))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 8))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.purple.opacity(0.1))
-                            .foregroundColor(.purple)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Button(action: { exportXML() }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "doc.richtext")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text("XML")
-                                    .font(.system(size: 10, weight: .medium))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.teal.opacity(0.1))
-                            .foregroundColor(.teal)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Menu {
-                            Button(^String.Titles.fullControlButtonExportTimeline) {
-                                selectedExportType = .currentTimeline
-                                showExportModeSheet = true
-                            }
-                            Button(^String.Titles.fullControlButtonExportAll) {
-                                selectedExportType = .allTimelines
-                                showExportModeSheet = true
-                            }
-                            Button(^String.Titles.fullControlButtonExportDrawings) {
-                                selectedExportType = .drawingsTimeline
-                                showExportModeSheet = true
-                            }
-                            Button(^String.Titles.fullControlButtonExportTags) {
-                                showTagSelectionSheet = true
-                            }
-                            Button(^String.Titles.fullControlButtonExportLabels) {
-                                showLabelSelectionSheet = true
-                            }
-                            Button(^String.Titles.fullControlButtonExportEvents) {
-                                showEventSelectionSheet = true
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "video")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text(^String.Titles.export)
-                                    .font(.system(size: 10, weight: .medium))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 8))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.red.opacity(0.1))
-                            .foregroundColor(.red)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        
-                        Button(^String.Titles.aIReports) {
-                            showAiReportSheet = true
-                        }
-                        .buttonStyle(CompactButtonStyle(icon: "brain", color: .indigo, showText: true))
-                        
-                        
-                        Button(^String.Titles.simpleReport) {
-                            showSimpleReportSheet = true
-                        }
-                        .buttonStyle(CompactButtonStyle(icon: "doc.text", color: .pink, showText: true, text: ^String.Titles.simpleReport))
-                        
-                        Button(^String.Titles.view) {
-                            WindowsManager.shared.showSportCutFromMarkup()
-                        }
-                        .buttonStyle(CompactButtonStyle(icon: "eye", color: .purple, showText: true, text: ^String.Titles.view))
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.gray.opacity(0.05))
-            .cornerRadius(8)
-            
-            Spacer()
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text(^String.Titles.tools)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                
-                if isSmallScreen {
-                    VStack(spacing: 4) {
-                        HStack(spacing: 8) {
-                            Button(^String.Titles.fullControlButtonScreenshots) {
-                                WindowsManager.shared.showScreenshots()
-                            }
-                            .buttonStyle(CompactButtonStyle(icon: "camera", color: .teal, showText: true, text: ^String.Titles.screenshots))
-                            Spacer()
-                        }
-                        
-                        HStack(spacing: 8) {
-                            Button {
-                                WindowsManager.shared.showFieldMapVisualizationPicker()
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "map")
-                                        .font(.system(size: 12, weight: .medium))
-                                    Text(^String.Titles.map)
-                                        .font(.system(size: 10, weight: .medium))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.brown.opacity(0.1))
-                                .foregroundColor(.brown)
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            Spacer()
-                        }
-                    }
-                } else {
-                    HStack(spacing: 8) {
-                        Button(^String.Titles.fullControlButtonScreenshots) {
-                            WindowsManager.shared.showScreenshots()
-                        }
-                        .buttonStyle(CompactButtonStyle(icon: "camera", color: .teal, showText: true, text: ^String.Titles.screenshots))
-                        
-                        Button {
-                            WindowsManager.shared.showFieldMapVisualizationPicker()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "map")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text(^String.Titles.map)
-                                    .font(.system(size: 10, weight: .medium))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.brown.opacity(0.1))
-                            .foregroundColor(.brown)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.gray.opacity(0.05))
-            .cornerRadius(8)
-            .disabled(isScreenshotDisplayActive)
-            .opacity(isScreenshotDisplayActive ? 0.5 : 1.0)
+    private func timelineToolsIconButton(systemImage: String, helpText: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.primary)
+                .frame(width: 28, height: 28)
         }
+        .buttonStyle(.plain)
+        .help(helpText)
     }
     
+    @ViewBuilder
+    private func timelineTableCornerControls() -> some View {
+        HStack(spacing: 3) {
+            if markupMode == .standard {
+                Button {
+                    showAddLineSheet = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.green)
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.fullControlButtonAddTimeline)
+            }
+            
+            HStack(spacing: 1) {
+                Button(action: {
+                    WindowsManager.shared.setMarkupMode(.standard)
+                }) {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 10, weight: .medium))
+                        .frame(minWidth: 22, minHeight: 22)
+                        .background(markupMode == .standard ? Color.blue : Color.gray.opacity(0.12))
+                        .foregroundColor(markupMode == .standard ? .white : .primary)
+                        .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.fullControlLabelStandard)
+                
+                Button(action: {
+                    WindowsManager.shared.setMarkupMode(.tagBased)
+                }) {
+                    Image(systemName: "tag")
+                        .font(.system(size: 10, weight: .medium))
+                        .frame(minWidth: 22, minHeight: 22)
+                        .background(markupMode == .tagBased ? Color.blue : Color.gray.opacity(0.12))
+                        .foregroundColor(markupMode == .tagBased ? .white : .primary)
+                        .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.tags)
+            }
+            .help(^String.Titles.fullControlModeHelp)
+            
+            HStack(spacing: 2) {
+                Button {
+                    timelineScale = max(1.0, timelineScale - 0.5)
+                } label: {
+                    Image(systemName: "minus.magnifyingglass")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.fullControlButtonTimelineZoomOut)
+                
+                Text(String(format: "%.1fx", timelineScale))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(width: 30)
+                
+                Button {
+                    timelineScale += 0.5
+                } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.fullControlButtonTimelineZoomIn)
+            }
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, 2)
+    }
+    
+    private var playbackActions: VideoControlPanelActions {
+        videoManager.isReviewMode
+            ? .init(
+                seekBackward10: { videoManager.seekReview(by: -10) },
+                seekBackward5: { videoManager.seekReview(by: -5) },
+                togglePlayPause: { videoManager.toggleReviewPlayPause() },
+                seekForward5: { videoManager.seekReview(by: 5) },
+                seekForward10: { videoManager.seekReview(by: 10) },
+                changeSpeed: { videoManager.changeReviewPlaybackSpeed(to: $0) }
+            )
+            : .init(
+                seekBackward10: { videoManager.seek(by: -10) },
+                seekBackward5: { videoManager.seek(by: -5) },
+                togglePlayPause: { videoManager.togglePlayPause() },
+                seekForward5: { videoManager.seek(by: 5) },
+                seekForward10: { videoManager.seek(by: 10) },
+                changeSpeed: { videoManager.changePlaybackSpeed(to: $0) }
+            )
+    }
+
     private func exportSimpleJSON() {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
@@ -1415,53 +1114,181 @@ struct FullControlView: View {
         }
     }
 
-    private func stampHoverPopup(stampInfo: String) -> some View {
-        let lines = stampInfo.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        guard lines.count >= 4 else { return AnyView(EmptyView()) }
-        
-        return AnyView(
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(lines[0].trimmingCharacters(in: .whitespaces))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .multilineTextAlignment(.trailing)
-                
-                Text(lines[1].trimmingCharacters(in: .whitespaces))
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.trailing)
-                
-                Text(lines[2].trimmingCharacters(in: .whitespaces))
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.trailing)
-                
-                Text(lines[3].trimmingCharacters(in: .whitespaces))
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.primary)
-                    .multilineTextAlignment(.trailing)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(NSColor.controlBackgroundColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 0.5)
-                    )
+    private func openCutsExportCurrentTimeline() {
+        selectedExportType = .currentTimeline
+        showExportModeSheet = true
+    }
+    
+    private func openCutsExportAllTimelines() {
+        selectedExportType = .allTimelines
+        showExportModeSheet = true
+    }
+    
+    private func openCutsExportDrawings() {
+        selectedExportType = .drawingsTimeline
+        showExportModeSheet = true
+    }
+
+    private var stampHoverInlineInfo: String? {
+        guard let stampInfo = hoveredStampInfo else { return nil }
+        let lines = stampInfo
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard !lines.isEmpty else { return nil }
+        return lines.joined(separator: "   •   ")
+    }
+    
+    @ViewBuilder
+    private var inlineControlsBar: some View {
+        HStack(spacing: 6) {
+            VideoControlPanelView(
+                width: 1800,
+                playbackSpeed: videoManager.isReviewMode ? videoManager.reviewPlaybackSpeed : videoManager.playbackSpeed,
+                forViewerMode: true,
+                forceHorizontalLayout: true,
+                actions: playbackActions
             )
-            .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
-            .frame(maxWidth: 200)
-        )
+            liveReviewToggleCompact()
+
+            Divider()
+                .frame(height: 20)
+
+            timelineFilterMenuButton
+
+            Text(stampHoverInlineInfo ?? " ")
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 2)
+                .opacity(stampHoverInlineInfo == nil ? 0 : 1)
+
+            timelineToolsIconButton(systemImage: "map", helpText: ^String.Titles.map) {
+                WindowsManager.shared.showFieldMapVisualizationPicker()
+            }
+            Menu {
+                Button("Новая сессия просмотра") {
+                    WindowsManager.shared.showSportCutNewSessionFromMarkup()
+                }
+                let existing = WindowsManager.shared.sportCutSessionsForCurrentMarkupProject()
+                if !existing.isEmpty {
+                    Divider()
+                    ForEach(existing, id: \.id) { sess in
+                        Button(sess.name) {
+                            WindowsManager.shared.openSportCutSessionFromMarkup(existingSessionID: sess.id)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "play.rectangle.on.rectangle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.primary)
+                    .padding(6)
+                    .background(Color.gray.opacity(0.12))
+                    .cornerRadius(6)
+            }
+            .menuStyle(.borderlessButton)
+            .help(^String.Titles.view)
+            timelineToolsIconButton(systemImage: "photo.on.rectangle.angled", helpText: ^String.Titles.screenshots) {
+                WindowsManager.shared.showScreenshots()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    
+    private var timelineFilterMenuButton: some View {
+        Menu {
+            Button("Сброс (как было)") {
+                applyTimelineSort(mode: .original)
+            }
+            
+            Divider()
+            
+            Button("По алфавиту (А → Я)") {
+                applyTimelineSort(mode: .nameAsc)
+            }
+            Button("По алфавиту (Я → А)") {
+                applyTimelineSort(mode: .nameDesc)
+            }
+            
+            Divider()
+            
+            Button("По количеству тегов (больше → меньше)") {
+                applyTimelineSort(mode: .tagCountDesc)
+            }
+            Button("По количеству тегов (меньше → больше)") {
+                applyTimelineSort(mode: .tagCountAsc)
+            }
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.primary)
+                .padding(6)
+                .background(Color.gray.opacity(0.12))
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .help("Фильтры и сортировка таймлайнов")
+    }
+    
+    private func applyTimelineSort(mode: TimelineLineSortMode) {
+        if timelineLineSortMode == .original, mode != .original {
+            originalLineOrderIDs = timelineData.lines.map(\.id)
+        }
+        
+        timelineLineSortMode = mode
+        
+        switch mode {
+        case .original:
+            guard let originalIDs = originalLineOrderIDs else {
+                return
+            }
+            let byId = Dictionary(uniqueKeysWithValues: timelineData.lines.map { ($0.id, $0) })
+            let originalOrdered: [TimelineLine] = originalIDs.compactMap { byId[$0] }
+            let extras: [TimelineLine] = timelineData.lines.filter { line in
+                !originalIDs.contains(line.id)
+            }
+            timelineData.lines = originalOrdered + extras
+            
+        case .nameAsc:
+            timelineData.lines.sort {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        case .nameDesc:
+            timelineData.lines.sort {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedDescending
+            }
+            
+        case .tagCountDesc:
+            timelineData.lines.sort {
+                let c0 = $0.stamps.count
+                let c1 = $1.stamps.count
+                if c0 != c1 { return c0 > c1 }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        case .tagCountAsc:
+            timelineData.lines.sort {
+                let c0 = $0.stamps.count
+                let c1 = $1.stamps.count
+                if c0 != c1 { return c0 < c1 }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        }
+
+        // Drawings timeline always stays at the top
+        let drawings = timelineData.lines.filter { $0.isDrawingsTimeline }
+        let rest = timelineData.lines.filter { !$0.isDrawingsTimeline }
+        timelineData.lines = drawings + rest
     }
     
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 12) {
-                    compactControlPanel(width: geo.size.width)
+                    VideoMarkupInlineStatusView()
+                    inlineControlsBar
                     scrollBlock()
                 }
                 
@@ -1667,6 +1494,50 @@ struct FullControlView: View {
                 }
             )
             .frame(width: 300, height: 300)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportMarkupJSONFull)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            exportFullJSON()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportMarkupJSONSimple)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            exportSimpleJSON()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportMarkupXML)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            exportXML()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsCurrentTimeline)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            openCutsExportCurrentTimeline()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsAllTimelines)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            openCutsExportAllTimelines()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsDrawings)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            openCutsExportDrawings()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsByTags)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            showTagSelectionSheet = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsByLabels)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            showLabelSelectionSheet = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsByEvents)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            showEventSelectionSheet = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsReportSimple)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            showSimpleReportSheet = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsReportAdvanced)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            showAiReportSheet = true
         }
         .alert(isPresented: $showErrorAlert) {
             Alert(
@@ -2781,4 +2652,16 @@ struct UnlinkedScreenshotPopupView: View {
             }
         }
     }
+}
+
+public extension ToolbarContent {
+
+    func disableGlassEffect() -> some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            return sharedBackgroundVisibility(.hidden)
+        } else {
+            return self
+        }
+    }
+
 }

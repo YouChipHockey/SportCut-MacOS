@@ -1473,7 +1473,7 @@ struct DrawingCanvasView: View {
             // Вычисляем расстояние от центра до новой позиции мыши в локальных координатах
             let distanceX = abs(localX)
             let distanceY = abs(localY)
-            
+             
             // Новый размер - это удвоенное расстояние от центра
             let newWidth = distanceX * 2
             let newHeight = distanceY * 2

@@ -54,6 +54,58 @@ struct Youchip_StatApp: App {
             }
         }
         .handlesExternalEvents(matching: [])
+        .commands {
+            CommandMenu("Tools") {
+                Menu("Экспорт разметки") {
+                    Button("JSON (полный)") {
+                        NotificationCenter.default.post(name: .toolsExportMarkupJSONFull, object: nil)
+                    }
+                    .keyboardShortcut("e", modifiers: [.command])
+                    
+                    Button("JSON (простой)") {
+                        NotificationCenter.default.post(name: .toolsExportMarkupJSONSimple, object: nil)
+                    }
+                    
+                    Button("XML") {
+                        NotificationCenter.default.post(name: .toolsExportMarkupXML, object: nil)
+                    }
+                    .keyboardShortcut("i", modifiers: [.command])
+                }
+                
+                Menu("Экспорт нарезки") {
+                    Button(^String.Titles.fullControlButtonExportTimeline) {
+                        NotificationCenter.default.post(name: .toolsExportCutsCurrentTimeline, object: nil)
+                    }
+                    Button(^String.Titles.fullControlButtonExportAll) {
+                        NotificationCenter.default.post(name: .toolsExportCutsAllTimelines, object: nil)
+                    }
+                    Button(^String.Titles.fullControlButtonExportDrawings) {
+                        NotificationCenter.default.post(name: .toolsExportCutsDrawings, object: nil)
+                    }
+                    Button(^String.Titles.fullControlButtonExportTags) {
+                        NotificationCenter.default.post(name: .toolsExportCutsByTags, object: nil)
+                    }
+                    Button(^String.Titles.fullControlButtonExportLabels) {
+                        NotificationCenter.default.post(name: .toolsExportCutsByLabels, object: nil)
+                    }
+                    Button(^String.Titles.fullControlButtonExportEvents) {
+                        NotificationCenter.default.post(name: .toolsExportCutsByEvents, object: nil)
+                    }
+                }
+                
+                Menu("Отчет") {
+                    Button("Обычный") {
+                        NotificationCenter.default.post(name: .toolsReportSimple, object: nil)
+                    }
+                    .keyboardShortcut("r", modifiers: [.command])
+                    
+                    Button("Продвинутый") {
+                        NotificationCenter.default.post(name: .toolsReportAdvanced, object: nil)
+                    }
+                    .keyboardShortcut("t", modifiers: [.command])
+                }
+            }
+        }
     }
     
     private func checkAppVersion() {

@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct SportCutMainView: View {
     @StateObject private var playerManager = SportCutPlayerManager()
@@ -56,11 +57,30 @@ struct SportCutMainView: View {
                         .frame(height: geometry.size.height * 0.45)
                     }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .sportCutTogglePlayPause)) { _ in
+                    guard !playerManager.isEditorMode else { return }
+                    if Self.isSportCutTextInputActive() { return }
+                    playerManager.togglePlayPause()
+                }
                 .onAppear {
                     playerManager.sessionID = sessionID
                     playerManager.configure(sources: session.sources)
                     playerManager.setupTimeObserver()
                     playerManager.startDrawingCheckTimer()
+                    if let playlistID = WindowsManager.shared.consumePendingSportCutAutoplayPlaylistID() {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            guard let s = sessionManager.sessions.first(where: { $0.id == sessionID }) else { return }
+                            for group in s.playlistGroups {
+                                if let playlist = group.playlists.first(where: { $0.id == playlistID }) {
+                                    let visible = playlist.events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
+                                    guard !visible.isEmpty else { return }
+                                    playerManager.sessionID = sessionID
+                                    playerManager.playPlaylist(visible, playlistID: playlist.id)
+                                    return
+                                }
+                            }
+                        }
+                    }
                 }
                 .onChange(of: session.sources.count) { _ in
                     if let session = self.session {
@@ -82,5 +102,18 @@ struct SportCutMainView: View {
             }
         }
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    private static func isSportCutTextInputActive() -> Bool {
+        guard let window = NSApp.keyWindow else { return false }
+        var responder: NSResponder? = window.firstResponder
+        while let cur = responder {
+            if cur is NSTextView { return true }
+            if cur is NSTextField { return true }
+            let name = NSStringFromClass(type(of: cur))
+            if name.contains("TextInput"), name.contains("SwiftUI") { return true }
+            responder = cur.nextResponder
+        }
+        return false
     }
 }

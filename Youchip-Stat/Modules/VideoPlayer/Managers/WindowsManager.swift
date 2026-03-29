@@ -41,6 +41,8 @@ class WindowsManager: NSObject {
     var fieldMapConfigurationWindow: FieldMapConfigurationWindowController?
     var viewerWindow: ViewerWindowController?
     var sportCutWindow: SportCutWindowController?
+    /// After opening SportCut from markup, main view starts playback of this playlist.
+    private(set) var pendingSportCutAutoplayPlaylistID: UUID?
     var reviewVideoWindow: ReviewVideoWindowController?
     var markupMirrorVideoWindow: MirroredVideoWindowController?
     var viewerMirrorVideoWindow: MirroredVideoWindowController?
@@ -374,6 +376,80 @@ class WindowsManager: NSObject {
             finalizeNewSession()
         }
     }
+
+    /// Stops live stream, finalizes recording and switches current windows to normal markup mode.
+    func stopLiveSessionAndSwitchToMarkupMode() {
+        guard isLiveSession else { return }
+        let timelines = TimelineDataManager.shared.lines
+        let liveId = liveVideoId ?? ""
+        let fileName = liveFileName ?? "Live_\(Date().timeIntervalSince1970)"
+        let appendTarget = appendingFile
+        let wasAppending = isAppendingToFile
+        
+        if VideoPlayerManager.shared.isReviewMode {
+            VideoPlayerManager.shared.exitReviewMode()
+            closeReviewWindow()
+        }
+        
+        VideoPlayerManager.shared.endLiveMode()
+        
+        LiveStreamManager.shared.stopAndFinalize { [weak self] fileURL in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                defer {
+                    self.isLiveSession = false
+                    self.isAppendingToFile = false
+                    self.appendingFile = nil
+                    self.liveVideoId = nil
+                    self.liveFileName = nil
+                    self.setMarkupMode(.standard)
+                    LiveStreamManager.shared.fullCleanup()
+                }
+                
+                guard let finalURL = fileURL else {
+                    print("WindowsManager: stop live failed - no file produced")
+                    return
+                }
+                
+                if wasAppending, let existing = appendTarget {
+                    VideoFilesManager.shared.updateVideoURL(for: existing, newURL: finalURL)
+                    VideoFilesManager.shared.saveTimelines(timelines, for: existing.id)
+                    
+                    self.currentVideoId = existing.id
+                    TimelineDataManager.shared.currentBookmark = existing.videoData.bookmark
+                    TimelineDataManager.shared.lines = timelines
+                    TimelineDataManager.shared.selectedLineID = timelines.first?.id
+                    self.ensureScreenshotsTimelineExists()
+                    ScreenshotsMetadataManager.shared.loadScreenshots(from: existing.screenshotsFolder)
+                    VideoPlayerManager.shared.transitionToStaticVideo(url: finalURL)
+                    return
+                }
+                
+                guard let importedFile = VideoFilesManager.shared.importFile(url: finalURL, newName: fileName) else {
+                    print("WindowsManager: import failed after stopping live")
+                    return
+                }
+                
+                VideoFilesManager.shared.updateTimelines(
+                    for: importedFile.videoData.bookmark,
+                    with: timelines
+                )
+                self.copyLiveScreenshotsToImportedVideo(
+                    liveVideoId: liveId,
+                    importedScreenshotsFolder: importedFile.screenshotsFolder
+                )
+                
+                self.currentVideoId = importedFile.id
+                TimelineDataManager.shared.currentBookmark = importedFile.videoData.bookmark
+                TimelineDataManager.shared.lines = timelines
+                TimelineDataManager.shared.selectedLineID = timelines.first?.id
+                self.ensureScreenshotsTimelineExists()
+                ScreenshotsMetadataManager.shared.loadScreenshots(from: importedFile.screenshotsFolder)
+                VideoPlayerManager.shared.transitionToStaticVideo(url: finalURL)
+            }
+        }
+    }
     
     private func finalizeNewSession() {
         let videoId = liveVideoId ?? ""
@@ -484,7 +560,16 @@ class WindowsManager: NSObject {
         reviewVideoWindow?.window?.delegate = nil
         reviewVideoWindow?.close()
         reviewVideoWindow = nil
-        
+        restoreLiveVideoWindowFrameAfterReview()
+    }
+
+    /// Called when user closes the review window directly.
+    func reviewWindowDidCloseByUser() {
+        reviewVideoWindow = nil
+        restoreLiveVideoWindowFrameAfterReview()
+    }
+
+    private func restoreLiveVideoWindowFrameAfterReview() {
         // Restore live video window to its original 2/3 width.
         if let screen = NSScreen.main {
             let screenFrame = screen.frame
@@ -713,11 +798,27 @@ class WindowsManager: NSObject {
         guard let keyWindow = NSApplication.shared.keyWindow else { return false }
         return keyWindow === reviewVideoWindow?.window
     }
+
+    /// Ключевое окно — режим просмотра SportCut (включая открытый с sheet поверх него).
+    func isSportCutKeyWindow() -> Bool {
+        guard let scWin = sportCutWindow?.window else { return false }
+        guard let keyWindow = NSApplication.shared.keyWindow else { return false }
+        if keyWindow === scWin { return true }
+        if keyWindow.sheetParent === scWin { return true }
+        return false
+    }
     
     // MARK: - Moment Viewer
     
     /// Открывает окно просмотра момента для указанного тега. Асинхронно получает подходящий AVAsset из текущего режима.
-    func openMomentViewer(stampStart: Double, stampDuration: Double, tagName: String, lineName: String) {
+    func openMomentViewer(
+        stampStart: Double,
+        stampDuration: Double,
+        tagName: String,
+        lineName: String,
+        lineID: UUID? = nil,
+        stampID: UUID? = nil
+    ) {
         let clipStart = max(0, stampStart)
         let clipDuration = max(stampDuration, 0.5)
         
@@ -729,7 +830,9 @@ class WindowsManager: NSObject {
                     startTime: clipStart,
                     duration: clipDuration,
                     tagName: tagName,
-                    lineName: lineName
+                    lineName: lineName,
+                    lineID: lineID,
+                    stampID: stampID
                 )
                 self.momentViewerControllers.append(controller)
                 controller.showWindow(nil)
@@ -764,24 +867,117 @@ class WindowsManager: NSObject {
         viewerWindow?.showWindow(nil)
     }
     
-    func showSportCutFromMarkup() {
+    func consumePendingSportCutAutoplayPlaylistID() -> UUID? {
+        let id = pendingSportCutAutoplayPlaylistID
+        pendingSportCutAutoplayPlaylistID = nil
+        return id
+    }
+
+    func sportCutSessionsForCurrentMarkupProject() -> [SportCutSession] {
+        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else {
+            return []
+        }
+        let pid = filesFile.id
+        return SportCutSessionManager.shared.sessions.filter { sess in
+            sess.sources.contains { $0.projectID == pid }
+        }
+    }
+
+    /// Creates a new viewing session with the current markup project (previous behavior).
+    func showSportCutNewSessionFromMarkup() {
         guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else {
             return
         }
-        
+
         sportCutWindow?.close()
         sportCutWindow = nil
-        
+
         let sessionName = filesFile.name
         var session = SportCutSessionManager.shared.createSession(name: sessionName)
         SportCutSessionManager.shared.addProjectSource(to: &session, file: filesFile)
-        
+
         if session.playlistGroups.isEmpty {
             SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
         }
-        
+
         sportCutWindow = SportCutWindowController(session: session)
         sportCutWindow?.showWindow(nil)
+    }
+
+    func showSportCutFromMarkup() {
+        showSportCutNewSessionFromMarkup()
+    }
+
+    func openSportCutSessionFromMarkup(existingSessionID: UUID) {
+        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }),
+              var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == existingSessionID }) else { return }
+        SportCutSessionManager.shared.syncProjectSource(from: filesFile, in: &session)
+        guard let refreshed = SportCutSessionManager.shared.sessions.first(where: { $0.id == existingSessionID }) else { return }
+        sportCutWindow?.close()
+        sportCutWindow = nil
+        sportCutWindow = SportCutWindowController(session: refreshed)
+        sportCutWindow?.showWindow(nil)
+    }
+
+    func openSportCutFromTimelineStamps(_ pairs: [(TimelineLine, TimelineStamp)]) {
+        guard !pairs.isEmpty else { return }
+        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else { return }
+        let pid = filesFile.id
+
+        if var existing = SportCutSessionManager.shared.sessions.first(where: { sess in
+            sess.sources.contains { $0.projectID == pid }
+        }) {
+            SportCutSessionManager.shared.syncProjectSource(from: filesFile, in: &existing)
+        } else {
+            var s = SportCutSessionManager.shared.createSession(name: filesFile.name)
+            SportCutSessionManager.shared.addProjectSource(to: &s, file: filesFile)
+            if s.playlistGroups.isEmpty {
+                SportCutSessionManager.shared.addPlaylistGroup(to: &s, name: "Основная")
+            }
+        }
+
+        guard var mutable = SportCutSessionManager.shared.sessions.first(where: { sess in
+            sess.sources.contains { $0.projectID == pid }
+        }) else { return }
+
+        guard let source = mutable.sources.first(where: { $0.projectID == pid }) else { return }
+        let sortedPairs = pairs.sorted { $0.1.timeStartSeconds < $1.1.timeStartSeconds }
+        let events = sortedPairs.map { SportCutEvent.from(stamp: $0.1, line: $0.0, source: source) }
+
+        if mutable.playlistGroups.isEmpty {
+            SportCutSessionManager.shared.addPlaylistGroup(to: &mutable, name: "Основная")
+        }
+        let df = DateFormatter()
+        df.locale = Locale.current
+        df.timeStyle = .short
+        df.dateStyle = .short
+        let playlistName = "Теги (\(df.string(from: Date())))"
+        let newPlaylist = SportCutPlaylist(name: playlistName, events: events)
+        mutable.playlistGroups[0].playlists.append(newPlaylist)
+        SportCutSessionManager.shared.updateSession(mutable)
+
+        let playlistID = newPlaylist.id
+        pendingSportCutAutoplayPlaylistID = playlistID
+
+        sportCutWindow?.close()
+        sportCutWindow = nil
+        guard let opened = SportCutSessionManager.shared.sessions.first(where: { $0.id == mutable.id }) else { return }
+        sportCutWindow = SportCutWindowController(session: opened)
+        sportCutWindow?.showWindow(nil)
+
+        TimelineDataManager.shared.clearSportCutExportSelection()
+    }
+
+    func openSportCutFromSelectedStamps() {
+        let ids = TimelineDataManager.shared.stampsSelectedForSportCut
+        guard !ids.isEmpty else { return }
+        var pairs: [(TimelineLine, TimelineStamp)] = []
+        for line in TimelineDataManager.shared.lines {
+            for stamp in line.stamps where ids.contains(stamp.id) {
+                pairs.append((line, stamp))
+            }
+        }
+        openSportCutFromTimelineStamps(pairs)
     }
     
     func showMomentViewer(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String) {

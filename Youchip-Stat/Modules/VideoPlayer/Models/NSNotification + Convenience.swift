@@ -28,12 +28,27 @@ extension NSNotification.Name {
     static let editorUndoKeyPressed = NSNotification.Name("editorUndoKeyPressed")
     static let screenshotDisplayChanged = NSNotification.Name("screenshotDisplayChanged")
     static let textBoxEditingChanged = NSNotification.Name("textBoxEditingChanged")
+    /// Пробел play/pause в окне режима просмотра (SportCut). Обрабатывается в `SportCutMainView`.
+    static let sportCutTogglePlayPause = NSNotification.Name("sportCutTogglePlayPause")
     /// Открыть редактор рисунка по скриншоту (перемотка на videoTime + восстановление состояния из метаданных). object = OpenEditorForScreenshotPayload.
     static let openEditorForScreenshot = NSNotification.Name("openEditorForScreenshot")
     /// Запрос редактора из окна пересмотра — захватывает кадр из reviewPlayer и открывает редактор в главном окне.
     static let takeReviewScreenshotForEditor = NSNotification.Name("takeReviewScreenshotForEditor")
     /// Запрос скриншота из окна пересмотра.
     static let takeReviewScreenshot = NSNotification.Name("takeReviewScreenshot")
+    
+    // MARK: - Tools Menu Commands (macOS menu bar)
+    static let toolsExportMarkupJSONFull = NSNotification.Name("toolsExportMarkupJSONFull")
+    static let toolsExportMarkupJSONSimple = NSNotification.Name("toolsExportMarkupJSONSimple")
+    static let toolsExportMarkupXML = NSNotification.Name("toolsExportMarkupXML")
+    static let toolsExportCutsCurrentTimeline = NSNotification.Name("toolsExportCutsCurrentTimeline")
+    static let toolsExportCutsAllTimelines = NSNotification.Name("toolsExportCutsAllTimelines")
+    static let toolsExportCutsDrawings = NSNotification.Name("toolsExportCutsDrawings")
+    static let toolsExportCutsByTags = NSNotification.Name("toolsExportCutsByTags")
+    static let toolsExportCutsByLabels = NSNotification.Name("toolsExportCutsByLabels")
+    static let toolsExportCutsByEvents = NSNotification.Name("toolsExportCutsByEvents")
+    static let toolsReportSimple = NSNotification.Name("toolsReportSimple")
+    static let toolsReportAdvanced = NSNotification.Name("toolsReportAdvanced")
 }
 
 /// Payload для открытия редактора из таймлайна (ПКМ по иконке рисунка → Редактировать).

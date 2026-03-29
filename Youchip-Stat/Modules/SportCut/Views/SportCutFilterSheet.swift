@@ -11,6 +11,8 @@ struct SportCutFilterSheet: View {
     let selectedSourceIndex: Int
     @ObservedObject var sessionManager = SportCutSessionManager.shared
     @Environment(\.presentationMode) var presentationMode
+    /// -1 = показать все проекты секциями; иначе индекс `session.sources` — только этот проект.
+    @State private var filterProjectTab: Int = -1
     
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
@@ -18,48 +20,60 @@ struct SportCutFilterSheet: View {
     
     private var activeSources: [SportCutSource] {
         guard let session = session else { return [] }
-        if selectedSourceIndex == -1 {
+        if selectedSourceIndex < 0 {
             return session.sources
         } else if selectedSourceIndex < session.sources.count {
             return [session.sources[selectedSourceIndex]]
         }
         return []
     }
-    
-    private var availableTags: [Tag] {
-        let allTags = activeSources.flatMap(\.tags)
-        let usedTagIDs = Set(activeSources.flatMap { source in
+
+    private func usedTagIDs(in sources: [SportCutSource]) -> Set<String> {
+        Set(sources.flatMap { source in
             source.timelines.flatMap { line in
                 line.stamps.flatMap(\.idTags)
             }
         })
-        return allTags.filter { usedTagIDs.contains($0.id) }
     }
-    
-    private var availableTagGroups: [TagGroup] {
-        activeSources.flatMap(\.tagGroups)
-    }
-    
-    private var availableLabels: [Label] {
-        let usedLabelIDs = Set(activeSources.flatMap { source in
+
+    private func usedLabelIDs(in sources: [SportCutSource]) -> Set<String> {
+        Set(sources.flatMap { source in
             source.timelines.flatMap { line in
                 line.stamps.flatMap(\.labelIDs)
             }
         })
-        return activeSources.flatMap(\.labels).filter { usedLabelIDs.contains($0.id) }
+    }
+
+    private func availableTags(for source: SportCutSource, used: Set<String>) -> [Tag] {
+        source.tags.filter { used.contains($0.id) }
     }
     
-    private var availableLabelGroups: [LabelGroupData] {
-        activeSources.flatMap(\.labelGroups)
+    private func availableTagGroups(for source: SportCutSource, used: Set<String>) -> [TagGroup] {
+        source.tagGroups.filter { group in
+            group.tags.contains { used.contains($0) }
+        }
     }
     
-    private var availableEvents: [TimeEvent] {
-        let usedEventIDs = Set(activeSources.flatMap { source in
+    private func availableLabels(for source: SportCutSource, used: Set<String>) -> [Label] {
+        source.labels.filter { used.contains($0.id) }
+    }
+    
+    private func availableLabelGroups(for source: SportCutSource, used: Set<String>) -> [LabelGroupData] {
+        source.labelGroups.filter { group in
+            group.lables.contains { used.contains($0) }
+        }
+    }
+    
+    private func availableEvents(for source: SportCutSource, usedEventIDs: Set<String>) -> [TimeEvent] {
+        source.timeEvents.filter { usedEventIDs.contains($0.id) }
+    }
+
+    private func usedEventIDs(in sources: [SportCutSource]) -> Set<String> {
+        Set(sources.flatMap { source in
             source.timelines.flatMap { line in
                 line.stamps.flatMap(\.timeEvents)
             }
         })
-        return activeSources.flatMap(\.timeEvents).filter { usedEventIDs.contains($0.id) }
     }
     
     var body: some View {
@@ -78,12 +92,108 @@ struct SportCutFilterSheet: View {
             .padding(.top)
             
             Divider()
+
+            if let session = session, activeSources.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        filterProjectTabButton(title: ^String.Titles.sportCutAllTab, index: -1)
+                        ForEach(Array(activeSources.enumerated()), id: \.element.id) { index, source in
+                            filterProjectTabButton(title: source.name, index: index)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical, 6)
+                Divider()
+            }
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if !availableTagGroups.isEmpty {
+                    if filterProjectTab == -1 {
+                        ForEach(activeSources, id: \.id) { source in
+                            let usedTags = usedTagIDs(in: [source])
+                            let usedLabels = usedLabelIDs(in: [source])
+                            let usedEv = usedEventIDs(in: [source])
+                            sourceFilterSections(
+                                source: source,
+                                usedTagIDs: usedTags,
+                                usedLabelIDs: usedLabels,
+                                usedEventIDs: usedEv,
+                                showSourceHeader: activeSources.count > 1
+                            )
+                        }
+                    } else if filterProjectTab >= 0, filterProjectTab < activeSources.count {
+                        let source = activeSources[filterProjectTab]
+                        let usedTags = usedTagIDs(in: [source])
+                        let usedLabels = usedLabelIDs(in: [source])
+                        let usedEv = usedEventIDs(in: [source])
+                        sourceFilterSections(
+                            source: source,
+                            usedTagIDs: usedTags,
+                            usedLabelIDs: usedLabels,
+                            usedEventIDs: usedEv,
+                            showSourceHeader: false
+                        )
+                    }
+                }
+                .padding(.horizontal)
+            }
+            
+            Divider()
+            
+            HStack {
+                Button(^String.Titles.cancelButtonTitle) { presentationMode.wrappedValue.dismiss() }
+                    .buttonStyle(PlainButtonStyle())
+                Spacer()
+                Button(^String.Titles.apply) { presentationMode.wrappedValue.dismiss() }
+                    .buttonStyle(PlainButtonStyle())
+                    .foregroundColor(.blue)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+        .frame(width: 500, height: 500)
+    }
+
+    private func filterProjectTabButton(title: String, index: Int) -> some View {
+        Button(action: { filterProjectTab = index }) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(filterProjectTab == index ? Color.blue : Color.gray.opacity(0.15))
+                .foregroundColor(filterProjectTab == index ? .white : .primary)
+                .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    @ViewBuilder
+    private func sourceFilterSections(
+        source: SportCutSource,
+        usedTagIDs: Set<String>,
+        usedLabelIDs: Set<String>,
+        usedEventIDs: Set<String>,
+        showSourceHeader: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if showSourceHeader {
+                Text(source.name)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
+            }
+            let tagGroups = availableTagGroups(for: source, used: usedTagIDs)
+            let tags = availableTags(for: source, used: usedTagIDs)
+            let labelGroups = availableLabelGroups(for: source, used: usedLabelIDs)
+            let labels = availableLabels(for: source, used: usedLabelIDs)
+            let events = availableEvents(for: source, usedEventIDs: usedEventIDs)
+
+                    if !tagGroups.isEmpty {
                         filterSection(title: ^String.Titles.sportCutTagGroups) {
-                            ForEach(availableTagGroups, id: \.id) { group in
+                            ForEach(tagGroups, id: \.id) { group in
                                 let groupTags = group.tags
                                 let allSelected = groupTags.allSatisfy { filter.selectedTags.contains($0) }
                                 
@@ -111,17 +221,17 @@ struct SportCutFilterSheet: View {
                         }
                     }
                     
-                    if !availableTags.isEmpty {
+                    if !tags.isEmpty {
                         filterSection(title: ^String.Titles.sportCutTags) {
-                            ForEach(availableTags, id: \.id) { tag in
+                            ForEach(tags, id: \.id) { tag in
                                 tagFilterButton(tag: tag)
                             }
                         }
                     }
                     
-                    if !availableLabelGroups.isEmpty {
+                    if !labelGroups.isEmpty {
                         filterSection(title: ^String.Titles.sportCutLabelGroups) {
-                            ForEach(availableLabelGroups, id: \.id) { group in
+                            ForEach(labelGroups, id: \.id) { group in
                                 let groupLabels = group.lables
                                 let allSelected = groupLabels.allSatisfy { filter.selectedLabels.contains($0) }
                                 
@@ -149,40 +259,22 @@ struct SportCutFilterSheet: View {
                         }
                     }
                     
-                    if !availableLabels.isEmpty {
+                    if !labels.isEmpty {
                         filterSection(title: ^String.Titles.sportCutLabels) {
-                            ForEach(availableLabels, id: \.id) { label in
+                            ForEach(labels, id: \.id) { label in
                                 labelFilterButton(label: label)
                             }
                         }
                     }
                     
-                    if !availableEvents.isEmpty {
+                    if !events.isEmpty {
                         filterSection(title: ^String.Titles.sportCutCommonEvents) {
-                            ForEach(availableEvents, id: \.id) { event in
+                            ForEach(events, id: \.id) { event in
                                 eventFilterButton(event: event)
                             }
                         }
                     }
-                }
-                .padding(.horizontal)
-            }
-            
-            Divider()
-            
-            HStack {
-                Button(^String.Titles.cancelButtonTitle) { presentationMode.wrappedValue.dismiss() }
-                    .buttonStyle(PlainButtonStyle())
-                Spacer()
-                Button(^String.Titles.apply) { presentationMode.wrappedValue.dismiss() }
-                    .buttonStyle(PlainButtonStyle())
-                    .foregroundColor(.blue)
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(.horizontal)
-            .padding(.bottom)
         }
-        .frame(width: 500, height: 500)
     }
     
     @ViewBuilder

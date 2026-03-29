@@ -21,9 +21,11 @@ struct VideoControlPanelView: View {
     let width: CGFloat
     let playbackSpeed: Double
     let forViewerMode: Bool
+    /// When true, keeps seek row and speed on one line (e.g. embedded in the timelines header bar).
+    var forceHorizontalLayout: Bool = false
     let actions: VideoControlPanelActions
 
-    private var isSmallScreen: Bool { width < 1700 }
+    private var isSmallScreen: Bool { width < 1700 && !forceHorizontalLayout }
     private let speeds: [Double] = [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0]
 
     var body: some View {
@@ -86,22 +88,11 @@ private struct SeekButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                if reversed {
-                    Text(title).font(.system(size: 10, weight: .medium))
-                    Image(systemName: systemImage).font(.system(size: 12, weight: .medium))
-                } else {
-                    Image(systemName: systemImage).font(.system(size: 12, weight: .medium))
-                    Text(title).font(.system(size: 10, weight: .medium))
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(color.opacity(0.1))
+            Image(systemName: systemImage).font(.system(size: 12, weight: .medium))
             .foregroundColor(color)
-            .cornerRadius(6)
         }
         .buttonStyle(.plain)
+        .help(title)
     }
 }
 
@@ -111,10 +102,7 @@ private struct PlayPauseButton: View {
         Button(action: action) {
             Image(systemName: "playpause")
                 .font(.system(size: 14, weight: .medium))
-                .padding(6)
-                .background(Color.green.opacity(0.1))
                 .foregroundColor(.green)
-                .cornerRadius(6)
         }
         .buttonStyle(.plain)
     }
@@ -138,11 +126,7 @@ private struct SpeedMenu: View {
                 Text("x\(String(format: "%.2f", playbackSpeed))").font(.system(size: 10, weight: .medium))
                 Image(systemName: "chevron.down").font(.system(size: 8))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(Color.orange.opacity(0.1))
             .foregroundColor(.orange)
-            .cornerRadius(6)
         }
         .buttonStyle(.plain)
     }

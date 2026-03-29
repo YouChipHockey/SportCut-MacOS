@@ -32,6 +32,17 @@ struct SportCutSession: Identifiable, Codable {
             }
         }
     }
+
+    /// Rebuilds a playlist/table event from the current timelines so times and labels match live markup.
+    func timelineResolvedEvent(for event: SportCutEvent) -> SportCutEvent {
+        guard let source = sources.first(where: { $0.id == event.sourceID }) else { return event }
+        for line in source.timelines {
+            if let stamp = line.stamps.first(where: { $0.id == event.stampID }) {
+                return SportCutEvent.from(stamp: stamp, line: line, source: source)
+            }
+        }
+        return event
+    }
 }
 
 // MARK: - Source (project or standalone video)
@@ -70,6 +81,16 @@ struct SportCutSource: Identifiable, Codable {
             return nil
         }
         _ = url.startAccessingSecurityScopedResource()
+        return url
+    }
+
+    /// For background export/processing on the calling thread. Pair with `url.stopAccessingSecurityScopedResource()`.
+    func mediaAccessURL() -> URL? {
+        var isStale = false
+        guard let url = try? URL(resolvingBookmarkData: videoBookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) else {
+            return nil
+        }
+        guard url.startAccessingSecurityScopedResource() else { return nil }
         return url
     }
     

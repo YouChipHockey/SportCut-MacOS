@@ -47,6 +47,9 @@ struct TimelineLineView: View {
     // MARK: - drag properties
     @State private var dragOffsetY: CGFloat = 0
     @State private var draggingStampID: UUID?
+
+    // MARK: - comment sheet
+    @State private var commentEditingStamp: TimelineStamp? = nil
     
     enum ResizeEdge {
         case left
@@ -96,6 +99,7 @@ struct TimelineLineView: View {
                     )
                     .onTapGesture {
                         timelineData.selectStamp(stampID: nil)
+                        timelineData.clearSportCutExportSelection()
                     }
                     ForEach(Array(line.stamps.enumerated()), id: \.element.id) { index, stamp in
                         stampView(
@@ -114,6 +118,15 @@ struct TimelineLineView: View {
                         scrollOffset = value.translation.width
                     }
             )
+        }
+        .sheet(item: $commentEditingStamp) { stamp in
+            StampCommentEditSheet(stamp: stamp) { newComment in
+                if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }),
+                   let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stamp.id }) {
+                    timelineData.lines[lineIndex].stamps[stampIndex].comment = newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : newComment
+                    timelineData.updateTimelines()
+                }
+            }
         }
     }
 
@@ -147,12 +160,17 @@ struct TimelineLineView: View {
                       (visualOffsetX ?? baseStampX) : baseStampX) ?? 0
         
         let isSelected = timelineData.selectedStampID == stamp.id
+        let inSportCutBulk = timelineData.stampsSelectedForSportCut.contains(stamp.id)
         let overlapCount = getOverlapCount(stamp: stamp, stamps: line.stamps, stampIndex: index)
         let hasOverlaps = overlapCount > 0
         
-        let borderColor = (hasOverlaps && !isSelected) ? Color.red :
-        (isSelected && hasOverlaps) ? Color.red :
-        (isSelected) ? Color.blue : Color.clear
+        let borderColor: Color = {
+            if inSportCutBulk { return Color.green }
+            if hasOverlaps && !isSelected { return Color.red }
+            if isSelected && hasOverlaps { return Color.red }
+            if isSelected { return Color.blue }
+            return Color.clear
+        }()
         let heightReduction = CGFloat(overlapCount * 6)
         let stampHeight: CGFloat = 25 - heightReduction
         
@@ -197,27 +215,46 @@ struct TimelineLineView: View {
                 widthMax: widthMax
             )
         )
+        .overlay(alignment: .topTrailing) {
+            if stamp.comment != nil {
+                Circle()
+                    .fill(Color.red)
+                    .overlay(Circle().stroke(Color.black, lineWidth: 0.8))
+                    .frame(width: 7, height: 7)
+                    .offset(x: 2, y: -2)
+            }
+        }
         .frame(width: stampWidth, height: stampHeight)
         .position(x: clampedCenterX(isDragging: isDragging, stampX: stampX, stampWidth: stampWidth), y: verticalOffset + 15)
-        .onTapGesture {
+        .onTapGesture(count: 2) {
             if resizingStampID == nil {
+                let stampDuration = max(stamp.timeFinishSeconds - stamp.timeStartSeconds, 1.0)
+                WindowsManager.shared.openMomentViewer(
+                    stampStart: stamp.timeStartSeconds,
+                    stampDuration: stampDuration,
+                    tagName: stamp.label,
+                    lineName: line.name,
+                    lineID: line.id,
+                    stampID: stamp.id
+                )
+            }
+        }
+        .onTapGesture(count: 1) {
+            if resizingStampID == nil {
+                let commandDown = NSApp.currentEvent?.modifierFlags.contains(.command) ?? false
+                if commandDown {
+                    timelineData.toggleSportCutExportSelection(stampID: stamp.id)
+                    return
+                }
+                timelineData.clearSportCutExportSelection()
                 withAnimation(.easeInOut(duration: 0.2)) {
                     timelineData.selectStamp(stampID: stamp.id)
-                    if videoManager.isReviewMode {
-                        videoManager.seekReview(to: stamp.timeStartSeconds)
-                    } else if videoManager.isLiveMode {
-                        // In live mode LMK opens the moment viewer for that tag.
-                        let stampDuration = max(stamp.timeFinishSeconds - stamp.timeStartSeconds, 1.0)
-                        WindowsManager.shared.openMomentViewer(
-                            stampStart: stamp.timeStartSeconds,
-                            stampDuration: stampDuration,
-                            tagName: stamp.label,
-                            lineName: line.name
-                        )
-                    } else {
-                        videoManager.seek(to: stamp.timeStartSeconds)
-                        videoManager.player?.play()
-                    }
+                }
+                if videoManager.isReviewMode {
+                    videoManager.seekReview(to: stamp.timeStartSeconds)
+                } else {
+                    videoManager.seek(to: stamp.timeStartSeconds)
+                    videoManager.player?.play()
                 }
             }
         }
@@ -484,8 +521,29 @@ struct TimelineLineView: View {
                 stampStart: stamp.timeStartSeconds,
                 stampDuration: stampDuration,
                 tagName: stamp.label,
-                lineName: line.name
+                lineName: line.name,
+                lineID: line.id,
+                stampID: stamp.id
             )
+        }
+
+        Button("Открыть в режиме просмотра") {
+            WindowsManager.shared.openSportCutFromTimelineStamps([(line, stamp)])
+        }
+
+        Divider()
+
+        Button(stamp.comment == nil ? "Добавить комментарий" : "Редактировать комментарий") {
+            commentEditingStamp = stamp
+        }
+        if stamp.comment != nil {
+            Button("Удалить комментарий") {
+                if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }),
+                   let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stamp.id }) {
+                    timelineData.lines[lineIndex].stamps[stampIndex].comment = nil
+                    timelineData.updateTimelines()
+                }
+            }
         }
         
         Button(^String.Titles.timelineButtonDeleteTag) {
@@ -537,7 +595,8 @@ struct TimelineLineView: View {
             label: stamp.label,
             labels: stamp.labels,
             timeEvents: stamp.timeEvents,
-            position: stamp.position
+            position: stamp.position,
+            comment: stamp.comment
         )
         
         timelineData.lines[destLineIndex].stamps.append(newStamp)

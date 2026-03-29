@@ -157,6 +157,15 @@ class HotKeyManager: ObservableObject {
                     return nil
                 }
             }
+            // Пробел в окне режима просмотра (SportCut) — play/pause плеера сессии.
+            if event.keyCode == 49,
+               WindowsManager.shared.isSportCutKeyWindow(),
+               self.isEnabled,
+               !self.blockedSheetActive,
+               !FocusStateManager.shared.isAnyTextFieldFocused {
+                NotificationCenter.default.post(name: .sportCutTogglePlayPause, object: nil)
+                return nil
+            }
             // Когда в фокусе окно таймлайна, библиотеки тегов или пересмотра — пробел всегда play/pause.
             // Работает только на экране разметчика (или когда активно окно пересмотра в рамках лайв-сессии).
             if event.keyCode == 49,

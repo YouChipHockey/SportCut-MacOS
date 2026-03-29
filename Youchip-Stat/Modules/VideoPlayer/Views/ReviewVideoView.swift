@@ -83,27 +83,6 @@ struct ReviewVideoView: View {
             .opacity(videoManager.reviewPlayer == nil ? 0.4 : 1)
             .help("Открыть редактор рисования на текущем кадре пересмотра")
             
-            // Screenshot button
-            Button {
-                NotificationCenter.default.post(name: .takeReviewScreenshot, object: nil)
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "camera")
-                        .font(.system(size: 13, weight: .medium))
-                    Text("Скриншот")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundColor(.primary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(6)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .disabled(videoManager.reviewPlayer == nil)
-            .opacity(videoManager.reviewPlayer == nil ? 0.4 : 1)
-            .help("Сделать скриншот текущего кадра пересмотра")
-            
             Spacer()
             
             // Play/Pause button

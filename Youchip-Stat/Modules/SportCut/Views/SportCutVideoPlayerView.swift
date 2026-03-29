@@ -4,7 +4,7 @@
 //
 
 import SwiftUI
-import AVKit
+import AppKit
 
 struct SportCutVideoPlayerView: View {
     @ObservedObject var playerManager: SportCutPlayerManager
@@ -12,24 +12,7 @@ struct SportCutVideoPlayerView: View {
     @Binding var showPlaylistPanel: Bool
     @Binding var showTimelinePanel: Bool
     @State private var isFullscreen = false
-
-    private var currentPlaylistComment: String? {
-        guard let sessionID = playerManager.sessionID,
-              let playlistID = playerManager.currentPlaylistID,
-              let event = playerManager.currentEvent,
-              let session = sessionManager.sessions.first(where: { $0.id == sessionID }),
-              let playlist = session.playlistGroups.flatMap(\.playlists).first(where: { $0.id == playlistID }) else { return nil }
-        let raw = playlist.eventComments[event.hiddenKey] ?? ""
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private var eventDataWatermarkText: String? {
-        guard let event = playerManager.currentEvent else { return nil }
-        let labels = playerManager.currentEventLabelNames
-        if labels.isEmpty { return event.tagName }
-        return "\(event.tagName) • \(labels.joined(separator: ", "))"
-    }
+    @State private var savedWindowFrameBeforeEditor: NSRect?
 
     private var hasDrawings: Bool {
         !playerManager.currentEventDrawings().isEmpty
@@ -50,6 +33,9 @@ struct SportCutVideoPlayerView: View {
                 Divider()
                 controlsView
             }
+        }
+        .onChange(of: playerManager.isEditorMode) { isEditor in
+            handleEditorFullscreenChange(isEditor: isEditor)
         }
     }
     
@@ -89,6 +75,17 @@ struct SportCutVideoPlayerView: View {
             }
             
             Spacer()
+
+            Button(action: {
+                playerManager.captureFrameForEditor()
+            }) {
+                Image(systemName: hasDrawings ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                    .font(.system(size: 14))
+                    .foregroundColor(!isPlaylistEvent ? .gray.opacity(0.35) : (hasDrawings ? .orange : .blue))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(!isPlaylistEvent)
+            .help(^String.Titles.sportCutCreateDrawing)
             
             Button(action: {
                 WindowsManager.shared.toggleSportCutMirrorVideoWindow(playerManager: playerManager)
@@ -117,44 +114,10 @@ struct SportCutVideoPlayerView: View {
     
     private var videoContentView: some View {
         ZStack {
-            VideoPlayer(player: playerManager.player)
+            SportCutMinimalPlayerView(player: playerManager.player)
                 .background(Color.black)
 
-            if playerManager.showEventDataWatermark, let text = eventDataWatermarkText {
-                VStack {
-                    Text(text)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.black.opacity(0.55))
-                        .cornerRadius(8)
-                        .padding(.top, 14)
-                        .padding(.horizontal, 16)
-                    Spacer()
-                }
-                .allowsHitTesting(false)
-            }
-
-            if playerManager.showCommentsWatermark, let comment = currentPlaylistComment {
-                VStack {
-                    Spacer()
-                    Text(comment)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.black.opacity(0.55))
-                        .cornerRadius(8)
-                        .padding(.bottom, 18)
-                        .padding(.horizontal, 16)
-                }
-                .allowsHitTesting(false)
-            }
+            SportCutWatermarkOverlay(playerManager: playerManager)
 
             if playerManager.isShowingDrawing, let drawingImage = playerManager.displayedDrawingImage {
                 ZStack {
@@ -232,18 +195,6 @@ struct SportCutVideoPlayerView: View {
             }.buttonStyle(PlainButtonStyle()).help(^String.Titles.sportCutSeekForward10)
 
             speedMenu
-
-            if isPlaylistEvent {
-                Button(action: {
-                    playerManager.captureFrameForEditor()
-                }) {
-                    Image(systemName: hasDrawings ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
-                        .font(.system(size: 14))
-                        .foregroundColor(hasDrawings ? .orange : .secondary)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .help(^String.Titles.sportCutCreateDrawing)
-            }
 
             Button(action: { playerManager.showEventDataWatermark.toggle() }) {
                 HStack(spacing: 4) {
@@ -389,6 +340,18 @@ struct SportCutVideoPlayerView: View {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
+    }
+
+    private func handleEditorFullscreenChange(isEditor: Bool) {
+        guard let window = NSApp.keyWindow else { return }
+        if isEditor {
+            savedWindowFrameBeforeEditor = window.frame
+            let target = NSScreen.main?.visibleFrame ?? window.frame
+            window.setFrame(target, display: true, animate: true)
+        } else if let frame = savedWindowFrameBeforeEditor {
+            window.setFrame(frame, display: true, animate: true)
+            savedWindowFrameBeforeEditor = nil
+        }
     }
 
     private func calculateDisplaySize(imageSize: CGSize, containerSize: CGSize) -> CGSize {

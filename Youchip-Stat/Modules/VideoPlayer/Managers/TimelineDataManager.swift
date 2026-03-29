@@ -18,6 +18,8 @@ class TimelineDataManager: ObservableObject {
     @Published var lines: [TimelineLine] = []
     @Published var selectedLineID: UUID? = nil
     @Published var selectedStampID: UUID? = nil
+    /// Stamps toggled with ⌘-click for «open in SportCut» bulk action.
+    @Published var stampsSelectedForSportCut: Set<UUID> = []
     @Published var unlinkedScreenshotPopups: [UnlinkedScreenshotPopup] = []
     var currentBookmark: Data?
     
@@ -42,6 +44,18 @@ class TimelineDataManager: ObservableObject {
     }
     func selectStamp(stampID: UUID?) {
         selectedStampID = stampID
+    }
+
+    func toggleSportCutExportSelection(stampID: UUID) {
+        if stampsSelectedForSportCut.contains(stampID) {
+            stampsSelectedForSportCut.remove(stampID)
+        } else {
+            stampsSelectedForSportCut.insert(stampID)
+        }
+    }
+
+    func clearSportCutExportSelection() {
+        stampsSelectedForSportCut.removeAll()
     }
     func removeStamp(lineID: UUID, stampID: UUID) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
@@ -241,6 +255,36 @@ class TimelineDataManager: ObservableObject {
         // Check if any screenshots need to be unlinked due to time range change
         checkAndUnlinkScreenshotsOutsideStamp(stampID: stampID, newStart: stamp.timeStartSeconds, newEnd: stamp.timeFinishSeconds)
     }
+
+    /// Запись таймлайнов в то же хранилище, что и режим разметки (`UserDefaults` + немедленный сброс JSON на диск). Вызывается из SportCut после изменения границ тега.
+    func persistProjectTimelinesForMarkupModel(
+        _ timelines: [TimelineLine],
+        videoId: String,
+        editedStampID: UUID,
+        editedLineID: UUID
+    ) {
+        InMemoryStorageManager.shared.saveTimelines(timelines, for: videoId)
+        InMemoryStorageManager.shared.saveToDiskImmediate()
+
+        if let bookmark = currentBookmark,
+           let vd = VideoFilesManager.shared.videosData.first(where: { $0.bookmark == bookmark }),
+           vd.id == videoId {
+            lines = timelines
+            objectWillChange.send()
+        }
+
+        if let line = timelines.first(where: { $0.id == editedLineID }),
+           let st = line.stamps.first(where: { $0.id == editedStampID }) {
+            checkAndUnlinkScreenshotsOutsideStamp(
+                stampID: editedStampID,
+                newStart: st.timeStartSeconds,
+                newEnd: st.timeFinishSeconds,
+                lookupLines: timelines
+            )
+        }
+
+        NotificationCenter.default.post(name: .stampCountsChanged, object: nil)
+    }
     
     func updateTimelines() {
         guard let currentBookmark = currentBookmark,
@@ -287,12 +331,18 @@ class TimelineDataManager: ObservableObject {
         updateTimelines()
     }
     
-    private func checkAndUnlinkScreenshotsOutsideStamp(stampID: UUID, newStart: Double, newEnd: Double) {
+    private func checkAndUnlinkScreenshotsOutsideStamp(
+        stampID: UUID,
+        newStart: Double,
+        newEnd: Double,
+        lookupLines: [TimelineLine]? = nil
+    ) {
+        let linesForLookup = lookupLines ?? lines
         let screenshots = ScreenshotsMetadataManager.shared.screenshots
         
         // Find the stamp to get its name
         var stampName: String = "тега"
-        for line in lines {
+        for line in linesForLookup {
             if let stamp = line.stamps.first(where: { $0.id == stampID }) {
                 if let tag = TagLibraryManager.shared.findTagById(stamp.idTag) {
                     stampName = tag.name

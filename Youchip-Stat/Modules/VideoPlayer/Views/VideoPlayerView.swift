@@ -16,6 +16,7 @@ struct VideoPlayerView: View {
     
     @ObservedObject var viewModel: VideoPlayerViewModel
     @ObservedObject var videoManager: VideoPlayerManager
+    @ObservedObject private var markupBanner = VideoMarkupActivityBanner.shared
     
     var body: some View {
         GeometryReader { geometry in
@@ -111,6 +112,19 @@ struct VideoPlayerView: View {
             if videoManager.isLiveMode {
                 liveBroadcastControls
             }
+
+            Toggle(isOn: Binding(
+                get: { markupBanner.isHistoryEnabled },
+                set: { markupBanner.setHistoryEnabled($0) }
+            )) {
+                HStack(spacing: 5) {
+                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                    Text("История")
+                }
+                .font(.system(size: 12, weight: .medium))
+            }
+            .toggleStyle(.switch)
+            .help("Показать или скрыть историю действий на видео")
             
             Spacer()
             
@@ -165,21 +179,33 @@ struct VideoPlayerView: View {
                     videoManager.resumeBroadcast()
                 }
             }) {
-                HStack(spacing: 6) {
-                    Image(systemName: videoManager.isBroadcastActive ? "stop.circle.fill" : "record.circle")
-                        .font(.system(size: 14, weight: .medium))
-                    Text(videoManager.isBroadcastActive ? ^String.Titles.liveStreamStopBroadcast : ^String.Titles.liveStreamContinueBroadcast)
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                Image(systemName: videoManager.isBroadcastActive ? "pause.fill" : "play.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 26)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(videoManager.isBroadcastActive ? Color.red : Color.green)
+                        .fill(videoManager.isBroadcastActive ? Color.orange : Color.green)
                 )
             }
             .buttonStyle(PlainButtonStyle())
+            .help(videoManager.isBroadcastActive ? "Пауза трансляции" : "Продолжить трансляцию")
+            
+            // Stop live session and switch to normal markup mode
+            Button(action: {
+                WindowsManager.shared.stopLiveSessionAndSwitchToMarkupMode()
+            }) {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 26)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.red)
+                    )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("Завершить трансляцию и перейти в обычный режим разметки")
             
             // Duration display
             Text(formatDuration(videoManager.currentTime))
@@ -473,7 +499,7 @@ struct VideoPlayerView: View {
             if viewModel.state.videoScale > 1.0 {
                 joystickView(geometry: geometry)
             }
-            
+
             VideoMarkupActivityOverlay()
                 .zIndex(6)
         }

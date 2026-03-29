@@ -6,18 +6,60 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private enum SportCutBottomPane: Int, CaseIterable {
+    case markup
+    case table
+
+    var title: String {
+        switch self {
+        case .markup: return "Разметка"
+        case .table: return "Таблица"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .markup: return "timeline.selection"
+        case .table: return "tablecells"
+        }
+    }
+}
+
+/// Индексы верхних вкладок источников: `-2` плейлисты, `-1` все проекты, `0..<n` проект.
+private enum SportCutTimelineSourceTab {
+    static let playlists = -2
+    static let allProjects = -1
+}
+
+private enum SportCutTimelineLineSort: String, CaseIterable {
+    case original
+    case nameAsc
+    case nameDesc
+
+    var label: String {
+        switch self {
+        case .original: return "Как в проекте"
+        case .nameAsc: return "Таймлайны А→Я"
+        case .nameDesc: return "Таймлайны Я→А"
+        }
+    }
+}
+
 struct SportCutTimelineView: View {
     let sessionID: UUID
     @ObservedObject var playerManager: SportCutPlayerManager
     @ObservedObject var sessionManager = SportCutSessionManager.shared
     
-    @State private var displayMode: TimelineDisplayMode = .timeline
-    @State private var selectedSourceIndex: Int = -1 // -1 = all tab
+    @State private var bottomPane: SportCutBottomPane = .table
+    @State private var selectedSourceIndex: Int = SportCutTimelineSourceTab.allProjects
+    @State private var previousSelectedSourceIndex: Int = SportCutTimelineSourceTab.allProjects
     @State private var showFilterSheet = false
     @State private var showAddSourceSheet = false
     @StateObject private var filter = TimelineFilter()
     @State private var timelineScale: CGFloat = 1.0
     @GestureState private var magnifyScale: CGFloat = 1.0
+    @State private var lineSort: SportCutTimelineLineSort = .original
+    @State private var selectedSportStampID: UUID?
     
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
@@ -37,23 +79,33 @@ struct SportCutTimelineView: View {
             controlBar
             Divider()
             
-            if displayMode == .timeline {
-                if selectedSourceIndex == -1 {
-                    Text(^String.Titles.sportCutSelectProjectForTimeline)
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.gray.opacity(0.1))
-                } else if let source = currentSource {
-                    timelineContent(source: source)
-                }
-            } else {
-                SportCutTableView(
+            if selectedSourceIndex == SportCutTimelineSourceTab.playlists {
+                SportCutPlaylistsTimelinePane(
                     sessionID: sessionID,
+                    sourceFilter: nil,
                     playerManager: playerManager,
-                    filter: filter,
-                    selectedSourceIndex: selectedSourceIndex
+                    timelineScale: $timelineScale
                 )
+            } else {
+                switch bottomPane {
+                case .markup:
+                    if selectedSourceIndex == SportCutTimelineSourceTab.allProjects {
+                        Text(^String.Titles.sportCutSelectProjectForTimeline)
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color.gray.opacity(0.1))
+                    } else if let source = currentSource {
+                        timelineContent(source: source)
+                    }
+                case .table:
+                    SportCutTableView(
+                        sessionID: sessionID,
+                        playerManager: playerManager,
+                        filter: filter,
+                        selectedSourceIndex: selectedSourceIndex
+                    )
+                }
             }
         }
         .sheet(isPresented: $showFilterSheet) {
@@ -65,6 +117,18 @@ struct SportCutTimelineView: View {
             }
         }
         .background(Color.gray.opacity(0.1))
+        .onChange(of: selectedSourceIndex) { newIdx in
+            let oldIdx = previousSelectedSourceIndex
+            previousSelectedSourceIndex = newIdx
+            if newIdx == SportCutTimelineSourceTab.allProjects {
+                bottomPane = .table
+            } else if newIdx == SportCutTimelineSourceTab.playlists {
+                // Только плейлисты; нижняя панель скрыта
+            } else if (oldIdx == SportCutTimelineSourceTab.allProjects || oldIdx == SportCutTimelineSourceTab.playlists),
+                      newIdx >= 0 {
+                bottomPane = .markup
+            }
+        }
     }
     
     private var controlBar: some View {
@@ -74,10 +138,33 @@ struct SportCutTimelineView: View {
             Spacer()
             
             addAllButton
-            displayModeToggle
+            if selectedSourceIndex != SportCutTimelineSourceTab.playlists {
+                bottomPaneToggle
+            }
             filterButton
             
-            if displayMode == .timeline {
+            if selectedSourceIndex == SportCutTimelineSourceTab.playlists {
+                zoomControls
+            } else if bottomPane == .markup {
+                Menu {
+                    ForEach(SportCutTimelineLineSort.allCases, id: \.self) { mode in
+                        Button(mode.label) { lineSort = mode }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: 10))
+                        Text(lineSort.label)
+                            .font(.system(size: 10, weight: .medium))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(6)
+                }
+                .menuStyle(.borderlessButton)
+
                 zoomControls
             }
         }
@@ -89,15 +176,27 @@ struct SportCutTimelineView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 Button(action: {
-                    selectedSourceIndex = -1
-                    if displayMode == .timeline { displayMode = .table }
+                    selectedSourceIndex = SportCutTimelineSourceTab.allProjects
+                    bottomPane = .table
                 }) {
                     Text(^String.Titles.sportCutAllTab)
                         .font(.system(size: 11, weight: .medium))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(selectedSourceIndex == -1 ? Color.blue : Color.gray.opacity(0.15))
-                        .foregroundColor(selectedSourceIndex == -1 ? .white : .primary)
+                        .background(selectedSourceIndex == SportCutTimelineSourceTab.allProjects ? Color.blue : Color.gray.opacity(0.15))
+                        .foregroundColor(selectedSourceIndex == SportCutTimelineSourceTab.allProjects ? .white : .primary)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button(action: { selectedSourceIndex = SportCutTimelineSourceTab.playlists }) {
+                    Text(^String.Titles.playlists)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(selectedSourceIndex == SportCutTimelineSourceTab.playlists ? Color.blue : Color.gray.opacity(0.15))
+                        .foregroundColor(selectedSourceIndex == SportCutTimelineSourceTab.playlists ? .white : .primary)
                         .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -143,25 +242,26 @@ struct SportCutTimelineView: View {
         .buttonStyle(PlainButtonStyle())
     }
     
-    private var displayModeToggle: some View {
+    private var bottomPaneToggle: some View {
         HStack(spacing: 2) {
-            ForEach(TimelineDisplayMode.allCases, id: \.self) { mode in
+            let modes: [SportCutBottomPane] = selectedSourceIndex == SportCutTimelineSourceTab.allProjects ? [.table] : SportCutBottomPane.allCases
+            ForEach(modes, id: \.rawValue) { pane in
                 Button(action: {
-                    if mode == .timeline && selectedSourceIndex == -1 && sources.count > 0 {
+                    if pane == .markup, selectedSourceIndex == SportCutTimelineSourceTab.allProjects, sources.count > 0 {
                         selectedSourceIndex = 0
                     }
-                    displayMode = mode
+                    bottomPane = pane
                 }) {
                     HStack(spacing: 4) {
-                        Image(systemName: mode.icon)
+                        Image(systemName: pane.icon)
                             .font(.system(size: 10))
-                        Text(mode.localizedName)
+                        Text(pane.title)
                             .font(.system(size: 10, weight: .medium))
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(displayMode == mode ? Color.blue : Color.gray.opacity(0.1))
-                    .foregroundColor(displayMode == mode ? .white : .primary)
+                    .background(bottomPane == pane ? Color.blue : Color.gray.opacity(0.1))
+                    .foregroundColor(bottomPane == pane ? .white : .primary)
                     .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -216,11 +316,22 @@ struct SportCutTimelineView: View {
         .help(^String.Titles.sportCutAddVideoOrProject)
     }
     
+    private func sortedTimelineLines(_ lines: [TimelineLine]) -> [TimelineLine] {
+        switch lineSort {
+        case .original:
+            return lines
+        case .nameAsc:
+            return lines.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .nameDesc:
+            return lines.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedDescending }
+        }
+    }
+
     @ViewBuilder
     private func timelineContent(source: SportCutSource) -> some View {
-        let filteredLines = source.timelines.filter { line in
+        let filteredLines = sortedTimelineLines(source.timelines.filter { line in
             line.stamps.contains { filter.matches(stamp: $0) }
-        }
+        })
         
         ScrollView(.vertical) {
             HStack(spacing: 0) {
@@ -262,7 +373,8 @@ struct SportCutTimelineView: View {
                                     gridWidth: gridWidth,
                                     filter: filter,
                                     playerManager: playerManager,
-                                    sessionID: sessionID
+                                    sessionID: sessionID,
+                                    selectedStampID: $selectedSportStampID
                                 )
                                 .frame(height: 30)
                             }
@@ -302,7 +414,8 @@ struct SportCutTimelineView: View {
         guard !session.playlistGroups.isEmpty else { return }
         
         let sourcesToProcess: [SportCutSource]
-        if selectedSourceIndex == -1 {
+        if selectedSourceIndex == SportCutTimelineSourceTab.allProjects
+            || selectedSourceIndex == SportCutTimelineSourceTab.playlists {
             sourcesToProcess = sources
         } else if let source = currentSource {
             sourcesToProcess = [source]
@@ -342,6 +455,7 @@ struct SportCutTimelineLineView: View {
     @ObservedObject var filter: TimelineFilter
     @ObservedObject var playerManager: SportCutPlayerManager
     let sessionID: UUID
+    @Binding var selectedStampID: UUID?
     
     var body: some View {
         ZStack(alignment: .leading) {
@@ -365,6 +479,10 @@ struct SportCutTimelineLineView: View {
                     color: color,
                     stampX: stampX,
                     stampWidth: stampWidth,
+                    totalDuration: totalDuration,
+                    gridWidth: gridWidth,
+                    isSelected: selectedStampID == stamp.id,
+                    onSelectStamp: { selectedStampID = stamp.id },
                     playerManager: playerManager,
                     sessionID: sessionID
                 )
@@ -375,68 +493,257 @@ struct SportCutTimelineLineView: View {
 }
 
 struct SportCutStampView: View {
+    private enum StampResizeEdge {
+        case left
+        case right
+    }
+
     let stamp: TimelineStamp
     let line: TimelineLine
     let source: SportCutSource
     let color: Color
     let stampX: CGFloat
     let stampWidth: CGFloat
+    let totalDuration: Double
+    let gridWidth: CGFloat
+    let isSelected: Bool
+    let onSelectStamp: () -> Void
     @ObservedObject var playerManager: SportCutPlayerManager
     let sessionID: UUID
     @ObservedObject var sessionManager = SportCutSessionManager.shared
-    
-    @State private var isDragging = false
-    
+
+    @State private var isDraggingExport = false
+    @State private var resizingEdge: StampResizeEdge?
+    @State private var visualOffsetX: CGFloat?
+    @State private var visualWidth: CGFloat?
+    @State private var maxVisualOffsetX: CGFloat?
+    @State private var originalStartTime: Double = 0
+    @State private var originalEndTime: Double = 0
+    @State private var dragInitialOffsetX: CGFloat = 0
+    @State private var dragInitialWidth: CGFloat = 0
+    @State private var lastSeekTime = Date()
+
+    private let minStampWidth: CGFloat = 30
+    private let stampHeight: CGFloat = 25
+    private let seekThrottle: TimeInterval = 0.033
+
+    private var leftX: CGFloat {
+        visualOffsetX ?? stampX
+    }
+
+    private var displayWidth: CGFloat {
+        max(visualWidth ?? stampWidth, minStampWidth)
+    }
+
+    private var centerX: CGFloat {
+        leftX + displayWidth / 2
+    }
+
     private func createEvent() -> SportCutEvent {
         SportCutEvent.from(stamp: stamp, line: line, source: source)
     }
-    
+
+    private func commitResizeCleanup() {
+        resizingEdge = nil
+        visualWidth = nil
+        visualOffsetX = nil
+        maxVisualOffsetX = nil
+        dragInitialOffsetX = 0
+        dragInitialWidth = 0
+    }
+
+    private func throttledPreviewSeek(absoluteVideoTime: Double) {
+        let now = Date()
+        guard now.timeIntervalSince(lastSeekTime) >= seekThrottle else { return }
+        lastSeekTime = now
+        playerManager.seekPreviewDuringResize(
+            absoluteVideoTime: absoluteVideoTime,
+            stampID: stamp.id,
+            sourceID: source.id
+        )
+    }
+
+    private var leftEdgeDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if resizingEdge != .left {
+                    resizingEdge = .left
+                    originalStartTime = stamp.timeStartSeconds
+                    originalEndTime = stamp.timeFinishSeconds
+                    let baseDur = originalEndTime - originalStartTime
+                    dragInitialWidth = max(CGFloat(baseDur / max(totalDuration, 0.001)) * gridWidth, minStampWidth)
+                    dragInitialOffsetX = CGFloat(originalStartTime / max(totalDuration, 0.001)) * gridWidth
+                    maxVisualOffsetX = dragInitialOffsetX + dragInitialWidth - minStampWidth
+                    visualOffsetX = dragInitialOffsetX
+                    visualWidth = dragInitialWidth
+                }
+                let newOffsetX = dragInitialOffsetX + value.translation.width
+                let newWidth = max(dragInitialWidth - value.translation.width, minStampWidth)
+                guard newOffsetX >= 0, newOffsetX <= maxVisualOffsetX ?? 0 else { return }
+                visualOffsetX = newOffsetX
+                visualWidth = newWidth
+                let t = Double(newOffsetX / max(gridWidth, 1)) * totalDuration
+                throttledPreviewSeek(absoluteVideoTime: t)
+            }
+            .onEnded { _ in
+                guard resizingEdge == .left, let ox = visualOffsetX else {
+                    commitResizeCleanup()
+                    return
+                }
+                applyLeftEdgeEnd(finalOffsetX: ox)
+            }
+    }
+
+    private var rightEdgeDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if resizingEdge != .right {
+                    resizingEdge = .right
+                    originalStartTime = stamp.timeStartSeconds
+                    originalEndTime = stamp.timeFinishSeconds
+                    let baseDur = originalEndTime - originalStartTime
+                    dragInitialWidth = max(CGFloat(baseDur / max(totalDuration, 0.001)) * gridWidth, minStampWidth)
+                    dragInitialOffsetX = CGFloat(originalStartTime / max(totalDuration, 0.001)) * gridWidth
+                    visualOffsetX = dragInitialOffsetX
+                    visualWidth = dragInitialWidth
+                }
+                let newWidth = max(dragInitialWidth + value.translation.width, minStampWidth)
+                guard dragInitialOffsetX + newWidth <= gridWidth else { return }
+                visualWidth = newWidth
+                let wPx = visualWidth ?? newWidth
+                let endTime = originalStartTime + Double(wPx / max(gridWidth, 1)) * totalDuration
+                throttledPreviewSeek(absoluteVideoTime: min(endTime, totalDuration))
+            }
+            .onEnded { _ in
+                guard resizingEdge == .right, let w = visualWidth else {
+                    commitResizeCleanup()
+                    return
+                }
+                applyRightEdgeEnd(finalWidth: w)
+            }
+    }
+
+    private func applyRightEdgeEnd(finalWidth: CGFloat) {
+        let ratio = finalWidth / max(gridWidth, 1)
+        let newDuration = max(ratio * totalDuration, 0.5)
+        let newEnd = min(originalStartTime + newDuration, totalDuration)
+        guard var session = sessionManager.sessions.first(where: { $0.id == sessionID }) else {
+            commitResizeCleanup()
+            return
+        }
+        SportCutSessionManager.shared.updateStampTime(
+            in: &session,
+            sourceID: source.id,
+            lineID: line.id,
+            stampID: stamp.id,
+            newStart: nil,
+            newEnd: newEnd
+        )
+        commitResizeCleanup()
+    }
+
+    private func applyLeftEdgeEnd(finalOffsetX: CGFloat) {
+        let startRatio = finalOffsetX / max(gridWidth, 1)
+        var finalStart = max(startRatio * totalDuration, 0)
+        finalStart = min(finalStart, originalEndTime - 0.5)
+        guard var session = sessionManager.sessions.first(where: { $0.id == sessionID }) else {
+            commitResizeCleanup()
+            return
+        }
+        SportCutSessionManager.shared.updateStampTime(
+            in: &session,
+            sourceID: source.id,
+            lineID: line.id,
+            stampID: stamp.id,
+            newStart: finalStart,
+            newEnd: nil
+        )
+        commitResizeCleanup()
+    }
+
+    private var borderColor: Color {
+        isSelected ? Color.blue : Color.clear
+    }
+
     var body: some View {
-        Rectangle()
-            .fill(color.opacity(isDragging ? 0.5 : 0.7))
-            .overlay(
-                Rectangle()
-                    .stroke(color, lineWidth: 1)
-            )
-            .frame(width: max(stampWidth, 2), height: 24)
-            .position(x: stampX + stampWidth / 2, y: 15)
-            .overlay(
-                Text(stamp.label)
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(.white)
-                    .shadow(color: .black, radius: 1)
-                    .lineLimit(1)
-                    .frame(width: max(stampWidth - 4, 0), height: 20)
-                    .position(x: stampX + stampWidth / 2, y: 15)
-            )
-            .onDrag {
-                isDragging = true
-                let event = createEvent()
-                let data = try? JSONEncoder().encode(event)
-                let provider = NSItemProvider()
-                provider.registerDataRepresentation(forTypeIdentifier: "com.youchip.sportcutEvent", visibility: .all) { completion in
-                    DispatchQueue.main.async { isDragging = false }
-                    completion(data, nil)
-                    return nil
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            color.opacity(isDraggingExport ? 0.45 : 0.95),
+                            color.opacity(isDraggingExport ? 0.35 : 0.75)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(height: stampHeight)
+                .shadow(
+                    color: color.opacity(0.35),
+                    radius: isSelected ? 4 : 2,
+                    x: 0,
+                    y: isSelected ? 2 : 1
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(borderColor, lineWidth: isSelected ? 2.5 : 1.5)
+                )
+
+            Text(stamp.label)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundColor(.white)
+                .shadow(color: .black, radius: 1)
+                .lineLimit(1)
+                .frame(width: max(displayWidth - 16, 0))
+                .padding(.horizontal, 4)
+        }
+        .overlay(alignment: .center) {
+            if isSelected {
+                HStack(spacing: 0) {
+                    EdgeResizeHandle(edge: TimelineLineView.ResizeEdge.left, stampHeight: stampHeight)
+                        .frame(width: 8)
+                        .highPriorityGesture(leftEdgeDragGesture)
+                    Spacer(minLength: 0)
+                    EdgeResizeHandle(edge: TimelineLineView.ResizeEdge.right, stampHeight: stampHeight)
+                        .frame(width: 8)
+                        .highPriorityGesture(rightEdgeDragGesture)
                 }
-                provider.registerDataRepresentation(forTypeIdentifier: "public.data", visibility: .all) { completion in
-                    completion(data, nil)
-                    return nil
-                }
-                return provider
+                .frame(width: displayWidth)
             }
-            .onTapGesture {
-                let event = createEvent()
-                playerManager.playEvent(event)
+        }
+        .frame(width: displayWidth, height: stampHeight)
+        .position(x: centerX, y: 15)
+        .onDrag {
+            isDraggingExport = true
+            let event = createEvent()
+            let data = try? JSONEncoder().encode(event)
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(forTypeIdentifier: "com.youchip.sportcutEvent", visibility: .all) { completion in
+                DispatchQueue.main.async { isDraggingExport = false }
+                completion(data, nil)
+                return nil
             }
-            .contextMenu {
-                Button(^String.Titles.sportCutPlayAction) {
-                    playerManager.playEvent(createEvent())
-                }
-                Button(^String.Titles.sportCutAddToPlaylist) {
-                    addToCurrentPlaylist()
-                }
+            provider.registerDataRepresentation(forTypeIdentifier: "public.data", visibility: .all) { completion in
+                completion(data, nil)
+                return nil
             }
+            return provider
+        }
+        .onTapGesture {
+            guard resizingEdge == nil else { return }
+            onSelectStamp()
+            let event = createEvent()
+            playerManager.playEvent(event)
+        }
+        .contextMenu {
+            Button(^String.Titles.sportCutPlayAction) {
+                playerManager.playEvent(createEvent())
+            }
+            Button(^String.Titles.sportCutAddToPlaylist) {
+                addToCurrentPlaylist()
+            }
+        }
     }
     
     private func addToCurrentPlaylist() {
@@ -452,6 +759,261 @@ struct SportCutStampView: View {
             session.playlistGroups[0].playlists[lastIdx].events.append(event)
             sessionManager.updateSession(session)
         }
+    }
+}
+
+// MARK: - Playlists as timelines (вкладка «Плейлисты», тот же каркас, что и разметка)
+
+private struct SportCutPlaylistsTimelinePane: View {
+    let sessionID: UUID
+    /// Если задан — только события этого проекта и ось по его длительности.
+    let sourceFilter: SportCutSource?
+    @ObservedObject var playerManager: SportCutPlayerManager
+    @Binding var timelineScale: CGFloat
+    @GestureState private var magnifyScale: CGFloat = 1.0
+    @State private var selectedEventKey: String?
+    @ObservedObject var sessionManager = SportCutSessionManager.shared
+
+    private var session: SportCutSession? {
+        sessionManager.sessions.first { $0.id == sessionID }
+    }
+
+    private func videoAxisDuration(for source: SportCutSource) -> Double {
+        let d = source.timelines.flatMap(\.stamps).map(\.timeFinishSeconds).max() ?? 1.0
+        return max(1.0, d)
+    }
+
+    /// Общая ось времени: максимум конца ролика среди всех источников сессии (как единая шкала).
+    private func sessionAxisDuration(_ session: SportCutSession) -> Double {
+        if let s = sourceFilter {
+            return videoAxisDuration(for: s)
+        }
+        let ends = session.sources.map { src in
+            src.timelines.flatMap(\.stamps).map(\.timeFinishSeconds).max() ?? 0
+        }
+        return max(ends.max() ?? 0, 1.0)
+    }
+
+    private func visibleEvents(in playlist: SportCutPlaylist) -> [SportCutEvent] {
+        playlist.events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
+    }
+
+    private func resolvedEvents(playlist: SportCutPlaylist, session: SportCutSession) -> [SportCutEvent] {
+        let visible = visibleEvents(in: playlist)
+        if let source = sourceFilter {
+            return visible.filter { $0.sourceID == source.id }.map { session.timelineResolvedEvent(for: $0) }
+        }
+        return visible.map { session.timelineResolvedEvent(for: $0) }
+    }
+
+    var body: some View {
+        Group {
+            if let session = session {
+                if session.playlistGroups.isEmpty {
+                    Text(^String.Titles.sportCutNoPlaylists)
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.gray.opacity(0.1))
+                } else {
+                    let axisDuration = sessionAxisDuration(session)
+                    ScrollView(.vertical) {
+                        HStack(spacing: 0) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Color.clear.frame(width: 180, height: 30)
+
+                                ForEach(session.playlistGroups) { group in
+                                    groupNameRow(group.name)
+                                    if group.playlists.isEmpty {
+                                        emptyGroupHintRow
+                                    } else {
+                                        ForEach(group.playlists) { playlist in
+                                            playlistNameRow(playlist.name)
+                                        }
+                                    }
+                                }
+                            }
+
+                            GeometryReader { geo in
+                                let effectiveScale = timelineScale * magnifyScale
+                                let gridWidth = geo.size.width * max(effectiveScale, 1.0)
+
+                                ScrollView(.horizontal) {
+                                    VStack(spacing: 0) {
+                                        TimelineTimestampsHeaderView(
+                                            duration: axisDuration,
+                                            interval: axisDuration / (20 * effectiveScale),
+                                            width: gridWidth
+                                        )
+                                        .frame(height: 30)
+
+                                        ForEach(session.playlistGroups) { group in
+                                            groupTimelineBand(width: gridWidth)
+                                            if group.playlists.isEmpty {
+                                                emptyPlaylistLine(width: gridWidth)
+                                            } else {
+                                                ForEach(group.playlists) { playlist in
+                                                    SportCutPlaylistTimelineLineView(
+                                                        events: resolvedEvents(playlist: playlist, session: session),
+                                                        totalDuration: axisDuration,
+                                                        gridWidth: gridWidth,
+                                                        playlistID: playlist.id,
+                                                        sessionID: sessionID,
+                                                        playerManager: playerManager,
+                                                        selectedEventKey: $selectedEventKey
+                                                    )
+                                                    .frame(height: 30)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .frame(width: gridWidth)
+                                }
+                            }
+                        }
+                    }
+                    .gesture(
+                        MagnificationGesture()
+                            .updating($magnifyScale) { state, gestureState, _ in
+                                gestureState = max(1.0, state)
+                            }
+                            .onEnded { value in
+                                timelineScale = max(1.0, timelineScale * value)
+                            }
+                    )
+                }
+            }
+        }
+    }
+
+    private func groupNameRow(_ name: String) -> some View {
+        HStack {
+            Text(name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .padding(.horizontal, 6)
+            Spacer()
+        }
+        .frame(width: 180, height: 30)
+        .background(Color.gray.opacity(0.06))
+    }
+
+    private var emptyGroupHintRow: some View {
+        HStack {
+            Text(^String.Titles.sportCutNoPlaylists)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .padding(.horizontal, 6)
+            Spacer()
+        }
+        .frame(width: 180, height: 30)
+    }
+
+    private func playlistNameRow(_ name: String) -> some View {
+        HStack {
+            Text(name)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(2)
+                .padding(.horizontal, 6)
+            Spacer()
+        }
+        .frame(width: 180, height: 30)
+    }
+
+    private func groupTimelineBand(width: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.06))
+                .frame(width: width, height: 30)
+        }
+        .frame(width: width, height: 30)
+    }
+
+    private func emptyPlaylistLine(width: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: width, height: 30)
+        }
+        .frame(width: width, height: 30)
+    }
+}
+
+/// Одна строка таймлайна плейлиста: только события из плейлиста, визу как у `SportCutTimelineLineView`.
+private struct SportCutPlaylistTimelineLineView: View {
+    let events: [SportCutEvent]
+    let totalDuration: Double
+    let gridWidth: CGFloat
+    let playlistID: UUID
+    let sessionID: UUID
+    @ObservedObject var playerManager: SportCutPlayerManager
+    @Binding var selectedEventKey: String?
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: gridWidth, height: 30)
+
+            ForEach(events.indices, id: \.self) { index in
+                let event = events[index]
+                let td = max(totalDuration, 0.001)
+                let startRatio = event.startTime / td
+                let durationRatio = max(event.duration, 0.01) / td
+                let stampWidth = max(durationRatio * gridWidth, 4)
+                let stampX = CGFloat(startRatio) * gridWidth
+
+                SportCutPlaylistEventStripView(
+                    event: event,
+                    color: Color(hex: event.color),
+                    stampX: stampX,
+                    stampWidth: stampWidth,
+                    isSelected: selectedEventKey == event.hiddenKey,
+                    onTap: {
+                        selectedEventKey = event.hiddenKey
+                        playerManager.sessionID = sessionID
+                        playerManager.playPlaylist(events, startIndex: index, playlistID: playlistID)
+                    }
+                )
+            }
+        }
+        .frame(width: gridWidth, height: 30)
+    }
+}
+
+private struct SportCutPlaylistEventStripView: View {
+    let event: SportCutEvent
+    let color: Color
+    let stampX: CGFloat
+    let stampWidth: CGFloat
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    private var displayW: CGFloat {
+        max(stampWidth, 4)
+    }
+
+    var body: some View {
+        ZStack(alignment: .center) {
+            Rectangle()
+                .fill(color.opacity(0.7))
+                .overlay(
+                    Rectangle()
+                        .stroke(isSelected ? Color.white : color, lineWidth: isSelected ? 2 : 1)
+                )
+            Text(event.tagName)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundColor(.white)
+                .shadow(color: .black, radius: 1)
+                .lineLimit(1)
+                .frame(width: max(displayW - 8, 0))
+                .padding(.horizontal, 2)
+        }
+        .frame(width: displayW, height: 24)
+        .position(x: stampX + displayW / 2, y: 15)
+        .onTapGesture(perform: onTap)
     }
 }
 

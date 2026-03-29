@@ -37,13 +37,16 @@ class SportCutSessionManager: ObservableObject {
     }
     
     func updateSession(_ session: SportCutSession) {
-        if let index = sessions.firstIndex(where: { $0.id == session.id }) {
-            sessions[index] = session
-            if currentSession?.id == session.id {
-                currentSession = session
-            }
-            saveSessions()
+        guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { return }
+        // Must replace the whole array: subscript assignment does not reliably
+        // trigger @Published, so SwiftUI would not refresh until full re-entry.
+        var next = sessions
+        next[index] = session
+        sessions = next
+        if currentSession?.id == session.id {
+            currentSession = session
         }
+        saveSessions()
     }
     
     // MARK: - Source management
@@ -136,6 +139,61 @@ class SportCutSessionManager: ObservableObject {
     func removeSource(from session: inout SportCutSession, sourceID: UUID) {
         session.sources.removeAll { $0.id == sourceID }
         updateSession(session)
+    }
+
+    /// Refreshes timelines and tag library snapshot for a markup project source (live markup → SportCut).
+    func syncProjectSource(from file: FilesFile, in session: inout SportCutSession) {
+        guard let idx = session.sources.firstIndex(where: { $0.projectID == file.id }) else { return }
+        let old = session.sources[idx]
+        let tagLibrary = TagLibraryManager.shared
+        session.sources[idx] = SportCutSource(
+            id: old.id,
+            name: file.name,
+            videoBookmark: old.videoBookmark,
+            timelines: file.timelines,
+            isStandaloneVideo: false,
+            projectID: file.id,
+            tags: tagLibrary.allTags,
+            tagGroups: tagLibrary.allTagGroups,
+            labels: tagLibrary.allLabels,
+            labelGroups: tagLibrary.allLabelGroups,
+            timeEvents: tagLibrary.allTimeEvents
+        )
+        updateSession(session)
+    }
+
+    func updateStampTime(in session: inout SportCutSession, sourceID: UUID, lineID: UUID, stampID: UUID, newStart: Double?, newEnd: Double?) {
+        guard let si = session.sources.firstIndex(where: { $0.id == sourceID }),
+              let li = session.sources[si].timelines.firstIndex(where: { $0.id == lineID }),
+              let sti = session.sources[si].timelines[li].stamps.firstIndex(where: { $0.id == stampID }) else { return }
+        var stamp = session.sources[si].timelines[li].stamps[sti]
+        if let newStart {
+            stamp.timeStartSeconds = min(newStart, stamp.timeFinishSeconds - 0.5)
+        }
+        if let newEnd {
+            stamp.timeFinishSeconds = max(newEnd, stamp.timeStartSeconds + 0.5)
+        }
+        session.sources[si].timelines[li].stamps[sti] = stamp
+        let lineID = session.sources[si].timelines[li].id
+        pushTimelinesToMarkupModel(session: session, sourceIndex: si, editedStampID: stamp.id, editedLineID: lineID)
+        updateSession(session)
+    }
+
+    /// Тот же путь хранения, что у `TimelineDataManager.updateTimelines` + немедленная запись на диск.
+    private func pushTimelinesToMarkupModel(
+        session: SportCutSession,
+        sourceIndex: Int,
+        editedStampID: UUID,
+        editedLineID: UUID
+    ) {
+        let source = session.sources[sourceIndex]
+        guard let projectID = source.projectID else { return }
+        TimelineDataManager.shared.persistProjectTimelinesForMarkupModel(
+            source.timelines,
+            videoId: projectID,
+            editedStampID: editedStampID,
+            editedLineID: editedLineID
+        )
     }
     
     // MARK: - Playlist management

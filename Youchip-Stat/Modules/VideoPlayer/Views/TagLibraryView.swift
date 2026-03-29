@@ -1083,7 +1083,7 @@ struct TagLibraryView: View {
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
-                                VideoMarkupActivityBanner.shared.cancelIntervalRecording()
+                                VideoMarkupActivityBanner.shared.cancelIntervalRecording(tagName: tag.name)
                             }
                         }
                     )
@@ -1165,7 +1165,7 @@ struct TagLibraryView: View {
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
-                                VideoMarkupActivityBanner.shared.cancelIntervalRecording()
+                                VideoMarkupActivityBanner.shared.cancelIntervalRecording(tagName: tag.name)
                             }
                         }
                     )

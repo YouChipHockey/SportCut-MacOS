@@ -11,13 +11,15 @@ class MomentViewerWindowController: NSWindowController, NSWindowDelegate {
     
     private let session: MomentViewerSession
     
-    init(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String) {
+    init(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String, lineID: UUID? = nil, stampID: UUID? = nil) {
         let session = MomentViewerSession(
             asset: asset,
             startTime: startTime,
             duration: duration,
             tagName: tagName,
-            lineName: lineName
+            lineName: lineName,
+            lineID: lineID,
+            stampID: stampID
         )
         self.session = session
         

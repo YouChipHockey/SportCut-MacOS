@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
 
 private struct PlaylistOrderDragData: Codable {
@@ -25,6 +26,8 @@ struct SportCutPlaylistsView: View {
     @State private var showDeleteAlert = false
     @State private var playlistToDelete: UUID?
     @State private var trashTargeted = false
+    /// -1 = все источники; иначе индекс в `session.sources` — только события этого проекта в списках и мини-таймлайне.
+    @State private var playlistSourceFilterIndex = -1
     
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
@@ -33,6 +36,13 @@ struct SportCutPlaylistsView: View {
     private var currentGroup: SportCutPlaylistGroup? {
         guard let session = session, selectedGroupIndex < session.playlistGroups.count else { return nil }
         return session.playlistGroups[selectedGroupIndex]
+    }
+
+    private var playlistSourceFilterID: UUID? {
+        guard let session = session,
+              playlistSourceFilterIndex >= 0,
+              playlistSourceFilterIndex < session.sources.count else { return nil }
+        return session.sources[playlistSourceFilterIndex].id
     }
     
     var body: some View {
@@ -72,6 +82,17 @@ struct SportCutPlaylistsView: View {
         HStack {
             Text(^String.Titles.playlists)
                 .font(.system(size: 14, weight: .semibold))
+            if let session = session, session.sources.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        playlistSourceTab(title: ^String.Titles.sportCutAllTab, index: -1)
+                        ForEach(Array(session.sources.enumerated()), id: \.element.id) { index, source in
+                            playlistSourceTab(title: source.name, index: index)
+                        }
+                    }
+                }
+                .frame(maxWidth: 220)
+            }
             Spacer()
             Button(action: { showNewPlaylistSheet = true }) {
                 Image(systemName: "plus")
@@ -91,6 +112,20 @@ struct SportCutPlaylistsView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private func playlistSourceTab(title: String, index: Int) -> some View {
+        Button(action: { playlistSourceFilterIndex = index }) {
+            Text(title)
+                .font(.system(size: 9, weight: .medium))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(playlistSourceFilterIndex == index ? Color.blue : Color.gray.opacity(0.12))
+                .foregroundColor(playlistSourceFilterIndex == index ? .white : .primary)
+                .cornerRadius(5)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Group Selector
@@ -154,6 +189,7 @@ struct SportCutPlaylistsView: View {
                                 playlist: playlist,
                                 sessionID: sessionID,
                                 groupIndex: selectedGroupIndex,
+                                sourceFilterID: playlistSourceFilterID,
                                 canMoveUp: index > 0,
                                 canMoveDown: index < group.playlists.count - 1,
                                 isActive: selectedPlaylistID == playlist.id,
@@ -188,10 +224,6 @@ struct SportCutPlaylistsView: View {
         .onDrop(of: [.data], isTargeted: nil) { providers in
             handleExternalDrop(providers: providers)
             return true
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            selectedPlaylistID = nil
         }
     }
     
@@ -387,6 +419,8 @@ struct SportCutPlaylistCardView: View {
     let playlist: SportCutPlaylist
     let sessionID: UUID
     let groupIndex: Int
+    /// If set, only events from this markup source are listed and shown on the mini timeline.
+    let sourceFilterID: UUID?
     let canMoveUp: Bool
     let canMoveDown: Bool
     let isActive: Bool
@@ -423,15 +457,36 @@ struct SportCutPlaylistCardView: View {
         playerManager.currentPlaylistID == playlist.id && playerManager.currentPlaylistIndex >= 0
     }
 
+    private func passesSourceFilter(_ event: SportCutEvent) -> Bool {
+        guard let fid = sourceFilterID else { return true }
+        return event.sourceID == fid
+    }
+
     private var visibleEvents: [SportCutEvent] {
-        playlist.events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
+        playlist.events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) && passesSourceFilter($0) }
+    }
+
+    /// Full playlist indices + events for rows when a source filter is active.
+    private var displayEventRows: [(index: Int, event: SportCutEvent)] {
+        playlist.events.enumerated().compactMap { i, e in
+            guard passesSourceFilter(e) else { return nil }
+            return (i, e)
+        }
+    }
+
+    private var miniTimelineEvents: [SportCutEvent] {
+        playlist.events.filter { passesSourceFilter($0) }
+    }
+
+    private var miniTimelineTotalDuration: Double {
+        miniTimelineEvents.reduce(0) { $0 + $1.duration }
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             cardHeader
             
-            if !playlist.events.isEmpty {
+            if !miniTimelineEvents.isEmpty {
                 miniTimeline
             }
             
@@ -443,11 +498,6 @@ struct SportCutPlaylistCardView: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(cardBG))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(cardBorder, lineWidth: cardDropTargeted ? 2 : 1))
         .opacity(playlist.isHidden ? 0.4 : 1.0)
-        .contentShape(Rectangle())
-        .gesture(
-            TapGesture().onEnded { onSelect() },
-            including: .gesture
-        )
         .contextMenu { cardContextMenu }
         .onDrag {
             let data = try! JSONEncoder().encode(PlaylistOrderDragData(playlistID: playlist.id))
@@ -484,6 +534,8 @@ struct SportCutPlaylistCardView: View {
             Text(playlist.name)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
+                .contentShape(Rectangle())
+                .onTapGesture { onSelect() }
             
             Spacer()
             
@@ -522,13 +574,13 @@ struct SportCutPlaylistCardView: View {
     
     private var miniTimeline: some View {
         GeometryReader { geo in
-            let totalDuration = playlist.totalDuration
+            let totalDuration = max(miniTimelineTotalDuration, 0.01)
             let w = geo.size.width
             
             ZStack(alignment: .leading) {
                 HStack(spacing: 1) {
-                    ForEach(Array(playlist.events.enumerated()), id: \.element.id) { index, event in
-                        let ratio = totalDuration > 0 ? event.duration / totalDuration : 1.0 / Double(playlist.events.count)
+                    ForEach(Array(miniTimelineEvents.enumerated()), id: \.1.hiddenKey) { _, event in
+                        let ratio = totalDuration > 0 ? event.duration / totalDuration : 1.0 / Double(max(miniTimelineEvents.count, 1))
                         let segW = max(w * ratio, 4)
                         let isCurrent = playerManager.currentPlaylistID == playlist.id && playerManager.currentEvent == event
                         let isHidden = playlist.hiddenEventKeys.contains(event.hiddenKey)
@@ -546,7 +598,7 @@ struct SportCutPlaylistCardView: View {
                     }
                 }
 
-                drawingMarkers(totalWidth: w, totalDuration: totalDuration)
+                drawingMarkers(totalWidth: w, totalDuration: miniTimelineTotalDuration)
             }
         }
         .frame(height: 14)
@@ -587,7 +639,9 @@ struct SportCutPlaylistCardView: View {
     
     private var eventList: some View {
         VStack(spacing: 2) {
-            ForEach(Array(playlist.events.enumerated()), id: \.element.id) { index, event in
+            ForEach(displayEventRows, id: \.event.hiddenKey) { row in
+                let index = row.index
+                let event = row.event
                 let isCurrent = playerManager.currentPlaylistID == playlist.id && playerManager.currentEvent == event
                 let isDropTarget = dragOverIndex == index
                 let isHidden = playlist.hiddenEventKeys.contains(event.hiddenKey)
@@ -940,6 +994,7 @@ struct SportCutEventCommentSheet: View {
     let onCancel: () -> Void
 
     @State private var text: String = ""
+    @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -972,6 +1027,20 @@ struct SportCutEventCommentSheet: View {
         .frame(width: 380, height: 230)
         .onAppear {
             text = initialComment
+            HotKeyManager.shared.isEnabled = false
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                guard event.keyCode == 36 else { return event }
+                if event.modifierFlags.contains(.shift) { return event }
+                onSave(text)
+                return nil
+            }
+        }
+        .onDisappear {
+            HotKeyManager.shared.isEnabled = true
+            if let keyMonitor {
+                NSEvent.removeMonitor(keyMonitor)
+            }
+            keyMonitor = nil
         }
     }
 }
