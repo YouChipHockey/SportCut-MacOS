@@ -819,6 +819,8 @@ class WindowsManager: NSObject {
         lineID: UUID? = nil,
         stampID: UUID? = nil
     ) {
+        VideoPlayerManager.shared.player?.pause()
+
         let clipStart = max(0, stampStart)
         let clipDuration = max(stampDuration, 0.5)
         
@@ -860,6 +862,8 @@ class WindowsManager: NSObject {
     }
     
     func showViewerWindow() {
+        VideoPlayerManager.shared.player?.pause()
+
         viewerWindow = nil
         viewerWindow?.close()
         
@@ -885,6 +889,8 @@ class WindowsManager: NSObject {
 
     /// Creates a new viewing session with the current markup project (previous behavior).
     func showSportCutNewSessionFromMarkup() {
+        VideoPlayerManager.shared.player?.pause()
+
         guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else {
             return
         }
@@ -909,6 +915,8 @@ class WindowsManager: NSObject {
     }
 
     func openSportCutSessionFromMarkup(existingSessionID: UUID) {
+        VideoPlayerManager.shared.player?.pause()
+
         guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }),
               var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == existingSessionID }) else { return }
         SportCutSessionManager.shared.syncProjectSource(from: filesFile, in: &session)
@@ -920,6 +928,8 @@ class WindowsManager: NSObject {
     }
 
     func openSportCutFromTimelineStamps(_ pairs: [(TimelineLine, TimelineStamp)]) {
+        VideoPlayerManager.shared.player?.pause()
+
         guard !pairs.isEmpty else { return }
         guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else { return }
         let pid = filesFile.id

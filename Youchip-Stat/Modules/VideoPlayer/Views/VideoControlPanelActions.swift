@@ -124,7 +124,6 @@ private struct SpeedMenu: View {
             HStack(spacing: 4) {
                 Image(systemName: "speedometer").font(.system(size: 12, weight: .medium))
                 Text("x\(String(format: "%.2f", playbackSpeed))").font(.system(size: 10, weight: .medium))
-                Image(systemName: "chevron.down").font(.system(size: 8))
             }
             .foregroundColor(.orange)
         }

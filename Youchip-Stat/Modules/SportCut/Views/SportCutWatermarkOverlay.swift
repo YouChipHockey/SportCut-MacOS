@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-/// First row: tag (caps) + label chips + time-event chips. Second row: playlist comment. Draggable.
+/// Styled overlay for current playlist event. Draggable with persisted offset.
 struct SportCutWatermarkOverlay: View {
     @ObservedObject var playerManager: SportCutPlayerManager
     @ObservedObject private var sessionManager = SportCutSessionManager.shared
@@ -54,74 +54,83 @@ struct SportCutWatermarkOverlay: View {
     var body: some View {
         if !hasLine1 && !hasLine2 { EmptyView() }
         else {
-            let base = playerManager.watermarkDragOffset
-            let drag = dragTranslation
-            VStack(spacing: 6) {
-                if hasLine1, let event = playerManager.currentEvent {
-                    eventRow(event: event)
+            GeometryReader { geo in
+                let base = playerManager.watermarkDragOffset
+                let drag = dragTranslation
+
+                VStack(alignment: .leading, spacing: 6) {
+                    if hasLine1, let event = playerManager.currentEvent {
+                        eventRow(event: event)
+                    }
+                    if hasLine2, let comment = commentText {
+                        Text(comment)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                if hasLine2, let comment = commentText {
-                    Text(comment)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: 420, alignment: .leading)
-                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.58))
+                .cornerRadius(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .offset(x: base.width + drag.width, y: base.height + drag.height)
+                .gesture(
+                    DragGesture()
+                        .updating($dragTranslation) { value, state, _ in
+                            state = value.translation
+                        }
+                        .onEnded { value in
+                            playerManager.commitWatermarkDrag(delta: value.translation)
+                        }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .padding(.leading, 16)
+                .padding(.bottom, 78)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.black.opacity(0.58))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-            )
-            .offset(x: base.width + drag.width, y: base.height + drag.height)
-            .gesture(
-                DragGesture()
-                    .updating($dragTranslation) { value, state, _ in
-                        state = value.translation
-                    }
-                    .onEnded { value in
-                        playerManager.commitWatermarkDrag(delta: value.translation)
-                    }
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.top, 16)
-            .padding(.leading, 16)
         }
     }
 
     @ViewBuilder
     private func eventRow(event: SportCutEvent) -> some View {
-        let baseColor = Color(hex: event.color)
+        let labelsText = labelModels.map(\.name).joined(separator: ", ")
+        let timeEventsText = timeEventModels.map(\.name).joined(separator: ", ")
+
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(event.tagName.uppercased())
-                    .font(.system(size: 11, weight: .heavy))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .shadow(color: .black.opacity(0.45), radius: 1, x: 0, y: 1)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.green)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let group = event.tagGroupName, !group.isEmpty {
-                    Text(group.uppercased())
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white.opacity(0.75))
+                    Text("\(group.uppercased()):")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
                         .lineLimit(1)
                 }
             }
-            if !labelModels.isEmpty || !timeEventModels.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(labelModels, id: \.id) { label in
-                            LabelChip(label: label, baseColor: baseColor, fontSize: 9)
-                        }
-                        ForEach(timeEventModels, id: \.id) { te in
-                            TimeEventChip(event: te, fontSize: 9)
-                        }
-                    }
-                }
+
+            if !timeEventsText.isEmpty {
+                Text(timeEventsText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.orange)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !labelsText.isEmpty {
+                Text(labelsText)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(.white)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: 420, alignment: .leading)
     }
 }

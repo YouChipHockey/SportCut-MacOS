@@ -15,6 +15,14 @@ struct SportCutMainView: View {
     @State private var showPlaylistPanel = true
     @State private var showTimelinePanel = true
     @State private var leftPanelWidth: CGFloat = 300
+    @State private var topAreaHeightRatio: CGFloat = 0.55
+    @State private var dragStartLeftPanelWidth: CGFloat?
+    @State private var dragStartTopAreaHeightRatio: CGFloat?
+
+    private let minLeftPanelWidth: CGFloat = 250
+    private let maxLeftPanelWidth: CGFloat = 700
+    private let minTopAreaHeight: CGFloat = 240
+    private let minBottomAreaHeight: CGFloat = 180
     
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
@@ -23,6 +31,11 @@ struct SportCutMainView: View {
     var body: some View {
         GeometryReader { geometry in
             if let session = session {
+                let availableHeight = geometry.size.height
+                let currentTopHeight = showTimelinePanel
+                    ? max(minTopAreaHeight, min(availableHeight - minBottomAreaHeight, availableHeight * topAreaHeightRatio))
+                    : availableHeight
+
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
                         if showPlaylistPanel {
@@ -30,10 +43,9 @@ struct SportCutMainView: View {
                                 sessionID: sessionID,
                                 playerManager: playerManager
                             )
-                            .frame(width: max(leftPanelWidth, 250))
+                            .frame(width: leftPanelWidth)
                             
-                            Divider()
-                                .frame(width: 1)
+                            resizeHandle(.vertical, totalHeight: availableHeight)
                         }
                         
                         SportCutVideoPlayerView(
@@ -43,18 +55,16 @@ struct SportCutMainView: View {
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(height: showTimelinePanel ? geometry.size.height * 0.55 : geometry.size.height)
+                    .frame(height: currentTopHeight)
                     
                     if showTimelinePanel {
-                        Divider()
-                            .frame(height: 1)
-                            .background(Color.gray.opacity(0.3))
+                        resizeHandle(.horizontal, totalHeight: availableHeight)
                         
                         SportCutTimelineView(
                             sessionID: sessionID,
                             playerManager: playerManager
                         )
-                        .frame(height: geometry.size.height * 0.45)
+                        .frame(maxHeight: .infinity)
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .sportCutTogglePlayPause)) { _ in
@@ -102,6 +112,86 @@ struct SportCutMainView: View {
             }
         }
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    private enum ResizeAxis {
+        case vertical
+        case horizontal
+    }
+
+    @ViewBuilder
+    private func resizeHandle(_ axis: ResizeAxis, totalHeight: CGFloat) -> some View {
+        switch axis {
+        case .vertical:
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(width: 5)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let start = dragStartLeftPanelWidth ?? leftPanelWidth
+                            if dragStartLeftPanelWidth == nil {
+                                dragStartLeftPanelWidth = leftPanelWidth
+                            }
+                            let next = start + value.translation.width
+                            let clamped = min(max(next, minLeftPanelWidth), maxLeftPanelWidth)
+                            updateWithoutAnimation {
+                                leftPanelWidth = clamped
+                            }
+                        }
+                        .onEnded { _ in
+                            dragStartLeftPanelWidth = nil
+                        }
+                )
+                .onHover { isHovering in
+                    if isHovering {
+                        NSCursor.resizeLeftRight.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+        case .horizontal:
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(height: 5)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            guard totalHeight > 0 else { return }
+                            if dragStartTopAreaHeightRatio == nil {
+                                dragStartTopAreaHeightRatio = topAreaHeightRatio
+                            }
+                            let startRatio = dragStartTopAreaHeightRatio ?? topAreaHeightRatio
+                            let topHeight = max(
+                                minTopAreaHeight,
+                                min(totalHeight - minBottomAreaHeight, (totalHeight * startRatio) + value.translation.height)
+                            )
+                            updateWithoutAnimation {
+                                topAreaHeightRatio = topHeight / totalHeight
+                            }
+                        }
+                        .onEnded { _ in
+                            dragStartTopAreaHeightRatio = nil
+                        }
+                )
+                .onHover { isHovering in
+                    if isHovering {
+                        NSCursor.resizeUpDown.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+        }
+    }
+
+    private func updateWithoutAnimation(_ block: () -> Void) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            block()
+        }
     }
 
     private static func isSportCutTextInputActive() -> Bool {

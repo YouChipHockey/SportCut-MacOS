@@ -125,6 +125,7 @@ struct FullControlView: View {
         case nameDesc
         case tagCountDesc
         case tagCountAsc
+        case lastTagChronological
     }
     
     @State private var timelineLineSortMode: TimelineLineSortMode = .original
@@ -252,6 +253,9 @@ struct FullControlView: View {
         HStack(spacing: 10) {
             Text("Выбрано тегов: \(timelineData.stampsSelectedForSportCut.count)")
                 .font(.system(size: 11, weight: .semibold))
+            Text("Суммарная длина: \(formatTotalSelectedTagsDuration())")
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.secondary)
             Button("Открыть в режиме просмотра") {
                 WindowsManager.shared.openSportCutFromSelectedStamps()
             }
@@ -273,6 +277,7 @@ struct FullControlView: View {
         .cornerRadius(8)
         .padding(.horizontal, 10)
         .padding(.top, 6)
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
@@ -466,7 +471,12 @@ struct FullControlView: View {
                                     )
                                     .onTapGesture {
                                         withAnimation(.easeInOut(duration: 0.2)) {
-                                            timelineData.selectLine(line.id)
+                                            let commandDown = NSApp.currentEvent?.modifierFlags.contains(.command) ?? false
+                                            if commandDown {
+                                                timelineData.selectAllSportCutExportStamps(in: line.id)
+                                            } else {
+                                                timelineData.selectLine(line.id)
+                                            }
                                         }
                                     }
                             }
@@ -558,7 +568,12 @@ struct FullControlView: View {
                                     )
                                     .onTapGesture {
                                         withAnimation(.easeInOut(duration: 0.2)) {
-                                            timelineData.selectLine(line.id)
+                                            let commandDown = NSApp.currentEvent?.modifierFlags.contains(.command) ?? false
+                                            if commandDown {
+                                                timelineData.selectAllSportCutExportStamps(in: line.id)
+                                            } else {
+                                                timelineData.selectLine(line.id)
+                                            }
                                         }
                                     }
                             }
@@ -1130,13 +1145,7 @@ struct FullControlView: View {
     }
 
     private var stampHoverInlineInfo: String? {
-        guard let stampInfo = hoveredStampInfo else { return nil }
-        let lines = stampInfo
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        guard !lines.isEmpty else { return nil }
-        return lines.joined(separator: "   •   ")
+        hoveredStampInfo
     }
     
     @ViewBuilder
@@ -1161,38 +1170,44 @@ struct FullControlView: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .minimumScaleFactor(0.7)
+                .allowsTightening(true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 2)
                 .opacity(stampHoverInlineInfo == nil ? 0 : 1)
 
-            timelineToolsIconButton(systemImage: "map", helpText: ^String.Titles.map) {
-                WindowsManager.shared.showFieldMapVisualizationPicker()
-            }
-            Menu {
-                Button("Новая сессия просмотра") {
-                    WindowsManager.shared.showSportCutNewSessionFromMarkup()
+            Spacer(minLength: 8)
+
+            HStack(spacing: 6) {
+                timelineToolsIconButton(systemImage: "map", helpText: ^String.Titles.map) {
+                    WindowsManager.shared.showFieldMapVisualizationPicker()
                 }
-                let existing = WindowsManager.shared.sportCutSessionsForCurrentMarkupProject()
-                if !existing.isEmpty {
-                    Divider()
-                    ForEach(existing, id: \.id) { sess in
-                        Button(sess.name) {
-                            WindowsManager.shared.openSportCutSessionFromMarkup(existingSessionID: sess.id)
+                Menu {
+                    Button("Новая сессия просмотра") {
+                        WindowsManager.shared.showSportCutNewSessionFromMarkup()
+                    }
+                    let existing = WindowsManager.shared.sportCutSessionsForCurrentMarkupProject()
+                    if !existing.isEmpty {
+                        Divider()
+                        ForEach(existing, id: \.id) { sess in
+                            Button(sess.name) {
+                                WindowsManager.shared.openSportCutSessionFromMarkup(existingSessionID: sess.id)
+                            }
                         }
                     }
+                } label: {
+                    Image(systemName: "play.rectangle.on.rectangle")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.primary)
+                        .frame(width: 28, height: 28)
                 }
-            } label: {
-                Image(systemName: "play.rectangle.on.rectangle")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.primary)
-                    .padding(6)
-                    .background(Color.gray.opacity(0.12))
-                    .cornerRadius(6)
-            }
-            .menuStyle(.borderlessButton)
-            .help(^String.Titles.view)
-            timelineToolsIconButton(systemImage: "photo.on.rectangle.angled", helpText: ^String.Titles.screenshots) {
-                WindowsManager.shared.showScreenshots()
+                .buttonStyle(.plain)
+                .menuStyle(.borderlessButton)
+                .help(^String.Titles.view)
+
+                timelineToolsIconButton(systemImage: "photo.on.rectangle.angled", helpText: ^String.Titles.screenshots) {
+                    WindowsManager.shared.showScreenshots()
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1220,6 +1235,12 @@ struct FullControlView: View {
             }
             Button("По количеству тегов (меньше → больше)") {
                 applyTimelineSort(mode: .tagCountAsc)
+            }
+            
+            Divider()
+            
+            Button("По дате добавления (хронологически)") {
+                applyTimelineSort(mode: .lastTagChronological)
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
@@ -1275,12 +1296,38 @@ struct FullControlView: View {
                 if c0 != c1 { return c0 < c1 }
                 return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
+        case .lastTagChronological:
+            timelineData.lines.sort {
+                let t0 = lastTagMoment(for: $0)
+                let t1 = lastTagMoment(for: $1)
+                
+                if t0 != t1 { return t0 < t1 }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
         }
 
         // Drawings timeline always stays at the top
         let drawings = timelineData.lines.filter { $0.isDrawingsTimeline }
         let rest = timelineData.lines.filter { !$0.isDrawingsTimeline }
         timelineData.lines = drawings + rest
+    }
+    
+    /// Proxy for "date added": the finish time of the most recently marked tag in the line.
+    private func lastTagMoment(for line: TimelineLine) -> Double {
+        line.stamps.map(\.timeFinishSeconds).max() ?? .greatestFiniteMagnitude
+    }
+    
+    private func formatTotalSelectedTagsDuration() -> String {
+        let selectedIDs = timelineData.stampsSelectedForSportCut
+        let totalSeconds = timelineData.lines
+            .flatMap(\.stamps)
+            .filter { selectedIDs.contains($0.id) }
+            .reduce(0.0) { $0 + max(0.0, $1.duration) }
+        
+        let minutes = Int(totalSeconds) / 60
+        let seconds = Int(totalSeconds) % 60
+        let milliseconds = Int((totalSeconds.truncatingRemainder(dividingBy: 1.0)) * 1000)
+        return String(format: "%02d:%02d.%03d", minutes, seconds, milliseconds)
     }
     
     var body: some View {
@@ -2122,20 +2169,43 @@ struct TimelineMouseTracker: NSViewRepresentable {
                 let tag = tagLibrary.findTagById(stamp.idTag)
                 let tagName = tag?.name ?? stamp.label
                 
+                var sameTagCounter = 0
+                var currentTagOrdinal = 1
+                outerLoop: for timelineLine in lines {
+                    for candidate in timelineLine.stamps {
+                        if candidate.idTag == stamp.idTag {
+                            sameTagCounter += 1
+                        }
+                        if candidate.id == stamp.id {
+                            currentTagOrdinal = max(1, sameTagCounter)
+                            break outerLoop
+                        }
+                    }
+                }
+
+                var infoParts: [String] = []
+                infoParts.append("\(tagName)_\(currentTagOrdinal)")
+
+                let eventNames = stamp.timeEvents.compactMap { eventID in
+                    tagLibrary.allTimeEvents.first(where: { $0.id == eventID })?.name
+                }
+                if !eventNames.isEmpty {
+                    infoParts.append(eventNames.joined(separator: ", "))
+                }
                 let labelNames = stamp.labelIDs.compactMap { labelID in
                     tagLibrary.findLabelById(labelID)?.name
                 }
-                let labelsString = labelNames.isEmpty ? "—" : labelNames.joined(separator: ", ")
+                if !labelNames.isEmpty {
+                    infoParts.append(labelNames.joined(separator: ", "))
+                }
+                if let comment = stamp.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !comment.isEmpty {
+                    infoParts.append(comment)
+                }
                 
-                let startTime = formatTimeStringCompact(stamp.timeStartSeconds)
                 let durationTime = formatTimeStringCompact(stamp.duration)
+                infoParts.append(durationTime)
                 
-                let info = """
-                \(tagName)
-                \(line.name)
-                \(labelsString)
-                \(startTime) • \(durationTime)
-                """
+                let info = infoParts.joined(separator: " - ")
                 
                 onStampUpdate?(info, nil)
             } else {

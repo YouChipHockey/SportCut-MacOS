@@ -13,6 +13,8 @@ struct SportCutVideoPlayerView: View {
     @Binding var showTimelinePanel: Bool
     @State private var isFullscreen = false
     @State private var savedWindowFrameBeforeEditor: NSRect?
+    @State private var savedShowPlaylistPanelBeforeEditor: Bool?
+    @State private var savedShowTimelinePanelBeforeEditor: Bool?
 
     private var hasDrawings: Bool {
         !playerManager.currentEventDrawings().isEmpty
@@ -345,10 +347,23 @@ struct SportCutVideoPlayerView: View {
     private func handleEditorFullscreenChange(isEditor: Bool) {
         guard let window = NSApp.keyWindow else { return }
         if isEditor {
+            savedShowPlaylistPanelBeforeEditor = showPlaylistPanel
+            savedShowTimelinePanelBeforeEditor = showTimelinePanel
+            showPlaylistPanel = false
+            showTimelinePanel = false
+
             savedWindowFrameBeforeEditor = window.frame
             let target = NSScreen.main?.visibleFrame ?? window.frame
             window.setFrame(target, display: true, animate: true)
         } else if let frame = savedWindowFrameBeforeEditor {
+            if let savedShowPlaylistPanelBeforeEditor {
+                showPlaylistPanel = savedShowPlaylistPanelBeforeEditor
+            }
+            if let savedShowTimelinePanelBeforeEditor {
+                showTimelinePanel = savedShowTimelinePanelBeforeEditor
+            }
+            self.savedShowPlaylistPanelBeforeEditor = nil
+            self.savedShowTimelinePanelBeforeEditor = nil
             window.setFrame(frame, display: true, animate: true)
             savedWindowFrameBeforeEditor = nil
         }

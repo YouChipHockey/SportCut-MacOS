@@ -196,7 +196,9 @@ struct SportCutPlaylistsView: View {
                                 isCurrentlyPlaying: playerManager.playlistPlaybackActive && playerManager.currentPlaylistID == playlist.id && playerManager.isPlaying,
                                 playerManager: playerManager,
                                 onSelect: {
-                                    selectedPlaylistID = (selectedPlaylistID == playlist.id) ? nil : playlist.id
+                                    let nextID = (selectedPlaylistID == playlist.id) ? nil : playlist.id
+                                    selectedPlaylistID = nextID
+                                    playerManager.currentPlaylistID = nextID
                                 },
                                 onPlay: { playPlaylist(playlist) },
                                 onDuplicate: { duplicatePlaylist(playlist) },
@@ -256,21 +258,12 @@ struct SportCutPlaylistsView: View {
     
     private func playPlaylist(_ playlist: SportCutPlaylist) {
         selectedPlaylistID = playlist.id
+        playerManager.currentPlaylistID = playlist.id
         playerManager.sessionID = sessionID
         let visible = visibleEvents(in: playlist)
-        
-        let isCurrentPlaylist = playerManager.playlistPlaybackActive && playerManager.currentPlaylistID == playlist.id
-        if isCurrentPlaylist {
-            if playerManager.isPlaying {
-                playerManager.pause()
-            } else {
-                playerManager.play()
-            }
-            return
-        }
-        
         guard !visible.isEmpty else { return }
-        playerManager.playPlaylist(visible, playlistID: playlist.id)
+        // Header play always starts a full playlist film from the first clip.
+        playerManager.playPlaylist(visible, startIndex: 0, playlistID: playlist.id)
     }
     
     private func duplicatePlaylist(_ playlist: SportCutPlaylist) {

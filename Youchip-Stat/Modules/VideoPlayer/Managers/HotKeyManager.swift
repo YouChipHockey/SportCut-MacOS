@@ -161,8 +161,7 @@ class HotKeyManager: ObservableObject {
             if event.keyCode == 49,
                WindowsManager.shared.isSportCutKeyWindow(),
                self.isEnabled,
-               !self.blockedSheetActive,
-               !FocusStateManager.shared.isAnyTextFieldFocused {
+               !self.blockedSheetActive {
                 NotificationCenter.default.post(name: .sportCutTogglePlayPause, object: nil)
                 return nil
             }

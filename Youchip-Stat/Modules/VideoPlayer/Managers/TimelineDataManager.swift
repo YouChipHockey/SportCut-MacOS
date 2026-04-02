@@ -57,6 +57,12 @@ class TimelineDataManager: ObservableObject {
     func clearSportCutExportSelection() {
         stampsSelectedForSportCut.removeAll()
     }
+    
+    func selectAllSportCutExportStamps(in lineID: UUID) {
+        guard let line = lines.first(where: { $0.id == lineID }) else { return }
+        let stampIDs = line.stamps.map(\.id)
+        stampsSelectedForSportCut.formUnion(stampIDs)
+    }
     func removeStamp(lineID: UUID, stampID: UUID) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
         

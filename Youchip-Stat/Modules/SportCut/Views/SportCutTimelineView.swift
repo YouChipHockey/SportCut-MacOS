@@ -83,6 +83,7 @@ struct SportCutTimelineView: View {
                 SportCutPlaylistsTimelinePane(
                     sessionID: sessionID,
                     sourceFilter: nil,
+                    selectedPlaylistID: playerManager.currentPlaylistID,
                     playerManager: playerManager,
                     timelineScale: $timelineScale
                 )
@@ -698,20 +699,6 @@ struct SportCutStampView: View {
                 .frame(width: max(displayWidth - 16, 0))
                 .padding(.horizontal, 4)
         }
-        .overlay(alignment: .center) {
-            if isSelected {
-                HStack(spacing: 0) {
-                    EdgeResizeHandle(edge: TimelineLineView.ResizeEdge.left, stampHeight: stampHeight)
-                        .frame(width: 8)
-                        .highPriorityGesture(leftEdgeDragGesture)
-                    Spacer(minLength: 0)
-                    EdgeResizeHandle(edge: TimelineLineView.ResizeEdge.right, stampHeight: stampHeight)
-                        .frame(width: 8)
-                        .highPriorityGesture(rightEdgeDragGesture)
-                }
-                .frame(width: displayWidth)
-            }
-        }
         .frame(width: displayWidth, height: stampHeight)
         .position(x: centerX, y: 15)
         .onDrag {
@@ -731,7 +718,6 @@ struct SportCutStampView: View {
             return provider
         }
         .onTapGesture {
-            guard resizingEdge == nil else { return }
             onSelectStamp()
             let event = createEvent()
             playerManager.playEvent(event)
@@ -764,10 +750,21 @@ struct SportCutStampView: View {
 
 // MARK: - Playlists as timelines (вкладка «Плейлисты», тот же каркас, что и разметка)
 
+private struct SportCutPlaylistEventRow: Identifiable {
+    let id: String
+    let rowName: String
+    let event: SportCutEvent
+    let playlistID: UUID
+    let playlistEvents: [SportCutEvent]
+    let startIndex: Int
+}
+
 private struct SportCutPlaylistsTimelinePane: View {
     let sessionID: UUID
     /// Если задан — только события этого проекта и ось по его длительности.
     let sourceFilter: SportCutSource?
+    /// Показываем разметку только этого плейлиста.
+    let selectedPlaylistID: UUID?
     @ObservedObject var playerManager: SportCutPlayerManager
     @Binding var timelineScale: CGFloat
     @GestureState private var magnifyScale: CGFloat = 1.0
@@ -806,6 +803,39 @@ private struct SportCutPlaylistsTimelinePane: View {
         return visible.map { session.timelineResolvedEvent(for: $0) }
     }
 
+    private func displayName(for event: SportCutEvent, nameUsage: inout [String: Int]) -> String {
+        let base = event.tagName.isEmpty ? event.lineName : event.tagName
+        let count = (nameUsage[base] ?? 0) + 1
+        nameUsage[base] = count
+        return count == 1 ? base : "\(base)_\(count)"
+    }
+
+    private func playlistRows(for session: SportCutSession) -> [SportCutPlaylistEventRow] {
+        var rows: [SportCutPlaylistEventRow] = []
+        var nameUsage: [String: Int] = [:]
+
+        for group in session.playlistGroups {
+            for playlist in group.playlists {
+                if let selectedPlaylistID, playlist.id != selectedPlaylistID { continue }
+                let events = resolvedEvents(playlist: playlist, session: session)
+                guard !events.isEmpty else { continue }
+                for (index, event) in events.enumerated() {
+                    rows.append(
+                        SportCutPlaylistEventRow(
+                            id: event.hiddenKey,
+                            rowName: displayName(for: event, nameUsage: &nameUsage),
+                            event: event,
+                            playlistID: playlist.id,
+                            playlistEvents: events,
+                            startIndex: index
+                        )
+                    )
+                }
+            }
+        }
+        return rows
+    }
+
     var body: some View {
         Group {
             if let session = session {
@@ -817,101 +847,68 @@ private struct SportCutPlaylistsTimelinePane: View {
                         .background(Color.gray.opacity(0.1))
                 } else {
                     let axisDuration = sessionAxisDuration(session)
-                    ScrollView(.vertical) {
-                        HStack(spacing: 0) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                Color.clear.frame(width: 180, height: 30)
-
-                                ForEach(session.playlistGroups) { group in
-                                    groupNameRow(group.name)
-                                    if group.playlists.isEmpty {
-                                        emptyGroupHintRow
-                                    } else {
-                                        ForEach(group.playlists) { playlist in
-                                            playlistNameRow(playlist.name)
-                                        }
+                    let rows = playlistRows(for: session)
+                    if selectedPlaylistID == nil {
+                        Text("Выберите плейлист слева")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color.gray.opacity(0.1))
+                    } else {
+                        ScrollView(.vertical) {
+                            HStack(spacing: 0) {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Color.clear.frame(width: 180, height: 30)
+                                    ForEach(rows) { row in
+                                        eventNameRow(row.rowName)
                                     }
                                 }
-                            }
 
-                            GeometryReader { geo in
-                                let effectiveScale = timelineScale * magnifyScale
-                                let gridWidth = geo.size.width * max(effectiveScale, 1.0)
+                                GeometryReader { geo in
+                                    let effectiveScale = timelineScale * magnifyScale
+                                    let gridWidth = geo.size.width * max(effectiveScale, 1.0)
 
-                                ScrollView(.horizontal) {
-                                    VStack(spacing: 0) {
-                                        TimelineTimestampsHeaderView(
-                                            duration: axisDuration,
-                                            interval: axisDuration / (20 * effectiveScale),
-                                            width: gridWidth
-                                        )
-                                        .frame(height: 30)
-
-                                        ForEach(session.playlistGroups) { group in
-                                            groupTimelineBand(width: gridWidth)
-                                            if group.playlists.isEmpty {
-                                                emptyPlaylistLine(width: gridWidth)
-                                            } else {
-                                                ForEach(group.playlists) { playlist in
-                                                    SportCutPlaylistTimelineLineView(
-                                                        events: resolvedEvents(playlist: playlist, session: session),
-                                                        totalDuration: axisDuration,
-                                                        gridWidth: gridWidth,
-                                                        playlistID: playlist.id,
-                                                        sessionID: sessionID,
-                                                        playerManager: playerManager,
-                                                        selectedEventKey: $selectedEventKey
-                                                    )
-                                                    .frame(height: 30)
-                                                }
+                                    ScrollView(.horizontal) {
+                                        VStack(spacing: 0) {
+                                            TimelineTimestampsHeaderView(
+                                                duration: axisDuration,
+                                                interval: axisDuration / (20 * effectiveScale),
+                                                width: gridWidth
+                                            )
+                                            .frame(height: 30)
+                                            ForEach(rows) { row in
+                                                SportCutPlaylistEventLineView(
+                                                    row: row,
+                                                    totalDuration: axisDuration,
+                                                    gridWidth: gridWidth,
+                                                    sessionID: sessionID,
+                                                    playerManager: playerManager,
+                                                    selectedEventKey: $selectedEventKey
+                                                )
+                                                .frame(height: 30)
                                             }
                                         }
+                                        .frame(width: gridWidth)
                                     }
-                                    .frame(width: gridWidth)
                                 }
                             }
                         }
+                        .gesture(
+                            MagnificationGesture()
+                                .updating($magnifyScale) { state, gestureState, _ in
+                                    gestureState = max(1.0, state)
+                                }
+                                .onEnded { value in
+                                    timelineScale = max(1.0, timelineScale * value)
+                                }
+                        )
                     }
-                    .gesture(
-                        MagnificationGesture()
-                            .updating($magnifyScale) { state, gestureState, _ in
-                                gestureState = max(1.0, state)
-                            }
-                            .onEnded { value in
-                                timelineScale = max(1.0, timelineScale * value)
-                            }
-                    )
                 }
             }
         }
     }
 
-    private func groupNameRow(_ name: String) -> some View {
-        HStack {
-            Text(name)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-                .padding(.horizontal, 6)
-            Spacer()
-        }
-        .frame(width: 180, height: 30)
-        .background(Color.gray.opacity(0.06))
-    }
-
-    private var emptyGroupHintRow: some View {
-        HStack {
-            Text(^String.Titles.sportCutNoPlaylists)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-                .padding(.horizontal, 6)
-            Spacer()
-        }
-        .frame(width: 180, height: 30)
-    }
-
-    private func playlistNameRow(_ name: String) -> some View {
+    private func eventNameRow(_ name: String) -> some View {
         HStack {
             Text(name)
                 .font(.system(size: 12, weight: .medium))
@@ -921,32 +918,13 @@ private struct SportCutPlaylistsTimelinePane: View {
         }
         .frame(width: 180, height: 30)
     }
-
-    private func groupTimelineBand(width: CGFloat) -> some View {
-        ZStack(alignment: .leading) {
-            Rectangle()
-                .fill(Color.gray.opacity(0.06))
-                .frame(width: width, height: 30)
-        }
-        .frame(width: width, height: 30)
-    }
-
-    private func emptyPlaylistLine(width: CGFloat) -> some View {
-        ZStack(alignment: .leading) {
-            Rectangle()
-                .fill(Color.clear)
-                .frame(width: width, height: 30)
-        }
-        .frame(width: width, height: 30)
-    }
 }
 
-/// Одна строка таймлайна плейлиста: только события из плейлиста, визу как у `SportCutTimelineLineView`.
-private struct SportCutPlaylistTimelineLineView: View {
-    let events: [SportCutEvent]
+/// Одна строка таймлайна плейлиста: один эпизод на строку.
+private struct SportCutPlaylistEventLineView: View {
+    let row: SportCutPlaylistEventRow
     let totalDuration: Double
     let gridWidth: CGFloat
-    let playlistID: UUID
     let sessionID: UUID
     @ObservedObject var playerManager: SportCutPlayerManager
     @Binding var selectedEventKey: String?
@@ -957,27 +935,25 @@ private struct SportCutPlaylistTimelineLineView: View {
                 .fill(Color.clear)
                 .frame(width: gridWidth, height: 30)
 
-            ForEach(events.indices, id: \.self) { index in
-                let event = events[index]
-                let td = max(totalDuration, 0.001)
-                let startRatio = event.startTime / td
-                let durationRatio = max(event.duration, 0.01) / td
-                let stampWidth = max(durationRatio * gridWidth, 4)
-                let stampX = CGFloat(startRatio) * gridWidth
+            let event = row.event
+            let td = max(totalDuration, 0.001)
+            let startRatio = event.startTime / td
+            let durationRatio = max(event.duration, 0.01) / td
+            let stampWidth = max(durationRatio * gridWidth, 4)
+            let stampX = CGFloat(startRatio) * gridWidth
 
-                SportCutPlaylistEventStripView(
-                    event: event,
-                    color: Color(hex: event.color),
-                    stampX: stampX,
-                    stampWidth: stampWidth,
-                    isSelected: selectedEventKey == event.hiddenKey,
-                    onTap: {
-                        selectedEventKey = event.hiddenKey
-                        playerManager.sessionID = sessionID
-                        playerManager.playPlaylist(events, startIndex: index, playlistID: playlistID)
-                    }
-                )
-            }
+            SportCutPlaylistEventStripView(
+                event: event,
+                color: Color(hex: event.color),
+                stampX: stampX,
+                stampWidth: stampWidth,
+                isSelected: selectedEventKey == event.hiddenKey,
+                onTap: {
+                    selectedEventKey = event.hiddenKey
+                    playerManager.sessionID = sessionID
+                    playerManager.playPlaylist(row.playlistEvents, startIndex: row.startIndex, playlistID: row.playlistID)
+                }
+            )
         }
         .frame(width: gridWidth, height: 30)
     }

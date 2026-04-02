@@ -102,6 +102,7 @@ struct MomentViewerView: View {
 
     @ObservedObject var session: MomentViewerSession
     @ObservedObject private var timelineData = TimelineDataManager.shared
+    @ObservedObject private var tagLibrary = TagLibraryManager.shared
 
     private var sourceStamp: TimelineStamp? {
         guard let lineID = session.lineID,
@@ -111,6 +112,27 @@ struct MomentViewerView: View {
         return stamp
     }
 
+    private var tagTitleWithOrder: String {
+        guard let stamp = sourceStamp else { return session.tagName }
+        let baseTagName = tagLibrary.findTagById(stamp.idTag)?.name ?? stamp.label
+        let ordinal = stampOrdinal(for: stamp)
+        return "\(baseTagName)_\(ordinal)"
+    }
+
+    private var stampEventNames: [String] {
+        guard let stamp = sourceStamp else { return [] }
+        return stamp.timeEvents.compactMap { eventID in
+            tagLibrary.allTimeEvents.first(where: { $0.id == eventID })?.name
+        }
+    }
+
+    private var stampLabelNames: [String] {
+        guard let stamp = sourceStamp else { return [] }
+        return stamp.labelIDs.compactMap { labelID in
+            tagLibrary.findLabelById(labelID)?.name
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             VideoPlayer(player: session.player)
@@ -118,11 +140,19 @@ struct MomentViewerView: View {
 
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(session.tagName)
+                    Text(tagTitleWithOrder)
                         .font(.headline)
-                    Text(session.lineName)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .fontWeight(.bold)
+                    if !stampEventNames.isEmpty {
+                        Text("События: \(stampEventNames.joined(separator: ", "))")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    if !stampLabelNames.isEmpty {
+                        Text("Лейблы: \(stampLabelNames.joined(separator: ", "))")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
                     if let comment = sourceStamp?.comment, !comment.isEmpty {
                         HStack(alignment: .top, spacing: 4) {
                             Circle()
@@ -139,9 +169,6 @@ struct MomentViewerView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text(formatClipTime(session.displayStartTime))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                     Text(String(format: "Длительность: %.2f с", session.displayDuration))
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -155,9 +182,18 @@ struct MomentViewerView: View {
         }
     }
 
-    private func formatClipTime(_ seconds: Double) -> String {
-        let minutes = Int(seconds) / 60
-        let secs    = Int(seconds) % 60
-        return String(format: "%02d:%02d", minutes, secs)
+    private func stampOrdinal(for stamp: TimelineStamp) -> Int {
+        var count = 0
+        for line in timelineData.lines {
+            for candidate in line.stamps {
+                if candidate.idTag == stamp.idTag {
+                    count += 1
+                }
+                if candidate.id == stamp.id {
+                    return max(1, count)
+                }
+            }
+        }
+        return 1
     }
 }
