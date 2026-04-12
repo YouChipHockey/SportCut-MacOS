@@ -131,6 +131,14 @@ class HotKeyManager: ObservableObject {
     @objc private func sheetDismissed() {
         blockedSheetActive = false
     }
+
+    /// Не перехватывать пробел (play/pause), пока пользователь вводит текст в поле или телестрацию.
+    private func shouldPassThroughSpaceForTextInput() -> Bool {
+        if isEditingTextBox { return true }
+        if FocusStateManager.shared.isAnyTextFieldFocused { return true }
+        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+        return responder is NSTextView || responder is NSTextField
+    }
     
     func setupKeyboardMonitoring() {
         removeMonitors()
@@ -161,17 +169,17 @@ class HotKeyManager: ObservableObject {
             if event.keyCode == 49,
                WindowsManager.shared.isSportCutKeyWindow(),
                self.isEnabled,
-               !self.blockedSheetActive {
+               !self.blockedSheetActive,
+               !self.shouldPassThroughSpaceForTextInput() {
                 NotificationCenter.default.post(name: .sportCutTogglePlayPause, object: nil)
                 return nil
             }
-            // Когда в фокусе окно таймлайна, библиотеки тегов или пересмотра — пробел всегда play/pause.
-            // Работает только на экране разметчика (или когда активно окно пересмотра в рамках лайв-сессии).
+            // Пробел = play/pause: окно видео / таймлайна / библиотеки тегов или окно «Пересмотр» (key window, не кэш уведомлений).
             if event.keyCode == 49,
-               (WindowsManager.shared.isControlOrTagLibraryWindowKey() && ActiveWindowManager.shared.isMarkerWindowActive())
-                   || WindowsManager.shared.isReviewWindowKey(),
+               ActiveWindowManager.shared.isMarkerWindowActive() || WindowsManager.shared.isReviewWindowKey(),
                self.isEnabled,
-               !self.blockedSheetActive {
+               !self.blockedSheetActive,
+               !self.shouldPassThroughSpaceForTextInput() {
                 if VideoPlayerManager.shared.isReviewMode {
                     VideoPlayerManager.shared.toggleReviewPlayPause()
                 } else {
@@ -206,7 +214,7 @@ class HotKeyManager: ObservableObject {
         let isViewerMode = WindowsManager.shared.viewerWindow != nil && isViewerWindowActive
         
         if event.keyCode == 49 {
-            if isEditingTextBox { return false }
+            if shouldPassThroughSpaceForTextInput() { return false }
             
             if isViewerMode {
                 NotificationCenter.default.post(name: .toggleViewerPlayer, object: nil)

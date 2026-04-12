@@ -183,17 +183,6 @@ struct MomentViewerView: View {
     }
 
     private func stampOrdinal(for stamp: TimelineStamp) -> Int {
-        var count = 0
-        for line in timelineData.lines {
-            for candidate in line.stamps {
-                if candidate.idTag == stamp.idTag {
-                    count += 1
-                }
-                if candidate.id == stamp.id {
-                    return max(1, count)
-                }
-            }
-        }
-        return 1
+        stamp.chronologicalOrdinalAmongSameTag(in: timelineData.lines)
     }
 }

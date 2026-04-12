@@ -16,11 +16,7 @@ struct SportCutMainView: View {
     @State private var showTimelinePanel = true
     @State private var leftPanelWidth: CGFloat = 300
     @State private var topAreaHeightRatio: CGFloat = 0.55
-    @State private var dragStartLeftPanelWidth: CGFloat?
-    @State private var dragStartTopAreaHeightRatio: CGFloat?
 
-    private let minLeftPanelWidth: CGFloat = 250
-    private let maxLeftPanelWidth: CGFloat = 700
     private let minTopAreaHeight: CGFloat = 240
     private let minBottomAreaHeight: CGFloat = 180
     
@@ -38,16 +34,19 @@ struct SportCutMainView: View {
 
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
+                        /// Панель всегда в иерархии (ширина 0 при скрытии), иначе при редакторе рисунка сбрасывается выбор группы/плейлиста.
+                        SportCutPlaylistsView(
+                            sessionID: sessionID,
+                            playerManager: playerManager
+                        )
+                        .frame(width: showPlaylistPanel ? leftPanelWidth : 0)
+                        .clipped()
+                        .allowsHitTesting(showPlaylistPanel)
+
                         if showPlaylistPanel {
-                            SportCutPlaylistsView(
-                                sessionID: sessionID,
-                                playerManager: playerManager
-                            )
-                            .frame(width: leftPanelWidth)
-                            
-                            resizeHandle(.vertical, totalHeight: availableHeight)
+                            Divider()
                         }
-                        
+
                         SportCutVideoPlayerView(
                             playerManager: playerManager,
                             showPlaylistPanel: $showPlaylistPanel,
@@ -56,16 +55,18 @@ struct SportCutMainView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(height: currentTopHeight)
-                    
+
                     if showTimelinePanel {
-                        resizeHandle(.horizontal, totalHeight: availableHeight)
-                        
-                        SportCutTimelineView(
-                            sessionID: sessionID,
-                            playerManager: playerManager
-                        )
-                        .frame(maxHeight: .infinity)
+                        Divider()
                     }
+
+                    SportCutTimelineView(
+                        sessionID: sessionID,
+                        playerManager: playerManager
+                    )
+                    .frame(maxHeight: showTimelinePanel ? .infinity : 0)
+                    .clipped()
+                    .allowsHitTesting(showTimelinePanel)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .sportCutTogglePlayPause)) { _ in
                     guard !playerManager.isEditorMode else { return }
@@ -77,6 +78,7 @@ struct SportCutMainView: View {
                     playerManager.configure(sources: session.sources)
                     playerManager.setupTimeObserver()
                     playerManager.startDrawingCheckTimer()
+                    WindowsManager.shared.registerActiveSportCut(sessionID: sessionID, playerManager: playerManager)
                     if let playlistID = WindowsManager.shared.consumePendingSportCutAutoplayPlaylistID() {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                             guard let s = sessionManager.sessions.first(where: { $0.id == sessionID }) else { return }
@@ -85,7 +87,7 @@ struct SportCutMainView: View {
                                     let visible = playlist.events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
                                     guard !visible.isEmpty else { return }
                                     playerManager.sessionID = sessionID
-                                    playerManager.playPlaylist(visible, playlistID: playlist.id)
+                                    playerManager.playPlaylist(visible, playlistID: playlist.id, playbackKind: .singleFilm)
                                     return
                                 }
                             }
@@ -98,6 +100,7 @@ struct SportCutMainView: View {
                     }
                 }
                 .onDisappear {
+                    WindowsManager.shared.unregisterActiveSportCut(sessionID: sessionID)
                     playerManager.stopPlayback()
                     playerManager.removeTimeObserver()
                     playerManager.stopDrawingCheckTimer()
@@ -112,86 +115,6 @@ struct SportCutMainView: View {
             }
         }
         .background(Color(NSColor.windowBackgroundColor))
-    }
-
-    private enum ResizeAxis {
-        case vertical
-        case horizontal
-    }
-
-    @ViewBuilder
-    private func resizeHandle(_ axis: ResizeAxis, totalHeight: CGFloat) -> some View {
-        switch axis {
-        case .vertical:
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .frame(width: 5)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let start = dragStartLeftPanelWidth ?? leftPanelWidth
-                            if dragStartLeftPanelWidth == nil {
-                                dragStartLeftPanelWidth = leftPanelWidth
-                            }
-                            let next = start + value.translation.width
-                            let clamped = min(max(next, minLeftPanelWidth), maxLeftPanelWidth)
-                            updateWithoutAnimation {
-                                leftPanelWidth = clamped
-                            }
-                        }
-                        .onEnded { _ in
-                            dragStartLeftPanelWidth = nil
-                        }
-                )
-                .onHover { isHovering in
-                    if isHovering {
-                        NSCursor.resizeLeftRight.push()
-                    } else {
-                        NSCursor.pop()
-                    }
-                }
-        case .horizontal:
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .frame(height: 5)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            guard totalHeight > 0 else { return }
-                            if dragStartTopAreaHeightRatio == nil {
-                                dragStartTopAreaHeightRatio = topAreaHeightRatio
-                            }
-                            let startRatio = dragStartTopAreaHeightRatio ?? topAreaHeightRatio
-                            let topHeight = max(
-                                minTopAreaHeight,
-                                min(totalHeight - minBottomAreaHeight, (totalHeight * startRatio) + value.translation.height)
-                            )
-                            updateWithoutAnimation {
-                                topAreaHeightRatio = topHeight / totalHeight
-                            }
-                        }
-                        .onEnded { _ in
-                            dragStartTopAreaHeightRatio = nil
-                        }
-                )
-                .onHover { isHovering in
-                    if isHovering {
-                        NSCursor.resizeUpDown.push()
-                    } else {
-                        NSCursor.pop()
-                    }
-                }
-        }
-    }
-
-    private func updateWithoutAnimation(_ block: () -> Void) {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            block()
-        }
     }
 
     private static func isSportCutTextInputActive() -> Bool {

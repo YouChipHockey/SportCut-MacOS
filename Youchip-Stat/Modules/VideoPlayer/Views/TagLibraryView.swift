@@ -44,6 +44,10 @@ struct TagLibraryView: View {
     @State private var cachedPlayField: (name: String, playField: PlayField)? = nil
     
     @State var activeIntervalTags: [ActiveIntervalTag] = []
+    /// Время клика по мгновенному тегу до листа лейблов (в live иначе подтверждение сдвигает `currentTime`).
+    @State private var pendingInstantTagAnchorTime: Double? = nil
+    /// Зафиксированный диапазон интервала при открытии листа лейблов на втором нажатии.
+    @State private var pendingIntervalClosureRange: (timeStart: Double, timeFinish: Double)? = nil
     
     @State private var tagCounts: [String: Int] = [:]
     
@@ -151,7 +155,10 @@ struct TagLibraryView: View {
         }
         .id(refreshID)
         .background(Color(.controlBackgroundColor))
-        .sheet(isPresented: $showLabelSheet) {
+        .sheet(isPresented: $showLabelSheet, onDismiss: {
+            pendingInstantTagAnchorTime = nil
+            pendingIntervalClosureRange = nil
+        }) {
             stampLabelSheet
         }
         .onAppear(perform: onAppearSetup)
@@ -944,13 +951,13 @@ struct TagLibraryView: View {
     }
     
     
-    private func addTagToTimeline(tag: Tag, selectedLabels: [FullLabelWithGroup]) {
+    private func addTagToTimeline(tag: Tag, selectedLabels: [FullLabelWithGroup], instantAnchorTime: Double? = nil) {
         if tag.mapEnabled == true {
             // Use cached playField if available, otherwise load
             if let collectionName = tagLibrary.currentCollectionType.name {
                 if let cached = cachedPlayField, cached.name == collectionName,
                    let imageBookmark = cached.playField.imageBookmark {
-                    showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
+                    showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels, instantAnchorTime: instantAnchorTime)
                     return
                 } else {
                     DispatchQueue.global(qos: .userInitiated).async {
@@ -960,11 +967,11 @@ struct TagLibraryView: View {
                            let imageBookmark = playField.imageBookmark {
                             DispatchQueue.main.async {
                                 self.cachedPlayField = (name: collectionName, playField: playField)
-                                self.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels)
+                                self.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels, instantAnchorTime: instantAnchorTime)
                             }
                         } else {
                             DispatchQueue.main.async {
-                                self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil)
+                                self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil, instantAnchorTime: instantAnchorTime)
                             }
                         }
                     }
@@ -973,12 +980,12 @@ struct TagLibraryView: View {
             }
         }
         
-        proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil)
+        proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil, instantAnchorTime: instantAnchorTime)
     }
     
-    private func showFieldMapSelection(tag: Tag, imageBookmark: Data, selectedLabels: [FullLabelWithGroup]) {
+    private func showFieldMapSelection(tag: Tag, imageBookmark: Data, selectedLabels: [FullLabelWithGroup], instantAnchorTime: Double? = nil) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
-            proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: coordinates)
+            proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: coordinates, instantAnchorTime: instantAnchorTime)
             if videoManager.playbackSpeed > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     videoManager.player?.play()
@@ -987,10 +994,10 @@ struct TagLibraryView: View {
         }
     }
     
-    private func proceedWithTagAddition(tag: Tag, selectedLabels: [FullLabelWithGroup], coordinates: CGPoint?) {
-        let currentTime = videoManager.currentTime
+    private func proceedWithTagAddition(tag: Tag, selectedLabels: [FullLabelWithGroup], coordinates: CGPoint?, instantAnchorTime: Double? = nil) {
+        let anchorTime = instantAnchorTime ?? videoManager.currentTime
         let videoDuration = max(1.0, videoManager.timelineDuration)
-        let startTime = max(0, currentTime - tag.defaultTimeBefore)
+        let startTime = max(0, anchorTime - tag.defaultTimeBefore)
         let finishTime = min(videoDuration, startTime + tag.defaultTimeBefore + tag.defaultTimeAfter)
         
         var fieldPosition: CGPoint? = nil
@@ -1022,7 +1029,7 @@ struct TagLibraryView: View {
             position: fieldPosition
         )
         
-        VideoMarkupActivityBanner.shared.notifyInstantTagAdded(tagName: tag.name)
+        VideoMarkupActivityBanner.shared.notifyInstantTagAdded(tagName: tag.name, tagColorHex: tag.color)
         
         DispatchQueue.main.async {
             self.updateTagCounts()
@@ -1055,7 +1062,17 @@ struct TagLibraryView: View {
                         onDone: { selectedLabelIds in
                             let fullLabels = Self.buildFullLabels(from: selectedLabelIds)
                             if tag.isInterval == true {
-                                if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
+                                if let range = pendingIntervalClosureRange {
+                                    pendingIntervalClosureRange = nil
+                                    pendingInstantTagAnchorTime = nil
+                                    activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                                    addTagToTimelineInterval(
+                                        tag: tag,
+                                        timeStartSeconds: range.timeStart,
+                                        timeFinishSeconds: range.timeFinish,
+                                        selectedLabels: fullLabels
+                                    )
+                                } else if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
                                     let videoDuration = max(1.0, videoManager.timelineDuration)
                                     let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                     let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
@@ -1073,13 +1090,18 @@ struct TagLibraryView: View {
                                     )
                                 }
                             } else {
-                                addTagToTimeline(tag: tag, selectedLabels: fullLabels)
+                                let anchor = pendingInstantTagAnchorTime
+                                pendingInstantTagAnchorTime = nil
+                                pendingIntervalClosureRange = nil
+                                addTagToTimeline(tag: tag, selectedLabels: fullLabels, instantAnchorTime: anchor)
                             }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 showLabelSheet = false
                             }
                         },
                         onCancel: {
+                            pendingInstantTagAnchorTime = nil
+                            pendingIntervalClosureRange = nil
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
@@ -1137,7 +1159,17 @@ struct TagLibraryView: View {
                         onDone: { selectedLabelIds in
                             let fullLabels = Self.buildFullLabels(from: selectedLabelIds)
                             if tag.isInterval == true {
-                                if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
+                                if let range = pendingIntervalClosureRange {
+                                    pendingIntervalClosureRange = nil
+                                    pendingInstantTagAnchorTime = nil
+                                    activeIntervalTags.removeAll { $0.tag.id == tag.id }
+                                    addTagToTimelineInterval(
+                                        tag: tag,
+                                        timeStartSeconds: range.timeStart,
+                                        timeFinishSeconds: range.timeFinish,
+                                        selectedLabels: fullLabels
+                                    )
+                                } else if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
                                     let videoDuration = max(1.0, videoManager.timelineDuration)
                                     let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                     let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
@@ -1155,13 +1187,18 @@ struct TagLibraryView: View {
                                     )
                                 }
                             } else {
-                                addTagToTimeline(tag: tag, selectedLabels: fullLabels)
+                                let anchor = pendingInstantTagAnchorTime
+                                pendingInstantTagAnchorTime = nil
+                                pendingIntervalClosureRange = nil
+                                addTagToTimeline(tag: tag, selectedLabels: fullLabels, instantAnchorTime: anchor)
                             }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 showLabelSheet = false
                             }
                         },
                         onCancel: {
+                            pendingInstantTagAnchorTime = nil
+                            pendingIntervalClosureRange = nil
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
@@ -1282,7 +1319,7 @@ struct TagLibraryView: View {
                     if tag.isInterval ?? false {
                         if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                             let activeTag = activeIntervalTags[index]
-                            let videoDuration = max(1.0, videoManager.videoDuration)
+                            let videoDuration = max(1.0, videoManager.timelineDuration)
                             let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
                             let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                             let timeStart = min(start, end)
@@ -1293,8 +1330,10 @@ struct TagLibraryView: View {
                             let labelGroupIdsSet = Set(tag.lablesGroup)
                             let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                             if hasLabels {
+                                pendingIntervalClosureRange = (timeStart, timeFinish)
                                 showLabelSheet = true
                             } else {
+                                pendingIntervalClosureRange = nil
                                 activeIntervalTags.remove(at: index)
                                 addTagToTimelineInterval(tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish, selectedLabels: [])
                             }
@@ -1310,8 +1349,10 @@ struct TagLibraryView: View {
                     let labelGroupIdsSet = Set(tag.lablesGroup)
                     let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                     if hasLabels {
+                        pendingInstantTagAnchorTime = videoManager.currentTime
                         showLabelSheet = true
                     } else {
+                        pendingInstantTagAnchorTime = nil
                         addTagToTimeline(tag: tag, selectedLabels: [])
                     }
                 }
@@ -1470,8 +1511,10 @@ struct TagLibraryView: View {
                 let labelGroupIdsSet = Set(tag.lablesGroup)
                 let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                     if hasLabels {
+                        pendingIntervalClosureRange = (timeStart, timeFinish)
                         showLabelSheet = true
                     } else {
+                        pendingIntervalClosureRange = nil
                         activeIntervalTags.remove(at: index)
                         addTagToTimelineInterval(tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish, selectedLabels: [])
                     }
@@ -1494,10 +1537,10 @@ struct TagLibraryView: View {
         let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
         
         if hasLabels {
-            // Show sheet immediately without delay
+            pendingInstantTagAnchorTime = videoManager.currentTime
             showLabelSheet = true
         } else {
-            // No labels - add tag immediately without showing sheet
+            pendingInstantTagAnchorTime = nil
             addTagToTimeline(tag: tag, selectedLabels: [])
         }
     }
@@ -1573,7 +1616,7 @@ struct TagLibraryView: View {
             position: fieldPosition
         )
         
-        VideoMarkupActivityBanner.shared.completeIntervalRecording(tagName: tag.name)
+        VideoMarkupActivityBanner.shared.completeIntervalRecording(tagName: tag.name, tagColorHex: tag.color)
         
         DispatchQueue.main.async {
             self.updateTagCounts()

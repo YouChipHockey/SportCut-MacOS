@@ -243,6 +243,32 @@ struct SportCutPlaylist: Identifiable, Codable {
     }
 }
 
+extension SportCutPlaylist {
+    /// Текст комментария штампа в разметке: сначала текущий `TimelineDataManager`, иначе снимок в `SportCutSession`.
+    static func markupComment(for event: SportCutEvent, session: SportCutSession) -> String? {
+        if let line = TimelineDataManager.shared.lines.first(where: { $0.id == event.lineID }),
+           let stamp = line.stamps.first(where: { $0.id == event.stampID }) {
+            let t = (stamp.comment ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { return t }
+        }
+        if let source = session.sources.first(where: { $0.id == event.sourceID }),
+           let line = source.timelines.first(where: { $0.id == event.lineID }),
+           let stamp = line.stamps.first(where: { $0.id == event.stampID }) {
+            let t = (stamp.comment ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { return t }
+        }
+        return nil
+    }
+
+    /// Переносит комментарии из разметки в `eventComments` плейлиста (режим просмотра / вотермарка).
+    mutating func mergeMarkupComments(for events: [SportCutEvent], session: SportCutSession) {
+        for ev in events {
+            guard let text = SportCutPlaylist.markupComment(for: ev, session: session) else { continue }
+            eventComments[ev.hiddenKey] = text
+        }
+    }
+}
+
 // MARK: - Event Drawing (per playlist event)
 
 struct SportCutEventDrawing: Codable {
@@ -257,6 +283,19 @@ struct SportCutEventDrawing: Codable {
 struct PlaylistEventDragData: Codable {
     let event: SportCutEvent
     let sourcePlaylistID: UUID
+}
+
+// MARK: - Markup → playlist drag (штампы с таймлайна разметки)
+
+struct MarkupStampRef: Codable, Hashable {
+    let lineID: UUID
+    let stampID: UUID
+}
+
+/// На drop события пересобираются из текущих `TimelineDataManager` + source сессии (корректный `sourceID`).
+struct MarkupStampsBatchPlaylistDragPayload: Codable {
+    let markupProjectID: String
+    let stampRefs: [MarkupStampRef]
 }
 
 // MARK: - Export options

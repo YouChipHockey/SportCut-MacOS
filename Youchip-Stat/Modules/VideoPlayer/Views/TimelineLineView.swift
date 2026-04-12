@@ -241,12 +241,12 @@ struct TimelineLineView: View {
         }
         .onTapGesture(count: 1) {
             if resizingStampID == nil {
-                let commandDown = NSApp.currentEvent?.modifierFlags.contains(.command) ?? false
+                let commandDown = NSEvent.modifierFlags.contains(.command)
                 if commandDown {
                     timelineData.toggleSportCutExportSelection(stampID: stamp.id)
                     return
                 }
-                timelineData.clearSportCutExportSelection()
+                // Сброс пачки ⌘-выбора только по пустому месту или «Снять выделение», не при обычном клике по тегу.
                 withAnimation(.easeInOut(duration: 0.2)) {
                     timelineData.selectStamp(stampID: stamp.id)
                 }
@@ -292,6 +292,12 @@ struct TimelineLineView: View {
         )
         .contextMenu {
             menuForTag(stamp: stamp)
+        }
+        .onDrag {
+            guard let data = WindowsManager.shared.encodeMarkupPlaylistDragData(line: line, stamp: stamp) else {
+                return NSItemProvider()
+            }
+            return NSItemProvider(item: data as NSData, typeIdentifier: UTType.data.identifier)
         }
         .coordinateSpace(name: "timelineSpace")
     }
@@ -529,6 +535,17 @@ struct TimelineLineView: View {
 
         Button("Открыть в режиме просмотра") {
             WindowsManager.shared.openSportCutFromTimelineStamps([(line, stamp)])
+        }
+
+        if !timelineData.stampsSelectedForSportCut.isEmpty,
+           timelineData.stampsSelectedForSportCut.contains(stamp.id) {
+            Button("Добавить выбранные в плейлист SportCut") {
+                WindowsManager.shared.appendMarkupSelectionToOpenSportCutPlaylist()
+            }
+        } else {
+            Button("Добавить в плейлист SportCut") {
+                WindowsManager.shared.appendSingleMarkupStampToOpenSportCutPlaylist(line: line, stamp: stamp)
+            }
         }
 
         Divider()

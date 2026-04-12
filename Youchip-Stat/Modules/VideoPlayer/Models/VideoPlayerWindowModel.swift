@@ -96,7 +96,10 @@ enum CopiedEditorItem: Identifiable {
 class EditorDrawingState: ObservableObject {
     /// Максимум элементов в буфере копирования (ПКМ → Вставить).
     static let copyBufferMaxCount = 5
-    
+
+    /// Отложенное масштабирование геометрии при ресайзе окна (иначе сотни вызовов подряд блокируют main thread).
+    private var viewSizeScalingWorkItem: DispatchWorkItem?
+
     @Published var currentTool: EditorTool = .pencil
     @Published var currentPath: EditorDrawingPath = EditorDrawingPath()
     @Published var completedPaths: [EditorDrawingPath] = []
@@ -171,96 +174,101 @@ class EditorDrawingState: ObservableObject {
             initialViewSize = newSize
         }
         viewSize = newSize
-        
-        // Масштабируем существующие пути если размер изменился
-        if initialViewSize != .zero && initialViewSize != newSize {
-            let scaleX = newSize.width / initialViewSize.width
-            let scaleY = newSize.height / initialViewSize.height
-            
-            completedPaths = completedPaths.map { path in
-                var newPath = path
-                newPath.points = path.points.map { point in
-                    CGPoint(x: point.x * scaleX, y: point.y * scaleY)
-                }
-                return newPath
-            }
-            
-            // Масштабируем объекты телестрации
-            telestrationObjects = telestrationObjects.map { object in
-                var newObject = object
-                newObject.positions = object.positions.map { point in
-                    CGPoint(x: point.x * scaleX, y: point.y * scaleY)
-                }
-                // Масштабируем радиус для objectHighlight
-                if object.type == .objectHighlight {
-                    newObject.radius = object.radius * max(scaleX, scaleY)
-                }
-                // Масштабируем контрольную точку и высоту кривизны для закруглённой стрелки
-                if object.type == .curvedArrow {
-                    if let cp = object.controlPoint {
-                        newObject.controlPoint = CGPoint(x: cp.x * scaleX, y: cp.y * scaleY)
-                    }
-                    newObject.curveHeight = object.curveHeight * max(scaleX, scaleY)
-                }
-                return newObject
-            }
-            
-            // Масштабируем pending объект телестрации (после нажатия done, но до apply)
-            if var pendingObject = pendingTelestrationObject {
-                pendingObject.positions = pendingObject.positions.map { point in
-                    CGPoint(x: point.x * scaleX, y: point.y * scaleY)
-                }
-                // Масштабируем радиус для objectHighlight
-                if pendingObject.type == .objectHighlight {
-                    pendingObject.radius = pendingObject.radius * max(scaleX, scaleY)
-                }
-                // Масштабируем контрольную точку и высоту кривизны для закруглённой стрелки
-                if pendingObject.type == .curvedArrow {
-                    if let cp = pendingObject.controlPoint {
-                        pendingObject.controlPoint = CGPoint(x: cp.x * scaleX, y: cp.y * scaleY)
-                    }
-                    pendingObject.curveHeight = pendingObject.curveHeight * max(scaleX, scaleY)
-                }
-                self.pendingTelestrationObject = pendingObject
-            }
-            
-            // Масштабируем вершины при создании
-            telestrationVertices = telestrationVertices.map { point in
+
+        viewSizeScalingWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.applyIncrementalGeometryScale(to: self.viewSize)
+        }
+        viewSizeScalingWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07, execute: work)
+    }
+
+    /// Окончание live resize окна: сразу применить масштаб без ожидания debounce.
+    func commitViewSizeScalingNow() {
+        viewSizeScalingWorkItem?.cancel()
+        viewSizeScalingWorkItem = nil
+        applyIncrementalGeometryScale(to: viewSize)
+    }
+
+    private func applyIncrementalGeometryScale(to newSize: CGSize) {
+        guard initialViewSize != .zero, initialViewSize != newSize else { return }
+
+        let scaleX = newSize.width / initialViewSize.width
+        let scaleY = newSize.height / initialViewSize.height
+
+        completedPaths = completedPaths.map { path in
+            var newPath = path
+            newPath.points = path.points.map { point in
                 CGPoint(x: point.x * scaleX, y: point.y * scaleY)
             }
-            
-            // Масштабируем фигуры
-            shapes = shapes.map { shape in
-                var newShape = shape
-                newShape.position = CGPoint(x: shape.position.x * scaleX, y: shape.position.y * scaleY)
-                newShape.size = CGSize(width: shape.size.width * scaleX, height: shape.size.height * scaleY)
-                return newShape
-            }
-            
-            // Масштабируем pending фигуру (после создания, но до apply)
-            if var pendingShape = pendingShape {
-                pendingShape.position = CGPoint(x: pendingShape.position.x * scaleX, y: pendingShape.position.y * scaleY)
-                pendingShape.size = CGSize(width: pendingShape.size.width * scaleX, height: pendingShape.size.height * scaleY)
-                self.pendingShape = pendingShape
-            }
-            
-            // Масштабируем текстовые боксы
-            textBoxes = textBoxes.map { textBox in
-                var newTextBox = textBox
-                newTextBox.position = CGPoint(x: textBox.position.x * scaleX, y: textBox.position.y * scaleY)
-                newTextBox.size = CGSize(width: textBox.size.width * scaleX, height: textBox.size.height * scaleY)
-                return newTextBox
-            }
-            
-            // Масштабируем pending текстовый бокс (после создания, но до apply)
-            if var pendingTextBox = pendingTextBox {
-                pendingTextBox.position = CGPoint(x: pendingTextBox.position.x * scaleX, y: pendingTextBox.position.y * scaleY)
-                pendingTextBox.size = CGSize(width: pendingTextBox.size.width * scaleX, height: pendingTextBox.size.height * scaleY)
-                self.pendingTextBox = pendingTextBox
-            }
-            
-            initialViewSize = newSize
+            return newPath
         }
+
+        telestrationObjects = telestrationObjects.map { object in
+            var newObject = object
+            newObject.positions = object.positions.map { point in
+                CGPoint(x: point.x * scaleX, y: point.y * scaleY)
+            }
+            if object.type == .objectHighlight {
+                newObject.radius = object.radius * max(scaleX, scaleY)
+            }
+            if object.type == .curvedArrow {
+                if let cp = object.controlPoint {
+                    newObject.controlPoint = CGPoint(x: cp.x * scaleX, y: cp.y * scaleY)
+                }
+                newObject.curveHeight = object.curveHeight * max(scaleX, scaleY)
+            }
+            return newObject
+        }
+
+        if var pendingObject = pendingTelestrationObject {
+            pendingObject.positions = pendingObject.positions.map { point in
+                CGPoint(x: point.x * scaleX, y: point.y * scaleY)
+            }
+            if pendingObject.type == .objectHighlight {
+                pendingObject.radius = pendingObject.radius * max(scaleX, scaleY)
+            }
+            if pendingObject.type == .curvedArrow {
+                if let cp = pendingObject.controlPoint {
+                    pendingObject.controlPoint = CGPoint(x: cp.x * scaleX, y: cp.y * scaleY)
+                }
+                pendingObject.curveHeight = pendingObject.curveHeight * max(scaleX, scaleY)
+            }
+            self.pendingTelestrationObject = pendingObject
+        }
+
+        telestrationVertices = telestrationVertices.map { point in
+            CGPoint(x: point.x * scaleX, y: point.y * scaleY)
+        }
+
+        shapes = shapes.map { shape in
+            var newShape = shape
+            newShape.position = CGPoint(x: shape.position.x * scaleX, y: shape.position.y * scaleY)
+            newShape.size = CGSize(width: shape.size.width * scaleX, height: shape.size.height * scaleY)
+            return newShape
+        }
+
+        if var pendingShape = pendingShape {
+            pendingShape.position = CGPoint(x: pendingShape.position.x * scaleX, y: pendingShape.position.y * scaleY)
+            pendingShape.size = CGSize(width: pendingShape.size.width * scaleX, height: pendingShape.size.height * scaleY)
+            self.pendingShape = pendingShape
+        }
+
+        textBoxes = textBoxes.map { textBox in
+            var newTextBox = textBox
+            newTextBox.position = CGPoint(x: textBox.position.x * scaleX, y: textBox.position.y * scaleY)
+            newTextBox.size = CGSize(width: textBox.size.width * scaleX, height: textBox.size.height * scaleY)
+            return newTextBox
+        }
+
+        if var pendingTextBox = pendingTextBox {
+            pendingTextBox.position = CGPoint(x: pendingTextBox.position.x * scaleX, y: pendingTextBox.position.y * scaleY)
+            pendingTextBox.size = CGSize(width: pendingTextBox.size.width * scaleX, height: pendingTextBox.size.height * scaleY)
+            self.pendingTextBox = pendingTextBox
+        }
+
+        initialViewSize = newSize
     }
     
     func startNewPath(at point: CGPoint) {
@@ -435,6 +443,8 @@ class EditorDrawingState: ObservableObject {
     }
     
     func clearDrawing() {
+        viewSizeScalingWorkItem?.cancel()
+        viewSizeScalingWorkItem = nil
         completedPaths.removeAll()
         currentPath = EditorDrawingPath()
         textBoxes.removeAll()

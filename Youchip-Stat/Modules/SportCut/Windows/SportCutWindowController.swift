@@ -6,15 +6,34 @@
 import Cocoa
 import SwiftUI
 
+/// Custom NSWindow that intercepts close when the drawing editor is active.
+private class SportCutWindow: NSWindow {
+    override func close() {
+        if WindowsManager.shared.cancelSportCutDrawingEditorIfActive() {
+            return
+        }
+        super.close()
+    }
+
+    override func performClose(_ sender: Any?) {
+        if WindowsManager.shared.cancelSportCutDrawingEditorIfActive() {
+            return
+        }
+        super.performClose(sender)
+    }
+}
+
 class SportCutWindowController: NSWindowController {
     
     private let session: SportCutSession
+
+    var hostedSessionID: UUID { session.id }
     
     init(session: SportCutSession) {
         self.session = session
         let view = SportCutMainView(sessionID: session.id)
         let hostingController = NSHostingController(rootView: view)
-        let window = NSWindow(contentViewController: hostingController)
+        let window = SportCutWindow(contentViewController: hostingController)
         
         window.title = "Просмотр: \(session.name)"
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
@@ -43,6 +62,13 @@ class SportCutWindowController: NSWindowController {
 }
 
 extension SportCutWindowController: NSWindowDelegate {
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if WindowsManager.shared.cancelSportCutDrawingEditorIfActive() {
+            return false
+        }
+        return true
+    }
+
     func windowWillClose(_ notification: Notification) {
         WindowsManager.shared.sportCutWindowDidClose()
     }

@@ -126,6 +126,7 @@ struct FullControlView: View {
         case tagCountDesc
         case tagCountAsc
         case lastTagChronological
+        case lastTagChronologicalReverse
     }
     
     @State private var timelineLineSortMode: TimelineLineSortMode = .original
@@ -261,11 +262,22 @@ struct FullControlView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
+            Button("В плейлист SportCut") {
+                WindowsManager.shared.appendMarkupSelectionToOpenSportCutPlaylist()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
             Button("Снять выделение") {
                 timelineData.clearSportCutExportSelection()
             }
             .buttonStyle(.plain)
             .font(.system(size: 11))
+        }
+        .onDrag {
+            guard let data = WindowsManager.shared.encodeMarkupPlaylistDragDataForSelectionOnly() else {
+                return NSItemProvider()
+            }
+            return NSItemProvider(item: data as NSData, typeIdentifier: UTType.data.identifier)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -419,6 +431,9 @@ struct FullControlView: View {
                 Button("Открыть в режиме просмотра") {
                     WindowsManager.shared.openSportCutFromSelectedStamps()
                 }
+                Button("Добавить выбранные в плейлист SportCut") {
+                    WindowsManager.shared.appendMarkupSelectionToOpenSportCutPlaylist()
+                }
             }
         }
     }
@@ -469,19 +484,9 @@ struct FullControlView: View {
                                             .stroke((line.id == timelineData.selectedLineID) ?
                                                     Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
                                     )
-                                    .onTapGesture {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            let commandDown = NSApp.currentEvent?.modifierFlags.contains(.command) ?? false
-                                            if commandDown {
-                                                timelineData.selectAllSportCutExportStamps(in: line.id)
-                                            } else {
-                                                timelineData.selectLine(line.id)
-                                            }
-                                        }
-                                    }
                             }
                             
-                            Spacer()
+                            Spacer(minLength: 0)
                             
                             HStack(spacing: 4) {
                                 Button(action: {
@@ -523,6 +528,17 @@ struct FullControlView: View {
                         }
                         .padding(.leading, 5)
                         .frame(width: 195, height: 30, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                let commandDown = NSEvent.modifierFlags.contains(.command)
+                                if commandDown {
+                                    timelineData.selectAllSportCutExportStamps(in: line.id)
+                                } else {
+                                    timelineData.selectLine(line.id)
+                                }
+                            }
+                        }
                         .contextMenu {
                             Button(^String.Titles.editName) {
                                 timelineData.selectLine(line.id)
@@ -566,19 +582,9 @@ struct FullControlView: View {
                                             .stroke((line.id == timelineData.selectedLineID) ?
                                                     Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
                                     )
-                                    .onTapGesture {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            let commandDown = NSApp.currentEvent?.modifierFlags.contains(.command) ?? false
-                                            if commandDown {
-                                                timelineData.selectAllSportCutExportStamps(in: line.id)
-                                            } else {
-                                                timelineData.selectLine(line.id)
-                                            }
-                                        }
-                                    }
                             }
                             
-                            Spacer()
+                            Spacer(minLength: 0)
 
                             HStack(spacing: 4) {
                                 Button(action: {
@@ -604,6 +610,17 @@ struct FullControlView: View {
                         }
                         .padding(.leading, 5)
                         .frame(width: 195, height: 30, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                let commandDown = NSEvent.modifierFlags.contains(.command)
+                                if commandDown {
+                                    timelineData.selectAllSportCutExportStamps(in: line.id)
+                                } else {
+                                    timelineData.selectLine(line.id)
+                                }
+                            }
+                        }
                         .contextMenu {
                             Button(^String.Titles.timelineButtonDeleteTimeline) {
                                 let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
@@ -1239,8 +1256,11 @@ struct FullControlView: View {
             
             Divider()
             
-            Button("По дате добавления (хронологически)") {
+            Button("По времени последнего тега (раньше → позже)") {
                 applyTimelineSort(mode: .lastTagChronological)
+            }
+            Button("По времени последнего тега (позже → раньше)") {
+                applyTimelineSort(mode: .lastTagChronologicalReverse)
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
@@ -1304,6 +1324,14 @@ struct FullControlView: View {
                 if t0 != t1 { return t0 < t1 }
                 return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
+        case .lastTagChronologicalReverse:
+            timelineData.lines.sort {
+                let t0 = lastTagMoment(for: $0)
+                let t1 = lastTagMoment(for: $1)
+                
+                if t0 != t1 { return t0 > t1 }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
         }
 
         // Drawings timeline always stays at the top
@@ -1334,7 +1362,6 @@ struct FullControlView: View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 12) {
-                    VideoMarkupInlineStatusView()
                     inlineControlsBar
                     scrollBlock()
                 }
@@ -2161,27 +2188,14 @@ struct TimelineMouseTracker: NSViewRepresentable {
             let time = (clampedX / gridWidth) * duration
             let clampedTime = max(0.0, min(time, duration))
             
-            let foundStamp = line.stamps.first { stamp in
+            let foundStamp = line.stamps.last { stamp in
                 clampedTime >= stamp.timeStartSeconds && clampedTime <= stamp.timeFinishSeconds
             }
             
             if let stamp = foundStamp, let tagLibrary = tagLibrary {
                 let tag = tagLibrary.findTagById(stamp.idTag)
                 let tagName = tag?.name ?? stamp.label
-                
-                var sameTagCounter = 0
-                var currentTagOrdinal = 1
-                outerLoop: for timelineLine in lines {
-                    for candidate in timelineLine.stamps {
-                        if candidate.idTag == stamp.idTag {
-                            sameTagCounter += 1
-                        }
-                        if candidate.id == stamp.id {
-                            currentTagOrdinal = max(1, sameTagCounter)
-                            break outerLoop
-                        }
-                    }
-                }
+                let currentTagOrdinal = stamp.chronologicalOrdinalAmongSameTag(in: lines)
 
                 var infoParts: [String] = []
                 infoParts.append("\(tagName)_\(currentTagOrdinal)")

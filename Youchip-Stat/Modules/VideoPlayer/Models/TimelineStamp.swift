@@ -147,6 +147,19 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
             && lhs.position == rhs.position
             && lhs.comment == rhs.comment
     }
+    
+    /// Порядковый номер среди всех экземпляров того же тега по времени начала (раньше по времени → меньший номер).
+    func chronologicalOrdinalAmongSameTag(in lines: [TimelineLine]) -> Int {
+        let peers = lines.flatMap(\.stamps).filter { $0.idTag == idTag }
+        let sorted = peers.sorted {
+            if $0.timeStartSeconds != $1.timeStartSeconds {
+                return $0.timeStartSeconds < $1.timeStartSeconds
+            }
+            return $0.id.uuidString < $1.id.uuidString
+        }
+        guard let idx = sorted.firstIndex(where: { $0.id == id }) else { return 1 }
+        return idx + 1
+    }
 }
 
 extension Array where Element == TimelineStamp {

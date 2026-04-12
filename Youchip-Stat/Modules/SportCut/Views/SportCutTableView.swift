@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import AppKit
 
 struct SportCutTableView: View {
     let sessionID: UUID
@@ -13,8 +12,6 @@ struct SportCutTableView: View {
     let selectedSourceIndex: Int
     
     @ObservedObject var sessionManager = SportCutSessionManager.shared
-    @State private var selectedEventIDs: Set<UUID> = []
-    @State private var isCommandPressed = false
     @State private var sortMode: SportCutTableSortMode = .startTimeAsc
 
     private enum SportCutTableSortMode: String, CaseIterable {
@@ -133,28 +130,6 @@ struct SportCutTableView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(spacing: 0) {
-                if !selectedEventIDs.isEmpty {
-                    HStack(spacing: 10) {
-                        Text("Выбрано: \(selectedEventIDs.count)")
-                            .font(.system(size: 11, weight: .semibold))
-                        Button("Добавить в плейлист") {
-                            appendSelectionToDefaultPlaylist()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        Button("Снять выделение") {
-                            selectedEventIDs.removeAll()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.blue.opacity(0.1))
-                    Divider()
-                }
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         tableHeader
@@ -163,51 +138,13 @@ struct SportCutTableView: View {
                             SportCutTableRowView(
                                 row: row,
                                 playerManager: playerManager,
-                                sessionID: sessionID,
-                                isSelected: selectedEventIDs.contains(row.stamp.id),
-                                isCommandPressed: isCommandPressed,
-                                onToggleSelection: {
-                                    if selectedEventIDs.contains(row.stamp.id) {
-                                        selectedEventIDs.remove(row.stamp.id)
-                                    } else {
-                                        selectedEventIDs.insert(row.stamp.id)
-                                    }
-                                }
+                                sessionID: sessionID
                             )
                         }
                     }
                 }
-                }
             }
         }
-        .onAppear { setupShiftKeyMonitoring() }
-    }
-
-    private func appendSelectionToDefaultPlaylist() {
-        guard var session = sessionManager.sessions.first(where: { $0.id == sessionID }) else { return }
-        let rows = filteredStamps.filter { selectedEventIDs.contains($0.stamp.id) }
-        guard !rows.isEmpty else { return }
-
-        if session.playlistGroups.isEmpty {
-            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
-        }
-        if session.playlistGroups[0].playlists.isEmpty {
-            SportCutSessionManager.shared.addPlaylist(to: &session, groupIndex: 0, name: nil)
-        }
-        guard var fresh = sessionManager.sessions.first(where: { $0.id == sessionID }) else { return }
-        var group0 = fresh.playlistGroups[0]
-        let lastIdx = group0.playlists.count - 1
-        var pl = group0.playlists[lastIdx]
-        for row in rows {
-            let ev = SportCutEvent.from(stamp: row.stamp, line: row.line, source: row.source)
-            if !pl.events.contains(ev) {
-                pl.events.append(ev)
-            }
-        }
-        group0.playlists[lastIdx] = pl
-        fresh.playlistGroups[0] = group0
-        sessionManager.updateSession(fresh)
-        selectedEventIDs.removeAll()
     }
     
     private var tableHeader: some View {
@@ -251,17 +188,6 @@ struct SportCutTableView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
     }
-    
-    private func setupShiftKeyMonitoring() {
-        NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
-            let cmd = event.modifierFlags.contains(.command)
-            if isCommandPressed != cmd {
-                isCommandPressed = cmd
-                if !cmd { selectedEventIDs.removeAll() }
-            }
-            return event
-        }
-    }
 }
 
 struct SportCutEventRow {
@@ -274,9 +200,6 @@ struct SportCutTableRowView: View {
     let row: SportCutEventRow
     @ObservedObject var playerManager: SportCutPlayerManager
     let sessionID: UUID
-    let isSelected: Bool
-    let isCommandPressed: Bool
-    let onToggleSelection: () -> Void
     
     @ObservedObject var sessionManager = SportCutSessionManager.shared
     @State private var isDragging = false
@@ -363,7 +286,8 @@ struct SportCutTableRowView: View {
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+            .contentShape(Rectangle())
             .padding(.horizontal, 6)
             Divider().frame(height: 20)
             
@@ -388,10 +312,9 @@ struct SportCutTableRowView: View {
             .padding(.horizontal, 6)
         }
         .padding(.vertical, 4)
-        .background(isSelected ? Color.blue.opacity(0.15) : Color.clear)
         .overlay(
             Rectangle()
-                .stroke(isSelected ? Color.blue : Color.gray.opacity(0.2), lineWidth: isSelected ? 1 : 0.5)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
         )
         .onDrag {
             isDragging = true
@@ -410,11 +333,7 @@ struct SportCutTableRowView: View {
             return provider
         }
         .onTapGesture {
-            if isCommandPressed {
-                onToggleSelection()
-            } else {
-                playerManager.playEvent(createEvent())
-            }
+            playerManager.playEvent(createEvent())
         }
         .contextMenu {
             Button(^String.Titles.sportCutPlayAction) {
@@ -436,6 +355,9 @@ struct SportCutTableRowView: View {
         let lastIdx = session.playlistGroups[0].playlists.count - 1
         if !session.playlistGroups[0].playlists[lastIdx].events.contains(event) {
             session.playlistGroups[0].playlists[lastIdx].events.append(event)
+            if let raw = row.stamp.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+                session.playlistGroups[0].playlists[lastIdx].eventComments[event.hiddenKey] = raw
+            }
             sessionManager.updateSession(session)
         }
     }

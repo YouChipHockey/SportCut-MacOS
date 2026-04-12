@@ -39,6 +39,12 @@ struct SportCutVideoPlayerView: View {
         .onChange(of: playerManager.isEditorMode) { isEditor in
             handleEditorFullscreenChange(isEditor: isEditor)
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEndLiveResizeNotification)) { notification in
+            guard playerManager.isEditorMode,
+                  let resized = notification.object as? NSWindow,
+                  resized === NSApp.keyWindow else { return }
+            playerManager.editorDrawingState.commitViewSizeScalingNow()
+        }
     }
     
     // MARK: - Normal Mode Header
@@ -81,7 +87,7 @@ struct SportCutVideoPlayerView: View {
             Button(action: {
                 playerManager.captureFrameForEditor()
             }) {
-                Image(systemName: hasDrawings ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                Image(systemName: "pencil.tip.crop.circle")
                     .font(.system(size: 14))
                     .foregroundColor(!isPlaylistEvent ? .gray.opacity(0.35) : (hasDrawings ? .orange : .blue))
             }
@@ -157,6 +163,7 @@ struct SportCutVideoPlayerView: View {
                 .background(Color.black.opacity(0.7))
             }
         }
+        .clipped()
     }
     
     // MARK: - Controls

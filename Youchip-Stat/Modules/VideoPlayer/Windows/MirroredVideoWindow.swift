@@ -88,5 +88,6 @@ struct MirrorSportCutVideoContentView: View {
                 .zIndex(10)
             }
         }
+        .clipped()
     }
 }

@@ -130,6 +130,8 @@ class WindowsManager: NSObject {
         sportCutMirrorVideoWindow?.close()
         sportCutMirrorVideoWindow = nil
         sportCutWindow = nil
+        activeSportCutSessionID = nil
+        activeSportCutPlayerManager = nil
     }
     
     private func positionMirrorWindow(_ window: NSWindow?, beside host: NSWindow?) {
@@ -227,6 +229,8 @@ class WindowsManager: NSObject {
         UserDefaults.standard.set("", forKey: "editingStampID")
         isClosing = false
         
+        VideoMarkupActivityBanner.shared.clearTagMarkupHistoryForNewVideoSession()
+        
         TimelineDataManager.shared.currentBookmark = nil
         TimelineDataManager.shared.lines = []
         TimelineDataManager.shared.selectedLineID = nil
@@ -267,6 +271,8 @@ class WindowsManager: NSObject {
         UserDefaults.standard.set("", forKey: "editingStampID")
         isClosing = false
         
+        VideoMarkupActivityBanner.shared.clearTagMarkupHistoryForNewVideoSession()
+        
         // Load existing timelines from the project being appended to.
         TimelineDataManager.shared.currentBookmark = nil
         TimelineDataManager.shared.lines = existingTimelines
@@ -301,6 +307,8 @@ class WindowsManager: NSObject {
         UserDefaults.standard.set("", forKey: "editingStampLineID")
         UserDefaults.standard.set("", forKey: "editingStampID")
         isClosing = false
+        
+        VideoMarkupActivityBanner.shared.clearTagMarkupHistoryForNewVideoSession()
         
         TimelineDataManager.shared.currentBookmark = nil
         TimelineDataManager.shared.lines = []
@@ -423,6 +431,7 @@ class WindowsManager: NSObject {
                     self.ensureScreenshotsTimelineExists()
                     ScreenshotsMetadataManager.shared.loadScreenshots(from: existing.screenshotsFolder)
                     VideoPlayerManager.shared.transitionToStaticVideo(url: finalURL)
+                    HotKeyManager.shared.resumeKeyboardMonitoring()
                     return
                 }
                 
@@ -447,6 +456,7 @@ class WindowsManager: NSObject {
                 self.ensureScreenshotsTimelineExists()
                 ScreenshotsMetadataManager.shared.loadScreenshots(from: importedFile.screenshotsFolder)
                 VideoPlayerManager.shared.transitionToStaticVideo(url: finalURL)
+                HotKeyManager.shared.resumeKeyboardMonitoring()
             }
         }
     }
@@ -711,6 +721,8 @@ class WindowsManager: NSObject {
         UserDefaults.standard.set("", forKey: "editingStampID")
         isClosing = false
         
+        VideoMarkupActivityBanner.shared.clearTagMarkupHistoryForNewVideoSession()
+        
         TimelineDataManager.shared.currentBookmark = filesFile.videoData.bookmark
         
         if MarkupMode.current == .standard {
@@ -953,6 +965,13 @@ class WindowsManager: NSObject {
         guard let source = mutable.sources.first(where: { $0.projectID == pid }) else { return }
         let sortedPairs = pairs.sorted { $0.1.timeStartSeconds < $1.1.timeStartSeconds }
         let events = sortedPairs.map { SportCutEvent.from(stamp: $0.1, line: $0.0, source: source) }
+        var eventComments: [String: String] = [:]
+        for (line, stamp) in sortedPairs {
+            let ev = SportCutEvent.from(stamp: stamp, line: line, source: source)
+            if let raw = stamp.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+                eventComments[ev.hiddenKey] = raw
+            }
+        }
 
         if mutable.playlistGroups.isEmpty {
             SportCutSessionManager.shared.addPlaylistGroup(to: &mutable, name: "Основная")
@@ -962,7 +981,7 @@ class WindowsManager: NSObject {
         df.timeStyle = .short
         df.dateStyle = .short
         let playlistName = "Теги (\(df.string(from: Date())))"
-        let newPlaylist = SportCutPlaylist(name: playlistName, events: events)
+        let newPlaylist = SportCutPlaylist(name: playlistName, events: events, eventComments: eventComments)
         mutable.playlistGroups[0].playlists.append(newPlaylist)
         SportCutSessionManager.shared.updateSession(mutable)
 
@@ -988,6 +1007,202 @@ class WindowsManager: NSObject {
             }
         }
         openSportCutFromTimelineStamps(pairs)
+    }
+
+    // MARK: - Markup multi-selection → SportCut playlist
+
+    private var activeSportCutPlayerManager: SportCutPlayerManager?
+    private var activeSportCutSessionID: UUID?
+
+    func registerActiveSportCut(sessionID: UUID, playerManager: SportCutPlayerManager) {
+        activeSportCutSessionID = sessionID
+        activeSportCutPlayerManager = playerManager
+    }
+
+    func unregisterActiveSportCut(sessionID: UUID) {
+        if activeSportCutSessionID == sessionID {
+            activeSportCutSessionID = nil
+            activeSportCutPlayerManager = nil
+        }
+    }
+
+    /// Если открыт редактор рисунка SportCut — закрывает его и возвращает `true` (окно закрывать не нужно).
+    @discardableResult
+    func cancelSportCutDrawingEditorIfActive() -> Bool {
+        guard let pm = activeSportCutPlayerManager, pm.isEditorMode else { return false }
+        pm.cancelEditor()
+        return true
+    }
+
+    private func stampStartForMarkupRef(_ ref: MarkupStampRef) -> Double {
+        guard let line = TimelineDataManager.shared.lines.first(where: { $0.id == ref.lineID }),
+              let st = line.stamps.first(where: { $0.id == ref.stampID }) else { return 0 }
+        return st.timeStartSeconds
+    }
+
+    /// Все выбранные ⌘-штампы или только кликнутый тег.
+    func makeMarkupPlaylistDragPayload(line: TimelineLine, stamp: TimelineStamp) -> MarkupStampsBatchPlaylistDragPayload? {
+        guard !currentVideoId.isEmpty else { return nil }
+        let bulk = TimelineDataManager.shared.stampsSelectedForSportCut
+        var refs: [MarkupStampRef] = []
+        if !bulk.isEmpty, bulk.contains(stamp.id) {
+            for ln in TimelineDataManager.shared.lines {
+                for st in ln.stamps where bulk.contains(st.id) {
+                    refs.append(MarkupStampRef(lineID: ln.id, stampID: st.id))
+                }
+            }
+        } else {
+            refs = [MarkupStampRef(lineID: line.id, stampID: stamp.id)]
+        }
+        refs.sort { stampStartForMarkupRef($0) < stampStartForMarkupRef($1) }
+        return MarkupStampsBatchPlaylistDragPayload(markupProjectID: currentVideoId, stampRefs: refs)
+    }
+
+    func encodeMarkupPlaylistDragData(line: TimelineLine, stamp: TimelineStamp) -> Data? {
+        guard let p = makeMarkupPlaylistDragPayload(line: line, stamp: stamp) else { return nil }
+        return try? JSONEncoder().encode(p)
+    }
+
+    func encodeMarkupPlaylistDragDataForSelectionOnly() -> Data? {
+        guard !currentVideoId.isEmpty else { return nil }
+        let bulk = TimelineDataManager.shared.stampsSelectedForSportCut
+        guard !bulk.isEmpty else { return nil }
+        var refs: [MarkupStampRef] = []
+        for ln in TimelineDataManager.shared.lines {
+            for st in ln.stamps where bulk.contains(st.id) {
+                refs.append(MarkupStampRef(lineID: ln.id, stampID: st.id))
+            }
+        }
+        refs.sort { stampStartForMarkupRef($0) < stampStartForMarkupRef($1) }
+        let payload = MarkupStampsBatchPlaylistDragPayload(markupProjectID: currentVideoId, stampRefs: refs)
+        return try? JSONEncoder().encode(payload)
+    }
+
+    func resolveMarkupPlaylistEvents(payload: MarkupStampsBatchPlaylistDragPayload, sessionID: UUID) -> [SportCutEvent]? {
+        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == payload.markupProjectID }) else { return nil }
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return nil }
+        if !session.sources.contains(where: { $0.projectID == filesFile.id }) {
+            SportCutSessionManager.shared.addProjectSource(to: &session, file: filesFile)
+        }
+        SportCutSessionManager.shared.syncProjectSource(from: filesFile, in: &session)
+        guard let refreshed = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+              let source = refreshed.sources.first(where: { $0.projectID == filesFile.id }) else { return nil }
+        var events: [SportCutEvent] = []
+        for ref in payload.stampRefs {
+            guard let line = TimelineDataManager.shared.lines.first(where: { $0.id == ref.lineID }),
+                  let stamp = line.stamps.first(where: { $0.id == ref.stampID }) else { continue }
+            events.append(SportCutEvent.from(stamp: stamp, line: line, source: source))
+        }
+        return events.isEmpty ? nil : events
+    }
+
+    func appendEventsToSportCutPlaylist(events: [SportCutEvent], sessionID: UUID, groupIndex: Int, playlistID: UUID) {
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
+        guard groupIndex < session.playlistGroups.count,
+              let pi = session.playlistGroups[groupIndex].playlists.firstIndex(where: { $0.id == playlistID }) else { return }
+        var pl = session.playlistGroups[groupIndex].playlists[pi]
+        let existing = Set(pl.events.map(\.hiddenKey))
+        let added = events.filter { !existing.contains($0.hiddenKey) }
+        for ev in added {
+            pl.events.append(ev)
+        }
+        pl.mergeMarkupComments(for: added, session: session)
+        session.playlistGroups[groupIndex].playlists[pi] = pl
+        SportCutSessionManager.shared.updateSession(session)
+    }
+
+    func insertMarkupEventsIntoSportCutPlaylist(events: [SportCutEvent], sessionID: UUID, groupIndex: Int, playlistID: UUID, at index: Int) {
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
+        guard groupIndex < session.playlistGroups.count,
+              let pi = session.playlistGroups[groupIndex].playlists.firstIndex(where: { $0.id == playlistID }) else { return }
+        var playlist = session.playlistGroups[groupIndex].playlists[pi]
+        var plEvents = playlist.events
+        let existing = Set(plEvents.map(\.hiddenKey))
+        let added = events.filter { !existing.contains($0.hiddenKey) }
+        var insertAt = min(max(0, index), plEvents.count)
+        for ev in added {
+            plEvents.insert(ev, at: insertAt)
+            insertAt += 1
+        }
+        playlist.events = plEvents
+        playlist.mergeMarkupComments(for: added, session: session)
+        session.playlistGroups[groupIndex].playlists[pi] = playlist
+        SportCutSessionManager.shared.updateSession(session)
+    }
+
+    private func sportCutPlaylistGroupIndex(session: SportCutSession, playlistID: UUID) -> Int? {
+        for (gi, g) in session.playlistGroups.enumerated() where g.playlists.contains(where: { $0.id == playlistID }) {
+            return gi
+        }
+        return nil
+    }
+
+    func appendMarkupSelectionToOpenSportCutPlaylist() {
+        VideoPlayerManager.shared.player?.pause()
+        guard let payload = buildMarkupPayloadFromBulkSelection() else { return }
+        appendMarkupPayloadUsingOpenSportCutWindow(payload)
+    }
+
+    func appendSingleMarkupStampToOpenSportCutPlaylist(line: TimelineLine, stamp: TimelineStamp) {
+        VideoPlayerManager.shared.player?.pause()
+        guard let payload = makeMarkupPlaylistDragPayload(line: line, stamp: stamp) else { return }
+        appendMarkupPayloadUsingOpenSportCutWindow(payload)
+    }
+
+    private func buildMarkupPayloadFromBulkSelection() -> MarkupStampsBatchPlaylistDragPayload? {
+        guard !currentVideoId.isEmpty else { return nil }
+        let bulk = TimelineDataManager.shared.stampsSelectedForSportCut
+        guard !bulk.isEmpty else { return nil }
+        var refs: [MarkupStampRef] = []
+        for ln in TimelineDataManager.shared.lines {
+            for st in ln.stamps where bulk.contains(st.id) {
+                refs.append(MarkupStampRef(lineID: ln.id, stampID: st.id))
+            }
+        }
+        guard !refs.isEmpty else { return nil }
+        refs.sort { stampStartForMarkupRef($0) < stampStartForMarkupRef($1) }
+        return MarkupStampsBatchPlaylistDragPayload(markupProjectID: currentVideoId, stampRefs: refs)
+    }
+
+    private func appendMarkupPayloadUsingOpenSportCutWindow(_ payload: MarkupStampsBatchPlaylistDragPayload) {
+        guard let sessionID = activeSportCutSessionID,
+              let pm = activeSportCutPlayerManager,
+              let session0 = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else {
+            var pairs: [(TimelineLine, TimelineStamp)] = []
+            for ref in payload.stampRefs {
+                guard let ln = TimelineDataManager.shared.lines.first(where: { $0.id == ref.lineID }),
+                      let st = ln.stamps.first(where: { $0.id == ref.stampID }) else { continue }
+                pairs.append((ln, st))
+            }
+            pairs.sort { $0.1.timeStartSeconds < $1.1.timeStartSeconds }
+            openSportCutFromTimelineStamps(pairs)
+            return
+        }
+
+        guard let events = resolveMarkupPlaylistEvents(payload: payload, sessionID: sessionID) else { return }
+
+        let targetPlaylistID: UUID
+        let targetGroup: Int
+        if let pid = pm.currentPlaylistID,
+           let gi = sportCutPlaylistGroupIndex(session: session0, playlistID: pid) {
+            targetPlaylistID = pid
+            targetGroup = gi
+        } else if let g0 = session0.playlistGroups.first, !g0.playlists.isEmpty, let lastPl = g0.playlists.last {
+            targetGroup = 0
+            targetPlaylistID = lastPl.id
+        } else {
+            var pairs: [(TimelineLine, TimelineStamp)] = []
+            for ref in payload.stampRefs {
+                guard let ln = TimelineDataManager.shared.lines.first(where: { $0.id == ref.lineID }),
+                      let st = ln.stamps.first(where: { $0.id == ref.stampID }) else { continue }
+                pairs.append((ln, st))
+            }
+            pairs.sort { $0.1.timeStartSeconds < $1.1.timeStartSeconds }
+            openSportCutFromTimelineStamps(pairs)
+            return
+        }
+
+        appendEventsToSportCutPlaylist(events: events, sessionID: sessionID, groupIndex: targetGroup, playlistID: targetPlaylistID)
     }
     
     func showMomentViewer(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String) {
@@ -1052,8 +1267,17 @@ class ActiveWindowManager {
         currentActiveWindow = nil
     }
     
+    /// Актуальное окно для клавиатуры: `keyWindow` или родитель sheet (кэш из уведомлений может рассинхронизироваться после смены key, например закрытие «Пересмотра» после live).
+    private func resolvedKeyWindowForInput() -> NSWindow? {
+        guard let keyWindow = NSApplication.shared.keyWindow else { return nil }
+        if keyWindow.isSheet, let parent = keyWindow.sheetParent {
+            return parent
+        }
+        return keyWindow
+    }
+    
     func isAllowedWindowActive() -> Bool {
-        guard let activeWindow = currentActiveWindow else { return false }
+        guard let activeWindow = resolvedKeyWindowForInput() ?? currentActiveWindow else { return false }
         
         let isDirectlyAllowed = allowedWindowControllers.contains { windowController in
             windowController.window == activeWindow
@@ -1074,14 +1298,15 @@ class ActiveWindowManager {
     }
     
     func isViewerWindowActive() -> Bool {
-        return currentActiveWindow?.windowController == WindowsManager.shared.viewerWindow
+        guard let w = resolvedKeyWindowForInput() else { return false }
+        return w.windowController === WindowsManager.shared.viewerWindow
     }
     
     /// Проверяет, является ли активное окно окном разметчика (VideoPlayerWindowController, FullControlWindowController или TagLibraryWindowController)
     func isMarkerWindowActive() -> Bool {
-        guard let activeWindow = currentActiveWindow else { return false }
+        guard let activeWindow = resolvedKeyWindowForInput() else { return false }
         let windowsManager = WindowsManager.shared
-        return activeWindow.windowController === windowsManager.videoWindow || 
+        return activeWindow.windowController === windowsManager.videoWindow ||
                activeWindow.windowController === windowsManager.controlWindow ||
                activeWindow.windowController === windowsManager.tagLibraryWindow
     }

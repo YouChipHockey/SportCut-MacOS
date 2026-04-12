@@ -8,6 +8,13 @@ import AVFoundation
 import Combine
 import AppKit
 
+enum SportCutPlaylistPlaybackKind {
+    /// Как сейчас: отдельная композиция на клип, по окончании — следующий.
+    case sequentialClips
+    /// Все клипы плейлиста подряд в одном AVPlayerItem (кнопка play в ячейке).
+    case singleFilm
+}
+
 class SportCutPlayerManager: ObservableObject {
     @Published var player: AVPlayer = AVPlayer()
     @Published var isPlaying: Bool = false
@@ -37,6 +44,9 @@ class SportCutPlayerManager: ObservableObject {
     
     private static let wmOffsetXKey = "SportCutWatermarkOffsetX"
     private static let wmOffsetYKey = "SportCutWatermarkOffsetY"
+    /// Default anchor: left margin and bottom margin inside the video tile (points).
+    static let watermarkLeadingInset: CGFloat = 20
+    static let watermarkBottomInset: CGFloat = 40
     
     var sessionID: UUID?
     
@@ -47,6 +57,10 @@ class SportCutPlayerManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     private var playlistEvents: [SportCutEvent] = []
+    private var playlistPlaybackKind: SportCutPlaylistPlaybackKind = .sequentialClips
+    /// Границы сегментов в «фильме» (секунды на оси склеенного таймлайна), по одному на элемент `playlistEvents`.
+    private var filmSegmentStartSeconds: [Double] = []
+    private var filmSegmentDurationSeconds: [Double] = []
 
     init() {
         let x = UserDefaults.standard.double(forKey: Self.wmOffsetXKey)
@@ -55,11 +69,32 @@ class SportCutPlayerManager: ObservableObject {
         observePlayerState()
     }
     
-    func commitWatermarkDrag(delta: CGSize) {
-        let next = CGSize(
+    func commitWatermarkDrag(delta: CGSize, container: CGSize, watermark: CGSize) {
+        watermarkDragOffset = CGSize(
             width: watermarkDragOffset.width + delta.width,
             height: watermarkDragOffset.height + delta.height
         )
+        syncWatermarkOffsetWithinVideoBounds(container: container, watermark: watermark)
+    }
+
+    /// Keeps the stored drag offset consistent with the video rect after resize or layout.
+    func syncWatermarkOffsetWithinVideoBounds(container: CGSize, watermark: CGSize) {
+        guard watermark.width > 0.5, watermark.height > 0.5 else { return }
+        let lead = Self.watermarkLeadingInset
+        let bottom = Self.watermarkBottomInset
+        let W = container.width
+        let H = container.height
+        let w = watermark.width
+        let h = watermark.height
+        guard W > 0, H > 0 else { return }
+        let maxX = max(0, W - w)
+        let maxYTop = max(0, H - h)
+        let rawX = lead + watermarkDragOffset.width
+        let rawYTop = H - bottom - h + watermarkDragOffset.height
+        let x = min(max(rawX, 0), maxX)
+        let yTop = min(max(rawYTop, 0), maxYTop)
+        let next = CGSize(width: x - lead, height: yTop - (H - bottom - h))
+        guard next != watermarkDragOffset else { return }
         watermarkDragOffset = next
         UserDefaults.standard.set(next.width, forKey: Self.wmOffsetXKey)
         UserDefaults.standard.set(next.height, forKey: Self.wmOffsetYKey)
@@ -100,8 +135,15 @@ class SportCutPlayerManager: ObservableObject {
     
     // MARK: - Playlist playback
     
-    func playPlaylist(_ events: [SportCutEvent], startIndex: Int = 0, playlistID: UUID? = nil) {
-        guard !events.isEmpty, startIndex < events.count else { return }
+    func playPlaylist(
+        _ events: [SportCutEvent],
+        startIndex: Int = 0,
+        playlistID: UUID? = nil,
+        playbackKind: SportCutPlaylistPlaybackKind = .sequentialClips,
+        autoPlayAfterLoad: Bool = true,
+        onSeekComplete: (() -> Void)? = nil
+    ) {
+        guard !events.isEmpty else { return }
         let mapped: [SportCutEvent]
         if let sessionID,
            let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) {
@@ -110,16 +152,61 @@ class SportCutPlayerManager: ObservableObject {
             mapped = events
         }
         playlistEvents = mapped
-        currentPlaylistIndex = startIndex
         playlistPlaybackActive = true
         if let playlistID = playlistID {
             currentPlaylistID = playlistID
         }
-        loadSourceAndPlay(event: mapped[startIndex])
+
+        if playbackKind == .singleFilm {
+            currentPlaylistIndex = 0
+            loadPlaylistAsSingleFilm(
+                events: mapped,
+                autoPlayAfterSeek: autoPlayAfterLoad,
+                resumeGlobalAfterLoad: nil,
+                onSeekFinished: onSeekComplete
+            )
+            return
+        }
+
+        guard startIndex < mapped.count else { return }
+        currentPlaylistIndex = startIndex
+        loadSourceAndPlay(
+            event: mapped[startIndex],
+            autoPlayAfterSeek: autoPlayAfterLoad,
+            onSeekFinished: onSeekComplete
+        )
+    }
+
+    /// Новый рисунок для эпизода плейлиста: если клип уже на экране — сразу захват кадра, иначе переключение без автоплея и затем редактор.
+    func captureNewDrawingForPlaylistClip(event: SportCutEvent, visiblePlaylistEvents: [SportCutEvent], playlistID: UUID) {
+        guard let idx = visiblePlaylistEvents.firstIndex(where: { $0.hiddenKey == event.hiddenKey }) else { return }
+
+        let sameClipActive = playlistPlaybackActive
+            && self.currentPlaylistID == playlistID
+            && currentEvent?.hiddenKey == event.hiddenKey
+
+        if sameClipActive {
+            captureFrameForEditor()
+            return
+        }
+
+        playPlaylist(
+            visiblePlaylistEvents,
+            startIndex: idx,
+            playlistID: playlistID,
+            autoPlayAfterLoad: false,
+            onSeekComplete: { [weak self] in
+                self?.captureFrameForEditor()
+            }
+        )
     }
     
     func advanceToNextEvent() {
         guard playlistPlaybackActive else { return }
+        if playlistPlaybackKind == .singleFilm {
+            advanceToNextPlaylist()
+            return
+        }
         let nextIndex = currentPlaylistIndex + 1
         if nextIndex < playlistEvents.count {
             currentPlaylistIndex = nextIndex
@@ -158,6 +245,19 @@ class SportCutPlayerManager: ObservableObject {
         // If no visible events remain in current playlist, jump to next available playlist.
         guard !visible.isEmpty else {
             advanceToNextPlaylist(session: session)
+            return
+        }
+
+        if playlistPlaybackKind == .singleFilm {
+            let resolved = visible.map { session.timelineResolvedEvent(for: $0) }
+            let resume = player.currentTime().seconds
+            let go = isPlaying
+            loadPlaylistAsSingleFilm(
+                events: resolved,
+                autoPlayAfterSeek: go,
+                resumeGlobalAfterLoad: resume,
+                onSeekFinished: nil
+            )
             return
         }
 
@@ -257,6 +357,9 @@ class SportCutPlayerManager: ObservableObject {
         player.pause()
         isPlaying = false
         playlistPlaybackActive = false
+        playlistPlaybackKind = .sequentialClips
+        filmSegmentStartSeconds = []
+        filmSegmentDurationSeconds = []
         currentPlaylistIndex = -1
         playlistEvents = []
         currentEvent = nil
@@ -273,6 +376,7 @@ class SportCutPlayerManager: ObservableObject {
 
     /// Предпросмотр при ресайзе тега на таймлайне SportCut: время в **исходном видео**, плеер крутит локальное время внутри текущего клипа.
     func seekPreviewDuringResize(absoluteVideoTime: Double, stampID: UUID, sourceID: UUID) {
+        guard playlistPlaybackKind != .singleFilm else { return }
         guard currentSourceID == sourceID,
               currentEvent?.stampID == stampID else { return }
         guard let ev = currentEvent else { return }
@@ -301,7 +405,152 @@ class SportCutPlayerManager: ObservableObject {
         return session.timelineResolvedEvent(for: event)
     }
 
-    private func loadSourceAndPlay(event: SportCutEvent) {
+    private func loadPlaylistAsSingleFilm(
+        events: [SportCutEvent],
+        autoPlayAfterSeek: Bool = true,
+        resumeGlobalAfterLoad: Double? = nil,
+        onSeekFinished: (() -> Void)? = nil
+    ) {
+        playlistPlaybackKind = .singleFilm
+        filmSegmentStartSeconds = []
+        filmSegmentDurationSeconds = []
+        shownDrawingNames.removeAll()
+
+        let composition = AVMutableComposition()
+        guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            stopPlayback()
+            return
+        }
+        var compAudioTrack: AVMutableCompositionTrack?
+
+        var cursor = CMTime.zero
+        var totalDuration: Double = 0
+        var builtEvents: [SportCutEvent] = []
+
+        for event in events {
+            let ev = resolvedAgainstSession(event)
+            guard let source = sources.first(where: { $0.id == ev.sourceID }),
+                  let url = source.resolveVideoURL() else { continue }
+
+            let asset: AVAsset
+            if let cached = loadedAssets[ev.sourceID] {
+                asset = cached
+            } else {
+                asset = AVAsset(url: url)
+                loadedAssets[ev.sourceID] = asset
+            }
+
+            let assetDuration = CMTimeGetSeconds(asset.duration)
+            let safeStart = max(0.0, min(ev.startTime, assetDuration))
+            let maxAvailable = max(0.0, assetDuration - safeStart)
+            let safeDuration = min(max(0.0, ev.duration), maxAvailable)
+
+            guard safeDuration > 0,
+                  let sourceVideoTrack = asset.tracks(withMediaType: .video).first else { continue }
+
+            let startCM = CMTime(seconds: safeStart, preferredTimescale: 600)
+            let durationCM = CMTime(seconds: safeDuration, preferredTimescale: 600)
+            let timeRange = CMTimeRange(start: startCM, duration: durationCM)
+
+            do {
+                try compVideoTrack.insertTimeRange(timeRange, of: sourceVideoTrack, at: cursor)
+                if let sourceAudioTrack = asset.tracks(withMediaType: .audio).first {
+                    if compAudioTrack == nil {
+                        compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+                    }
+                    if let at = compAudioTrack {
+                        try at.insertTimeRange(timeRange, of: sourceAudioTrack, at: cursor)
+                    }
+                }
+            } catch {
+                continue
+            }
+
+            filmSegmentStartSeconds.append(totalDuration)
+            filmSegmentDurationSeconds.append(safeDuration)
+            totalDuration += safeDuration
+            builtEvents.append(ev)
+            cursor = CMTimeAdd(cursor, durationCM)
+        }
+
+        guard totalDuration > 0, !builtEvents.isEmpty else {
+            stopPlayback()
+            return
+        }
+
+        playlistEvents = builtEvents
+        currentPlaylistIndex = 0
+        currentEvent = builtEvents[0]
+        currentSourceID = builtEvents[0].sourceID
+
+        let playerItem = AVPlayerItem(asset: composition)
+        player.replaceCurrentItem(with: playerItem)
+        videoDuration = totalDuration
+
+        setupEndObserver(item: playerItem)
+        player.pause()
+        isPlaying = false
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            guard let self, finished else { return }
+            let finishLoad: () -> Void = {
+                onSeekFinished?()
+                if autoPlayAfterSeek {
+                    self.play()
+                }
+            }
+            if let rawResume = resumeGlobalAfterLoad {
+                let t = min(max(0, rawResume), max(0, self.videoDuration - 0.05))
+                self.player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    finishLoad()
+                }
+            } else {
+                finishLoad()
+            }
+        }
+    }
+
+    private func filmEventIndexAndLocalTime(globalTime: Double) -> (index: Int, localTime: Double)? {
+        guard playlistPlaybackKind == .singleFilm,
+              !filmSegmentStartSeconds.isEmpty,
+              filmSegmentStartSeconds.count == filmSegmentDurationSeconds.count,
+              filmSegmentStartSeconds.count == playlistEvents.count else { return nil }
+        let t = max(0, globalTime)
+        let n = filmSegmentStartSeconds.count
+        for i in 0..<n {
+            let start = filmSegmentStartSeconds[i]
+            let dur = filmSegmentDurationSeconds[i]
+            let end = start + dur
+            if i < n - 1 {
+                if t >= start && t < end {
+                    return (i, t - start)
+                }
+            } else {
+                if t >= start {
+                    return (i, min(max(0, t - start), dur))
+                }
+            }
+        }
+        return (0, 0)
+    }
+
+    private func updateFilmModeCurrentEventIfNeeded(globalTime: Double) {
+        guard let (idx, _) = filmEventIndexAndLocalTime(globalTime: globalTime) else { return }
+        if idx != currentPlaylistIndex {
+            currentPlaylistIndex = idx
+            currentEvent = resolvedAgainstSession(playlistEvents[idx])
+            currentSourceID = playlistEvents[idx].sourceID
+            shownDrawingNames.removeAll()
+        }
+    }
+
+    private func loadSourceAndPlay(
+        event: SportCutEvent,
+        autoPlayAfterSeek: Bool = true,
+        onSeekFinished: (() -> Void)? = nil
+    ) {
+        playlistPlaybackKind = .sequentialClips
+        filmSegmentStartSeconds = []
+        filmSegmentDurationSeconds = []
         let event = resolvedAgainstSession(event)
         currentEvent = event
         shownDrawingNames.removeAll()
@@ -360,7 +609,10 @@ class SportCutPlayerManager: ObservableObject {
         let start = CMTime.zero
         player.seek(to: start, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             guard let self, finished else { return }
-            self.play()
+            onSeekFinished?()
+            if autoPlayAfterSeek {
+                self.play()
+            }
         }
     }
 
@@ -391,7 +643,10 @@ class SportCutPlayerManager: ObservableObject {
         removeTimeObserver()
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            self?.currentTime = time.seconds
+            guard let self else { return }
+            let sec = time.seconds
+            self.currentTime = sec
+            self.updateFilmModeCurrentEventIfNeeded(globalTime: sec)
         }
     }
     
@@ -419,7 +674,15 @@ class SportCutPlayerManager: ObservableObject {
         pause()
         let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         tempScreenshotImage = nsImage
-        editorScreenshotVideoTime = time.seconds
+        let globalT = time.seconds
+        if playlistPlaybackKind == .singleFilm, let (idx, local) = filmEventIndexAndLocalTime(globalTime: globalT) {
+            currentPlaylistIndex = idx
+            currentEvent = resolvedAgainstSession(playlistEvents[idx])
+            currentSourceID = playlistEvents[idx].sourceID
+            editorScreenshotVideoTime = local
+        } else {
+            editorScreenshotVideoTime = globalT
+        }
         editorDrawingState.clearDrawing()
         editorDrawingState.currentTool = .pencil
         isEditorMode = true
@@ -433,6 +696,21 @@ class SportCutPlayerManager: ObservableObject {
         pause()
         editorScreenshotVideoTime = drawing.videoTime
         editorDrawingState.clearDrawing()
+
+        let seekSecondsForFrame: Double = {
+            if playlistPlaybackKind == .singleFilm,
+               let ev = currentEvent,
+               let idx = playlistEvents.firstIndex(where: { $0.hiddenKey == ev.hiddenKey }),
+               idx < filmSegmentStartSeconds.count {
+                return filmSegmentStartSeconds[idx] + drawing.videoTime
+            }
+            return drawing.videoTime
+        }()
+        
+        if playlistPlaybackKind == .singleFilm {
+            let cm = CMTime(seconds: seekSecondsForFrame, preferredTimescale: 600)
+            player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero)
+        }
         
         if let snapshot = drawing.editorState {
             // Re-capture the base frame at drawing time to restore editor layers on top
@@ -441,7 +719,7 @@ class SportCutPlayerManager: ObservableObject {
                 gen.appliesPreferredTrackTransform = true
                 gen.requestedTimeToleranceBefore = .zero
                 gen.requestedTimeToleranceAfter = .zero
-                let cmTime = CMTime(seconds: drawing.videoTime, preferredTimescale: 600)
+                let cmTime = CMTime(seconds: seekSecondsForFrame, preferredTimescale: 600)
                 if let cg = try? gen.copyCGImage(at: cmTime, actualTime: nil) {
                     tempScreenshotImage = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
                 }
@@ -536,12 +814,21 @@ class SportCutPlayerManager: ObservableObject {
         guard !isEditorMode, !isShowingDrawing, currentPlaylistID != nil else { return }
         guard let sessionID = sessionID else { return }
         
-        let ct = player.currentTime().seconds
+        let globalT = player.currentTime().seconds
+        if playlistPlaybackKind == .singleFilm {
+            updateFilmModeCurrentEventIfNeeded(globalTime: globalT)
+        }
+        let compareTime: Double
+        if playlistPlaybackKind == .singleFilm, let (_, local) = filmEventIndexAndLocalTime(globalTime: globalT) {
+            compareTime = local
+        } else {
+            compareTime = globalT
+        }
         let drawings = currentEventDrawings()
         guard !drawings.isEmpty else { return }
         
         guard let matched = drawings.first(where: {
-            abs($0.videoTime - ct) < 0.15 && !shownDrawingNames.contains($0.imageName)
+            abs($0.videoTime - compareTime) < 0.15 && !shownDrawingNames.contains($0.imageName)
         }) else { return }
         
         let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)

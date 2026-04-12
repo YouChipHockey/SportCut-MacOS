@@ -9,6 +9,8 @@ struct VideoMarkupHistoryItem: Identifiable, Equatable {
     let id = UUID()
     let text: String
     let isSaved: Bool
+    /// Hex цвета тега для точки в списке истории (например из `Tag.color`).
+    let tagColorHex: String?
 }
 
 struct VideoMarkupRecordingItem: Identifiable, Equatable {
@@ -16,7 +18,6 @@ struct VideoMarkupRecordingItem: Identifiable, Equatable {
     let tagName: String
 }
 
-@MainActor
 final class VideoMarkupActivityBanner: ObservableObject {
     static let shared = VideoMarkupActivityBanner()
     
@@ -52,22 +53,31 @@ final class VideoMarkupActivityBanner: ObservableObject {
         }
     }
     
-    func completeIntervalRecording(tagName: String) {
+    func completeIntervalRecording(tagName: String, tagColorHex: String? = nil) {
         activeRecordings.removeAll { $0.tagName == tagName }
         let savedText = String.Titles.videoMarkupToastIntervalSaved.format(tagName)
         showTransientToast(savedText, addToHistory: false)
-        appendToHistory(text: savedText, isSaved: true)
+        appendToHistory(text: savedText, isSaved: true, tagColorHex: tagColorHex)
     }
     
-    func notifyInstantTagAdded(tagName: String) {
+    func notifyInstantTagAdded(tagName: String, tagColorHex: String? = nil) {
         let text = String.Titles.videoMarkupToastTagAdded.format(tagName)
         showTransientToast(text, addToHistory: false)
-        appendToHistory(text: text, isSaved: true)
+        appendToHistory(text: text, isSaved: true, tagColorHex: tagColorHex)
     }
     
     func setHistoryEnabled(_ enabled: Bool) {
         isHistoryEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: historyEnabledKey)
+    }
+    
+    /// Clears in-memory history/toast/recording chips when a new video markup session starts (singleton otherwise keeps state across window lifetimes).
+    func clearTagMarkupHistoryForNewVideoSession() {
+        cancelToastHide()
+        toastText = ""
+        toastVisible = false
+        historyItems.removeAll()
+        activeRecordings.removeAll()
     }
     
     private func showTransientToast(_ text: String, addToHistory: Bool) {
@@ -91,8 +101,8 @@ final class VideoMarkupActivityBanner: ObservableObject {
         hideToastTask = nil
     }
 
-    private func appendToHistory(text: String, isSaved: Bool) {
-        let item = VideoMarkupHistoryItem(text: text, isSaved: isSaved)
+    private func appendToHistory(text: String, isSaved: Bool, tagColorHex: String? = nil) {
+        let item = VideoMarkupHistoryItem(text: text, isSaved: isSaved, tagColorHex: tagColorHex)
         historyItems.insert(item, at: 0)
         if historyItems.count > 12 {
             historyItems.removeLast(historyItems.count - 12)
@@ -104,7 +114,7 @@ struct VideoMarkupActivityOverlay: View {
     @ObservedObject private var banner = VideoMarkupActivityBanner.shared
     
     private var limitedHistoryItems: [VideoMarkupHistoryItem] {
-        Array(banner.historyItems.prefix(8))
+        Array(banner.historyItems.prefix(5))
     }
     
     private func textOpacity(for index: Int) -> Double {
@@ -144,7 +154,10 @@ struct VideoMarkupActivityOverlay: View {
     private func historyRow(_ item: VideoMarkupHistoryItem, index: Int) -> some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(Color.white.opacity(0.45))
+                .fill(
+                    item.tagColorHex.map { Color(hex: $0) }
+                        ?? Color.white.opacity(0.45)
+                )
                 .frame(width: 6, height: 6)
             Text(item.text)
                 .font(.system(size: 11, weight: index == 0 ? .semibold : .regular))

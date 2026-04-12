@@ -57,6 +57,12 @@ struct VideoPlayerView: View {
             VideoPlayerManager.shared.isVideoPlayerInEditorMode = isEditor
             handleEditorModeChange(isEditor: isEditor)
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEndLiveResizeNotification)) { notification in
+            guard viewModel.state.isEditorMode,
+                  let resized = notification.object as? NSWindow,
+                  resized === NSApp.keyWindow else { return }
+            viewModel.state.editorDrawingState.commitViewSizeScalingNow()
+        }
     }
     
     private func handleEditorModeChange(isEditor: Bool) {

@@ -256,14 +256,21 @@ struct SportCutPlaylistsView: View {
     
     // MARK: - Actions
     
+    /// Кнопка в шапке карточки: для уже активного этого плейлиста — пауза/продолжить; иначе старт с первого клипа.
     private func playPlaylist(_ playlist: SportCutPlaylist) {
         selectedPlaylistID = playlist.id
-        playerManager.currentPlaylistID = playlist.id
         playerManager.sessionID = sessionID
+
+        if playerManager.playlistPlaybackActive,
+           playerManager.currentPlaylistID == playlist.id {
+            playerManager.togglePlayPause()
+            return
+        }
+
         let visible = visibleEvents(in: playlist)
         guard !visible.isEmpty else { return }
-        // Header play always starts a full playlist film from the first clip.
-        playerManager.playPlaylist(visible, startIndex: 0, playlistID: playlist.id)
+        playerManager.currentPlaylistID = playlist.id
+        playerManager.playPlaylist(visible, startIndex: 0, playlistID: playlist.id, playbackKind: .singleFilm)
     }
     
     private func duplicatePlaylist(_ playlist: SportCutPlaylist) {
@@ -330,6 +337,28 @@ struct SportCutPlaylistsView: View {
                 if let _ = try? JSONDecoder().decode(PlaylistEventDragData.self, from: data) {
                     return
                 }
+                if let payload = try? JSONDecoder().decode(MarkupStampsBatchPlaylistDragPayload.self, from: data),
+                   let events = WindowsManager.shared.resolveMarkupPlaylistEvents(payload: payload, sessionID: self.sessionID),
+                   !events.isEmpty {
+                    DispatchQueue.main.async {
+                        guard var session = self.session else { return }
+                        guard self.selectedGroupIndex < session.playlistGroups.count else { return }
+                        if session.playlistGroups[self.selectedGroupIndex].playlists.isEmpty {
+                            session.playlistGroups[self.selectedGroupIndex].playlists.append(
+                                SportCutPlaylist(name: "\(1)")
+                            )
+                        }
+                        let lastIdx = session.playlistGroups[self.selectedGroupIndex].playlists.count - 1
+                        let pid = session.playlistGroups[self.selectedGroupIndex].playlists[lastIdx].id
+                        WindowsManager.shared.appendEventsToSportCutPlaylist(
+                            events: events,
+                            sessionID: self.sessionID,
+                            groupIndex: self.selectedGroupIndex,
+                            playlistID: pid
+                        )
+                    }
+                    return
+                }
                 guard let event = try? JSONDecoder().decode(SportCutEvent.self, from: data) else { return }
                 DispatchQueue.main.async {
                     guard var session = self.session else { return }
@@ -342,6 +371,7 @@ struct SportCutPlaylistsView: View {
                     let lastIdx = session.playlistGroups[self.selectedGroupIndex].playlists.count - 1
                     if !session.playlistGroups[self.selectedGroupIndex].playlists[lastIdx].events.contains(event) {
                         session.playlistGroups[self.selectedGroupIndex].playlists[lastIdx].events.append(event)
+                        session.playlistGroups[self.selectedGroupIndex].playlists[lastIdx].mergeMarkupComments(for: [event], session: session)
                         self.sessionManager.updateSession(session)
                     }
                 }
@@ -614,12 +644,13 @@ struct SportCutPlaylistCardView: View {
         guard totalDuration > 0 else { return [] }
         var markers: [DrawingMarker] = []
         var accumulatedTime: Double = 0
-        
-        for event in playlist.events {
+        // Тот же порядок сегментов, что и у мини-таймлайна (фильтр источника).
+        for event in miniTimelineEvents {
             let drawings = playlist.eventDrawings[event.hiddenKey] ?? []
             for drawing in drawings {
-                let relTime = drawing.videoTime - event.startTime
-                let absTime = accumulatedTime + max(0, min(relTime, event.duration))
+                // videoTime при сохранении — локальное время внутри клипа (таймлайн композиции плеера), не абсолют ролика.
+                let localT = max(0, min(drawing.videoTime, max(event.duration, 0.001)))
+                let absTime = accumulatedTime + localT
                 let x = totalWidth * (absTime / totalDuration)
                 markers.append(DrawingMarker(offset: x))
             }
@@ -648,6 +679,14 @@ struct SportCutPlaylistCardView: View {
                     isHidden: isHidden,
                     isDropTarget: isDropTarget,
                     hasDrawing: !(playlist.eventDrawings[event.hiddenKey] ?? []).isEmpty,
+                    onAddDrawing: {
+                        playerManager.sessionID = sessionID
+                        playerManager.captureNewDrawingForPlaylistClip(
+                            event: event,
+                            visiblePlaylistEvents: visibleEvents,
+                            playlistID: playlist.id
+                        )
+                    },
                     onTap: {
                         guard let start = visibleEvents.firstIndex(of: event) else { return }
                         playerManager.sessionID = sessionID
@@ -716,6 +755,16 @@ struct SportCutPlaylistCardView: View {
                         onReorderDrop(orderData.playlistID)
                     } else if let dragData = try? JSONDecoder().decode(PlaylistEventDragData.self, from: data) {
                         movePlaylistEvent(dragData: dragData, toIndex: insertAt)
+                    } else if let payload = try? JSONDecoder().decode(MarkupStampsBatchPlaylistDragPayload.self, from: data),
+                              let events = WindowsManager.shared.resolveMarkupPlaylistEvents(payload: payload, sessionID: sessionID),
+                              !events.isEmpty {
+                        WindowsManager.shared.insertMarkupEventsIntoSportCutPlaylist(
+                            events: events,
+                            sessionID: sessionID,
+                            groupIndex: groupIndex,
+                            playlistID: playlist.id,
+                            at: insertAt ?? playlist.events.count
+                        )
                     } else if let event = try? JSONDecoder().decode(SportCutEvent.self, from: data) {
                         appendExternalEvent(event, at: insertAt)
                     }
@@ -726,10 +775,13 @@ struct SportCutPlaylistCardView: View {
     
     private func movePlaylistEvent(dragData: PlaylistEventDragData, toIndex: Int?) {
         guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
-        
+        let hk = dragData.event.hiddenKey
+        var carriedComment: String?
         for gi in session.playlistGroups.indices {
             if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == dragData.sourcePlaylistID }) {
+                carriedComment = session.playlistGroups[gi].playlists[pi].eventComments[hk]
                 session.playlistGroups[gi].playlists[pi].events.removeAll { $0 == dragData.event }
+                session.playlistGroups[gi].playlists[pi].eventComments.removeValue(forKey: hk)
                 break
             }
         }
@@ -738,6 +790,9 @@ struct SportCutPlaylistCardView: View {
             let targetIdx = toIndex ?? session.playlistGroups[groupIndex].playlists[pi].events.count
             let clamped = min(targetIdx, session.playlistGroups[groupIndex].playlists[pi].events.count)
             session.playlistGroups[groupIndex].playlists[pi].events.insert(dragData.event, at: clamped)
+            if let c = carriedComment, !c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                session.playlistGroups[groupIndex].playlists[pi].eventComments[hk] = c
+            }
         }
         
         SportCutSessionManager.shared.updateSession(session)
@@ -751,6 +806,7 @@ struct SportCutPlaylistCardView: View {
                 let targetIdx = index ?? session.playlistGroups[groupIndex].playlists[pi].events.count
                 let clamped = min(targetIdx, session.playlistGroups[groupIndex].playlists[pi].events.count)
                 session.playlistGroups[groupIndex].playlists[pi].events.insert(event, at: clamped)
+                session.playlistGroups[groupIndex].playlists[pi].mergeMarkupComments(for: [event], session: session)
                 SportCutSessionManager.shared.updateSession(session)
             }
         }
@@ -862,6 +918,7 @@ struct PlaylistEventRowView: View {
     let isHidden: Bool
     let isDropTarget: Bool
     let hasDrawing: Bool
+    let onAddDrawing: () -> Void
     let onTap: () -> Void
     let onDelete: () -> Void
     let onComment: () -> Void
@@ -891,11 +948,15 @@ struct PlaylistEventRowView: View {
             }
             .buttonStyle(PlainButtonStyle())
 
-            if hasDrawing {
-                Image(systemName: "pencil.tip.crop.circle.fill")
+            Button(action: onAddDrawing) {
+                Image(systemName: "pencil.tip.crop.circle")
                     .font(.system(size: 10))
-                    .foregroundColor(.green)
+                    .foregroundColor(hasDrawing ? .green : .secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(PlainButtonStyle())
+            .help(^String.Titles.sportCutCreateDrawing)
 
             Circle()
                 .fill(Color(hex: event.color))
@@ -951,6 +1012,7 @@ struct PlaylistEventRowView: View {
         .onDrag(dragProvider)
         .contextMenu {
             Button(hasComment ? ^String.Titles.sportCutEditComment : ^String.Titles.sportCutAddComment) { onComment() }
+            Button(^String.Titles.sportCutCreateDrawing) { onAddDrawing() }
             Button(isHidden ? ^String.Titles.sportCutShowEvent : ^String.Titles.sportCutHideEvent) { onToggleHidden() }
             Divider()
             Button(^String.Titles.sportCutMoveUp) { onMoveUp() }
@@ -1070,6 +1132,16 @@ struct EventReorderDropDelegate: DropDelegate {
                 DispatchQueue.main.async {
                     if let dragData = try? JSONDecoder().decode(PlaylistEventDragData.self, from: data) {
                         performMoveEvent(dragData: dragData)
+                    } else if let payload = try? JSONDecoder().decode(MarkupStampsBatchPlaylistDragPayload.self, from: data),
+                              let events = WindowsManager.shared.resolveMarkupPlaylistEvents(payload: payload, sessionID: sessionID),
+                              !events.isEmpty {
+                        WindowsManager.shared.insertMarkupEventsIntoSportCutPlaylist(
+                            events: events,
+                            sessionID: sessionID,
+                            groupIndex: groupIndex,
+                            playlistID: playlist.id,
+                            at: targetIndex
+                        )
                     } else if let event = try? JSONDecoder().decode(SportCutEvent.self, from: data) {
                         performInsertEvent(event)
                     }
@@ -1081,10 +1153,13 @@ struct EventReorderDropDelegate: DropDelegate {
     
     private func performMoveEvent(dragData: PlaylistEventDragData) {
         guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
-        
+        let hk = dragData.event.hiddenKey
+        var carriedComment: String?
         for gi in session.playlistGroups.indices {
             if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == dragData.sourcePlaylistID }) {
+                carriedComment = session.playlistGroups[gi].playlists[pi].eventComments[hk]
                 session.playlistGroups[gi].playlists[pi].events.removeAll { $0 == dragData.event }
+                session.playlistGroups[gi].playlists[pi].eventComments.removeValue(forKey: hk)
                 break
             }
         }
@@ -1092,6 +1167,9 @@ struct EventReorderDropDelegate: DropDelegate {
         if let pi = session.playlistGroups[groupIndex].playlists.firstIndex(where: { $0.id == playlist.id }) {
             let clamped = min(targetIndex, session.playlistGroups[groupIndex].playlists[pi].events.count)
             session.playlistGroups[groupIndex].playlists[pi].events.insert(dragData.event, at: clamped)
+            if let c = carriedComment, !c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                session.playlistGroups[groupIndex].playlists[pi].eventComments[hk] = c
+            }
         }
         
         SportCutSessionManager.shared.updateSession(session)
@@ -1104,6 +1182,7 @@ struct EventReorderDropDelegate: DropDelegate {
             if !session.playlistGroups[groupIndex].playlists[pi].events.contains(event) {
                 let clamped = min(targetIndex, session.playlistGroups[groupIndex].playlists[pi].events.count)
                 session.playlistGroups[groupIndex].playlists[pi].events.insert(event, at: clamped)
+                session.playlistGroups[groupIndex].playlists[pi].mergeMarkupComments(for: [event], session: session)
                 SportCutSessionManager.shared.updateSession(session)
             }
         }

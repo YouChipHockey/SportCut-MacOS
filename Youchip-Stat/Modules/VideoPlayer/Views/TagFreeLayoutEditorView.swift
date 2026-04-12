@@ -55,7 +55,9 @@ struct TagFreeLayoutEditorView: View {
             HStack(spacing: 0) {
                 GeometryReader { geometry in
                     let availableWidth = max(geometry.size.width - 32, 300)
-                    let scale = max(availableWidth / max(layout.canvasWidth, 1), 0.1)
+                    let fitScale = availableWidth / max(layout.canvasWidth, 1)
+                    /// Без увеличения плиток больше 1×: только уменьшение, если окно уже холста.
+                    let scale = min(1.0, max(fitScale, 0.1))
                     let canvasHeight = layout.canvasHeight * scale
                     
                     ScrollView(.vertical) {
@@ -211,14 +213,6 @@ struct TagFreeLayoutEditorView: View {
         
         return ZStack {
             content
-            
-            if isSelected {
-                rotationHandle(item: item, scale: scale)
-                    .position(x: viewSize.width / 2, y: 10)
-                
-                resizeHandle(item: item, scale: scale)
-                    .position(x: viewSize.width - 10, y: viewSize.height - 10)
-            }
         }
         .frame(width: viewSize.width, height: viewSize.height)
         .rotationEffect(.degrees(item.rotation))
@@ -484,23 +478,6 @@ struct TagFreeLayoutEditorView: View {
                     Slider(value: binding.cornerRadius, in: 0...40, step: 1)
                 }
                 
-                HStack(spacing: 4) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Ш").font(.caption2).foregroundColor(.secondary)
-                        TextField("", value: cgFloatBinding(binding.size.width), format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.caption)
-                            .frame(width: 70)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("В").font(.caption2).foregroundColor(.secondary)
-                        TextField("", value: cgFloatBinding(binding.size.height), format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.caption)
-                            .frame(width: 70)
-                    }
-                }
-                
                 Toggle("Фиксировать пропорции", isOn: binding.aspectRatioLocked)
                     .font(.caption)
                 
@@ -521,12 +498,7 @@ struct TagFreeLayoutEditorView: View {
                     }
                 }
                 
-                HStack {
-                    Text("Поворот").font(.caption)
-                    Spacer()
-                    Text("\(Int(binding.rotation.wrappedValue))°").font(.caption).foregroundColor(.secondary)
-                }
-                Slider(value: binding.rotation, in: -180...180, step: 1)
+                EmptyView()
             }
             
             Divider()

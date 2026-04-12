@@ -28,7 +28,8 @@ struct FreeTagsCanvasView: View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let effectiveLayout = layout ?? TagFreeLayoutStorage.makeDefaultLayout(for: tags)
-            let scale = max(width / max(effectiveLayout.canvasWidth, 1), 0.1)
+            let fitScale = width / max(effectiveLayout.canvasWidth, 1)
+            let scale = min(1.0, max(fitScale, 0.1))
             let canvasHeight = effectiveLayout.canvasHeight * scale
             
             ScrollView(.vertical) {

@@ -55,7 +55,7 @@ struct ViewerVideoView: View {
                         playlistManager.playVideo(false)
                         drawingState.showDrawingMenu.toggle()
                     }) {
-                        Image(systemName: drawingState.showDrawingMenu ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                        Image(systemName: "pencil.tip.crop.circle")
                             .font(.system(size: 16))
                             .foregroundColor(drawingState.showDrawingMenu ? .blue : .gray)
                     }
