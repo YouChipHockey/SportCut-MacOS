@@ -45,6 +45,36 @@ struct SportCutVideoPlayerView: View {
                   resized === NSApp.keyWindow else { return }
             playerManager.editorDrawingState.commitViewSizeScalingNow()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .editorCopyKeyPressed)) { _ in
+            guard playerManager.isEditorMode else { return }
+            let state = playerManager.editorDrawingState
+            guard state.currentTool == .cursor else { return }
+            if let id = state.selectedTelestrationObjectId,
+               let obj = state.telestrationObjects.first(where: { $0.id == id }) {
+                state.addToCopyBuffer(.telestration(obj))
+            } else if let id = state.selectedShapeId,
+                      let s = state.shapes.first(where: { $0.id == id }) {
+                state.addToCopyBuffer(.shape(s))
+            } else if let id = state.selectedTextBoxId,
+                      let t = state.textBoxes.first(where: { $0.id == id }) {
+                state.addToCopyBuffer(.textBox(t))
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorPasteKeyPressed)) { _ in
+            guard playerManager.isEditorMode else { return }
+            let state = playerManager.editorDrawingState
+            guard state.currentTool == .cursor, !state.copyBuffer.isEmpty else { return }
+            let center = CGPoint(x: state.viewSize.width / 2, y: state.viewSize.height / 2)
+            state.pasteFromBuffer(at: center, bufferIndex: 0)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorUndoKeyPressed)) { _ in
+            guard playerManager.isEditorMode else { return }
+            playerManager.editorDrawingState.undo()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorEnterKeyPressed)) { _ in
+            guard playerManager.isEditorMode else { return }
+            playerManager.editorDrawingState.handleEditorEnterKey()
+        }
     }
     
     // MARK: - Normal Mode Header
@@ -184,11 +214,6 @@ struct SportCutVideoPlayerView: View {
                     .background(Color.gray.opacity(0.2)).cornerRadius(4)
             }.buttonStyle(PlainButtonStyle()).help(^String.Titles.sportCutSeekBack2)
             
-            Button(action: { playerManager.togglePlayPause() }) {
-                Image(systemName: playerManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 28)).foregroundColor(.blue)
-            }.buttonStyle(PlainButtonStyle())
-            
             Button(action: { playerManager.seek(by: 2) }) {
                 Text("+2").font(.system(size: 10, weight: .bold))
                     .frame(width: 24, height: 24)
@@ -266,6 +291,19 @@ struct SportCutVideoPlayerView: View {
         HStack(spacing: 12) {
             Text(^String.Titles.sportCutDrawing)
                 .font(.system(size: 14, weight: .semibold))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(^String.Titles.editorExportDurationLabel)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    Text("\(String(format: "%.1f", playerManager.editorDisplayDuration))s")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 40)
+                    Stepper("", value: $playerManager.editorDisplayDuration, in: 1.0...10.0, step: 0.5)
+                        .labelsHidden()
+                }
+            }
 
             Spacer()
 

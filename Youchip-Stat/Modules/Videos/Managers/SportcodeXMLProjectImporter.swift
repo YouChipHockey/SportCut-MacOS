@@ -191,18 +191,19 @@ enum SportcodeXMLProjectImporter {
         guard parser.parse() else {
             throw SportcodeXMLImportError.parseFailed
         }
-        
+
         var rawInstances = delegate.resultInstances()
         if rawInstances.isEmpty {
             throw SportcodeXMLImportError.noInstances
         }
         rawInstances.sort { $0.start < $1.start }
-        
+
         let codeColors = delegate.resultCodeColors()
         let projectTitle = (fileName as NSString).deletingPathExtension
-        
+
         let collectionDisplayName = ^String.Titles.xmlImportCollectionDisplayName
-        
+
+        // --- Build tags from `code` values ---
         var uniqueCodes: [String] = []
         var seenCodes = Set<String>()
         for inst in rawInstances {
@@ -210,10 +211,10 @@ enum SportcodeXMLProjectImporter {
                 uniqueCodes.append(inst.code)
             }
         }
-        
+
         var tagByCode: [String: Tag] = [:]
         var tagIds: [String] = []
-        
+
         for code in uniqueCodes {
             let id = UUID().uuidString
             let color = codeColors[code] ?? defaultImportedTagColor
@@ -235,47 +236,70 @@ enum SportcodeXMLProjectImporter {
             tagByCode[code] = tag
             tagIds.append(id)
         }
-        
+
         let groupId = UUID().uuidString
         let tagGroup = TagGroup(id: groupId, name: ^String.Titles.xmlImportTagGroupName, tags: tagIds)
-        
-        let tags: [Tag] = uniqueCodes.map { tagByCode[$0]! }
-        
+
+        // --- Build labels from `label.text` values (e.g. "Passes", "Interceptions") ---
+        // These are real labels attached to tags, not notes.
         var labels: [Label] = []
         var labelGroupLabels: [String] = []
-        var freeTextToLabelId: [String: String] = [:]
-        
+        var labelTextToId: [String: String] = [:]
+
         for inst in rawInstances {
-            guard let note = inst.freeText, !note.isEmpty else { continue }
-            if freeTextToLabelId[note] != nil { continue }
-            let lid = UUID().uuidString
-            freeTextToLabelId[note] = lid
-            labels.append(Label(id: lid, name: note, description: ""))
-            labelGroupLabels.append(lid)
+            // label.text → real label; freeText → also a label
+            for text in [inst.freeText].compactMap({ $0 }) + (inst.code.isEmpty ? [] : []) {
+                // handled below
+                _ = text
+            }
         }
-        
+
+        // Collect unique label texts from label.text field
+        // In the XML, labelText is stored in freeText when code is present (see parser line 88)
+        // freeText contains the label text extracted from <label><text>
+        for inst in rawInstances {
+            if let note = inst.freeText, !note.isEmpty {
+                if labelTextToId[note] == nil {
+                    let lid = UUID().uuidString
+                    labelTextToId[note] = lid
+                    labels.append(Label(id: lid, name: note, description: ""))
+                    labelGroupLabels.append(lid)
+                }
+            }
+        }
+
         var labelGroups: [LabelGroupData] = []
+        let labelGroupId: String?
         if !labels.isEmpty {
             let lgId = UUID().uuidString
             labelGroups.append(LabelGroupData(id: lgId, name: ^String.Titles.xmlImportNotesLabelGroupName, lables: labelGroupLabels))
+            labelGroupId = lgId
+        } else {
+            labelGroupId = nil
         }
-        
-        var tagsWithLabelGroups = tags
-        if let firstLG = labelGroups.first {
-            tagsWithLabelGroups = tags.map { t in
+
+        // Attach label group to all tags
+        var tagsWithLabelGroups: [Tag] = uniqueCodes.map { tagByCode[$0]! }
+        if let lgId = labelGroupId {
+            tagsWithLabelGroups = tagsWithLabelGroups.map { t in
                 var copy = t
-                copy.lablesGroup = [firstLG.id]
+                copy.lablesGroup = [lgId]
                 return copy
             }
+            // Update tagByCode with label groups for stamp creation
+            for code in uniqueCodes {
+                if var tag = tagByCode[code] {
+                    tag.lablesGroup = [lgId]
+                    tagByCode[code] = tag
+                }
+            }
         }
-        
+
         func stampForInstance(_ inst: (start: Double, end: Double, code: String, freeText: String?)) -> TimelineStamp {
             let tag = tagByCode[inst.code]!
-            let labelStructs: [FullLabelWithGroup]
-            if let ft = inst.freeText, let lid = freeTextToLabelId[ft], let lgId = labelGroups.first?.id {
+            var labelStructs: [FullLabelWithGroup] = []
+            if let ft = inst.freeText, !ft.isEmpty, let lid = labelTextToId[ft], let lgId = labelGroupId {
                 labelStructs = [FullLabelWithGroup(id: lid, name: ft, description: "", lableGroupId: lgId)]
-            } else {
-                labelStructs = []
             }
             return TimelineStamp(
                 tagRefs: [StampTagRef(id: tag.id, tagGroupId: groupId)],
@@ -288,7 +312,7 @@ enum SportcodeXMLProjectImporter {
                 timeEvents: []
             )
         }
-        
+
         let timelines: [TimelineLine] = uniqueCodes.map { code in
             let tag = tagByCode[code]!
             let lineStamps = rawInstances
@@ -302,7 +326,7 @@ enum SportcodeXMLProjectImporter {
                 tagIdForMode: tag.id
             )
         }
-        
+
         let customCollection = CustomCollectionExport(
             name: collectionDisplayName,
             tags: tagsWithLabelGroups,
@@ -312,7 +336,7 @@ enum SportcodeXMLProjectImporter {
             timeEvents: [],
             playField: nil
         )
-        
+
         return ProjectImportModel(
             version: "1.0",
             exportDate: Date(),

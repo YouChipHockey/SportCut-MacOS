@@ -45,27 +45,104 @@ struct SportCutFilterSheet: View {
     }
 
     private func availableTags(for source: SportCutSource, used: Set<String>) -> [Tag] {
-        source.tags.filter { used.contains($0.id) }
+        let fromSource = source.tags.filter { used.contains($0.id) }
+        if !fromSource.isEmpty { return fromSource }
+        // Fallback 1: check TagLibrary
+        let tagLib = TagLibraryManager.shared
+        let fromLib = used.compactMap { tagLib.findTagById($0) }
+        if !fromLib.isEmpty { return fromLib.sorted { $0.name < $1.name } }
+        // Fallback 2: build synthetic tags directly from stamp data
+        var seen = Set<String>()
+        var result: [Tag] = []
+        for line in source.timelines {
+            for stamp in line.stamps {
+                for tagId in stamp.idTags where used.contains(tagId) && seen.insert(tagId).inserted {
+                    result.append(Tag(
+                        id: tagId,
+                        primaryID: stamp.primaryID,
+                        name: stamp.label,
+                        description: "",
+                        color: stamp.colorHex,
+                        defaultTimeBefore: 5,
+                        defaultTimeAfter: 3,
+                        collection: nil,
+                        lablesGroup: [],
+                        hotkey: nil,
+                        labelHotkeys: nil,
+                        mapEnabled: false,
+                        isInterval: true
+                    ))
+                }
+            }
+        }
+        return result.sorted { $0.name < $1.name }
     }
-    
+
     private func availableTagGroups(for source: SportCutSource, used: Set<String>) -> [TagGroup] {
-        source.tagGroups.filter { group in
+        let fromSource = source.tagGroups.filter { group in
+            group.tags.contains { used.contains($0) }
+        }
+        if !fromSource.isEmpty { return fromSource }
+        let tagLib = TagLibraryManager.shared
+        return tagLib.tagGroups.filter { group in
             group.tags.contains { used.contains($0) }
         }
     }
-    
+
     private func availableLabels(for source: SportCutSource, used: Set<String>) -> [Label] {
-        source.labels.filter { used.contains($0.id) }
+        let fromSource = source.labels.filter { used.contains($0.id) }
+        if !fromSource.isEmpty { return fromSource }
+        // Fallback: build labels from stamp data
+        var seen = Set<String>()
+        var result: [Label] = []
+        for line in source.timelines {
+            for stamp in line.stamps {
+                for lbl in stamp.labels where used.contains(lbl.id) && seen.insert(lbl.id).inserted {
+                    result.append(Label(id: lbl.id, name: lbl.name, description: lbl.description))
+                }
+            }
+        }
+        return result.sorted { $0.name < $1.name }
     }
-    
+
     private func availableLabelGroups(for source: SportCutSource, used: Set<String>) -> [LabelGroupData] {
-        source.labelGroups.filter { group in
+        let fromSource = source.labelGroups.filter { group in
             group.lables.contains { used.contains($0) }
         }
+        if !fromSource.isEmpty { return fromSource }
+        // Fallback: build label groups from stamp data
+        var groupMap: [String: Set<String>] = [:] // groupId -> label IDs
+        var groupNames: [String: String] = [:]
+        for line in source.timelines {
+            for stamp in line.stamps {
+                for lbl in stamp.labels where used.contains(lbl.id) {
+                    let gid = lbl.lableGroupId
+                    if !gid.isEmpty {
+                        groupMap[gid, default: []].insert(lbl.id)
+                        if groupNames[gid] == nil {
+                            // Try to get name from TagLibrary
+                            if let lg = TagLibraryManager.shared.allLabelGroups.first(where: { $0.id == gid }) {
+                                groupNames[gid] = lg.name
+                            } else {
+                                groupNames[gid] = gid
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return groupMap.map { gid, labelIds in
+            LabelGroupData(id: gid, name: groupNames[gid] ?? gid, lables: Array(labelIds))
+        }.sorted { $0.name < $1.name }
     }
-    
+
     private func availableEvents(for source: SportCutSource, usedEventIDs: Set<String>) -> [TimeEvent] {
-        source.timeEvents.filter { usedEventIDs.contains($0.id) }
+        let fromSource = source.timeEvents.filter { usedEventIDs.contains($0.id) }
+        if !fromSource.isEmpty { return fromSource }
+        // Fallback: find events from TagLibrary
+        let tagLib = TagLibraryManager.shared
+        return usedEventIDs.compactMap { id in tagLib.allTimeEvents.first { $0.id == id } }
+            .sorted { $0.name < $1.name }
     }
 
     private func usedEventIDs(in sources: [SportCutSource]) -> Set<String> {

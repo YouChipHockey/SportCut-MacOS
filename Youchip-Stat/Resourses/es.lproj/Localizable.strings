@@ -830,6 +830,7 @@
 "SportCutHidePlaylist" = "Ocultar playlist";
 "SportCutMoveUp" = "Mover arriba";
 "SportCutMoveDown" = "Mover abajo";
+"SportCutPlayAsFilm" = "Reproducir como película";
 "SportCutPlayAction" = "Reproducir";
 "SportCutDuplicate" = "Duplicar";
 "SportCutRenameAction" = "Renombrar";
@@ -838,6 +839,12 @@
 "SportCutShowEvent" = "Mostrar evento";
 "SportCutHideEvent" = "Ocultar evento";
 "SportCutDeleteFromPlaylist" = "Eliminar de la playlist";
+"SportCutEditDrawing" = "Editar dibujo";
+"SportCutDeleteDrawing" = "Eliminar dibujo";
+"SportCutDeleteGroup" = "Eliminar grupo";
+"SportCutBulkSelectedCount" = "Tags seleccionados";
+"SportCutBulkTotalDuration" = "Duración total";
+"SportCutBulkClearSelection" = "Deseleccionar";
 "SportCutComment" = "Comentario";
 "SportCutSessionNotFound" = "Sesión no encontrada";
 "SportCutSelectProjectForTimeline" = "Seleccione un proyecto para mostrar la línea de tiempo";

@@ -4,13 +4,15 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct SportCutTableView: View {
     let sessionID: UUID
     @ObservedObject var playerManager: SportCutPlayerManager
     @ObservedObject var filter: TimelineFilter
     let selectedSourceIndex: Int
-    
+    @Binding var bulkSelectedStampIDs: Set<UUID>
+
     @ObservedObject var sessionManager = SportCutSessionManager.shared
     @State private var sortMode: SportCutTableSortMode = .startTimeAsc
 
@@ -118,7 +120,11 @@ struct SportCutTableView: View {
             .padding(.vertical, 6)
             
             Divider()
-            
+
+            if !bulkSelectedStampIDs.isEmpty {
+                tableBulkSelectionBar
+            }
+
             if filteredStamps.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "tablecells")
@@ -138,7 +144,8 @@ struct SportCutTableView: View {
                             SportCutTableRowView(
                                 row: row,
                                 playerManager: playerManager,
-                                sessionID: sessionID
+                                sessionID: sessionID,
+                                bulkSelectedStampIDs: $bulkSelectedStampIDs
                             )
                         }
                     }
@@ -178,6 +185,47 @@ struct SportCutTableView: View {
         )
     }
 
+    private var tableBulkSelectionBar: some View {
+        let selected = filteredStamps.filter { bulkSelectedStampIDs.contains($0.stamp.id) }
+        let totalSeconds = selected.reduce(0.0) { $0 + max(0.0, $1.stamp.duration) }
+        let minutes = Int(totalSeconds) / 60
+        let seconds = Int(totalSeconds) % 60
+        let ms = Int((totalSeconds.truncatingRemainder(dividingBy: 1.0)) * 1000)
+        let durationStr = String(format: "%02d:%02d.%03d", minutes, seconds, ms)
+
+        return HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+            Text(^String.Titles.sportCutBulkSelectedCount + ": \(selected.count)")
+                .font(.system(size: 11, weight: .semibold))
+            Text(^String.Titles.sportCutBulkTotalDuration + ": \(durationStr)")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            Spacer()
+            Button(^String.Titles.sportCutBulkClearSelection) {
+                bulkSelectedStampIDs.removeAll()
+            }
+            .font(.system(size: 11))
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.red)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.green.opacity(0.1))
+        .onDrag {
+            let events: [SportCutEvent] = selected.compactMap { row in
+                SportCutEvent.from(stamp: row.stamp, line: row.line, source: row.source)
+            }
+            let data = try? JSONEncoder().encode(events)
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(forTypeIdentifier: "public.data", visibility: .all) { completion in
+                completion(data, nil)
+                return nil
+            }
+            return provider
+        }
+    }
+
     private func headerCell(_ title: String, width: CGFloat? = nil) -> some View {
         Text(title)
             .font(.system(size: 10, weight: .semibold))
@@ -200,9 +248,14 @@ struct SportCutTableRowView: View {
     let row: SportCutEventRow
     @ObservedObject var playerManager: SportCutPlayerManager
     let sessionID: UUID
-    
+    @Binding var bulkSelectedStampIDs: Set<UUID>
+
     @ObservedObject var sessionManager = SportCutSessionManager.shared
     @State private var isDragging = false
+
+    private var isBulkSelected: Bool {
+        bulkSelectedStampIDs.contains(row.stamp.id)
+    }
     
     private var labels: [Label] {
         row.stamp.labelIDs.compactMap { row.source.findLabel(byID: $0) }
@@ -238,7 +291,7 @@ struct SportCutTableRowView: View {
             HStack(spacing: 4) {
                 let tag = row.source.findTag(byID: row.stamp.idTag)
                 Circle()
-                    .fill(Color(hex: tag?.color ?? "FFFFFF"))
+                    .fill(Color(hex: tag?.color ?? row.stamp.colorHex))
                     .frame(width: 6, height: 6)
                 Text(row.stamp.label)
                     .font(.system(size: 10, weight: .medium))
@@ -318,8 +371,17 @@ struct SportCutTableRowView: View {
         )
         .onDrag {
             isDragging = true
-            let event = createEvent()
-            let data = try? JSONEncoder().encode(event)
+            let data: Data?
+            if isBulkSelected, bulkSelectedStampIDs.count > 1 {
+                let allStamps = row.source.timelines.flatMap { ln in
+                    ln.stamps.filter { bulkSelectedStampIDs.contains($0.id) }.map { (stamp: $0, line: ln) }
+                }.sorted { $0.stamp.timeStartSeconds < $1.stamp.timeStartSeconds }
+                let events = allStamps.map { SportCutEvent.from(stamp: $0.stamp, line: $0.line, source: row.source) }
+                data = try? JSONEncoder().encode(events)
+            } else {
+                let event = createEvent()
+                data = try? JSONEncoder().encode(event)
+            }
             let provider = NSItemProvider()
             provider.registerDataRepresentation(forTypeIdentifier: "com.youchip.sportcutEvent", visibility: .all) { completion in
                 DispatchQueue.main.async { isDragging = false }
@@ -332,8 +394,18 @@ struct SportCutTableRowView: View {
             }
             return provider
         }
+        .background(isBulkSelected ? Color.blue.opacity(0.15) : Color.clear)
         .onTapGesture {
-            playerManager.playEvent(createEvent())
+            let commandDown = NSEvent.modifierFlags.contains(.command)
+            if commandDown {
+                if bulkSelectedStampIDs.contains(row.stamp.id) {
+                    bulkSelectedStampIDs.remove(row.stamp.id)
+                } else {
+                    bulkSelectedStampIDs.insert(row.stamp.id)
+                }
+            } else {
+                playerManager.playEvent(createEvent())
+            }
         }
         .contextMenu {
             Button(^String.Titles.sportCutPlayAction) {

@@ -30,13 +30,21 @@ class SportCutPlayerManager: ObservableObject {
     @Published var showEventDataWatermark: Bool = true
     
     // Drawing editor state
-    @Published var isEditorMode: Bool = false
+    @Published var isEditorMode: Bool = false {
+        didSet {
+            NotificationCenter.default.post(name: .editorModeChanged, object: isEditorMode)
+        }
+    }
     @Published var editorDrawingState = EditorDrawingState()
     @Published var tempScreenshotImage: NSImage?
     @Published var editorScreenshotVideoTime: Double = 0
     @Published var isShowingDrawing: Bool = false
     @Published var displayedDrawingImage: NSImage?
     @Published var showDrawingWatermark: Bool = true
+    @Published var editorDisplayDuration: Double = 3.0
+    /// Tracks the drawing being edited so saveDrawing can replace it instead of appending.
+    private(set) var editingDrawing: SportCutEventDrawing?
+    private(set) var editingDrawingEventKey: String?
     /// User-positionable combined watermark (shared with mirror window via UserDefaults).
     @Published var watermarkDragOffset: CGSize = .zero
     private var shownDrawingNames: Set<String> = []
@@ -57,7 +65,11 @@ class SportCutPlayerManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     private var playlistEvents: [SportCutEvent] = []
-    private var playlistPlaybackKind: SportCutPlaylistPlaybackKind = .sequentialClips
+    @Published private(set) var playlistPlaybackKind: SportCutPlaylistPlaybackKind = .sequentialClips
+    /// Per-event start time overrides from the playlist (keyed by `event.hiddenKey`).
+    private var playlistStartOverrides: [String: Double] = [:]
+    /// Per-event duration overrides from the playlist (keyed by `event.hiddenKey`).
+    private var playlistDurationOverrides: [String: Double] = [:]
     /// Границы сегментов в «фильме» (секунды на оси склеенного таймлайна), по одному на элемент `playlistEvents`.
     private var filmSegmentStartSeconds: [Double] = []
     private var filmSegmentDurationSeconds: [Double] = []
@@ -156,6 +168,17 @@ class SportCutPlayerManager: ObservableObject {
         if let playlistID = playlistID {
             currentPlaylistID = playlistID
         }
+        // Load duration overrides from the playlist, if available
+        if let playlistID = playlistID,
+           let sessionID,
+           let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+           let playlist = session.playlistGroups.flatMap(\.playlists).first(where: { $0.id == playlistID }) {
+            playlistStartOverrides = playlist.eventStartOverrides
+            playlistDurationOverrides = playlist.eventDurationOverrides
+        } else {
+            playlistStartOverrides = [:]
+            playlistDurationOverrides = [:]
+        }
 
         if playbackKind == .singleFilm {
             currentPlaylistIndex = 0
@@ -217,16 +240,22 @@ class SportCutPlayerManager: ObservableObject {
     }
 
     func handlePlaylistVisibilityChange(session: SportCutSession, playlistID: UUID) {
-        guard playlistPlaybackActive, currentPlaylistID == playlistID else { return }
         guard let playlist = session.playlistGroups
             .flatMap(\.playlists)
             .first(where: { $0.id == playlistID }) else {
-            stopPlayback()
+            if playlistPlaybackActive, currentPlaylistID == playlistID {
+                stopPlayback()
+            }
             return
         }
 
         if playlist.isHidden {
+            guard playlistPlaybackActive, currentPlaylistID == playlistID else { return }
             advanceToNextPlaylist(session: session)
+        } else if !playlistPlaybackActive, currentPlaylistID == playlistID, currentEvent == nil {
+            let visible = playlist.events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
+            guard !visible.isEmpty else { return }
+            playPlaylist(visible, startIndex: 0, playlistID: playlistID, playbackKind: .singleFilm)
         }
     }
 
@@ -355,11 +384,14 @@ class SportCutPlayerManager: ObservableObject {
     
     func stopPlayback() {
         player.pause()
+        player.replaceCurrentItem(with: nil)
         isPlaying = false
         playlistPlaybackActive = false
         playlistPlaybackKind = .sequentialClips
         filmSegmentStartSeconds = []
         filmSegmentDurationSeconds = []
+        playlistStartOverrides = [:]
+        playlistDurationOverrides = [:]
         currentPlaylistIndex = -1
         playlistEvents = []
         currentEvent = nil
@@ -388,6 +420,36 @@ class SportCutPlayerManager: ObservableObject {
         player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
     }
     
+    /// Seek to an absolute video time for preview during playlist edge resize.
+    /// Loads the source video if needed and pauses at the given time.
+    func seekPreviewForPlaylistResize(absoluteVideoTime: Double, sourceID: UUID) {
+        player.pause()
+        isPlaying = false
+
+        guard let source = sources.first(where: { $0.id == sourceID }) ?? {
+            guard let sessionID,
+                  let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+                  let s = session.sources.first(where: { $0.id == sourceID }) else { return nil }
+            return s
+        }() else { return }
+
+        guard let url = source.resolveVideoURL() else { return }
+        let asset: AVAsset
+        if let cached = loadedAssets[sourceID] {
+            asset = cached
+        } else {
+            asset = AVAsset(url: url)
+            loadedAssets[sourceID] = asset
+        }
+
+        currentSourceID = sourceID
+        let item = AVPlayerItem(asset: asset)
+        player.replaceCurrentItem(with: item)
+        let cm = CMTime(seconds: max(0, absoluteVideoTime), preferredTimescale: 600)
+        let tol = CMTime(seconds: 0.05, preferredTimescale: 600)
+        player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+    }
+
     func changePlaybackSpeed(to speed: Double) {
         playbackSpeed = speed
         if isPlaying {
@@ -441,9 +503,11 @@ class SportCutPlayerManager: ObservableObject {
             }
 
             let assetDuration = CMTimeGetSeconds(asset.duration)
-            let safeStart = max(0.0, min(ev.startTime, assetDuration))
+            let overrideStart = playlistStartOverrides[ev.hiddenKey] ?? ev.startTime
+            let safeStart = max(0.0, min(overrideStart, assetDuration))
             let maxAvailable = max(0.0, assetDuration - safeStart)
-            let safeDuration = min(max(0.0, ev.duration), maxAvailable)
+            let overrideDuration = playlistDurationOverrides[ev.hiddenKey] ?? ev.duration
+            let safeDuration = min(max(0.0, overrideDuration), maxAvailable)
 
             guard safeDuration > 0,
                   let sourceVideoTrack = asset.tracks(withMediaType: .video).first else { continue }
@@ -573,9 +637,11 @@ class SportCutPlayerManager: ObservableObject {
 
         let composition = AVMutableComposition()
         let assetDuration = CMTimeGetSeconds(asset.duration)
-        let safeStart = max(0.0, min(event.startTime, assetDuration))
+        let overrideStart = playlistStartOverrides[event.hiddenKey] ?? event.startTime
+        let safeStart = max(0.0, min(overrideStart, assetDuration))
         let maxAvailable = max(0.0, assetDuration - safeStart)
-        let safeDuration = min(max(0.0, event.duration), maxAvailable)
+        let overrideDuration = playlistDurationOverrides[event.hiddenKey] ?? event.duration
+        let safeDuration = min(max(0.0, overrideDuration), maxAvailable)
 
         guard safeDuration > 0,
               let sourceVideoTrack = asset.tracks(withMediaType: .video).first,
@@ -685,41 +751,55 @@ class SportCutPlayerManager: ObservableObject {
         }
         editorDrawingState.clearDrawing()
         editorDrawingState.currentTool = .pencil
+        editorDisplayDuration = 3.0
+        editingDrawing = nil
+        editingDrawingEventKey = nil
         isEditorMode = true
     }
 
-    func editExistingDrawing(drawing: SportCutEventDrawing) {
+    /// Opens the editor for an existing drawing.
+    /// Loads the correct event's video, seeks to the drawing time, then opens the editor.
+    func editExistingDrawing(drawing: SportCutEventDrawing, event: SportCutEvent, visiblePlaylistEvents: [SportCutEvent], playlistID: UUID) {
         guard let sessionID = sessionID else { return }
+
+        editingDrawing = drawing
+        editingDrawingEventKey = event.hiddenKey
+        editorDisplayDuration = drawing.displayDuration
+
+        // Load the correct event's video, seek to drawing time, then open editor
+        let events = visiblePlaylistEvents
+        guard let idx = events.firstIndex(where: { $0.hiddenKey == event.hiddenKey }) else { return }
+
+        playPlaylist(events, startIndex: idx, playlistID: playlistID, autoPlayAfterLoad: false) { [weak self] in
+            guard let self = self else { return }
+            // Пересчёт: drawing.videoTime (оригинальный клип) → effective клип
+            let absDrawingTime = event.startTime + drawing.videoTime
+            let effectiveStart = self.playlistStartOverrides[event.hiddenKey] ?? event.startTime
+            let effectiveLocalTime = max(0, absDrawingTime - effectiveStart)
+            let seekTime = CMTime(seconds: effectiveLocalTime, preferredTimescale: 600)
+            self.player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                DispatchQueue.main.async {
+                    self.openEditorAfterSeek(drawing: drawing, sessionID: sessionID)
+                }
+            }
+        }
+    }
+
+    private func openEditorAfterSeek(drawing: SportCutEventDrawing, sessionID: UUID) {
         let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
         let imgURL = folder.appendingPathComponent(drawing.imageName)
-        
-        pause()
+
         editorScreenshotVideoTime = drawing.videoTime
         editorDrawingState.clearDrawing()
 
-        let seekSecondsForFrame: Double = {
-            if playlistPlaybackKind == .singleFilm,
-               let ev = currentEvent,
-               let idx = playlistEvents.firstIndex(where: { $0.hiddenKey == ev.hiddenKey }),
-               idx < filmSegmentStartSeconds.count {
-                return filmSegmentStartSeconds[idx] + drawing.videoTime
-            }
-            return drawing.videoTime
-        }()
-        
-        if playlistPlaybackKind == .singleFilm {
-            let cm = CMTime(seconds: seekSecondsForFrame, preferredTimescale: 600)
-            player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero)
-        }
-        
         if let snapshot = drawing.editorState {
-            // Re-capture the base frame at drawing time to restore editor layers on top
+            // Capture the base frame from the video at drawing time to restore editor layers on top
             if let item = player.currentItem {
                 let gen = AVAssetImageGenerator(asset: item.asset)
                 gen.appliesPreferredTrackTransform = true
                 gen.requestedTimeToleranceBefore = .zero
                 gen.requestedTimeToleranceAfter = .zero
-                let cmTime = CMTime(seconds: seekSecondsForFrame, preferredTimescale: 600)
+                let cmTime = player.currentTime()
                 if let cg = try? gen.copyCGImage(at: cmTime, actualTime: nil) {
                     tempScreenshotImage = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
                 }
@@ -731,41 +811,64 @@ class SportCutPlayerManager: ObservableObject {
         isEditorMode = true
     }
 
-    func saveDrawing(displayDuration: Double = 3.0) {
+    func saveDrawing() {
+        let displayDuration = editorDisplayDuration
         guard let baseImage = tempScreenshotImage,
               let sessionID = sessionID,
-              let event = currentEvent,
               let playlistID = currentPlaylistID else { return }
-        
+
+        // Use the stored event key when editing an existing drawing,
+        // otherwise fall back to the current event.
+        let eventKey: String
+        if let storedKey = editingDrawingEventKey {
+            eventKey = storedKey
+        } else if let event = currentEvent {
+            eventKey = event.hiddenKey
+        } else {
+            return
+        }
+
         let finalImage = DrawingImageMerger.merge(baseImage: baseImage, drawingState: editorDrawingState)
         let editorSnapshot = EditorStateSnapshot.from(drawingState: editorDrawingState)
-        
+
         let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        
+
         let ts = Int(Date().timeIntervalSince1970 * 1000)
         let imageName = "drawing_\(playlistID.uuidString.prefix(8))_\(ts).png"
         let fileURL = folder.appendingPathComponent(imageName)
-        
+
         if let tiffData = finalImage.tiffRepresentation,
            let rep = NSBitmapImageRep(data: tiffData),
            let pngData = rep.representation(using: .png, properties: [:]) {
             try? pngData.write(to: fileURL)
         }
-        
+
         let drawing = SportCutEventDrawing(
             imageName: imageName,
             videoTime: editorScreenshotVideoTime,
             displayDuration: displayDuration,
             editorState: editorSnapshot
         )
-        
+
+        // If editing an existing drawing, replace it; otherwise append.
         if var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) {
             for gi in session.playlistGroups.indices {
                 if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == playlistID }) {
-                    var arr = session.playlistGroups[gi].playlists[pi].eventDrawings[event.hiddenKey] ?? []
-                    arr.append(drawing)
-                    session.playlistGroups[gi].playlists[pi].eventDrawings[event.hiddenKey] = arr
+                    var arr = session.playlistGroups[gi].playlists[pi].eventDrawings[eventKey] ?? []
+
+                    if let oldDrawing = editingDrawing,
+                       let oldIdx = arr.firstIndex(where: { $0.imageName == oldDrawing.imageName }) {
+                        // Replace old drawing with new one
+                        arr[oldIdx] = drawing
+                        // Delete old image file
+                        let oldFile = folder.appendingPathComponent(oldDrawing.imageName)
+                        try? FileManager.default.removeItem(at: oldFile)
+                    } else {
+                        arr.append(drawing)
+                    }
+
+                    session.playlistGroups[gi].playlists[pi].eventDrawings[eventKey] = arr
                     SportCutSessionManager.shared.updateSession(session)
                     break
                 }
@@ -779,6 +882,23 @@ class SportCutPlayerManager: ObservableObject {
         isEditorMode = false
         tempScreenshotImage = nil
         editorDrawingState.clearDrawing()
+        editingDrawing = nil
+        editingDrawingEventKey = nil
+        // Kick the player: play then immediately pause to re-sync AVPlayer's internal state.
+        // This ensures native playback controls and spacebar work after editor dismissal.
+        player.play()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.player.pause()
+        }
+        // Restore key window and clear firstResponder so spacebar hotkey works.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            if let window = WindowsManager.shared.sportCutWindow?.window {
+                window.makeKeyAndOrderFront(nil)
+                if window.firstResponder is NSTextView || window.firstResponder is NSTextField {
+                    window.makeFirstResponder(window.contentView)
+                }
+            }
+        }
     }
 
     func hideDrawingOverlay(resume: Bool = true) {
@@ -813,28 +933,44 @@ class SportCutPlayerManager: ObservableObject {
     private func checkForDrawingAtCurrentTime() {
         guard !isEditorMode, !isShowingDrawing, currentPlaylistID != nil else { return }
         guard let sessionID = sessionID else { return }
-        
+        guard let event = currentEvent else { return }
+
         let globalT = player.currentTime().seconds
         if playlistPlaybackKind == .singleFilm {
             updateFilmModeCurrentEventIfNeeded(globalTime: globalT)
         }
+        // compareTime = локальное время внутри текущего клипа (с учётом overrides)
         let compareTime: Double
         if playlistPlaybackKind == .singleFilm, let (_, local) = filmEventIndexAndLocalTime(globalTime: globalT) {
             compareTime = local
         } else {
             compareTime = globalT
         }
+
         let drawings = currentEventDrawings()
         guard !drawings.isEmpty else { return }
-        
-        guard let matched = drawings.first(where: {
-            abs($0.videoTime - compareTime) < 0.15 && !shownDrawingNames.contains($0.imageName)
+
+        // Пересчёт: drawing.videoTime — локальное время в ОРИГИНАЛЬНОМ клипе.
+        // Нужно перевести в локальное время EFFECTIVE клипа.
+        let originalStart = event.startTime
+        let effectiveStart = playlistStartOverrides[event.hiddenKey] ?? event.startTime
+        let effectiveDuration = playlistDurationOverrides[event.hiddenKey] ?? event.duration
+
+        guard let matched = drawings.first(where: { drawing in
+            // Абсолютное время рисунка на исходном видео
+            let absDrawingTime = originalStart + drawing.videoTime
+            // Проверяем что рисунок попадает в effective границы клипа
+            let effectiveEnd = effectiveStart + effectiveDuration
+            guard absDrawingTime >= effectiveStart && absDrawingTime <= effectiveEnd else { return false }
+            // Локальное время рисунка в effective клипе
+            let effectiveLocalTime = absDrawingTime - effectiveStart
+            return abs(effectiveLocalTime - compareTime) < 0.15 && !shownDrawingNames.contains(drawing.imageName)
         }) else { return }
-        
+
         let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
         let imgURL = folder.appendingPathComponent(matched.imageName)
         guard let nsImage = NSImage(contentsOf: imgURL) else { return }
-        
+
         pause()
         displayedDrawingImage = nsImage
         isShowingDrawing = true

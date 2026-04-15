@@ -501,12 +501,12 @@ struct TimelineLineView: View {
         
         if !stamp.labels.isEmpty {
             ForEach(stamp.labels, id: \.id) { labelItem in
-                if let label = tagLibrary.findLabelById(labelItem.id) {
-                    if let group = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(label.id) }) {
-                        Text("\(label.name) (\(group.name))")
-                    } else {
-                        Text(label.name)
-                    }
+                let label = tagLibrary.findLabelById(labelItem.id)
+                let displayName = label?.name ?? labelItem.name
+                if let group = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(labelItem.id) }) {
+                    Text("\(displayName) (\(group.name))")
+                } else if !displayName.isEmpty {
+                    Text(displayName)
                 }
             }
             Divider()

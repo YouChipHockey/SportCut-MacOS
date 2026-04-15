@@ -857,6 +857,7 @@
 "SportCutHidePlaylist" = "Скрыть плейлист";
 "SportCutMoveUp" = "Переместить выше";
 "SportCutMoveDown" = "Переместить ниже";
+"SportCutPlayAsFilm" = "Воспроизвести как фильм";
 "SportCutPlayAction" = "Воспроизвести";
 "SportCutDuplicate" = "Дублировать";
 "SportCutRenameAction" = "Переименовать";
@@ -865,6 +866,12 @@
 "SportCutShowEvent" = "Показать событие";
 "SportCutHideEvent" = "Скрыть событие";
 "SportCutDeleteFromPlaylist" = "Удалить из плейлиста";
+"SportCutEditDrawing" = "Редактировать рисунок";
+"SportCutDeleteDrawing" = "Удалить рисунок";
+"SportCutDeleteGroup" = "Удалить группу";
+"SportCutBulkSelectedCount" = "Выбрано тегов";
+"SportCutBulkTotalDuration" = "Общая длительность";
+"SportCutBulkClearSelection" = "Снять выделение";
 "SportCutComment" = "Комментарий";
 "SportCutSessionNotFound" = "Сессия не найдена";
 "SportCutSelectProjectForTimeline" = "Выберите проект для отображения таймлайна";

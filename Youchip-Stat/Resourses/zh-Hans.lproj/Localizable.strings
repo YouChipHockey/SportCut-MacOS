@@ -830,6 +830,7 @@
 "SportCutHidePlaylist" = "隐藏播放列表";
 "SportCutMoveUp" = "上移";
 "SportCutMoveDown" = "下移";
+"SportCutPlayAsFilm" = "以影片播放";
 "SportCutPlayAction" = "播放";
 "SportCutDuplicate" = "复制";
 "SportCutRenameAction" = "重命名";
@@ -838,6 +839,12 @@
 "SportCutShowEvent" = "显示事件";
 "SportCutHideEvent" = "隐藏事件";
 "SportCutDeleteFromPlaylist" = "从播放列表中删除";
+"SportCutEditDrawing" = "编辑绘图";
+"SportCutDeleteDrawing" = "删除绘图";
+"SportCutDeleteGroup" = "删除分组";
+"SportCutBulkSelectedCount" = "已选标签";
+"SportCutBulkTotalDuration" = "总时长";
+"SportCutBulkClearSelection" = "取消选择";
 "SportCutComment" = "评论";
 "SportCutSessionNotFound" = "未找到会话";
 "SportCutSelectProjectForTimeline" = "选择项目以显示时间线";

@@ -69,14 +69,12 @@ class VideoFilesManager {
         if let bookmark = url.makeBookmark() {
             let id = generate32CharacterCode()
             var file = FilesFile(videoData: VideosData(bookmark: bookmark, id: id))
-            if videosData.first(where: { $0.bookmark == bookmark}) == nil {
-                file.updateDateOpened()
-                file.updateDateModified()
-                files.append(file)
-                videosData.append(VideosData(bookmark: file.videoData.bookmark, id: id))
-                saveBookmarks()
-                updateFiles?(files)
-            }
+            file.updateDateOpened()
+            file.updateDateModified()
+            files.append(file)
+            videosData.append(VideosData(bookmark: file.videoData.bookmark, id: id))
+            saveBookmarks()
+            updateFiles?(files)
             return file
         } else {
             return nil
@@ -100,18 +98,19 @@ class VideoFilesManager {
     @discardableResult
     func importFile(url: URL, newName: String) -> FilesFile? {
         if let file = importFile(url: url) {
-            if let index = videosData.firstIndex(where: { $0.bookmark == file.videoData.bookmark }) {
+            let fileID = file.videoData.id
+            if let index = videosData.firstIndex(where: { $0.id == fileID }) {
                 videosData[index].customName = newName
                 saveBookmarks()
             }
             var updatedFile = file
             updatedFile.videoData.customName = newName
-            
-            if let fileIndex = files.firstIndex(where: { $0.videoData.bookmark == file.videoData.bookmark }) {
+
+            if let fileIndex = files.firstIndex(where: { $0.videoData.id == fileID }) {
                 files[fileIndex] = updatedFile
                 updateFiles?(files)
             }
-            
+
             return updatedFile
         }
         return nil
@@ -119,16 +118,11 @@ class VideoFilesManager {
     
     func removeFile(file: FilesFile) {
         guard let fileIndex = files.firstIndex(of: file), let bookmarkIndex = videosData.firstIndex(where: {$0.bookmark ==  file.videoData.bookmark}) else {
-            do {
-                guard let url = file.url else { return }
-                try fileManager.removeItem(at: url)
-            } catch {
-                print(error.localizedDescription)
-            }
+            // File not found in our data — just remove from arrays if possible, never delete the actual video
             return
         }
-        
-        // IMPORTANT: Backup timeline BEFORE deleting video
+
+        // IMPORTANT: Backup timeline BEFORE deleting project data
         // This allows restoring timeline even after repeated deletion
         let videoDataToBackup = videosData[bookmarkIndex]
         let timelines = loadTimelines(for: videoDataToBackup.id)
@@ -142,10 +136,23 @@ class VideoFilesManager {
             )
             DataSyncManager.shared.backupTimelinesForVideo(videoDataWithTimelines)
         }
-        
+
         // Delete timeline file
         deleteTimelinesFile(for: videoDataToBackup.id)
-        
+
+        // Delete cached preview thumbnail (PNG)
+        if let url = file.url {
+            let previewPath = URL.previewsDirectory.appendingPathComponent(url.makePreviewName())
+            try? fileManager.removeItem(at: previewPath)
+            url.stopAccessingSecurityScopedResource()
+        }
+
+        // Delete screenshots folder for this project
+        let screenshotsFolder = file.screenshotsFolder
+        if fileManager.fileExists(atPath: screenshotsFolder.path) {
+            try? fileManager.removeItem(at: screenshotsFolder)
+        }
+
         videosData.remove(at: bookmarkIndex)
         files.remove(at: fileIndex)
         saveBookmarks()

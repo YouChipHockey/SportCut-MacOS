@@ -128,8 +128,9 @@ struct MomentViewerView: View {
 
     private var stampLabelNames: [String] {
         guard let stamp = sourceStamp else { return [] }
-        return stamp.labelIDs.compactMap { labelID in
-            tagLibrary.findLabelById(labelID)?.name
+        return stamp.labels.compactMap { labelItem in
+            let name = tagLibrary.findLabelById(labelItem.id)?.name ?? labelItem.name
+            return name.isEmpty ? nil : name
         }
     }
 

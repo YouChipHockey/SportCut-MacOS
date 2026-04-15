@@ -75,6 +75,14 @@ struct SportCutSource: Identifiable, Codable {
         self.timeEvents = timeEvents
     }
     
+    /// Returns the full video duration (seconds) by quickly reading the asset. Falls back to 0 if unavailable.
+    func videoDuration() -> Double {
+        guard let url = resolveVideoURL() else { return 0 }
+        defer { url.stopAccessingSecurityScopedResource() }
+        let asset = AVAsset(url: url)
+        return CMTimeGetSeconds(asset.duration)
+    }
+
     func resolveVideoURL() -> URL? {
         var isStale = false
         guard let url = try? URL(resolvingBookmarkData: videoBookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) else {
@@ -141,7 +149,7 @@ struct SportCutEvent: Identifiable, Codable, Equatable {
             lineName: line.name,
             startTime: stamp.timeStartSeconds,
             duration: stamp.duration,
-            color: tag?.color ?? "FFFFFF",
+            color: tag?.color ?? stamp.colorHex,
             tagGroupName: tagGroup?.name,
             labelIDs: stamp.labelIDs,
             eventIDs: stamp.timeEvents
@@ -193,8 +201,12 @@ struct SportCutPlaylist: Identifiable, Codable {
     var hiddenEventKeys: Set<String>
     var eventComments: [String: String]
     var eventDrawings: [String: [SportCutEventDrawing]]
+    /// Per-event clip start time overrides (keyed by `event.hiddenKey`). Only affects playlist, not original markup.
+    var eventStartOverrides: [String: Double]
+    /// Per-event clip duration overrides (keyed by `event.hiddenKey`). Only affects playlist playback, not original markup.
+    var eventDurationOverrides: [String: Double]
     let createdAt: Date
-    
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -203,6 +215,8 @@ struct SportCutPlaylist: Identifiable, Codable {
         hiddenEventKeys: Set<String> = [],
         eventComments: [String: String] = [:],
         eventDrawings: [String: [SportCutEventDrawing]] = [:],
+        eventStartOverrides: [String: Double] = [:],
+        eventDurationOverrides: [String: Double] = [:],
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -212,9 +226,11 @@ struct SportCutPlaylist: Identifiable, Codable {
         self.hiddenEventKeys = hiddenEventKeys
         self.eventComments = eventComments
         self.eventDrawings = eventDrawings
+        self.eventStartOverrides = eventStartOverrides
+        self.eventDurationOverrides = eventDurationOverrides
         self.createdAt = createdAt
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -231,15 +247,32 @@ struct SportCutPlaylist: Identifiable, Codable {
         } else {
             eventDrawings = [:]
         }
+        eventStartOverrides = try container.decodeIfPresent([String: Double].self, forKey: .eventStartOverrides) ?? [:]
+        eventDurationOverrides = try container.decodeIfPresent([String: Double].self, forKey: .eventDurationOverrides) ?? [:]
         createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
     
     var totalDuration: Double {
-        events.reduce(0) { $0 + $1.duration }
+        events.reduce(0) { acc, event in acc + effectiveDuration(for: event) }
     }
-    
+
     var eventCount: Int {
         events.count
+    }
+
+    /// Returns the playlist-level start time for an event (override if set, otherwise original).
+    func effectiveStartTime(for event: SportCutEvent) -> Double {
+        eventStartOverrides[event.hiddenKey] ?? event.startTime
+    }
+
+    /// Returns the playlist-level duration for an event (override if set, otherwise original).
+    func effectiveDuration(for event: SportCutEvent) -> Double {
+        eventDurationOverrides[event.hiddenKey] ?? event.duration
+    }
+
+    /// End time of the event on the source video timeline.
+    func effectiveEndTime(for event: SportCutEvent) -> Double {
+        effectiveStartTime(for: event) + effectiveDuration(for: event)
     }
 }
 

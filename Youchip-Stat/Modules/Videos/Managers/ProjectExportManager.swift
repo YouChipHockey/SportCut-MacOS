@@ -313,94 +313,54 @@ class ProjectExportManager {
     
     private func importCustomCollection(_ customCollection: CustomCollectionExport, timelines: [TimelineLine]) -> [TimelineLine] {
         let tagLibraryManager = TagLibraryManager.shared
-        
-        var tagIdMapping: [String: String] = [:]
-        var labelIdMapping: [String: String] = [:]
-        var timeEventIdMapping: [String: String] = [:]
-        
+
+        // Strategy: preserve ORIGINAL IDs from the exported file.
+        // If an entity with the same ID already exists in TagLibrary, skip it.
+        // If not, add it with its original ID. This ensures stamps (which reference
+        // these IDs) and on-disk collection files stay in sync.
+
         for label in customCollection.labels {
-            let newId = UUID().uuidString
-            labelIdMapping[label.id] = newId
-            
-            let newLabel = Label(
-                id: newId,
-                name: label.name,
-                description: label.description
-            )
-            
-            tagLibraryManager.labels.append(newLabel)
+            if !tagLibraryManager.labels.contains(where: { $0.id == label.id }) {
+                tagLibraryManager.labels.append(label)
+            }
         }
-        
+
         for labelGroup in customCollection.labelGroups {
-            var newLabelGroup = labelGroup
-            newLabelGroup.id = UUID().uuidString
-            
-            newLabelGroup.lables = labelGroup.lables.compactMap { oldLabelId in
-                return labelIdMapping[oldLabelId]
+            if !tagLibraryManager.labelGroups.contains(where: { $0.id == labelGroup.id }) {
+                tagLibraryManager.labelGroups.append(labelGroup)
             }
-            
-            tagLibraryManager.labelGroups.append(newLabelGroup)
         }
-        
+
         for timeEvent in customCollection.timeEvents {
-            let newId = UUID().uuidString
-            timeEventIdMapping[timeEvent.id] = newId
-            
-            let newTimeEvent = TimeEvent(
-                id: newId,
-                name: timeEvent.name
-            )
-            
-            tagLibraryManager.timeEvents.append(newTimeEvent)
+            if !tagLibraryManager.timeEvents.contains(where: { $0.id == timeEvent.id }) {
+                tagLibraryManager.timeEvents.append(timeEvent)
+            }
         }
-        
+
         for tag in customCollection.tags {
-            let newId = UUID().uuidString
-            tagIdMapping[tag.id] = newId
-            
-            var newTag = tag
-            newTag.id = newId
-            newTag.collection = customCollection.name
-            
-            newTag.lablesGroup = tag.lablesGroup.compactMap { oldLabelGroupId in
-                if let oldLabelGroup = customCollection.labelGroups.first(where: { $0.id == oldLabelGroupId }) {
-                    return tagLibraryManager.labelGroups.first(where: { $0.name == oldLabelGroup.name })?.id
-                }
-                return nil
+            if !tagLibraryManager.tags.contains(where: { $0.id == tag.id }) {
+                var importedTag = tag
+                importedTag.collection = customCollection.name
+                tagLibraryManager.tags.append(importedTag)
             }
-            
-            tagLibraryManager.tags.append(newTag)
         }
-        
+
         for tagGroup in customCollection.tagGroups {
-            var newTagGroup = tagGroup
-            newTagGroup.id = UUID().uuidString
-            newTagGroup.tags = tagGroup.tags.compactMap { oldTagId in
-                return tagIdMapping[oldTagId]
-            }
-            
-            tagLibraryManager.tagGroups.append(newTagGroup)
-        }
-        
-        var updatedTimelines = timelines
-        for timelineIndex in 0..<updatedTimelines.count {
-            for stampIndex in 0..<updatedTimelines[timelineIndex].stamps.count {
-                updatedTimelines[timelineIndex].stamps[stampIndex].tagRefs = updatedTimelines[timelineIndex].stamps[stampIndex].tagRefs.map { ref in
-                    StampTagRef(id: tagIdMapping[ref.id] ?? ref.id, tagGroupId: ref.tagGroupId)
+            if let idx = tagLibraryManager.tagGroups.firstIndex(where: { $0.id == tagGroup.id }) {
+                // Merge any missing tags into the existing group
+                var existing = tagLibraryManager.tagGroups[idx]
+                for tagId in tagGroup.tags where !existing.tags.contains(tagId) {
+                    existing.tags.append(tagId)
                 }
-                
-                var newTimeEvents: [String] = []
-                for oldTimeEventId in updatedTimelines[timelineIndex].stamps[stampIndex].timeEvents {
-                    if let newTimeEventId = timeEventIdMapping[oldTimeEventId] {
-                        newTimeEvents.append(newTimeEventId)
-                    }
-                }
-                updatedTimelines[timelineIndex].stamps[stampIndex].timeEvents = newTimeEvents
+                tagLibraryManager.tagGroups[idx] = existing
+            } else {
+                tagLibraryManager.tagGroups.append(tagGroup)
             }
         }
-        
+
         tagLibraryManager.refreshGlobalPools()
-        
-        return updatedTimelines
+
+        // No ID remapping needed — timelines already reference the original IDs
+        return timelines
     }
 }

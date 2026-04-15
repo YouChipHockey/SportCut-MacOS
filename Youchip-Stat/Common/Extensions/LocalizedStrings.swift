@@ -881,6 +881,7 @@ extension String {
         case sportCutHidePlaylist
         case sportCutMoveUp
         case sportCutMoveDown
+        case sportCutPlayAsFilm
         case sportCutPlayAction
         case sportCutDuplicate
         case sportCutRenameAction
@@ -889,6 +890,12 @@ extension String {
         case sportCutShowEvent
         case sportCutHideEvent
         case sportCutDeleteFromPlaylist
+        case sportCutEditDrawing
+        case sportCutDeleteDrawing
+        case sportCutDeleteGroup
+        case sportCutBulkSelectedCount
+        case sportCutBulkTotalDuration
+        case sportCutBulkClearSelection
         case sportCutComment
         case sportCutSessionNotFound
         case sportCutSelectProjectForTimeline

@@ -5,6 +5,7 @@
 
 import SwiftUI
 import AppKit
+import AVFoundation
 import UniformTypeIdentifiers
 
 private struct PlaylistOrderDragData: Codable {
@@ -147,6 +148,13 @@ struct SportCutPlaylistsView: View {
                                     .cornerRadius(6)
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .contextMenu {
+                                if session.playlistGroups.count > 1 {
+                                    Button(^String.Titles.sportCutDeleteGroup, role: .destructive) {
+                                        deleteGroup(at: index)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -201,6 +209,7 @@ struct SportCutPlaylistsView: View {
                                     playerManager.currentPlaylistID = nextID
                                 },
                                 onPlay: { playPlaylist(playlist) },
+                                onPlayAsFilm: { playPlaylistAsFilm(playlist) },
                                 onDuplicate: { duplicatePlaylist(playlist) },
                                 onRename: {
                                     renamingPlaylistID = playlist.id
@@ -256,7 +265,7 @@ struct SportCutPlaylistsView: View {
     
     // MARK: - Actions
     
-    /// Кнопка в шапке карточки: для уже активного этого плейлиста — пауза/продолжить; иначе старт с первого клипа.
+    /// Кнопка в шапке карточки: для уже активного этого плейлиста — пауза/продолжить; иначе старт с первого клипа как фильм.
     private func playPlaylist(_ playlist: SportCutPlaylist) {
         selectedPlaylistID = playlist.id
         playerManager.sessionID = sessionID
@@ -267,6 +276,16 @@ struct SportCutPlaylistsView: View {
             return
         }
 
+        let visible = visibleEvents(in: playlist)
+        guard !visible.isEmpty else { return }
+        playerManager.currentPlaylistID = playlist.id
+        playerManager.playPlaylist(visible, startIndex: 0, playlistID: playlist.id, playbackKind: .singleFilm)
+    }
+
+    /// Перезапуск плейлиста как склеенного фильма с начала.
+    private func playPlaylistAsFilm(_ playlist: SportCutPlaylist) {
+        selectedPlaylistID = playlist.id
+        playerManager.sessionID = sessionID
         let visible = visibleEvents(in: playlist)
         guard !visible.isEmpty else { return }
         playerManager.currentPlaylistID = playlist.id
@@ -289,6 +308,19 @@ struct SportCutPlaylistsView: View {
         }
     }
     
+    private func deleteGroup(at index: Int) {
+        guard var session = session else { return }
+        guard index < session.playlistGroups.count else { return }
+        guard session.playlistGroups.count > 1 else { return }
+        session.playlistGroups.remove(at: index)
+        sessionManager.updateSession(session)
+        if selectedGroupIndex >= session.playlistGroups.count {
+            selectedGroupIndex = max(0, session.playlistGroups.count - 1)
+        }
+        selectedPlaylistID = nil
+        playerManager.stopPlayback()
+    }
+
     private func toggleHidden(_ playlist: SportCutPlaylist) {
         guard var session = session else { return }
         guard let idx = session.playlistGroups[selectedGroupIndex].playlists.firstIndex(where: { $0.id == playlist.id }) else { return }
@@ -356,6 +388,27 @@ struct SportCutPlaylistsView: View {
                             groupIndex: self.selectedGroupIndex,
                             playlistID: pid
                         )
+                    }
+                    return
+                }
+                // Handle batch of events from SportCut timeline bulk selection
+                if let events = try? JSONDecoder().decode([SportCutEvent].self, from: data), !events.isEmpty {
+                    DispatchQueue.main.async {
+                        guard var session = self.session else { return }
+                        guard self.selectedGroupIndex < session.playlistGroups.count else { return }
+                        if session.playlistGroups[self.selectedGroupIndex].playlists.isEmpty {
+                            session.playlistGroups[self.selectedGroupIndex].playlists.append(
+                                SportCutPlaylist(name: "\(1)")
+                            )
+                        }
+                        let lastIdx = session.playlistGroups[self.selectedGroupIndex].playlists.count - 1
+                        for event in events {
+                            if !session.playlistGroups[self.selectedGroupIndex].playlists[lastIdx].events.contains(event) {
+                                session.playlistGroups[self.selectedGroupIndex].playlists[lastIdx].events.append(event)
+                                session.playlistGroups[self.selectedGroupIndex].playlists[lastIdx].mergeMarkupComments(for: [event], session: session)
+                            }
+                        }
+                        self.sessionManager.updateSession(session)
                     }
                     return
                 }
@@ -451,6 +504,7 @@ struct SportCutPlaylistCardView: View {
     @ObservedObject var playerManager: SportCutPlayerManager
     let onSelect: () -> Void
     let onPlay: () -> Void
+    let onPlayAsFilm: () -> Void
     let onDuplicate: () -> Void
     let onRename: () -> Void
     let onDelete: () -> Void
@@ -502,7 +556,7 @@ struct SportCutPlaylistCardView: View {
     }
 
     private var miniTimelineTotalDuration: Double {
-        miniTimelineEvents.reduce(0) { $0 + $1.duration }
+        miniTimelineEvents.reduce(0) { $0 + playlist.effectiveDuration(for: $1) }
     }
     
     var body: some View {
@@ -584,6 +638,16 @@ struct SportCutPlaylistCardView: View {
             .disabled(!canMoveDown)
             .help(^String.Titles.sportCutMoveDown)
             
+            if isPlayingClipsMode {
+                Button(action: onPlayAsFilm) {
+                    Image(systemName: "film")
+                        .font(.system(size: 12))
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(^String.Titles.sportCutPlayAsFilm)
+            }
+
             Button(action: onPlay) {
                 Image(systemName: isCurrentlyPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 16))
@@ -592,6 +656,13 @@ struct SportCutPlaylistCardView: View {
             .buttonStyle(PlainButtonStyle())
         }
     }
+
+    /// Плейлист сейчас проигрывается по клипам (не как фильм).
+    private var isPlayingClipsMode: Bool {
+        playerManager.playlistPlaybackActive
+            && playerManager.currentPlaylistID == playlist.id
+            && playerManager.playlistPlaybackKind == .sequentialClips
+    }
     
     // MARK: - Mini Timeline (visual only)
     
@@ -599,39 +670,48 @@ struct SportCutPlaylistCardView: View {
         GeometryReader { geo in
             let totalDuration = max(miniTimelineTotalDuration, 0.01)
             let w = geo.size.width
-            
-            ZStack(alignment: .leading) {
-                HStack(spacing: 1) {
-                    ForEach(Array(miniTimelineEvents.enumerated()), id: \.1.hiddenKey) { _, event in
-                        let ratio = totalDuration > 0 ? event.duration / totalDuration : 1.0 / Double(max(miniTimelineEvents.count, 1))
-                        let segW = max(w * ratio, 4)
-                        let isCurrent = playerManager.currentPlaylistID == playlist.id && playerManager.currentEvent == event
-                        let isHidden = playlist.hiddenEventKeys.contains(event.hiddenKey)
-                        
-                        Rectangle()
-                            .fill(Color(hex: event.color).opacity(isHidden ? 0.2 : (isCurrent ? 1.0 : 0.7)))
-                            .frame(width: segW)
-                            .overlay(Rectangle().stroke(isCurrent ? Color.white : Color.clear, lineWidth: 1))
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                guard let start = visibleEvents.firstIndex(of: event) else { return }
-                                playerManager.sessionID = sessionID
-                                playerManager.playPlaylist(visibleEvents, startIndex: start, playlistID: playlist.id)
-                            }
-                    }
-                }
 
-                drawingMarkers(totalWidth: w, totalDuration: miniTimelineTotalDuration)
+            ZStack(alignment: .leading) {
+                // Timeline bar with clipped white marker lines
+                ZStack(alignment: .leading) {
+                    HStack(spacing: 1) {
+                        ForEach(Array(miniTimelineEvents.enumerated()), id: \.1.hiddenKey) { _, event in
+                            let effectiveDur = playlist.effectiveDuration(for: event)
+                            let ratio = totalDuration > 0 ? effectiveDur / totalDuration : 1.0 / Double(max(miniTimelineEvents.count, 1))
+                            let segW = max(w * ratio, 4)
+                            let isCurrent = playerManager.currentPlaylistID == playlist.id && playerManager.currentEvent == event
+                            let isHidden = playlist.hiddenEventKeys.contains(event.hiddenKey)
+
+                            Rectangle()
+                                .fill(Color(hex: event.color).opacity(isHidden ? 0.2 : (isCurrent ? 1.0 : 0.7)))
+                                .frame(width: segW)
+                                .overlay(Rectangle().stroke(isCurrent ? Color.white : Color.clear, lineWidth: 1))
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    guard let start = visibleEvents.firstIndex(of: event) else { return }
+                                    playerManager.sessionID = sessionID
+                                    playerManager.playPlaylist(visibleEvents, startIndex: start, playlistID: playlist.id)
+                                }
+                        }
+                    }
+
+                    drawingMarkerLines(totalWidth: w, totalDuration: miniTimelineTotalDuration)
+                }
+                .frame(height: 14)
+                .cornerRadius(3)
+                .clipped()
+
+                // Drawing icons above the timeline (not clipped)
+                drawingMarkerIcons(totalWidth: w, totalDuration: miniTimelineTotalDuration)
             }
         }
         .frame(height: 14)
-        .cornerRadius(3)
-        .clipped()
     }
 
-    private func drawingMarkers(totalWidth: CGFloat, totalDuration: Double) -> some View {
+    /// White vertical lines (full height, inside clipped timeline bar)
+    private func drawingMarkerLines(totalWidth: CGFloat, totalDuration: Double) -> some View {
         let markers = drawingMarkerPositions(totalWidth: totalWidth, totalDuration: totalDuration)
-        return ForEach(markers, id: \.offset) { marker in
+        return ForEach(markers) { marker in
             Rectangle()
                 .fill(Color.white)
                 .frame(width: 2, height: 14)
@@ -640,21 +720,71 @@ struct SportCutPlaylistCardView: View {
         }
     }
 
+    /// Pencil icons above the timeline bar (outside clipped region)
+    private func drawingMarkerIcons(totalWidth: CGFloat, totalDuration: Double) -> some View {
+        let markers = drawingMarkerPositions(totalWidth: totalWidth, totalDuration: totalDuration)
+        return ForEach(markers) { marker in
+            Image(systemName: "pencil.tip.crop.circle")
+                .font(.system(size: 9))
+                .foregroundColor(.green)
+                .offset(x: marker.offset - 5, y: -12)
+                .onTapGesture {
+                    navigateToDrawing(marker)
+                }
+                .contextMenu {
+                    Button(^String.Titles.sportCutEditDrawing) {
+                        playerManager.sessionID = sessionID
+                        playerManager.editExistingDrawing(
+                            drawing: marker.drawing,
+                            event: marker.event,
+                            visiblePlaylistEvents: visibleEvents,
+                            playlistID: playlist.id
+                        )
+                    }
+                    Button(^String.Titles.sportCutDeleteDrawing, role: .destructive) {
+                        playerManager.deleteDrawing(marker.drawing)
+                    }
+                }
+        }
+    }
+
+    private func navigateToDrawing(_ marker: DrawingMarker) {
+        guard let start = visibleEvents.firstIndex(of: marker.event) else { return }
+        let event = marker.event
+        // Пересчёт: drawing.videoTime — локальное в оригинальном клипе → локальное в effective клипе
+        let absDrawingTime = event.startTime + marker.drawing.videoTime
+        let effectiveStart = playlist.effectiveStartTime(for: event)
+        let effectiveLocalTime = absDrawingTime - effectiveStart
+        playerManager.sessionID = sessionID
+        playerManager.playPlaylist(visibleEvents, startIndex: start, playlistID: playlist.id, autoPlayAfterLoad: false) {
+            let seekTime = CMTime(seconds: max(0, effectiveLocalTime), preferredTimescale: 600)
+            playerManager.player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+    }
+
     private func drawingMarkerPositions(totalWidth: CGFloat, totalDuration: Double) -> [DrawingMarker] {
         guard totalDuration > 0 else { return [] }
         var markers: [DrawingMarker] = []
         var accumulatedTime: Double = 0
-        // Тот же порядок сегментов, что и у мини-таймлайна (фильтр источника).
         for event in miniTimelineEvents {
             let drawings = playlist.eventDrawings[event.hiddenKey] ?? []
+            let effectiveDur = playlist.effectiveDuration(for: event)
+            let effectiveStart = playlist.effectiveStartTime(for: event)
+            let originalStart = event.startTime
+
             for drawing in drawings {
-                // videoTime при сохранении — локальное время внутри клипа (таймлайн композиции плеера), не абсолют ролика.
-                let localT = max(0, min(drawing.videoTime, max(event.duration, 0.001)))
+                // drawing.videoTime — локальное время относительно оригинального клипа
+                let absDrawingTime = originalStart + drawing.videoTime
+                // Проверяем что рисунок попадает в текущие effective границы клипа
+                let effectiveEnd = effectiveStart + effectiveDur
+                guard absDrawingTime >= effectiveStart && absDrawingTime <= effectiveEnd else { continue }
+                // Локальное время в новом клипе
+                let localT = absDrawingTime - effectiveStart
                 let absTime = accumulatedTime + localT
                 let x = totalWidth * (absTime / totalDuration)
-                markers.append(DrawingMarker(offset: x))
+                markers.append(DrawingMarker(offset: x, drawing: drawing, event: event))
             }
-            accumulatedTime += event.duration
+            accumulatedTime += effectiveDur
         }
         return markers
     }
@@ -765,6 +895,9 @@ struct SportCutPlaylistCardView: View {
                             playlistID: playlist.id,
                             at: insertAt ?? playlist.events.count
                         )
+                    } else if let events = try? JSONDecoder().decode([SportCutEvent].self, from: data),
+                              !events.isEmpty {
+                        appendExternalEvents(events, at: insertAt)
                     } else if let event = try? JSONDecoder().decode(SportCutEvent.self, from: data) {
                         appendExternalEvent(event, at: insertAt)
                     }
@@ -810,6 +943,26 @@ struct SportCutPlaylistCardView: View {
                 SportCutSessionManager.shared.updateSession(session)
             }
         }
+    }
+
+    private func appendExternalEvents(_ events: [SportCutEvent], at index: Int?) {
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
+        guard let pi = session.playlistGroups[groupIndex].playlists.firstIndex(where: { $0.id == playlist.id }) else { return }
+
+        var destinationPlaylist = session.playlistGroups[groupIndex].playlists[pi]
+        var insertIndex = min(max(index ?? destinationPlaylist.events.count, 0), destinationPlaylist.events.count)
+        var insertedEvents: [SportCutEvent] = []
+
+        for event in events where !destinationPlaylist.events.contains(event) {
+            destinationPlaylist.events.insert(event, at: insertIndex)
+            insertIndex += 1
+            insertedEvents.append(event)
+        }
+
+        guard !insertedEvents.isEmpty else { return }
+        destinationPlaylist.mergeMarkupComments(for: insertedEvents, session: session)
+        session.playlistGroups[groupIndex].playlists[pi] = destinationPlaylist
+        SportCutSessionManager.shared.updateSession(session)
     }
     
     private func removeEvent(at index: Int) {
@@ -1033,7 +1186,9 @@ struct PlaylistEventRowView: View {
 
 private struct DrawingMarker: Identifiable {
     let offset: CGFloat
-    var id: CGFloat { offset }
+    let drawing: SportCutEventDrawing
+    let event: SportCutEvent
+    var id: String { drawing.imageName }
 }
 
 private struct EventCommentEditorState: Identifiable {
@@ -1142,6 +1297,9 @@ struct EventReorderDropDelegate: DropDelegate {
                             playlistID: playlist.id,
                             at: targetIndex
                         )
+                    } else if let events = try? JSONDecoder().decode([SportCutEvent].self, from: data),
+                              !events.isEmpty {
+                        performInsertEvents(events)
                     } else if let event = try? JSONDecoder().decode(SportCutEvent.self, from: data) {
                         performInsertEvent(event)
                     }
@@ -1186,6 +1344,26 @@ struct EventReorderDropDelegate: DropDelegate {
                 SportCutSessionManager.shared.updateSession(session)
             }
         }
+    }
+
+    private func performInsertEvents(_ events: [SportCutEvent]) {
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
+        guard let pi = session.playlistGroups[groupIndex].playlists.firstIndex(where: { $0.id == playlist.id }) else { return }
+
+        var destinationPlaylist = session.playlistGroups[groupIndex].playlists[pi]
+        var insertIndex = min(max(targetIndex, 0), destinationPlaylist.events.count)
+        var insertedEvents: [SportCutEvent] = []
+
+        for event in events where !destinationPlaylist.events.contains(event) {
+            destinationPlaylist.events.insert(event, at: insertIndex)
+            insertIndex += 1
+            insertedEvents.append(event)
+        }
+
+        guard !insertedEvents.isEmpty else { return }
+        destinationPlaylist.mergeMarkupComments(for: insertedEvents, session: session)
+        session.playlistGroups[groupIndex].playlists[pi] = destinationPlaylist
+        SportCutSessionManager.shared.updateSession(session)
     }
 }
 

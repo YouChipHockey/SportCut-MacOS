@@ -137,7 +137,14 @@ class HotKeyManager: ObservableObject {
         if isEditingTextBox { return true }
         if FocusStateManager.shared.isAnyTextFieldFocused { return true }
         guard let responder = NSApp.keyWindow?.firstResponder else { return false }
-        return responder is NSTextView || responder is NSTextField
+        if responder is NSTextField { return true }
+        if let textView = responder as? NSTextView {
+            // AVPlayerView and SwiftUI hosting views contain internal NSTextView
+            // that is not a real user text input. Only block for genuine field editors
+            // (e.g. comment fields, rename fields) that the user is actively typing into.
+            return textView.isFieldEditor
+        }
+        return false
     }
     
     func setupKeyboardMonitoring() {
@@ -172,6 +179,40 @@ class HotKeyManager: ObservableObject {
                !self.blockedSheetActive,
                !self.shouldPassThroughSpaceForTextInput() {
                 NotificationCenter.default.post(name: .sportCutTogglePlayPause, object: nil)
+                return nil
+            }
+            // Shift+стрелки в окне режима просмотра (SportCut) — перемотка ±3 сек.
+            if event.modifierFlags.contains(.shift),
+               WindowsManager.shared.isSportCutKeyWindow(),
+               self.isEnabled,
+               !self.blockedSheetActive {
+                if event.keyCode == 123 {
+                    NotificationCenter.default.post(name: .sportCutSeekBackward, object: nil)
+                    return nil
+                }
+                if event.keyCode == 124 {
+                    NotificationCenter.default.post(name: .sportCutSeekForward, object: nil)
+                    return nil
+                }
+            }
+            // Shift+стрелки в окне разметки — перемотка ±3 сек (также в режиме редактирования рисунка).
+            if event.modifierFlags.contains(.shift),
+               (event.keyCode == 123 || event.keyCode == 124),
+               self.isEnabled,
+               !self.blockedSheetActive,
+               ActiveWindowManager.shared.isMarkerWindowActive() || ActiveWindowManager.shared.isViewerWindowActive() {
+                let isViewer = WindowsManager.shared.viewerWindow != nil && ActiveWindowManager.shared.isViewerWindowActive()
+                let seekBy: Double = event.keyCode == 123 ? -3 : 3
+                if isViewer {
+                    NotificationCenter.default.post(name: event.keyCode == 123 ? .seekViewerPlayerBackward : .seekViewerPlayerForward, object: nil)
+                } else if self.isEditorModeActive {
+                    NotificationCenter.default.post(name: .editorModeChanged, object: false)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        VideoPlayerManager.shared.seek(by: seekBy)
+                    }
+                } else {
+                    VideoPlayerManager.shared.seek(by: seekBy)
+                }
                 return nil
             }
             // Пробел = play/pause: окно видео / таймлайна / библиотеки тегов или окно «Пересмотр» (key window, не кэш уведомлений).
@@ -231,36 +272,7 @@ class HotKeyManager: ObservableObject {
             return true
         }
         
-        if event.modifierFlags.contains(.shift) {
-            switch event.keyCode {
-            case 123:
-                if isViewerMode {
-                    NotificationCenter.default.post(name: .seekViewerPlayerBackward, object: nil)
-                } else if isEditorModeActive {
-                    NotificationCenter.default.post(name: .editorModeChanged, object: false)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        VideoPlayerManager.shared.seek(by: -3)
-                    }
-                } else {
-                    VideoPlayerManager.shared.seek(by: -3)
-                }
-                return true
-            case 124:
-                if isViewerMode {
-                    NotificationCenter.default.post(name: .seekViewerPlayerForward, object: nil)
-                } else if isEditorModeActive {
-                    NotificationCenter.default.post(name: .editorModeChanged, object: false)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        VideoPlayerManager.shared.seek(by: 3)
-                    }
-                } else {
-                    VideoPlayerManager.shared.seek(by: 3)
-                }
-                return true
-            default:
-                break
-            }
-        }
+        // Shift+arrows теперь обрабатываются до guard isEditorModeActive в keyDown мониторе.
         
         let hotkeyString = hotkeyStringFromEvent(event)
         

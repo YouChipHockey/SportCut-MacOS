@@ -21,7 +21,8 @@ struct FullControlView: View {
     @ObservedObject var focusManager = FocusStateManager.shared
     @ObservedObject var hotkeyManager = HotKeyManager.shared
     @StateObject var exportHelper = ExportHelper()
-    
+    @ObservedObject var sportCutSessionManager = SportCutSessionManager.shared
+
     /// Effective video duration - uses live stream duration when in live mode, otherwise AVPlayer duration.
     private var effectiveVideoDuration: Double {
         return max(1.0, videoManager.timelineDuration)
@@ -257,16 +258,26 @@ struct FullControlView: View {
             Text("Суммарная длина: \(formatTotalSelectedTagsDuration())")
                 .font(.system(size: 11, weight: .regular))
                 .foregroundColor(.secondary)
-            Button("Открыть в режиме просмотра") {
+            Button("Новая сессия просмотра") {
                 WindowsManager.shared.openSportCutFromSelectedStamps()
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
-            Button("В плейлист SportCut") {
-                WindowsManager.shared.appendMarkupSelectionToOpenSportCutPlaylist()
+            let existingSessions = sportCutSessionManager.sessionsForProject(projectID: WindowsManager.shared.currentVideoId)
+            if !existingSessions.isEmpty {
+                Menu {
+                    ForEach(existingSessions, id: \.id) { sess in
+                        Button(sess.name) {
+                            WindowsManager.shared.appendMarkupSelectionToSportCutSession(sessionID: sess.id)
+                        }
+                    }
+                } label: {
+                    Text("В существующую сессию")
+                        .font(.system(size: 11))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
             Button("Снять выделение") {
                 timelineData.clearSportCutExportSelection()
             }
@@ -1203,7 +1214,7 @@ struct FullControlView: View {
                     Button("Новая сессия просмотра") {
                         WindowsManager.shared.showSportCutNewSessionFromMarkup()
                     }
-                    let existing = WindowsManager.shared.sportCutSessionsForCurrentMarkupProject()
+                    let existing = sportCutSessionManager.sessionsForProject(projectID: WindowsManager.shared.currentVideoId)
                     if !existing.isEmpty {
                         Divider()
                         ForEach(existing, id: \.id) { sess in

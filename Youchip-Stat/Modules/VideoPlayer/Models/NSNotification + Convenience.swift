@@ -30,6 +30,8 @@ extension NSNotification.Name {
     static let textBoxEditingChanged = NSNotification.Name("textBoxEditingChanged")
     /// Пробел play/pause в окне режима просмотра (SportCut). Обрабатывается в `SportCutMainView`.
     static let sportCutTogglePlayPause = NSNotification.Name("sportCutTogglePlayPause")
+    static let sportCutSeekBackward = NSNotification.Name("sportCutSeekBackward")
+    static let sportCutSeekForward = NSNotification.Name("sportCutSeekForward")
     /// Открыть редактор рисунка по скриншоту (перемотка на videoTime + восстановление состояния из метаданных). object = OpenEditorForScreenshotPayload.
     static let openEditorForScreenshot = NSNotification.Name("openEditorForScreenshot")
     /// Запрос редактора из окна пересмотра — захватывает кадр из reviewPlayer и открывает редактор в главном окне.

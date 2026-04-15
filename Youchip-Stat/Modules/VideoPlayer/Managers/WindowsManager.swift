@@ -1017,6 +1017,7 @@ class WindowsManager: NSObject {
     func registerActiveSportCut(sessionID: UUID, playerManager: SportCutPlayerManager) {
         activeSportCutSessionID = sessionID
         activeSportCutPlayerManager = playerManager
+        HotKeyManager.shared.resumeKeyboardMonitoring()
     }
 
     func unregisterActiveSportCut(sessionID: UUID) {
@@ -1109,6 +1110,9 @@ class WindowsManager: NSObject {
         pl.mergeMarkupComments(for: added, session: session)
         session.playlistGroups[groupIndex].playlists[pi] = pl
         SportCutSessionManager.shared.updateSession(session)
+        if !added.isEmpty {
+            TimelineDataManager.shared.clearSportCutExportSelection()
+        }
     }
 
     func insertMarkupEventsIntoSportCutPlaylist(events: [SportCutEvent], sessionID: UUID, groupIndex: Int, playlistID: UUID, at index: Int) {
@@ -1128,6 +1132,9 @@ class WindowsManager: NSObject {
         playlist.mergeMarkupComments(for: added, session: session)
         session.playlistGroups[groupIndex].playlists[pi] = playlist
         SportCutSessionManager.shared.updateSession(session)
+        if !added.isEmpty {
+            TimelineDataManager.shared.clearSportCutExportSelection()
+        }
     }
 
     private func sportCutPlaylistGroupIndex(session: SportCutSession, playlistID: UUID) -> Int? {
@@ -1135,6 +1142,31 @@ class WindowsManager: NSObject {
             return gi
         }
         return nil
+    }
+
+    func appendMarkupSelectionToSportCutSession(sessionID: UUID) {
+        VideoPlayerManager.shared.player?.pause()
+        guard let payload = buildMarkupPayloadFromBulkSelection() else { return }
+        guard let events = resolveMarkupPlaylistEvents(payload: payload, sessionID: sessionID) else { return }
+
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
+
+        // Создаём новый плейлист в первой группе
+        if session.playlistGroups.isEmpty {
+            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
+        }
+        let groupIndex = 0
+        let playlistName = "\(session.playlistGroups[groupIndex].playlists.count + 1)"
+        var newPlaylist = SportCutPlaylist(name: playlistName, events: events)
+        newPlaylist.mergeMarkupComments(for: events, session: session)
+        session.playlistGroups[groupIndex].playlists.append(newPlaylist)
+        SportCutSessionManager.shared.updateSession(session)
+        TimelineDataManager.shared.clearSportCutExportSelection()
+
+        // Открыть окно сессии если ещё не открыто
+        if activeSportCutSessionID != sessionID {
+            openSportCutSessionFromMarkup(existingSessionID: sessionID)
+        }
     }
 
     func appendMarkupSelectionToOpenSportCutPlaylist() {

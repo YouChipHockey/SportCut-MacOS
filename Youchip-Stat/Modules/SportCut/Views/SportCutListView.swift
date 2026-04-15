@@ -183,8 +183,12 @@ struct SportCutListView: View {
     }
     
     private func openSession(_ session: SportCutSession) {
+        WindowsManager.shared.sportCutWindow?.close()
+        WindowsManager.shared.sportCutWindow = nil
         let controller = SportCutWindowController(session: session)
+        WindowsManager.shared.sportCutWindow = controller
         controller.showWindow(nil)
+        HotKeyManager.shared.resumeKeyboardMonitoring()
     }
 }
 

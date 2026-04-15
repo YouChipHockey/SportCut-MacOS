@@ -830,6 +830,7 @@
 "SportCutHidePlaylist" = "Pleylistni yashirish";
 "SportCutMoveUp" = "Yuqoriga ko'chirish";
 "SportCutMoveDown" = "Pastga ko'chirish";
+"SportCutPlayAsFilm" = "Film sifatida ijro etish";
 "SportCutPlayAction" = "Ijro etish";
 "SportCutDuplicate" = "Nusxalash";
 "SportCutRenameAction" = "Qayta nomlash";
@@ -838,6 +839,12 @@
 "SportCutShowEvent" = "Voqeani ko'rsatish";
 "SportCutHideEvent" = "Voqeani yashirish";
 "SportCutDeleteFromPlaylist" = "Pleylistdan o'chirish";
+"SportCutEditDrawing" = "Rasmni tahrirlash";
+"SportCutDeleteDrawing" = "Rasmni o'chirish";
+"SportCutDeleteGroup" = "Guruhni o'chirish";
+"SportCutBulkSelectedCount" = "Tanlangan teglar";
+"SportCutBulkTotalDuration" = "Umumiy davomiylik";
+"SportCutBulkClearSelection" = "Tanlovni bekor qilish";
 "SportCutComment" = "Izoh";
 "SportCutSessionNotFound" = "Sessiya topilmadi";
 "SportCutSelectProjectForTimeline" = "Vaqt chizig'ini ko'rsatish uchun loyihani tanlang";

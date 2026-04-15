@@ -19,8 +19,15 @@ class SportCutSessionManager: ObservableObject {
         loadSessions()
     }
     
+    func sessionsForProject(projectID: String) -> [SportCutSession] {
+        guard !projectID.isEmpty else { return [] }
+        return sessions.filter { sess in
+            sess.sources.contains { $0.projectID == projectID }
+        }
+    }
+
     // MARK: - CRUD
-    
+
     func createSession(name: String) -> SportCutSession {
         let session = SportCutSession(name: name)
         sessions.append(session)

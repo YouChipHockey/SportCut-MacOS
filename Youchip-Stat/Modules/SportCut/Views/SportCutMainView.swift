@@ -70,8 +70,15 @@ struct SportCutMainView: View {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .sportCutTogglePlayPause)) { _ in
                     guard !playerManager.isEditorMode else { return }
-                    if Self.isSportCutTextInputActive() { return }
                     playerManager.togglePlayPause()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .sportCutSeekBackward)) { _ in
+                    guard !playerManager.isEditorMode else { return }
+                    playerManager.seek(by: -3)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .sportCutSeekForward)) { _ in
+                    guard !playerManager.isEditorMode else { return }
+                    playerManager.seek(by: 3)
                 }
                 .onAppear {
                     playerManager.sessionID = sessionID
