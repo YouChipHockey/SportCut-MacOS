@@ -536,7 +536,7 @@ struct TimelineLineView: View {
         Button("Новая сессия просмотра") {
             WindowsManager.shared.openSportCutFromTimelineStamps([(line, stamp)])
         }
-        let existingSessions = SportCutSessionManager.shared.sessionsForProject(projectID: WindowsManager.shared.currentVideoId)
+        let existingSessions = SportCutSessionManager.shared.sessions
         if !existingSessions.isEmpty {
             Menu("В существующую сессию") {
                 ForEach(existingSessions, id: \.id) { sess in

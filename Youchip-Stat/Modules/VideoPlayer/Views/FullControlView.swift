@@ -263,7 +263,7 @@ struct FullControlView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
-            let existingSessions = sportCutSessionManager.sessionsForProject(projectID: WindowsManager.shared.currentVideoId)
+            let existingSessions = sportCutSessionManager.sessions
             if !existingSessions.isEmpty {
                 Menu {
                     ForEach(existingSessions, id: \.id) { sess in
@@ -1245,7 +1245,7 @@ struct FullControlView: View {
                     Button("Новая сессия просмотра") {
                         WindowsManager.shared.showSportCutNewSessionFromMarkup()
                     }
-                    let existing = sportCutSessionManager.sessionsForProject(projectID: WindowsManager.shared.currentVideoId)
+                    let existing = sportCutSessionManager.sessions
                     if !existing.isEmpty {
                         Divider()
                         ForEach(existing, id: \.id) { sess in

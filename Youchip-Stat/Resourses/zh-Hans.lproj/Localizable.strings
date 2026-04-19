@@ -830,6 +830,8 @@
 "SportCutHidePlaylist" = "隐藏播放列表";
 "SportCutMoveUp" = "上移";
 "SportCutMoveDown" = "下移";
+"SportCutMoveLeft" = "左移";
+"SportCutMoveRight" = "右移";
 "SportCutPlayAsFilm" = "以影片播放";
 "SportCutPlayAction" = "播放";
 "SportCutDuplicate" = "复制";

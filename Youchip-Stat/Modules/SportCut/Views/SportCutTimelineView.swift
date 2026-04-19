@@ -21,6 +21,14 @@ private struct PlaylistEventSelectionKey: Equatable {
     let eventIndex: Int
 }
 
+/// Состояние редактора комментария для тега в таймлайне плейлиста.
+private struct TimelineCommentEditorState: Identifiable {
+    let event: SportCutEvent
+    let playlistID: UUID
+    let comment: String
+    var id: String { "\(playlistID.uuidString)_\(event.hiddenKey)" }
+}
+
 /// Manages local event monitor for Esc key to deselect playlist event.
 private final class PlaylistTimelineEventMonitor: ObservableObject {
     private var keyMonitor: Any?
@@ -925,6 +933,7 @@ private struct SportCutPlaylistsTimelinePane: View {
     @State private var resizeEdge: PlaylistResizeEdge = .right
     @StateObject private var eventMonitor = PlaylistTimelineEventMonitor()
     @ObservedObject var sessionManager = SportCutSessionManager.shared
+    @State private var commentEditorState: TimelineCommentEditorState?
 
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
@@ -934,8 +943,9 @@ private struct SportCutPlaylistsTimelinePane: View {
         session?.playlistGroups.flatMap(\.playlists) ?? []
     }
 
+    /// Returns all events for the timeline — hidden events are shown dimmed, not excluded.
     private func visibleEvents(in playlist: SportCutPlaylist) -> [SportCutEvent] {
-        var events = playlist.events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
+        var events = playlist.events
         if let source = sourceFilter {
             events = events.filter { $0.sourceID == source.id }
         }
@@ -945,6 +955,102 @@ private struct SportCutPlaylistsTimelinePane: View {
     private func clearSelection() {
         selection = nil
         eventMonitor.lastSelection = nil
+    }
+
+    // MARK: - Timeline event actions
+
+    private func findGroupPlaylist(playlistID: UUID) -> (gi: Int, pi: Int)? {
+        guard let session = session else { return nil }
+        for (gi, group) in session.playlistGroups.enumerated() {
+            if let pi = group.playlists.firstIndex(where: { $0.id == playlistID }) {
+                return (gi, pi)
+            }
+        }
+        return nil
+    }
+
+    private func toggleEventHidden(playlistID: UUID, event: SportCutEvent) {
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+              let (gi, pi) = findGroupPlaylist(playlistID: playlistID) else { return }
+        let key = event.hiddenKey
+        if session.playlistGroups[gi].playlists[pi].hiddenEventKeys.contains(key) {
+            session.playlistGroups[gi].playlists[pi].hiddenEventKeys.remove(key)
+        } else {
+            session.playlistGroups[gi].playlists[pi].hiddenEventKeys.insert(key)
+        }
+        SportCutSessionManager.shared.updateSession(session)
+        playerManager.handleEventVisibilityChange(session: session, playlistID: playlistID, changedEvent: event)
+    }
+
+    private func openCommentEditor(playlistID: UUID, event: SportCutEvent) {
+        guard let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+              let (gi, pi) = findGroupPlaylist(playlistID: playlistID) else { return }
+        let comment = session.playlistGroups[gi].playlists[pi].eventComments[event.hiddenKey] ?? ""
+        commentEditorState = TimelineCommentEditorState(event: event, playlistID: playlistID, comment: comment)
+    }
+
+    private func saveEventComment(event: SportCutEvent, playlistID: UUID, comment: String) {
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+              let (gi, pi) = findGroupPlaylist(playlistID: playlistID) else { return }
+        let trimmed = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            session.playlistGroups[gi].playlists[pi].eventComments.removeValue(forKey: event.hiddenKey)
+        } else {
+            session.playlistGroups[gi].playlists[pi].eventComments[event.hiddenKey] = trimmed
+        }
+        SportCutSessionManager.shared.updateSession(session)
+        commentEditorState = nil
+    }
+
+    private func deleteEvent(playlistID: UUID, event: SportCutEvent) {
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+              let (gi, pi) = findGroupPlaylist(playlistID: playlistID) else { return }
+        guard let idx = session.playlistGroups[gi].playlists[pi].events.firstIndex(of: event) else { return }
+        session.playlistGroups[gi].playlists[pi].events.remove(at: idx)
+        session.playlistGroups[gi].playlists[pi].hiddenEventKeys.remove(event.hiddenKey)
+        session.playlistGroups[gi].playlists[pi].eventComments.removeValue(forKey: event.hiddenKey)
+        SportCutSessionManager.shared.updateSession(session)
+    }
+
+    private func moveEventInPlaylist(playlistID: UUID, event: SportCutEvent, direction: Int) {
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+              let (gi, pi) = findGroupPlaylist(playlistID: playlistID) else { return }
+        var events = session.playlistGroups[gi].playlists[pi].events
+        guard let idx = events.firstIndex(of: event) else { return }
+        let newIdx = idx + direction
+        guard newIdx >= 0, newIdx < events.count else { return }
+        let item = events.remove(at: idx)
+        events.insert(item, at: newIdx)
+        session.playlistGroups[gi].playlists[pi].events = events
+        SportCutSessionManager.shared.updateSession(session)
+    }
+
+    private func handleTimelineDrop(dragData: PlaylistEventDragData, toPlaylistID: UUID, toIndex: Int) {
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
+        let hk = dragData.event.hiddenKey
+        var carriedComment: String?
+        var carriedDrawings: [SportCutEventDrawing]?
+        // Remove from source playlist
+        for gi in session.playlistGroups.indices {
+            if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == dragData.sourcePlaylistID }) {
+                carriedComment = session.playlistGroups[gi].playlists[pi].eventComments[hk]
+                carriedDrawings = session.playlistGroups[gi].playlists[pi].eventDrawings[hk]
+                session.playlistGroups[gi].playlists[pi].events.removeAll { $0 == dragData.event }
+                session.playlistGroups[gi].playlists[pi].eventComments.removeValue(forKey: hk)
+                break
+            }
+        }
+        // Insert into target playlist
+        for gi in session.playlistGroups.indices {
+            if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == toPlaylistID }) {
+                let clamped = min(toIndex, session.playlistGroups[gi].playlists[pi].events.count)
+                session.playlistGroups[gi].playlists[pi].events.insert(dragData.event, at: clamped)
+                if let c = carriedComment { session.playlistGroups[gi].playlists[pi].eventComments[hk] = c }
+                if let d = carriedDrawings { session.playlistGroups[gi].playlists[pi].eventDrawings[hk] = d }
+                break
+            }
+        }
+        SportCutSessionManager.shared.updateSession(session)
     }
 
     var body: some View {
@@ -967,6 +1073,14 @@ private struct SportCutPlaylistsTimelinePane: View {
         }
         .onDisappear {
             eventMonitor.stop()
+        }
+        .sheet(item: $commentEditorState) { state in
+            SportCutEventCommentSheet(
+                title: state.event.tagName,
+                initialComment: state.comment,
+                onSave: { text in saveEventComment(event: state.event, playlistID: state.playlistID, comment: text) },
+                onCancel: { commentEditorState = nil }
+            )
         }
     }
 
@@ -1071,6 +1185,21 @@ private struct SportCutPlaylistsTimelinePane: View {
                                     },
                                     onReset: { event in
                                         resetEventOverrides(playlistID: playlist.id, event: event)
+                                    },
+                                    onToggleHidden: { event in
+                                        toggleEventHidden(playlistID: playlist.id, event: event)
+                                    },
+                                    onComment: { event in
+                                        openCommentEditor(playlistID: playlist.id, event: event)
+                                    },
+                                    onDelete: { event in
+                                        deleteEvent(playlistID: playlist.id, event: event)
+                                    },
+                                    onMoveEvent: { event, direction in
+                                        moveEventInPlaylist(playlistID: playlist.id, event: event, direction: direction)
+                                    },
+                                    onDrop: { dragData, toIndex in
+                                        handleTimelineDrop(dragData: dragData, toPlaylistID: playlist.id, toIndex: toIndex)
                                     }
                                 )
                             }
@@ -1096,6 +1225,11 @@ private struct SportCutPlaylistSequentialRowView: View {
     @Binding var resizeEdge: PlaylistResizeEdge
     var onCommitResize: (_ edge: PlaylistResizeEdge, _ deltaSec: Double) -> Void = { _, _ in }
     var onReset: (SportCutEvent) -> Void = { _ in }
+    var onToggleHidden: (SportCutEvent) -> Void = { _ in }
+    var onComment: (SportCutEvent) -> Void = { _ in }
+    var onDelete: (SportCutEvent) -> Void = { _ in }
+    var onMoveEvent: (_ event: SportCutEvent, _ direction: Int) -> Void = { _, _ in }
+    var onDrop: (_ dragData: PlaylistEventDragData, _ toIndex: Int) -> Void = { _, _ in }
 
     private let gapPx: CGFloat = 3
     private let minStripW: CGFloat = 24
@@ -1160,6 +1294,9 @@ private struct SportCutPlaylistSequentialRowView: View {
         let effStart = playlist.effectiveStartTime(for: event)
         let effDur = playlist.effectiveDuration(for: event)
         let spp = secPerPixel
+        let drawings = playlist.eventDrawings[event.hiddenKey] ?? []
+        let isHidden = playlist.hiddenEventKeys.contains(event.hiddenKey)
+        let hasComment = !(playlist.eventComments[event.hiddenKey] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         let times = visualTimes(effStart: effStart, effDur: effDur, isSelected: isSelected, event: event)
 
@@ -1170,10 +1307,25 @@ private struct SportCutPlaylistSequentialRowView: View {
             stripWidth: stripW,
             isSelected: isSelected,
             isDragging: isSelected && draggingEdge != nil,
+            isHidden: isHidden,
+            hasComment: hasComment,
+            canMoveLeft: index > 0,
+            canMoveRight: index < events.count - 1,
+            drawings: drawings,
+            sourcePlaylistID: playlist.id,
+            eventIndex: index,
             onTap: {
                 selection = selKey
                 playerManager.sessionID = sessionID
-                playerManager.playPlaylist(events, startIndex: index, playlistID: playlist.id)
+                if isHidden {
+                    // Скрытый клип: играем только его одного
+                    playerManager.playPlaylist([event], startIndex: 0, playlistID: playlist.id)
+                } else {
+                    // Играем с этого клипа, пропуская скрытые
+                    let playable = events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
+                    let startIdx = playable.firstIndex(of: event) ?? 0
+                    playerManager.playPlaylist(playable, startIndex: startIdx, playlistID: playlist.id)
+                }
             },
             onEdgeDragChanged: { edge, translationX in
                 if draggingEdge == nil { draggingEdge = edge; resizeEdge = edge }
@@ -1212,7 +1364,13 @@ private struct SportCutPlaylistSequentialRowView: View {
             onReset: {
                 onReset(event)
             },
-            hasOverrides: playlist.eventStartOverrides[event.hiddenKey] != nil || playlist.eventDurationOverrides[event.hiddenKey] != nil
+            hasOverrides: playlist.eventStartOverrides[event.hiddenKey] != nil || playlist.eventDurationOverrides[event.hiddenKey] != nil,
+            onToggleHidden: { onToggleHidden(event) },
+            onComment: { onComment(event) },
+            onDelete: { onDelete(event) },
+            onMoveLeft: { onMoveEvent(event, -1) },
+            onMoveRight: { onMoveEvent(event, 1) },
+            onDropEvent: { dragData in onDrop(dragData, index) }
         )
     }
 
@@ -1326,8 +1484,7 @@ private struct SportCutPlaylistSequentialRowView: View {
 }
 
 /// Визуальный элемент тега на таймлайне плейлиста.
-/// Ресайз — через drag handles на краях (как EdgeResizeHandle в TimelineLineView).
-/// Во время drag обновляется только визуальная ширина (@State в row), модель — при отпускании.
+/// Ресайз — через drag handles на краях. Reorder — через system drag (center).
 private struct SportCutPlaylistStripView: View {
     let event: SportCutEvent
     let effectiveStart: Double
@@ -1335,12 +1492,27 @@ private struct SportCutPlaylistStripView: View {
     let stripWidth: CGFloat
     let isSelected: Bool
     let isDragging: Bool
+    let isHidden: Bool
+    let hasComment: Bool
+    let canMoveLeft: Bool
+    let canMoveRight: Bool
+    let drawings: [SportCutEventDrawing]
+    let sourcePlaylistID: UUID
+    let eventIndex: Int
     let onTap: () -> Void
     let onEdgeDragChanged: (_ edge: PlaylistResizeEdge, _ translationX: CGFloat) -> Void
     let onEdgeDragEnded: (_ edge: PlaylistResizeEdge, _ translationX: CGFloat) -> Void
     let onDeselect: () -> Void
     let onReset: () -> Void
     let hasOverrides: Bool
+    let onToggleHidden: () -> Void
+    let onComment: () -> Void
+    let onDelete: () -> Void
+    let onMoveLeft: () -> Void
+    let onMoveRight: () -> Void
+    let onDropEvent: (_ dragData: PlaylistEventDragData) -> Void
+
+    @State private var isDropTarget: Bool = false
 
     private let handleW: CGFloat = 8
     private let handleH: CGFloat = 20
@@ -1355,14 +1527,44 @@ private struct SportCutPlaylistStripView: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4)
-                .fill(Color(hex: event.color).opacity(isSelected ? 0.95 : 0.7))
+                .fill(Color(hex: event.color).opacity(isHidden ? 0.3 : (isSelected ? 0.95 : 0.7)))
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(isSelected ? Color.white : Color(hex: event.color).opacity(0.3), lineWidth: isSelected ? 2.5 : 1)
+                        .stroke(isDropTarget ? Color.blue : (isSelected ? Color.white : Color(hex: event.color).opacity(0.3)),
+                                lineWidth: isDropTarget ? 2 : (isSelected ? 2.5 : 1))
                 )
+
+            // Drawing markers — белые вертикальные линии внутри стрипа
+            let duration = effectiveEnd - effectiveStart
+            if duration > 0 {
+                ForEach(drawings.indices, id: \.self) { i in
+                    let drawing = drawings[i]
+                    let absTime = event.startTime + drawing.videoTime
+                    if absTime >= effectiveStart && absTime <= effectiveEnd {
+                        let xRatio = CGFloat((absTime - effectiveStart) / duration)
+                        Rectangle()
+                            .fill(Color.white.opacity(0.85))
+                            .frame(width: 1.5, height: 24)
+                            .offset(x: xRatio * stripWidth - stripWidth / 2)
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
+
+            // Comment indicator dot
+            if hasComment {
+                Image(systemName: "text.bubble.fill")
+                    .font(.system(size: 7))
+                    .foregroundColor(.white.opacity(0.85))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.trailing, isSelected ? 10 : 3)
+                    .padding(.top, 2)
+                    .allowsHitTesting(false)
+            }
+
             Text(event.tagName)
                 .font(.system(size: 8, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(.white.opacity(isHidden ? 0.5 : 1.0))
                 .shadow(color: .black, radius: 1)
                 .lineLimit(1)
                 .padding(.horizontal, 12)
@@ -1378,12 +1580,8 @@ private struct SportCutPlaylistStripView: View {
                         .contentShape(Rectangle())
                         .gesture(
                             DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    onEdgeDragChanged(.left, value.translation.width)
-                                }
-                                .onEnded { value in
-                                    onEdgeDragEnded(.left, value.translation.width)
-                                }
+                                .onChanged { value in onEdgeDragChanged(.left, value.translation.width) }
+                                .onEnded { value in onEdgeDragEnded(.left, value.translation.width) }
                         )
 
                     Spacer()
@@ -1397,12 +1595,8 @@ private struct SportCutPlaylistStripView: View {
                         .contentShape(Rectangle())
                         .gesture(
                             DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    onEdgeDragChanged(.right, value.translation.width)
-                                }
-                                .onEnded { value in
-                                    onEdgeDragEnded(.right, value.translation.width)
-                                }
+                                .onChanged { value in onEdgeDragChanged(.right, value.translation.width) }
+                                .onEnded { value in onEdgeDragEnded(.right, value.translation.width) }
                         )
                 }
                 .frame(width: stripWidth)
@@ -1412,6 +1606,32 @@ private struct SportCutPlaylistStripView: View {
         .contentShape(Rectangle())
         .help("\(event.tagName) — \(formatTime(effectiveStart))–\(formatTime(effectiveEnd))")
         .onTapGesture(perform: onTap)
+        .onDrag {
+            let dragData = PlaylistEventDragData(event: event, sourcePlaylistID: sourcePlaylistID)
+            let data = (try? JSONEncoder().encode(dragData)) ?? Data()
+            return NSItemProvider(item: data as NSData, typeIdentifier: UTType.data.identifier)
+        }
+        .onDrop(of: [.data], isTargeted: $isDropTarget) { providers in
+            for provider in providers {
+                provider.loadDataRepresentation(forTypeIdentifier: UTType.data.identifier) { data, _ in
+                    guard let data = data,
+                          let dragData = try? JSONDecoder().decode(PlaylistEventDragData.self, from: data) else { return }
+                    DispatchQueue.main.async { onDropEvent(dragData) }
+                }
+            }
+            return true
+        }
+        .contextMenu {
+            Button(hasComment ? ^String.Titles.sportCutEditComment : ^String.Titles.sportCutAddComment) { onComment() }
+            Button(isHidden ? ^String.Titles.sportCutShowEvent : ^String.Titles.sportCutHideEvent) { onToggleHidden() }
+            Divider()
+            Button(^String.Titles.sportCutMoveLeft) { onMoveLeft() }
+                .disabled(!canMoveLeft)
+            Button(^String.Titles.sportCutMoveRight) { onMoveRight() }
+                .disabled(!canMoveRight)
+            Divider()
+            Button(^String.Titles.sportCutDeleteFromPlaylist, role: .destructive) { onDelete() }
+        }
         .overlay(alignment: .top) {
             if isSelected {
                 HStack {

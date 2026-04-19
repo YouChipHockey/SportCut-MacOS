@@ -830,6 +830,8 @@
 "SportCutHidePlaylist" = "Pleylistni yashirish";
 "SportCutMoveUp" = "Yuqoriga ko'chirish";
 "SportCutMoveDown" = "Pastga ko'chirish";
+"SportCutMoveLeft" = "Chapga ko'chirish";
+"SportCutMoveRight" = "O'ngga ko'chirish";
 "SportCutPlayAsFilm" = "Film sifatida ijro etish";
 "SportCutPlayAction" = "Ijro etish";
 "SportCutDuplicate" = "Nusxalash";

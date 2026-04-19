@@ -50,9 +50,9 @@ struct SportCutPlaylistsView: View {
         VStack(alignment: .leading, spacing: 0) {
             headerView
             Divider()
-            groupSelector
-            Divider()
             playlistsContent
+            Divider()
+            groupSelector
             trashDropZone
         }
         .sheet(isPresented: $showNewPlaylistSheet) { newPlaylistSheet }
@@ -678,7 +678,10 @@ struct SportCutPlaylistCardView: View {
                         ForEach(Array(miniTimelineEvents.enumerated()), id: \.1.hiddenKey) { _, event in
                             let effectiveDur = playlist.effectiveDuration(for: event)
                             let ratio = totalDuration > 0 ? effectiveDur / totalDuration : 1.0 / Double(max(miniTimelineEvents.count, 1))
-                            let segW = max(w * ratio, 4)
+                            // Scale down if segments would exceed available width
+                            let rawW = w * CGFloat(ratio)
+                            let totalRaw = w // already proportional; enforce min via scale
+                            let segW = max(rawW, 2)
                             let isCurrent = playerManager.currentPlaylistID == playlist.id && playerManager.currentEvent == event
                             let isHidden = playlist.hiddenEventKeys.contains(event.hiddenKey)
 
@@ -694,18 +697,22 @@ struct SportCutPlaylistCardView: View {
                                 }
                         }
                     }
+                    .frame(width: w, alignment: .leading)
 
                     drawingMarkerLines(totalWidth: w, totalDuration: miniTimelineTotalDuration)
                 }
-                .frame(height: 14)
+                .frame(width: w, height: 14)
                 .cornerRadius(3)
                 .clipped()
 
-                // Drawing icons above the timeline (not clipped)
+                // Drawing icons above the timeline
                 drawingMarkerIcons(totalWidth: w, totalDuration: miniTimelineTotalDuration)
             }
+            .frame(width: w, height: 14)
+            .clipped()
         }
         .frame(height: 14)
+        .clipped()
     }
 
     /// White vertical lines (full height, inside clipped timeline bar)
@@ -792,6 +799,7 @@ struct SportCutPlaylistCardView: View {
     // MARK: - Event List (interactive: drag, reorder, delete)
     
     private var eventList: some View {
+        ScrollView {
         VStack(spacing: 2) {
             ForEach(displayEventRows, id: \.event.hiddenKey) { row in
                 let index = row.index
@@ -854,8 +862,10 @@ struct SportCutPlaylistCardView: View {
             }
         }
         .padding(.top, 4)
+        }
+        .frame(maxHeight: 220)
     }
-    
+
     // MARK: - Context Menu
     
     @ViewBuilder

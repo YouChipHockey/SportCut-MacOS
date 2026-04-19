@@ -881,6 +881,8 @@ extension String {
         case sportCutHidePlaylist
         case sportCutMoveUp
         case sportCutMoveDown
+        case sportCutMoveLeft
+        case sportCutMoveRight
         case sportCutPlayAsFilm
         case sportCutPlayAction
         case sportCutDuplicate

@@ -857,6 +857,8 @@
 "SportCutHidePlaylist" = "Скрыть плейлист";
 "SportCutMoveUp" = "Переместить выше";
 "SportCutMoveDown" = "Переместить ниже";
+"SportCutMoveLeft" = "Переместить влево";
+"SportCutMoveRight" = "Переместить вправо";
 "SportCutPlayAsFilm" = "Воспроизвести как фильм";
 "SportCutPlayAction" = "Воспроизвести";
 "SportCutDuplicate" = "Дублировать";

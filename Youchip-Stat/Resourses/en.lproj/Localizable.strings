@@ -856,6 +856,8 @@
 "SportCutHidePlaylist" = "Hide playlist";
 "SportCutMoveUp" = "Move up";
 "SportCutMoveDown" = "Move down";
+"SportCutMoveLeft" = "Move left";
+"SportCutMoveRight" = "Move right";
 "SportCutPlayAsFilm" = "Play as film";
 "SportCutPlayAction" = "Play";
 "SportCutDuplicate" = "Duplicate";
