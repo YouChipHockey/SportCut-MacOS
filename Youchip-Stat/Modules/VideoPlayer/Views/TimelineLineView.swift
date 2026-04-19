@@ -27,7 +27,6 @@ struct TimelineLineView: View {
     
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @State private var isDraggingOver = false
-    @Binding var scrollOffset: CGFloat
     private let lineHeight: CGFloat = 30
     
     // MARK: - Stamp edges drag properties
@@ -79,7 +78,7 @@ struct TimelineLineView: View {
         GeometryReader { geometry in
             let totalDuration = max(1, videoManager.timelineDuration)
             
-            HStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
                 ZStack(alignment: .topLeading) {
                     LinearGradient(
                         gradient: Gradient(colors: [
@@ -89,7 +88,6 @@ struct TimelineLineView: View {
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(width: widthMax, height: lineHeight)
                     .overlay(
                         RoundedRectangle(cornerRadius: 0)
                             .stroke(
@@ -97,9 +95,15 @@ struct TimelineLineView: View {
                                 lineWidth: 0.5
                             )
                     )
-                    .onTapGesture {
-                        timelineData.selectStamp(stampID: nil)
-                        timelineData.clearSportCutExportSelection()
+                    .timelineTapToSeek(
+                        gridWidth: widthMax,
+                        duration: totalDuration,
+                        onShortPress: {
+                            timelineData.selectStamp(stampID: nil)
+                            timelineData.clearSportCutExportSelection()
+                        }
+                    ) { time in
+                        videoManager.seek(to: time)
                     }
                     ForEach(Array(line.stamps.enumerated()), id: \.element.id) { index, stamp in
                         stampView(
@@ -111,13 +115,7 @@ struct TimelineLineView: View {
                     }
                 }
             }
-            .frame(width: widthMax, height: 60)
-            .simultaneousGesture(
-                DragGesture()
-                    .onChanged { value in
-                        scrollOffset = value.translation.width
-                    }
-            )
+            .frame(width: widthMax, height: lineHeight)
         }
         .sheet(item: $commentEditingStamp) { stamp in
             StampCommentEditSheet(stamp: stamp) { newComment in

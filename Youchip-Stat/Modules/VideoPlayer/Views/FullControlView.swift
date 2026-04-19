@@ -14,7 +14,6 @@ import WebKit
 
 struct FullControlView: View {
     
-    @State private var scrollOffset: CGFloat = 0
     @ObservedObject var videoManager = VideoPlayerManager.shared
     @ObservedObject var liveStreamManager = LiveStreamManager.shared
     @ObservedObject var timelineData = TimelineDataManager.shared
@@ -42,6 +41,8 @@ struct FullControlView: View {
     @GestureState private var magnifyScale: CGFloat = 1.0
     @State private var keyEventMonitor: Any?
     @State private var tagEdgePosition: CGFloat? = nil
+    @StateObject private var timelineScrollController = TimelineScrollController()
+    @StateObject private var playheadDragController = PlayheadEdgeScrollController()
     
     @State private var isEditorModeActive = false
     @State private var isScreenshotDisplayActive = false
@@ -308,37 +309,105 @@ struct FullControlView: View {
         let interval = calculateTimeGridInterval(scale: effectiveScale, totalDuration: duration)
         let gridWidth = geo.size.width * max(effectiveScale, 1.0)
         
-        if #available(macOS 13.0, *) {
-            return AnyView(
-                ScrollView(.horizontal) {
-                    HStack(spacing: 0) {
-                        timelineZStackContent(
-                            duration: duration,
-                            interval: interval,
-                            gridWidth: gridWidth,
-                            effectiveScale: effectiveScale
-                        )
-                    }
-                }
-                .scrollIndicators(.hidden)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            )
-        } else {
-            return AnyView(
-                ScrollView(.horizontal) {
-                    HStack(spacing: 0) {
-                        timelineZStackContent(
-                            duration: duration,
-                            interval: interval,
-                            gridWidth: gridWidth,
-                            effectiveScale: effectiveScale
-                        )
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            )
+        return ScrollView(.horizontal) {
+            HStack(spacing: 0) {
+                timelineZStackContent(
+                    duration: duration,
+                    interval: interval,
+                    gridWidth: gridWidth,
+                    effectiveScale: effectiveScale
+                )
+                // Invisible attacher — finds the enclosing NSScrollView so we
+                // can drive programmatic jumps from handleTimelineAutoScroll.
+                .background(
+                    TimelineScrollControllerAttacher(controller: timelineScrollController)
+                        .frame(width: 0, height: 0)
+                        .allowsHitTesting(false)
+                )
+            }
+        }
+        .hideScrollIndicators()
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onChange(of: videoManager.currentTime) { newTime in
+            handleTimelineAutoScroll(currentTime: newTime, duration: duration)
+        }
+        .onChange(of: videoManager.isPlaying) { isPlaying in
+            if isPlaying {
+                handlePlaybackResumed(duration: duration)
+            }
+        }
+        .onChange(of: timelineScale) { _ in
+            handleZoomChanged(duration: duration)
+        }
+    }
+    
+    // The playhead position (as a fraction of visible width) at which the
+    // timeline starts scrolling to keep the playhead in place.
+    private let autoScrollThreshold: CGFloat = 0.85
+
+    // Continuous auto-scroll: once the playhead reaches autoScrollThreshold of
+    // the visible area the timeline scrolls forward so the playhead stays fixed
+    // at that threshold position. This applies both during normal playback and
+    // when the user manually seeks the playhead past the threshold.
+    //
+    // If the user manually scrolled away, auto-scroll is suppressed until they
+    // either resume playback or scroll back so the playhead re-enters the
+    // visible zone before the threshold.
+    private func handleTimelineAutoScroll(currentTime: Double, duration: Double) {
+        guard !playheadDragController.isDragging else { return }
+        let visibleWidth = timelineScrollController.visibleWidth
+        guard visibleWidth > 0, duration > 0 else { return }
+
+        let effectiveScale = max(timelineScale * magnifyScale, 1.0)
+        let gridWidth = visibleWidth * effectiveScale
+        let playheadX = (currentTime / duration) * gridWidth
+        let currentScrollX = timelineScrollController.currentScrollX
+
+        // If user scrolled away but has now scrolled back so the playhead is
+        // visible and before the threshold, clear the flag and resume auto-scroll.
+        if timelineScrollController.userDidManuallyScroll {
+            let playheadVisible = playheadX >= currentScrollX &&
+                                  playheadX < currentScrollX + visibleWidth * autoScrollThreshold
+            if playheadVisible {
+                timelineScrollController.userDidManuallyScroll = false
+            } else {
+                return
+            }
         }
 
+        let triggerX = currentScrollX + visibleWidth * autoScrollThreshold
+        if playheadX >= triggerX {
+            let newScrollX = playheadX - visibleWidth * autoScrollThreshold
+            timelineScrollController.scrollTo(x: newScrollX)
+        }
+    }
+
+    // On resume from pause: position the playhead at the left edge of the
+    // visible area so it starts from the beginning and the timeline scrolls
+    // when the playhead reaches the threshold. Clears the manual-scroll flag
+    // so auto-scroll works going forward.
+    private func handlePlaybackResumed(duration: Double) {
+        let visibleWidth = timelineScrollController.visibleWidth
+        guard visibleWidth > 0, duration > 0 else { return }
+
+        let effectiveScale = max(timelineScale * magnifyScale, 1.0)
+        let gridWidth = visibleWidth * effectiveScale
+        let playheadX = (videoManager.currentTime / duration) * gridWidth
+        let currentScrollX = timelineScrollController.currentScrollX
+
+        timelineScrollController.stopAutoScrollFollow()
+        timelineScrollController.userDidManuallyScroll = false
+        if playheadX < currentScrollX || playheadX >= currentScrollX + visibleWidth {
+            timelineScrollController.scrollTo(x: max(0, playheadX))
+        }
+    }
+
+    // After zoom the pixel coordinate of the playhead shifts while the
+    // NSScrollView keeps its old content offset. Treat zoom like a manual scroll
+    // so auto-scroll is suppressed until the user pauses and resumes playback.
+    private func handleZoomChanged(duration: Double) {
+        timelineScrollController.stopAutoScrollFollow()
+        timelineScrollController.userDidManuallyScroll = true
     }
     
     private func formatTimeForHover(_ time: Double) -> String {
@@ -371,6 +440,13 @@ struct FullControlView: View {
                     width: gridWidth
                 )
                 .frame(height: 30)
+                .timelineTapToSeek(
+                    gridWidth: gridWidth,
+                    duration: duration,
+                    onShortPress: { timelineData.selectStamp(stampID: nil) }
+                ) { time in
+                    videoManager.seek(to: time)
+                }
                 
                 ForEach(timelineData.lines) { line in
                     TimelineLineView(
@@ -398,8 +474,7 @@ struct FullControlView: View {
                         onTagDragging: { tagEdgePosition in
                             self.tagEdgePosition = tagEdgePosition
                         },
-                        tagLibrary: TagLibraryManager.shared,
-                        scrollOffset: $scrollOffset
+                        tagLibrary: TagLibraryManager.shared
                     )
                     .frame(height: 30)
                     .id("timeline-\(line.id)")
@@ -414,11 +489,20 @@ struct FullControlView: View {
                 totalHeight: 30 * CGFloat(timelineData.lines.count + 1)
             )
             
+            // timeOffsetToPixels is passed to TimelinePlayheadView so that
+            // FullControlView does NOT read any @Published property of
+            // playheadDragController in its own body — only TimelinePlayheadView
+            // observes it, keeping FullControlView out of the 60 Hz render loop.
             let timeOffsetToPixels = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
-            Rectangle()
-                .fill(Color.red)
-                .frame(width: 2)
-                .offset(x: tagEdgePosition ?? timeOffsetToPixels)
+            TimelinePlayheadView(
+                dragController: playheadDragController,
+                scrollController: timelineScrollController,
+                timeOffsetToPixels: timeOffsetToPixels,
+                tagEdgePosition: tagEdgePosition,
+                gridWidth: gridWidth,
+                duration: duration,
+                isResizingTag: videoManager.isResizingTag
+            )
             
             TimelineMouseTracker(
                 duration: duration,
@@ -2785,7 +2869,7 @@ struct UnlinkedScreenshotPopupView: View {
 }
 
 public extension ToolbarContent {
-
+    
     func disableGlassEffect() -> some ToolbarContent {
         if #available(macOS 26.0, *) {
             return sharedBackgroundVisibility(.hidden)
@@ -2793,5 +2877,4 @@ public extension ToolbarContent {
             return self
         }
     }
-
 }

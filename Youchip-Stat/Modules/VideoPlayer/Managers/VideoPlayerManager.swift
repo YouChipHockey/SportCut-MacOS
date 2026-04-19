@@ -18,6 +18,7 @@ class VideoPlayerManager: ObservableObject {
     @Published var player: AVPlayer?
     @Published var playbackSpeed: Double = 1.0
     @Published var currentTime: Double = 0.0
+    @Published var isPlaying: Bool = false
     @Published var isResizingTag: Bool = false // Track if user is resizing a tag
     /// Режим редактирования скриншота во вьюхе видео-окна (для обработки кнопки закрытия окна).
     var isVideoPlayerInEditorMode: Bool = false
@@ -55,12 +56,14 @@ class VideoPlayerManager: ObservableObject {
         return videoDuration
     }
     private var timeObserverToken: Any?
+    private var isSeeking = false
     private var cancellables = Set<AnyCancellable>()
     private var liveDurationCancellable: AnyCancellable?
     
     func loadVideo(from url: URL) {
         isLiveMode = false
         isBroadcastActive = false
+        isSeeking = false
         player = AVPlayer(url: url)
         player?.play()
         startTimeObserver()
@@ -320,20 +323,23 @@ class VideoPlayerManager: ObservableObject {
     }
     func seek(to time: Double) {
         guard let player = player else { return }
+        isSeeking = true
         if let token = timeObserverToken {
             player.removeTimeObserver(token)
             timeObserverToken = nil
         }
-        
+        currentTime = time
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
         player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             guard let self = self else { return }
+            self.isSeeking = false
             self.currentTime = self.player?.currentTime().seconds ?? time
             self.startTimeObserver()
         }
     }
     func deleteVideo() {
         exitReviewMode()
+        isSeeking = false
         player?.pause()
         if let token = timeObserverToken {
             player?.removeTimeObserver(token)
@@ -350,9 +356,12 @@ class VideoPlayerManager: ObservableObject {
     }
     private func startTimeObserver() {
         guard let player = player else { return }
-        let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        // Higher update rate for smoother playhead and timeline auto-scroll.
+        let interval = CMTime(seconds: 1.0 / 30.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            self?.currentTime = CMTimeGetSeconds(time)
+            guard let self else { return }
+            guard !self.isSeeking else { return }
+            self.currentTime = CMTimeGetSeconds(time)
         }
     }
     func togglePlayPause() {
@@ -400,6 +409,9 @@ class VideoPlayerManager: ObservableObject {
                     if player.rate != Float(welf.playbackSpeed) {
                         player.rate = Float(welf.playbackSpeed)
                     }
+                }
+                DispatchQueue.main.async {
+                    welf.isPlaying = (status == .playing)
                 }
             }
             .store(in: &cancellables)

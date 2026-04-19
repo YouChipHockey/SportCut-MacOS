@@ -13,6 +13,7 @@
 		BF37EEBC2F4F65A70048E583 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF37EEBB2F4F659F0048E583 /* AppConfig.swift */; };
 		BF6715C02EF6E69700A71E47 /* NSAttributedString+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */; };
 		BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFDA33492EEDBD9100358696 /* URLConstants.swift */; };
+		BFDD3EE82F954BB700CDDEA5 /* ScrollView+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFDD3EE72F954BB100CDDEA5 /* ScrollView+Convenience.swift */; };
 		BFE837592F3B5A29005458F4 /* DataSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE837582F3B5A29005458F4 /* DataSyncManager.swift */; };
 		BFE8375C2F3C670A005458F4 /* OrphanedTimelinesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE8375A2F3C670A005458F4 /* OrphanedTimelinesManager.swift */; };
 		BFE8375D2F3C670A005458F4 /* OrphanedTimelinesRecoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE8375B2F3C670A005458F4 /* OrphanedTimelinesRecoveryView.swift */; };
@@ -88,6 +89,7 @@
 		BF37EEBB2F4F659F0048E583 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSAttributedString+Convenience.swift"; sourceTree = "<group>"; };
 		BFDA33492EEDBD9100358696 /* URLConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLConstants.swift; sourceTree = "<group>"; };
+		BFDD3EE72F954BB100CDDEA5 /* ScrollView+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScrollView+Convenience.swift"; sourceTree = "<group>"; };
 		BFE837582F3B5A29005458F4 /* DataSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataSyncManager.swift; sourceTree = "<group>"; };
 		BFE8375A2F3C670A005458F4 /* OrphanedTimelinesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrphanedTimelinesManager.swift; sourceTree = "<group>"; };
 		BFE8375B2F3C670A005458F4 /* OrphanedTimelinesRecoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrphanedTimelinesRecoveryView.swift; sourceTree = "<group>"; };
@@ -346,6 +348,7 @@
 		DD32C29F2D74A1C80052B5C6 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
+				BFDD3EE72F954BB100CDDEA5 /* ScrollView+Convenience.swift */,
 				BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */,
 				DDDB36352D78E16100A1111C /* Color.swift */,
 				DD32C2902D74A1C80052B5C6 /* Colors.swift */,
@@ -609,6 +612,7 @@
 				BFE837592F3B5A29005458F4 /* DataSyncManager.swift in Sources */,
 				DDFB1A542DE5131F00175D97 /* SheetToolbarView.swift in Sources */,
 				DD2A706B2D74D31600287BA8 /* VideosPreviewManager.swift in Sources */,
+				BFDD3EE82F954BB700CDDEA5 /* ScrollView+Convenience.swift in Sources */,
 				BFE84A002F3DD033005458F4 /* KeychainHelper.swift in Sources */,
 				DDFB1A502DE512D900175D97 /* SharingPicker.swift in Sources */,
 				DD2A70582D74C35F00287BA8 /* URL+Convenience.swift in Sources */,
