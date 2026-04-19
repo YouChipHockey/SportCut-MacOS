@@ -80,6 +80,14 @@ struct SportCutMainView: View {
                     guard !playerManager.isEditorMode else { return }
                     playerManager.seek(by: 3)
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .sportCutStepFrameBackward)) { _ in
+                    guard !playerManager.isEditorMode else { return }
+                    playerManager.stepFrame(forward: false)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .sportCutStepFrameForward)) { _ in
+                    guard !playerManager.isEditorMode else { return }
+                    playerManager.stepFrame(forward: true)
+                }
                 .onAppear {
                     playerManager.sessionID = sessionID
                     playerManager.configure(sources: session.sources)

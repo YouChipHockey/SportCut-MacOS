@@ -18,7 +18,7 @@ struct SportCutCreateSessionView: View {
     
     private var availableFiles: [FilesFile] {
         filesManager.files.filter { file in
-            !selectedProjects.contains(where: { $0.videoData.bookmark == file.videoData.bookmark })
+            !selectedProjects.contains(where: { $0.videoData.id == file.videoData.id })
         }
     }
     
@@ -84,7 +84,7 @@ struct SportCutCreateSessionView: View {
                                 .foregroundColor(.secondary)
                                 .padding(.vertical, 8)
                         } else {
-                            ForEach(selectedProjects, id: \.videoData.bookmark) { file in
+                            ForEach(selectedProjects, id: \.videoData.id) { file in
                                 HStack {
                                     Image(systemName: "film")
                                         .foregroundColor(.blue)
@@ -100,7 +100,7 @@ struct SportCutCreateSessionView: View {
                                         .foregroundColor(.secondary)
                                     
                                     Button(action: {
-                                        selectedProjects.removeAll { $0.videoData.bookmark == file.videoData.bookmark }
+                                        selectedProjects.removeAll { $0.videoData.id == file.videoData.id }
                                     }) {
                                         Image(systemName: "xmark.circle.fill")
                                             .foregroundColor(.red.opacity(0.7))
@@ -222,7 +222,7 @@ struct SportCutCreateSessionView: View {
                 availableFiles: availableFiles,
                 onAdd: { files in
                     for file in files {
-                        if !selectedProjects.contains(where: { $0.videoData.bookmark == file.videoData.bookmark }) {
+                        if !selectedProjects.contains(where: { $0.videoData.id == file.videoData.id }) {
                             selectedProjects.append(file)
                         }
                     }
@@ -301,7 +301,7 @@ struct ProjectPickerSheet: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 4) {
-                        ForEach(availableFiles, id: \.videoData.bookmark) { file in
+                        ForEach(availableFiles, id: \.videoData.id) { file in
                             let isSelected = selectedBookmarks.contains(file.videoData.bookmark)
                             HStack {
                                 Image(systemName: isSelected ? "checkmark.square.fill" : "square")

@@ -441,16 +441,17 @@ class WindowsManager: NSObject {
                 }
                 
                 VideoFilesManager.shared.updateTimelines(
-                    for: importedFile.videoData.bookmark,
+                    forVideoId: importedFile.videoData.id,
                     with: timelines
                 )
                 self.copyLiveScreenshotsToImportedVideo(
                     liveVideoId: liveId,
                     importedScreenshotsFolder: importedFile.screenshotsFolder
                 )
-                
+
                 self.currentVideoId = importedFile.id
                 TimelineDataManager.shared.currentBookmark = importedFile.videoData.bookmark
+                TimelineDataManager.shared.currentVideoId = importedFile.videoData.id
                 TimelineDataManager.shared.lines = timelines
                 TimelineDataManager.shared.selectedLineID = timelines.first?.id
                 self.ensureScreenshotsTimelineExists()
@@ -475,7 +476,7 @@ class WindowsManager: NSObject {
                 if let url = fileURL {
                     if let filesFile = VideoFilesManager.shared.importFile(url: url, newName: fileName) {
                         VideoFilesManager.shared.updateTimelines(
-                            for: filesFile.videoData.bookmark,
+                            forVideoId: filesFile.videoData.id,
                             with: timelines
                         )
                         self.copyLiveScreenshotsToImportedVideo(liveVideoId: videoId, importedScreenshotsFolder: filesFile.screenshotsFolder)
@@ -724,6 +725,7 @@ class WindowsManager: NSObject {
         VideoMarkupActivityBanner.shared.clearTagMarkupHistoryForNewVideoSession()
         
         TimelineDataManager.shared.currentBookmark = filesFile.videoData.bookmark
+        TimelineDataManager.shared.currentVideoId = filesFile.videoData.id
         
         if MarkupMode.current == .standard {
             TimelineDataManager.shared.lines = loadedTimelines
@@ -1142,6 +1144,30 @@ class WindowsManager: NSObject {
             return gi
         }
         return nil
+    }
+
+    func appendStampsToSportCutSession(pairs: [(TimelineLine, TimelineStamp)], sessionID: UUID) {
+        VideoPlayerManager.shared.player?.pause()
+        guard !currentVideoId.isEmpty, !pairs.isEmpty else { return }
+        let refs = pairs.map { MarkupStampRef(lineID: $0.0.id, stampID: $0.1.id) }
+        let payload = MarkupStampsBatchPlaylistDragPayload(markupProjectID: currentVideoId, stampRefs: refs)
+        guard let events = resolveMarkupPlaylistEvents(payload: payload, sessionID: sessionID) else { return }
+
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
+
+        if session.playlistGroups.isEmpty {
+            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
+        }
+        let groupIndex = 0
+        let playlistName = "\(session.playlistGroups[groupIndex].playlists.count + 1)"
+        var newPlaylist = SportCutPlaylist(name: playlistName, events: events)
+        newPlaylist.mergeMarkupComments(for: events, session: session)
+        session.playlistGroups[groupIndex].playlists.append(newPlaylist)
+        SportCutSessionManager.shared.updateSession(session)
+
+        if activeSportCutSessionID != sessionID {
+            openSportCutSessionFromMarkup(existingSessionID: sessionID)
+        }
     }
 
     func appendMarkupSelectionToSportCutSession(sessionID: UUID) {

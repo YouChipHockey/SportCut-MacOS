@@ -195,6 +195,21 @@ class HotKeyManager: ObservableObject {
                     return nil
                 }
             }
+            // Стрелки без модификаторов в SportCut — покадровая перемотка.
+            if !event.modifierFlags.contains(.shift),
+               !event.modifierFlags.contains(.command),
+               !event.modifierFlags.contains(.option),
+               !event.modifierFlags.contains(.control),
+               (event.keyCode == 123 || event.keyCode == 124),
+               WindowsManager.shared.isSportCutKeyWindow(),
+               self.isEnabled,
+               !self.blockedSheetActive {
+                NotificationCenter.default.post(
+                    name: event.keyCode == 123 ? .sportCutStepFrameBackward : .sportCutStepFrameForward,
+                    object: nil
+                )
+                return nil
+            }
             // Shift+стрелки в окне разметки — перемотка ±3 сек (также в режиме редактирования рисунка).
             if event.modifierFlags.contains(.shift),
                (event.keyCode == 123 || event.keyCode == 124),

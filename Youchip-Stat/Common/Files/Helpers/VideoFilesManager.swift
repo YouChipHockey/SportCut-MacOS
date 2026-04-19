@@ -117,7 +117,7 @@ class VideoFilesManager {
     }
     
     func removeFile(file: FilesFile) {
-        guard let fileIndex = files.firstIndex(of: file), let bookmarkIndex = videosData.firstIndex(where: {$0.bookmark ==  file.videoData.bookmark}) else {
+        guard let fileIndex = files.firstIndex(of: file), let bookmarkIndex = videosData.firstIndex(where: { $0.id == file.videoData.id }) else {
             // File not found in our data — just remove from arrays if possible, never delete the actual video
             return
         }
@@ -165,6 +165,10 @@ class VideoFilesManager {
         }
         InMemoryStorageManager.shared.saveTimelines(timelines, for: videoData.id)
     }
+
+    func updateTimelines(forVideoId videoId: String, with timelines: [TimelineLine]) {
+        InMemoryStorageManager.shared.saveTimelines(timelines, for: videoId)
+    }
     
     /// Updates the video file of an existing project to point to a new URL.
     /// Used in "append" mode to replace the original video with the combined (old + new recording) file.
@@ -208,10 +212,10 @@ class VideoFilesManager {
     }
     
     func renameFile(file: FilesFile, newName: String) {
-        if let index = files.firstIndex(where: { $0.videoData.bookmark == file.videoData.bookmark }) {
+        if let index = files.firstIndex(where: { $0.videoData.id == file.videoData.id }) {
             files[index].videoData.customName = newName
-            
-            if let dataIndex = videosData.firstIndex(where: { $0.bookmark == file.videoData.bookmark }) {
+
+            if let dataIndex = videosData.firstIndex(where: { $0.id == file.videoData.id }) {
                 videosData[dataIndex].customName = newName
                 saveBookmarks()
                 updateFiles?(files)
@@ -235,35 +239,23 @@ class VideoFilesManager {
     }
     
     func saveBookmarks() {
-        var seenURLs = Set<String>()
         var seenIDs = Set<String>()
         let originalCount = videosData.count
-        
+
+        // Дедупликация только по ID. Один и тот же видеофайл может иметь
+        // несколько независимых проектов (разметок) с разными ID.
         let deduplicatedData = videosData.filter { videoData in
             guard !seenIDs.contains(videoData.id) else {
                 return false
             }
             seenIDs.insert(videoData.id)
-            
-            do {
-                var isStale = false
-                let resolvedURL = try URL(resolvingBookmarkData: videoData.bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
-                let urlString = resolvedURL.path
-                
-                if seenURLs.contains(urlString) {
-                    return false
-                }
-                seenURLs.insert(urlString)
-                return true
-            } catch {
-                return true
-            }
+            return true
         }
-        
+
         if deduplicatedData.count != originalCount {
             videosData = deduplicatedData
         }
-        
+
         do {
             let encoded = try JSONEncoder().encode(videosData)
             UserDefaults.standard.set(encoded, forKey: "videosData")
@@ -273,24 +265,13 @@ class VideoFilesManager {
     }
     
     private func filterFiles() {
-        var seenURLs = Set<URL>()
-        var seenBrokenIDs = Set<String>()
+        // Дедупликация по ID проекта. Один URL может иметь несколько проектов.
+        var seenIDs = Set<String>()
         files = files.filter { file in
-            if let url = file.url {
-                if seenURLs.contains(url) {
-                    return false
-                } else {
-                    seenURLs.insert(url)
-                    return true
-                }
-            } else {
-                if seenBrokenIDs.contains(file.id) {
-                    return false
-                } else {
-                    seenBrokenIDs.insert(file.id)
-                    return true
-                }
-            }
+            let key = file.videoData.id
+            guard !seenIDs.contains(key) else { return false }
+            seenIDs.insert(key)
+            return true
         }
     }
     
@@ -313,32 +294,18 @@ class VideoFilesManager {
                     return migratedData
                 }
                 
-                var seenURLs = Set<String>()
                 var seenIDs = Set<String>()
                 let deduplicatedData = migratedVideosData.filter { videoData in
                     guard !seenIDs.contains(videoData.id) else {
                         return false
                     }
                     seenIDs.insert(videoData.id)
-                    
-                    do {
-                        var isStale = false
-                        let resolvedURL = try URL(resolvingBookmarkData: videoData.bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
-                        let urlString = resolvedURL.path
-                        
-                        if seenURLs.contains(urlString) {
-                            return false
-                        }
-                        seenURLs.insert(urlString)
-                        return true
-                    } catch {
-                        return true
-                    }
+                    return true
                 }
-                
+
                 self.videosData = deduplicatedData
-                
-                if deduplicatedData.count != videosData.count || deduplicatedData != videosData {
+
+                if deduplicatedData.count != migratedVideosData.count {
                     saveBookmarks()
                 }
             } catch {

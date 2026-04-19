@@ -1107,10 +1107,10 @@ class ExportHelper: ObservableObject {
     // MARK: - Screenshot Export Helper Functions
     
     private func getCurrentFile() -> FilesFile? {
-        guard let currentBookmark = timelineData.currentBookmark else {
+        guard let videoId = timelineData.currentVideoId else {
             return nil
         }
-        return VideoFilesManager.shared.files.first(where: { $0.videoData.bookmark == currentBookmark })
+        return VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId })
     }
     
     /// Returns screenshots linked to the given stamp that fall within the time range.

@@ -67,8 +67,8 @@ class ScreenshotsMetadataManager: ObservableObject {
         screenshots[index] = updatedScreenshot
         
         // Сохраняем обновленные метаданные в JSON файл
-        guard let currentBookmark = TimelineDataManager.shared.currentBookmark,
-              let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.bookmark == currentBookmark }) else {
+        guard let videoId = TimelineDataManager.shared.currentVideoId,
+              let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId }) else {
             print("❌ Не найден filesFile для сохранения метаданных")
             return
         }

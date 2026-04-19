@@ -22,6 +22,7 @@ class TimelineDataManager: ObservableObject {
     @Published var stampsSelectedForSportCut: Set<UUID> = []
     @Published var unlinkedScreenshotPopups: [UnlinkedScreenshotPopup] = []
     var currentBookmark: Data?
+    var currentVideoId: String?
     
     init() {
         lines = []
@@ -85,8 +86,8 @@ class TimelineDataManager: ObservableObject {
     }
     
     private func deleteScreenshotFile(screenshotName: String) {
-        guard let currentBookmark = currentBookmark,
-              let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.bookmark == currentBookmark }) else {
+        guard let videoId = currentVideoId,
+              let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId }) else {
             print("❌ Не найден filesFile для удаления скриншота")
             return
         }
@@ -272,9 +273,7 @@ class TimelineDataManager: ObservableObject {
         InMemoryStorageManager.shared.saveTimelines(timelines, for: videoId)
         InMemoryStorageManager.shared.saveToDiskImmediate()
 
-        if let bookmark = currentBookmark,
-           let vd = VideoFilesManager.shared.videosData.first(where: { $0.bookmark == bookmark }),
-           vd.id == videoId {
+        if let currentId = currentVideoId, currentId == videoId {
             lines = timelines
             objectWillChange.send()
         }
@@ -293,11 +292,10 @@ class TimelineDataManager: ObservableObject {
     }
     
     func updateTimelines() {
-        guard let currentBookmark = currentBookmark,
-              let videoData = VideoFilesManager.shared.videosData.first(where: { $0.bookmark == currentBookmark }) else {
+        guard let videoId = currentVideoId else {
             return
         }
-        InMemoryStorageManager.shared.saveTimelines(lines, for: videoData.id)
+        InMemoryStorageManager.shared.saveTimelines(lines, for: videoId)
     }
     
     @objc private func handleTagUpdated(_ notification: Notification) {

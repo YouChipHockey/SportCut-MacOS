@@ -104,11 +104,11 @@ extension FilesFile: Equatable {
 }
 
 extension FilesFile: Hashable {
-    
+
     func hash(into hasher: inout Hasher) {
-        hasher.combine(url?.absoluteString)
+        hasher.combine(videoData.id)
     }
-    
+
 }
 
 extension FilesFile {

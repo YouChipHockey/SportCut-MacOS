@@ -127,20 +127,20 @@ class VideosViewModel: ObservableObject {
             action.send(.showError(error: ^String.Titles.alertsFileErrorTitle))
             return
         }
-        
+
         let newFileName = metadata.generateFileName()
         guard let filesFile = filesManager.importFile(url: url, newName: newFileName) else {
             action.send(.showError(error: ^String.Titles.alertsFileErrorTitle))
             return
         }
-        
+
         var file = filesFile
         guard let fileUrl = file.url else { return }
-        
+
         if !authManager.isAuthValid {
             incrementAddedVideosCount()
         }
-        
+
         filesPreviewManager.saveThumbnail(for: fileUrl) {
             file.updateDateOpened()
             DispatchQueue.main.async { [weak self] in

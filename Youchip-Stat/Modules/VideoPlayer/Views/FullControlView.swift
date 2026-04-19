@@ -60,10 +60,10 @@ struct FullControlView: View {
     }
     
     private func getCurrentFile() -> FilesFile? {
-        guard let currentBookmark = timelineData.currentBookmark else {
+        guard let videoId = timelineData.currentVideoId else {
             return nil
         }
-        return VideoFilesManager.shared.files.first(where: { $0.videoData.bookmark == currentBookmark })
+        return VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId })
     }
     
     private func setupKeyboardShortcuts() {
@@ -1159,17 +1159,48 @@ struct FullControlView: View {
 
     private func openCutsExportCurrentTimeline() {
         selectedExportType = .currentTimeline
-        showExportModeSheet = true
+        exitFullscreenAndShowExportSheet()
     }
-    
+
     private func openCutsExportAllTimelines() {
         selectedExportType = .allTimelines
-        showExportModeSheet = true
+        exitFullscreenAndShowExportSheet()
     }
-    
+
     private func openCutsExportDrawings() {
         selectedExportType = .drawingsTimeline
-        showExportModeSheet = true
+        exitFullscreenAndShowExportSheet()
+    }
+
+    /// Выходит из fullscreen (если нужно) перед показом sheet экспорта,
+    /// чтобы окно не растягивалось на весь экран.
+    private func exitFullscreenAndShowExportSheet() {
+        // Если какое-либо из наших окон в fullscreen — выходим.
+        let windows = [
+            WindowsManager.shared.controlWindow?.window,
+            WindowsManager.shared.videoWindow?.window,
+            WindowsManager.shared.tagLibraryWindow?.window
+        ].compactMap { $0 }
+
+        var needsDelay = false
+        for w in windows where w.styleMask.contains(.fullScreen) {
+            w.toggleFullScreen(nil)
+            needsDelay = true
+        }
+        // Также проверяем главное окно приложения.
+        if let mainWindow = NSApp.windows.first(where: { $0.styleMask.contains(.fullScreen) && !windows.contains($0) }) {
+            mainWindow.toggleFullScreen(nil)
+            needsDelay = true
+        }
+
+        if needsDelay {
+            // Даём macOS время на анимацию выхода из fullscreen.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                self.showExportModeSheet = true
+            }
+        } else {
+            showExportModeSheet = true
+        }
     }
 
     private var stampHoverInlineInfo: String? {
@@ -2200,7 +2231,11 @@ struct TimelineMouseTracker: NSViewRepresentable {
             let clampedTime = max(0.0, min(time, duration))
             
             let foundStamp = line.stamps.last { stamp in
-                clampedTime >= stamp.timeStartSeconds && clampedTime <= stamp.timeFinishSeconds
+                let startRatio = stamp.timeStartSeconds / duration
+                let durationRatio = (stamp.timeFinishSeconds - stamp.timeStartSeconds) / duration
+                let stampPixelX = startRatio * gridWidth
+                let stampPixelWidth = max(durationRatio * gridWidth, 10)
+                return clampedX >= stampPixelX && clampedX <= stampPixelX + stampPixelWidth
             }
             
             if let stamp = foundStamp, let tagLibrary = tagLibrary {
@@ -2283,10 +2318,10 @@ struct ScreenshotMarkersView: View {
     @State private var isFirstOpen: Bool = true
     
     private func getCurrentFile() -> FilesFile? {
-        guard let currentBookmark = timelineData.currentBookmark else {
+        guard let videoId = timelineData.currentVideoId else {
             return nil
         }
-        return VideoFilesManager.shared.files.first(where: { $0.videoData.bookmark == currentBookmark })
+        return VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId })
     }
     
     /// Папка скриншотов для текущей сессии: для live — Documents/Screenshots/currentVideoId, иначе из filesFile.

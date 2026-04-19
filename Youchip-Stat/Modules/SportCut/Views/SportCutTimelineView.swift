@@ -21,25 +21,14 @@ private struct PlaylistEventSelectionKey: Equatable {
     let eventIndex: Int
 }
 
-/// Manages local event monitors for playlist timeline resize: scroll wheel + Esc key.
+/// Manages local event monitor for Esc key to deselect playlist event.
 private final class PlaylistTimelineEventMonitor: ObservableObject {
-    private var scrollMonitor: Any?
     private var keyMonitor: Any?
-    var onScroll: ((CGFloat) -> Void)?
     var onEsc: (() -> Void)?
     var lastSelection: PlaylistEventSelectionKey?
-    var lastEdge: PlaylistResizeEdge = .right
 
     func start() {
-        guard scrollMonitor == nil else { return }
-        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-            let dy = event.scrollingDeltaY
-            if abs(dy) > 0.01, self?.lastSelection != nil {
-                self?.onScroll?(dy)
-                return nil
-            }
-            return event
-        }
+        guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53, self?.lastSelection != nil {
                 self?.onEsc?()
@@ -50,7 +39,6 @@ private final class PlaylistTimelineEventMonitor: ObservableObject {
     }
 
     func stop() {
-        if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
     }
 
@@ -1036,21 +1024,7 @@ private struct SportCutPlaylistsTimelinePane: View {
     }
 
     private func setupEventMonitor() {
-        eventMonitor.onScroll = { [weak eventMonitor] delta in
-            guard eventMonitor?.lastSelection != nil else { return }
-            let step: Double = 0.5
-            let deltaSec: Double
-            switch eventMonitor?.lastEdge ?? .right {
-            case .left:
-                deltaSec = delta > 0 ? -step : step
-            case .right:
-                deltaSec = delta > 0 ? step : -step
-            }
-            DispatchQueue.main.async {
-                self.applyEdgeDelta(deltaSec)
-            }
-        }
-        eventMonitor.onEsc = { [weak eventMonitor] in
+        eventMonitor.onEsc = {
             DispatchQueue.main.async {
                 self.clearSelection()
             }
@@ -1092,7 +1066,7 @@ private struct SportCutPlaylistsTimelinePane: View {
                                     playerManager: playerManager,
                                     selection: $selection,
                                     resizeEdge: $resizeEdge,
-                                    onNudge: { deltaSec in
+                                    onCommitResize: { edge, deltaSec in
                                         applyEdgeDelta(deltaSec)
                                     },
                                     onReset: { event in
@@ -1107,9 +1081,6 @@ private struct SportCutPlaylistsTimelinePane: View {
             .onChange(of: selection) { newSel in
                 eventMonitor.lastSelection = newSel
             }
-            .onChange(of: resizeEdge) { newEdge in
-                eventMonitor.lastEdge = newEdge
-            }
         }
     }
 }
@@ -1123,176 +1094,256 @@ private struct SportCutPlaylistSequentialRowView: View {
     @ObservedObject var playerManager: SportCutPlayerManager
     @Binding var selection: PlaylistEventSelectionKey?
     @Binding var resizeEdge: PlaylistResizeEdge
-    var onNudge: (Double) -> Void = { _ in }
+    var onCommitResize: (_ edge: PlaylistResizeEdge, _ deltaSec: Double) -> Void = { _, _ in }
     var onReset: (SportCutEvent) -> Void = { _ in }
 
     private let gapPx: CGFloat = 3
     private let minStripW: CGFloat = 24
 
-    /// Снимок effective длительности выделенного тега на момент выделения.
-    /// Пока duration == snapshot — используется обычный пропорциональный layout.
-    /// Когда duration меняется — включается направленный layout.
-    @State private var selectionDurationSnapshot: Double?
+    /// Пиксельная дельта drag'а (raw translation.width). Положительная = вправо.
+    @State private var dragTranslation: CGFloat = 0
+    /// Край, который сейчас тянут.
+    @State private var draggingEdge: PlaylistResizeEdge?
+    /// Throttle: время последнего seek preview.
+    @State private var lastSeekDate: Date = .distantPast
 
-    /// Есть ли выделенный тег в этой строке.
     private var hasSelectionInRow: Bool {
         guard let sel = selection else { return false }
         return sel.playlistID == playlist.id
     }
 
-    /// Высота строки: 24 (тег) + 16 (badge сверху) + 14 (nudge снизу) если есть выделение, иначе 30.
     private var rowHeight: CGFloat {
-        hasSelectionInRow ? 54 : 30
+        hasSelectionInRow ? 46 : 30
     }
 
-    /// Рассчитывает ширины тегов.
-    /// Без выделения: пропорционально effective длительностям.
-    /// С выделением: используется «стабильный» знаменатель (total без дельты overrides выбранного тега).
-    /// Unaffected сторона привязана к стабильному знаменателю → не двигается.
-    /// Affected сторона получает остаток → поглощает изменения.
-    /// При отсутствии overrides у выбранного тега — layout идентичен обычному.
+    /// sec/px для пересчёта пиксельной дельты в секунды.
+    private var secPerPixel: Double {
+        let total = events.map { playlist.effectiveDuration(for: $0) }.reduce(0, +)
+        guard gridWidth > 0, total > 0 else { return 1 }
+        return total / Double(gridWidth)
+    }
+
+    /// Clamp drag так, чтобы не уйти за 0, за видео, за другой край (min 1 сек).
+    private func clampedDragPx(edge: PlaylistResizeEdge, event: SportCutEvent, rawPx: CGFloat) -> CGFloat {
+        let effStart = playlist.effectiveStartTime(for: event)
+        let effDur = playlist.effectiveDuration(for: event)
+        let effEnd = effStart + effDur
+        let spp = secPerPixel
+
+        let session = SportCutSessionManager.shared.sessions.first { $0.id == sessionID }
+        let source = session?.sources.first { $0.id == event.sourceID }
+        let videoDur = source?.videoDuration() ?? 0
+        let maxTime = videoDur > 0 ? videoDur : max(effEnd * 3, 60)
+
+        switch edge {
+        case .left:
+            // Тянем left handle: translation > 0 = вправо = start увеличивается = ширина уменьшается
+            let deltaSec = Double(rawPx) * spp
+            let newStart = effStart + deltaSec
+            let clamped = max(0, min(newStart, effEnd - 1.0))
+            return CGFloat((clamped - effStart) / spp)
+        case .right:
+            // Тянем right handle: translation > 0 = вправо = end увеличивается = ширина увеличивается
+            let deltaSec = Double(rawPx) * spp
+            let newEnd = effEnd + deltaSec
+            let clamped = max(effStart + 1.0, min(newEnd, maxTime))
+            return CGFloat((clamped - effEnd) / spp)
+        }
+    }
+
+    @ViewBuilder
+    private func stripForEvent(at index: Int, widths: [CGFloat]) -> some View {
+        let event = events[index]
+        let stripW = index < widths.count ? widths[index] : minStripW
+        let selKey = PlaylistEventSelectionKey(playlistID: playlist.id, eventIndex: index)
+        let isSelected = selection == selKey
+        let effStart = playlist.effectiveStartTime(for: event)
+        let effDur = playlist.effectiveDuration(for: event)
+        let spp = secPerPixel
+
+        let times = visualTimes(effStart: effStart, effDur: effDur, isSelected: isSelected, event: event)
+
+        SportCutPlaylistStripView(
+            event: event,
+            effectiveStart: times.start,
+            effectiveEnd: times.end,
+            stripWidth: stripW,
+            isSelected: isSelected,
+            isDragging: isSelected && draggingEdge != nil,
+            onTap: {
+                selection = selKey
+                playerManager.sessionID = sessionID
+                playerManager.playPlaylist(events, startIndex: index, playlistID: playlist.id)
+            },
+            onEdgeDragChanged: { edge, translationX in
+                if draggingEdge == nil { draggingEdge = edge; resizeEdge = edge }
+                let clampedPx = clampedDragPx(edge: edge, event: event, rawPx: translationX)
+                withAnimation(.linear(duration: 0.06)) {
+                    dragTranslation = clampedPx
+                }
+                // Throttle seek preview — не чаще 12 fps, чтобы не нагружать AVPlayer
+                let now = Date()
+                if now.timeIntervalSince(lastSeekDate) >= 0.08 {
+                    lastSeekDate = now
+                    let seekSec = edge == .left
+                        ? effStart + Double(clampedPx) * spp
+                        : effStart + effDur + Double(clampedPx) * spp
+                    playerManager.seekPreviewForPlaylistResize(
+                        absoluteVideoTime: max(0, seekSec),
+                        sourceID: event.sourceID
+                    )
+                }
+            },
+            onEdgeDragEnded: { edge, translationX in
+                let clampedPx = clampedDragPx(edge: edge, event: event, rawPx: translationX)
+                let deltaSec = Double(clampedPx) * spp
+                // Сначала сбрасываем drag state, потом commit — layout плавно перестроится по модели
+                withAnimation(.easeOut(duration: 0.2)) {
+                    dragTranslation = 0
+                    draggingEdge = nil
+                }
+                onCommitResize(edge, deltaSec)
+            },
+            onDeselect: {
+                selection = nil
+                dragTranslation = 0
+                draggingEdge = nil
+            },
+            onReset: {
+                onReset(event)
+            },
+            hasOverrides: playlist.eventStartOverrides[event.hiddenKey] != nil || playlist.eventDurationOverrides[event.hiddenKey] != nil
+        )
+    }
+
+    private func visualTimes(effStart: Double, effDur: Double, isSelected: Bool, event: SportCutEvent) -> (start: Double, end: Double) {
+        guard isSelected, let edge = draggingEdge else {
+            return (effStart, effStart + effDur)
+        }
+        let clampedPx = clampedDragPx(edge: edge, event: event, rawPx: dragTranslation)
+        let spp = secPerPixel
+        if edge == .left {
+            return (effStart + Double(clampedPx) * spp, effStart + effDur)
+        } else {
+            return (effStart, effStart + effDur + Double(clampedPx) * spp)
+        }
+    }
+
+    /// Текущие ширины с учётом drag.
+    private func currentWidths(usableWidth: CGFloat) -> [CGFloat] {
+        let base = computeStripWidths(usableWidth: usableWidth)
+        guard let sel = selection, sel.playlistID == playlist.id,
+              let edge = draggingEdge, sel.eventIndex < base.count else {
+            return base
+        }
+        return computeDragWidths(baseWidths: base, usableWidth: usableWidth, selIdx: sel.eventIndex, edge: edge, deltaPx: dragTranslation)
+    }
+
+    /// Пропорциональные ширины по effective длительностям. Сумма == usableWidth.
     private func computeStripWidths(usableWidth: CGFloat) -> [CGFloat] {
         let count = events.count
         guard count > 0 else { return [] }
-
         let durations = events.map { playlist.effectiveDuration(for: $0) }
-        let totalDuration = durations.reduce(0, +)
-        guard totalDuration > 0 else {
+        let total = durations.reduce(0, +)
+        guard total > 0 else {
             return Array(repeating: max(usableWidth / CGFloat(count), minStripW), count: count)
         }
-
-        let proportional: [CGFloat] = durations.map { max(usableWidth * CGFloat($0 / totalDuration), minStripW) }
-
-        // Нет выделения в этой строке — пропорционально
-        guard let sel = selection, sel.playlistID == playlist.id, sel.eventIndex < count else {
-            return proportional
+        var widths = durations.map { max(usableWidth * CGFloat($0 / total), minStripW) }
+        // Нормализация
+        let sum = widths.reduce(CGFloat(0), +)
+        if abs(sum - usableWidth) > 0.5 && sum > 0 {
+            let scale = usableWidth / sum
+            for i in 0..<count { widths[i] *= scale }
         }
-        let selIdx = sel.eventIndex
+        return widths
+    }
 
-        // Если длительность не изменилась с момента выделения — обычный layout, без скачков
-        guard let snapshot = selectionDurationSnapshot else { return proportional }
-        let currentSelDur = durations[selIdx]
-        guard abs(currentSelDur - snapshot) > 0.001 else { return proportional }
+    /// Ширины с учётом drag'а: selected тег +/- delta, affected теги поглощают остаток.
+    /// Сумма ширин всегда == usableWidth.
+    private func computeDragWidths(baseWidths: [CGFloat], usableWidth: CGFloat, selIdx: Int, edge: PlaylistResizeEdge, deltaPx: CGFloat) -> [CGFloat] {
+        var widths = baseWidths
+        let count = widths.count
+        guard count > 1 else { return widths }
 
-        // Стабильный знаменатель: total, где selected имеет snapshot-длительность (на момент выделения).
-        let stableTotal = totalDuration - currentSelDur + snapshot
-        guard stableTotal > 0 else { return proportional }
+        // Affected теги — со стороны resize edge
+        let affectedIndices: [Int] = edge == .left
+            ? Array(0..<selIdx)
+            : Array((selIdx + 1)..<count)
+        // Unaffected — с другой стороны (не меняются)
+        let unaffectedIndices: [Int] = edge == .left
+            ? Array((selIdx + 1)..<count)
+            : Array(0..<selIdx)
 
-        let leftIndices = Array(0..<selIdx)
-        let rightIndices = Array((selIdx + 1)..<count)
+        // Считаем, сколько пикселей занимают unaffected (они зафиксированы)
+        let unaffectedTotal = unaffectedIndices.reduce(CGFloat(0)) { $0 + widths[$1] }
 
-        let unaffectedIndices: [Int]
-        let affectedIndices: [Int]
-        switch resizeEdge {
-        case .left:
-            unaffectedIndices = rightIndices
-            affectedIndices = leftIndices
-        case .right:
-            unaffectedIndices = leftIndices
-            affectedIndices = rightIndices
-        }
+        // Новая ширина selected
+        let selDelta: CGFloat = edge == .left ? -deltaPx : deltaPx
+        let maxSelW = usableWidth - unaffectedTotal - CGFloat(affectedIndices.count) * minStripW
+        let newSelW = max(min(widths[selIdx] + selDelta, maxSelW), minStripW)
+        widths[selIdx] = newSelW
 
-        var widths = Array(repeating: CGFloat(0), count: count)
+        // Affected забирают остаток
+        let affectedAvailable = usableWidth - unaffectedTotal - newSelW
+        let affectedOldTotal = affectedIndices.reduce(CGFloat(0)) { $0 + widths[$1] }
 
-        // 1. Unaffected: ширины по stableTotal (не меняются при resize selected)
-        var frozenTotal: CGFloat = 0
-        for i in unaffectedIndices {
-            let w = max(usableWidth * CGFloat(durations[i] / stableTotal), minStripW)
-            widths[i] = w
-            frozenTotal += w
-        }
-
-        // 2. Selected: его effective длительность тоже по stableTotal
-        let selectedW = max(usableWidth * CGFloat(durations[selIdx] / stableTotal), minStripW)
-        widths[selIdx] = selectedW
-
-        // 3. Affected: остаток
-        let affectedAvailable = max(usableWidth - frozenTotal - selectedW, CGFloat(affectedIndices.count) * minStripW)
-        let affectedDurTotal = affectedIndices.reduce(0.0) { $0 + durations[$1] }
-        if affectedDurTotal > 0 && !affectedIndices.isEmpty {
+        if affectedOldTotal > 0 && !affectedIndices.isEmpty {
             for i in affectedIndices {
-                widths[i] = max(CGFloat(durations[i] / affectedDurTotal) * affectedAvailable, minStripW)
+                widths[i] = max(widths[i] / affectedOldTotal * affectedAvailable, minStripW)
             }
-        } else {
-            for i in affectedIndices {
-                widths[i] = minStripW
-            }
+        } else if !affectedIndices.isEmpty {
+            let each = max(affectedAvailable / CGFloat(affectedIndices.count), minStripW)
+            for i in affectedIndices { widths[i] = each }
+        }
+
+        // Нормализация: гарантируем что сумма == usableWidth
+        let currentTotal = widths.reduce(CGFloat(0), +)
+        if abs(currentTotal - usableWidth) > 0.5 && currentTotal > 0 {
+            let scale = usableWidth / currentTotal
+            for i in 0..<count { widths[i] *= scale }
         }
 
         return widths
     }
 
+    private let rightPadding: CGFloat = 8
+
     var body: some View {
         let totalGap = gapPx * CGFloat(max(events.count - 1, 0))
-        let usableWidth = max(gridWidth - totalGap, CGFloat(events.count) * minStripW)
-        let widths = computeStripWidths(usableWidth: usableWidth)
+        let usableWidth = max(gridWidth - totalGap - rightPadding, CGFloat(events.count) * minStripW)
+        let widths = currentWidths(usableWidth: usableWidth)
 
         HStack(spacing: gapPx) {
-            ForEach(Array(events.enumerated()), id: \.1.hiddenKey) { index, event in
-                let effectiveDur = playlist.effectiveDuration(for: event)
-                let stripW = index < widths.count ? widths[index] : minStripW
-                let selKey = PlaylistEventSelectionKey(playlistID: playlist.id, eventIndex: index)
-                let isSelected = selection == selKey
-
-                SportCutPlaylistStripView(
-                    event: event,
-                    effectiveStart: playlist.effectiveStartTime(for: event),
-                    effectiveDuration: effectiveDur,
-                    stripWidth: stripW,
-                    isSelected: isSelected,
-                    resizeEdge: isSelected ? resizeEdge : .right,
-                    onTap: {
-                        selection = selKey
-                        selectionDurationSnapshot = effectiveDur
-                        playerManager.sessionID = sessionID
-                        playerManager.playPlaylist(events, startIndex: index, playlistID: playlist.id)
-                    },
-                    onToggleEdge: {
-                        // При переключении L↔R сбрасываем snapshot на текущую длительность,
-                        // чтобы layout не прыгал — направленный режим включится только при следующем resize.
-                        selectionDurationSnapshot = effectiveDur
-                        resizeEdge = resizeEdge == .right ? .left : .right
-                    },
-                    onNudge: { deltaSec in
-                        onNudge(deltaSec)
-                    },
-                    onDeselect: {
-                        selectionDurationSnapshot = nil
-                        selection = nil
-                    },
-                    onReset: {
-                        onReset(event)
-                        selectionDurationSnapshot = events[index].duration // вернётся к оригиналу
-                    },
-                    hasOverrides: playlist.eventStartOverrides[event.hiddenKey] != nil || playlist.eventDurationOverrides[event.hiddenKey] != nil
-                )
+            ForEach(Array(events.indices), id: \.self) { index in
+                stripForEvent(at: index, widths: widths)
             }
+            Spacer(minLength: rightPadding)
         }
         .frame(height: rowHeight)
         .animation(.easeInOut(duration: 0.15), value: hasSelectionInRow)
+        .animation(.linear(duration: 0.06), value: dragTranslation)
     }
 }
 
 /// Визуальный элемент тега на таймлайне плейлиста.
-/// Тег всегда 24px. Служебные элементы (бейдж сверху, кнопки снизу) выводятся в пространстве
-/// между строками через overlay+offset, не влияя на высоту самого тега.
+/// Ресайз — через drag handles на краях (как EdgeResizeHandle в TimelineLineView).
+/// Во время drag обновляется только визуальная ширина (@State в row), модель — при отпускании.
 private struct SportCutPlaylistStripView: View {
     let event: SportCutEvent
     let effectiveStart: Double
-    let effectiveDuration: Double
+    let effectiveEnd: Double
     let stripWidth: CGFloat
     let isSelected: Bool
-    let resizeEdge: PlaylistResizeEdge
+    let isDragging: Bool
     let onTap: () -> Void
-    let onToggleEdge: () -> Void
-    let onNudge: (Double) -> Void
+    let onEdgeDragChanged: (_ edge: PlaylistResizeEdge, _ translationX: CGFloat) -> Void
+    let onEdgeDragEnded: (_ edge: PlaylistResizeEdge, _ translationX: CGFloat) -> Void
     let onDeselect: () -> Void
     let onReset: () -> Void
     let hasOverrides: Bool
 
-    private var effectiveEnd: Double {
-        effectiveStart + effectiveDuration
-    }
+    private let handleW: CGFloat = 8
+    private let handleH: CGFloat = 20
 
     private func formatTime(_ seconds: Double) -> String {
         let m = Int(seconds) / 60
@@ -1302,7 +1353,6 @@ private struct SportCutPlaylistStripView: View {
     }
 
     var body: some View {
-        // Main tag body — always 24px, never compressed
         ZStack {
             RoundedRectangle(cornerRadius: 4)
                 .fill(Color(hex: event.color).opacity(isSelected ? 0.95 : 0.7))
@@ -1315,101 +1365,96 @@ private struct SportCutPlaylistStripView: View {
                 .foregroundColor(.white)
                 .shadow(color: .black, radius: 1)
                 .lineLimit(1)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 12)
+
+            if isSelected {
+                HStack(spacing: 0) {
+                    // Left edge handle
+                    Rectangle()
+                        .fill(Color.white.opacity(0.8))
+                        .overlay(Rectangle().stroke(Color.orange, lineWidth: 1.5))
+                        .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+                        .frame(width: handleW, height: handleH)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    onEdgeDragChanged(.left, value.translation.width)
+                                }
+                                .onEnded { value in
+                                    onEdgeDragEnded(.left, value.translation.width)
+                                }
+                        )
+
+                    Spacer()
+
+                    // Right edge handle
+                    Rectangle()
+                        .fill(Color.white.opacity(0.8))
+                        .overlay(Rectangle().stroke(Color.blue, lineWidth: 1.5))
+                        .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+                        .frame(width: handleW, height: handleH)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    onEdgeDragChanged(.right, value.translation.width)
+                                }
+                                .onEnded { value in
+                                    onEdgeDragEnded(.right, value.translation.width)
+                                }
+                        )
+                }
+                .frame(width: stripWidth)
+            }
         }
         .frame(width: stripWidth, height: 24)
         .contentShape(Rectangle())
-        .help("\(event.tagName) — \(formatTime(effectiveStart))–\(formatTime(effectiveEnd)) (\(formatTime(effectiveDuration)))")
+        .help("\(event.tagName) — \(formatTime(effectiveStart))–\(formatTime(effectiveEnd))")
         .onTapGesture(perform: onTap)
-        // Controls overlay — positioned above and below the tag, in the inter-row space
         .overlay(alignment: .top) {
             if isSelected {
-                topBadge
-                    .offset(y: -16)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if isSelected {
-                bottomNudge
-                    .offset(y: 14)
-            }
-        }
-    }
+                HStack {
+                    HStack(spacing: 2) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                            .onTapGesture { onDeselect() }
 
-    private var topBadge: some View {
-        HStack(spacing: 2) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 9))
-                .foregroundColor(.secondary)
-                .onTapGesture { onDeselect() }
-
-            if hasOverrides {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundColor(.yellow)
-                    .onTapGesture { onReset() }
-            }
-
-            Text(resizeEdge.rawValue)
-                .font(.system(size: 7, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-                .frame(width: 12, height: 12)
-                .background(resizeEdge == .right ? Color.blue : Color.orange)
-                .cornerRadius(3)
-                .onTapGesture { onToggleEdge() }
-
-            let timeValue = resizeEdge == .left ? effectiveStart : effectiveEnd
-            Text(formatTime(timeValue))
-                .font(.system(size: 7, weight: .medium, design: .monospaced))
-                .foregroundColor(.white)
-                .padding(.horizontal, 3)
-                .padding(.vertical, 1)
-                .background(Color.black.opacity(0.6))
-                .cornerRadius(3)
-        }
-        .fixedSize()
-    }
-
-    private var bottomNudge: some View {
-        HStack(spacing: 4) {
-            RepeatButton(systemImage: "chevron.left") { onNudge(-0.1) }
-            Text("0.1s")
-                .font(.system(size: 6, weight: .medium))
-                .foregroundColor(.secondary)
-            RepeatButton(systemImage: "chevron.right") { onNudge(0.1) }
-        }
-        .fixedSize()
-    }
-}
-
-/// Кнопка с auto-repeat: клик = одно срабатывание, удержание = повтор каждые 0.12с.
-private struct RepeatButton: View {
-    let systemImage: String
-    let action: () -> Void
-    @State private var timer: Timer?
-
-    var body: some View {
-        Image(systemName: systemImage)
-            .font(.system(size: 7, weight: .bold))
-            .foregroundColor(.secondary)
-            .frame(width: 16, height: 14)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard timer == nil else { return }
-                        action()
-                        timer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { _ in
-                            action()
+                        if hasOverrides {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.yellow)
+                                .onTapGesture { onReset() }
                         }
+
+                        Text(formatTime(effectiveStart))
+                            .font(.system(size: 7, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.7))
+                            .cornerRadius(3)
                     }
-                    .onEnded { _ in
-                        timer?.invalidate()
-                        timer = nil
-                    }
-            )
+                    .fixedSize()
+
+                    Spacer()
+
+                    Text(formatTime(effectiveEnd))
+                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(Color.blue.opacity(0.7))
+                        .cornerRadius(3)
+                        .fixedSize()
+                }
+                .offset(y: -16)
+            }
+        }
     }
 }
+
 
 // MARK: - Add Source Sheet
 

@@ -440,7 +440,7 @@ struct VideosView: View {
                 ],
                 spacing: 20
             ) {
-                ForEach(filteredFiles, id: \.videoData.bookmark) { file in
+                ForEach(filteredFiles, id: \.videoData.id) { file in
                     VideoThumbnailView(file: file, viewModel: viewModel)
                 }
             }

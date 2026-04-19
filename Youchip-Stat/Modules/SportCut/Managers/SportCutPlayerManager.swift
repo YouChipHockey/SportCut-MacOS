@@ -406,6 +406,13 @@ class SportCutPlayerManager: ObservableObject {
         player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
+    /// Покадровая перемотка: +1 кадр (forward = true) или −1 кадр (forward = false).
+    func stepFrame(forward: Bool) {
+        guard let item = player.currentItem else { return }
+        if isPlaying { pause() }
+        item.step(byCount: forward ? 1 : -1)
+    }
+
     /// Предпросмотр при ресайзе тега на таймлайне SportCut: время в **исходном видео**, плеер крутит локальное время внутри текущего клипа.
     func seekPreviewDuringResize(absoluteVideoTime: Double, stampID: UUID, sourceID: UUID) {
         guard playlistPlaybackKind != .singleFilm else { return }

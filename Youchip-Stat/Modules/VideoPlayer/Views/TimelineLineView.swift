@@ -533,18 +533,17 @@ struct TimelineLineView: View {
             )
         }
 
-        Button("Открыть в режиме просмотра") {
+        Button("Новая сессия просмотра") {
             WindowsManager.shared.openSportCutFromTimelineStamps([(line, stamp)])
         }
-
-        if !timelineData.stampsSelectedForSportCut.isEmpty,
-           timelineData.stampsSelectedForSportCut.contains(stamp.id) {
-            Button("Добавить выбранные в плейлист SportCut") {
-                WindowsManager.shared.appendMarkupSelectionToOpenSportCutPlaylist()
-            }
-        } else {
-            Button("Добавить в плейлист SportCut") {
-                WindowsManager.shared.appendSingleMarkupStampToOpenSportCutPlaylist(line: line, stamp: stamp)
+        let existingSessions = SportCutSessionManager.shared.sessionsForProject(projectID: WindowsManager.shared.currentVideoId)
+        if !existingSessions.isEmpty {
+            Menu("В существующую сессию") {
+                ForEach(existingSessions, id: \.id) { sess in
+                    Button(sess.name) {
+                        WindowsManager.shared.appendStampsToSportCutSession(pairs: [(line, stamp)], sessionID: sess.id)
+                    }
+                }
             }
         }
 
