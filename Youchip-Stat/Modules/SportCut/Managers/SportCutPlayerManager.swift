@@ -63,6 +63,9 @@ class SportCutPlayerManager: ObservableObject {
     private var timeObserver: Any?
     private var endObserver: Any?
     private var cancellables = Set<AnyCancellable>()
+    /// Tracks which sourceID is currently loaded as a direct file asset for resize preview.
+    /// nil means the current item is a composition (normal playback), not a raw file preview.
+    private var previewSourceID: UUID?
     
     private var playlistEvents: [SportCutEvent] = []
     @Published private(set) var playlistPlaybackKind: SportCutPlaylistPlaybackKind = .sequentialClips
@@ -391,6 +394,7 @@ class SportCutPlayerManager: ObservableObject {
         filmSegmentStartSeconds = []
         filmSegmentDurationSeconds = []
         playlistStartOverrides = [:]
+        previewSourceID = nil
         playlistDurationOverrides = [:]
         currentPlaylistIndex = -1
         playlistEvents = []
@@ -428,10 +432,22 @@ class SportCutPlayerManager: ObservableObject {
     }
     
     /// Seek to an absolute video time for preview during playlist edge resize.
-    /// Loads the source video if needed and pauses at the given time.
+    /// On first call for a sourceID (or after normal playback reset), loads the raw video file.
+    /// On subsequent calls for the same sourceID, only seeks — no item replacement, no black flash.
     func seekPreviewForPlaylistResize(absoluteVideoTime: Double, sourceID: UUID) {
         player.pause()
         isPlaying = false
+
+        let cm = CMTime(seconds: max(0, absoluteVideoTime), preferredTimescale: 600)
+        let tol = CMTime(seconds: 0.05, preferredTimescale: 600)
+
+        // If the raw file for this source is already loaded as the current item — just seek.
+        // previewSourceID is nil when a composition is loaded (normal playback), so we
+        // correctly reload on the first drag gesture after playback.
+        if previewSourceID == sourceID {
+            player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+            return
+        }
 
         guard let source = sources.first(where: { $0.id == sourceID }) ?? {
             guard let sessionID,
@@ -450,10 +466,9 @@ class SportCutPlayerManager: ObservableObject {
         }
 
         currentSourceID = sourceID
+        previewSourceID = sourceID
         let item = AVPlayerItem(asset: asset)
         player.replaceCurrentItem(with: item)
-        let cm = CMTime(seconds: max(0, absoluteVideoTime), preferredTimescale: 600)
-        let tol = CMTime(seconds: 0.05, preferredTimescale: 600)
         player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
     }
 
@@ -554,6 +569,7 @@ class SportCutPlayerManager: ObservableObject {
         currentEvent = builtEvents[0]
         currentSourceID = builtEvents[0].sourceID
 
+        previewSourceID = nil
         let playerItem = AVPlayerItem(asset: composition)
         player.replaceCurrentItem(with: playerItem)
         videoDuration = totalDuration
@@ -672,6 +688,7 @@ class SportCutPlayerManager: ObservableObject {
             return
         }
 
+        previewSourceID = nil
         let playerItem = AVPlayerItem(asset: composition)
         player.replaceCurrentItem(with: playerItem)
         videoDuration = safeDuration
