@@ -153,6 +153,7 @@ struct ExportSegmentOrganaizer {
     let stampId: UUID
     let groupName: String
     let labels: [Label]
+    let eventIDs: [String]
 }
 
 struct TimelineLine: Identifiable, Codable, Equatable {

@@ -16,7 +16,8 @@ struct SportCutExportSheet: View {
 
     @State private var exportType: SportCutExportType = .clips
     @State private var selectedPlaylistIDs: Set<UUID> = []
-    @State private var addWatermark = false
+    @State private var addWatermark = true
+    @State private var watermarkOptions: ExportWatermarkOptions = .default
     @StateObject private var exportUI = SportCutExportUIState()
 
     private var session: SportCutSession? {
@@ -103,6 +104,16 @@ struct SportCutExportSheet: View {
                         Text(^String.Titles.sportCutAddWatermark)
                     }
                     .font(.system(size: 13))
+
+                    if addWatermark {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle(^String.Titles.exportAddEpisodeNumbering, isOn: $watermarkOptions.showEpisodeNumbering)
+                            Toggle(^String.Titles.exportAddTagAndLabels, isOn: $watermarkOptions.showTagAndLabels)
+                            Toggle(^String.Titles.exportAddComment, isOn: $watermarkOptions.showComment)
+                        }
+                        .font(.system(size: 12))
+                        .padding(.leading, 16)
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
@@ -140,7 +151,7 @@ struct SportCutExportSheet: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
-        .frame(width: 500, height: 550)
+        .frame(width: 500, height: 620)
     }
 
     private func startExport() {
@@ -175,9 +186,10 @@ struct SportCutExportSheet: View {
         let type = exportType
         let ui = exportUI
         let wm = addWatermark
+        let wmOptions = watermarkOptions
         DispatchQueue.global(qos: .userInitiated).async {
             let backend = SportCutExportBackend(ui: ui)
-            backend.run(playlists: selectedPlaylists, outputURL: outputURL, session: session, type: type, addWatermark: wm)
+            backend.run(playlists: selectedPlaylists, outputURL: outputURL, session: session, type: type, addWatermark: wm, watermarkOptions: wmOptions)
         }
     }
 }
@@ -194,13 +206,15 @@ private final class SportCutExportUIState: ObservableObject {
 private final class SportCutExportBackend {
     private let ui: SportCutExportUIState
     private var addWatermark: Bool = false
+    private var watermarkOptions: ExportWatermarkOptions = .default
 
     init(ui: SportCutExportUIState) {
         self.ui = ui
     }
 
-    func run(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession, type: SportCutExportType, addWatermark: Bool) {
+    func run(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession, type: SportCutExportType, addWatermark: Bool, watermarkOptions: ExportWatermarkOptions = .default) {
         self.addWatermark = addWatermark
+        self.watermarkOptions = watermarkOptions
         switch type {
         case .clips:
             exportAsClips(playlists: playlists, outputURL: outputURL, session: session)
@@ -226,10 +240,8 @@ private final class SportCutExportBackend {
 
     // MARK: - Watermark overlay
 
-    /// Creates an AVVideoComposition that overlays event tag/comment text on the video.
-    /// Each segment gets its own text shown for its duration.
     private func watermarkVideoComposition(
-        segments: [(text: String, start: CMTime, duration: CMTime)],
+        segments: [(text: NSAttributedString, start: CMTime, duration: CMTime)],
         videoTrack: AVAssetTrack,
         compositionVideoTrack: AVMutableCompositionTrack,
         compositionDuration: CMTime
@@ -252,97 +264,177 @@ private final class SportCutExportBackend {
         instruction.layerInstructions = [layerInstruction]
         videoComposition.instructions = [instruction]
 
-        let parentLayer = CALayer()
-        parentLayer.frame = CGRect(origin: .zero, size: renderSize)
-        let videoLayer = CALayer()
-        videoLayer.frame = parentLayer.frame
-        parentLayer.addSublayer(videoLayer)
-
         let total = CMTimeGetSeconds(compositionDuration)
         guard total > 0 else { return nil }
 
-        let fontSize: CGFloat = max(renderSize.height / 30, 14)
         let padding: CGFloat = 12
 
-        for seg in segments {
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
-                .foregroundColor: NSColor.white
-            ]
-            let attrStr = NSAttributedString(string: seg.text, attributes: attrs)
-            let textMaxWidth = renderSize.width - padding * 2
-            let textRect = attrStr.boundingRect(
-                with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
-                options: [.usesLineFragmentOrigin, .usesFontLeading],
-                context: nil
-            )
-            let textHeight = ceil(textRect.height)
-            let overlayHeight = min(textHeight + padding * 2, renderSize.height / 4)
+        // CALayer/CATextLayer setup and NSAttributedString measurement must happen on main thread
+        var parentLayer: CALayer!
+        var videoLayer: CALayer!
 
-            let bgLayer = CALayer()
-            bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
-            bgLayer.frame = CGRect(x: 0, y: 0, width: renderSize.width, height: overlayHeight)
-            parentLayer.addSublayer(bgLayer)
+        let buildLayers = {
+            parentLayer = CALayer()
+            parentLayer.frame = CGRect(origin: .zero, size: renderSize)
+            videoLayer = CALayer()
+            videoLayer.frame = parentLayer.frame
+            parentLayer.addSublayer(videoLayer)
 
-            let textLayer = CATextLayer()
-            textLayer.string = attrStr
-            textLayer.contentsScale = 2
-            textLayer.alignmentMode = .left
-            textLayer.isWrapped = true
-            textLayer.truncationMode = .end
-            textLayer.frame = CGRect(x: padding, y: padding, width: textMaxWidth, height: overlayHeight - padding * 2)
-            parentLayer.addSublayer(textLayer)
+            for seg in segments {
+                let attrStr = seg.text
+                let textMaxWidth = renderSize.width - padding * 2
 
-            let start = CMTimeGetSeconds(seg.start)
-            let dur = CMTimeGetSeconds(seg.duration)
+                // boundingRect must run on main thread for accurate font metrics
+                let textRect = attrStr.boundingRect(
+                    with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    context: nil
+                )
+                // Ensure a minimum height so text is never clipped to zero
+                let minHeight = max(ceil(textRect.height), 20)
+                let overlayHeight = min(minHeight + padding * 2, renderSize.height / 4)
 
-            let opacity = CAKeyframeAnimation(keyPath: "opacity")
-            opacity.values = [0, 1, 0, 0]
-            opacity.keyTimes = [
-                0,
-                NSNumber(value: start / total),
-                NSNumber(value: (start + dur) / total),
-                1
-            ]
-            opacity.duration = total
-            opacity.beginTime = AVCoreAnimationBeginTimeAtZero
-            opacity.isRemovedOnCompletion = false
-            opacity.fillMode = .forwards
-            opacity.calculationMode = .discrete
+                let bgLayer = CALayer()
+                bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
+                bgLayer.frame = CGRect(x: 0, y: 0, width: renderSize.width, height: overlayHeight)
+                parentLayer.addSublayer(bgLayer)
 
-            bgLayer.add(opacity, forKey: "opacity")
-            let opacity2 = opacity.copy() as! CAKeyframeAnimation
-            textLayer.add(opacity2, forKey: "opacity")
+                let textLayer = CATextLayer()
+                textLayer.string = attrStr
+                textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+                textLayer.alignmentMode = .left
+                textLayer.isWrapped = true
+                textLayer.truncationMode = .end
+                textLayer.frame = CGRect(x: padding, y: padding, width: textMaxWidth, height: overlayHeight - padding * 2)
+                textLayer.displayIfNeeded()
+                parentLayer.addSublayer(textLayer)
+
+                let start = CMTimeGetSeconds(seg.start)
+                let dur = CMTimeGetSeconds(seg.duration)
+                let endFrac = min(1.0 - 1e-7, (start + dur) / total)
+
+                let opacity = CAKeyframeAnimation(keyPath: "opacity")
+                if start < 1e-6 {
+                    // Starts at composition time 0: visible immediately, no fade-in delay
+                    opacity.values = [1, 0, 0]
+                    opacity.keyTimes = [0, NSNumber(value: endFrac), 1]
+                } else {
+                    let startFrac = start / total
+                    opacity.values = [0, 1, 0, 0]
+                    opacity.keyTimes = [0, NSNumber(value: startFrac), NSNumber(value: endFrac), 1]
+                }
+                opacity.duration = total
+                opacity.beginTime = AVCoreAnimationBeginTimeAtZero
+                opacity.isRemovedOnCompletion = false
+                // .both ensures the first keyframe value is used BEFORE the animation starts,
+                // eliminating any invisible period at the beginning of the video.
+                opacity.fillMode = .both
+                opacity.calculationMode = .discrete
+
+                bgLayer.add(opacity, forKey: "opacity")
+                textLayer.add(opacity.copy() as! CAKeyframeAnimation, forKey: "opacity")
+            }
+        }
+
+        if Thread.isMainThread {
+            buildLayers()
+        } else {
+            DispatchQueue.main.sync { buildLayers() }
         }
 
         videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
             postProcessingAsVideoLayer: videoLayer,
             in: parentLayer
         )
-
         return videoComposition
     }
 
-    /// Builds watermark text for a SportCut event.
-    private func watermarkText(for event: SportCutEvent, playlist: SportCutPlaylist, session: SportCutSession) -> String {
-        var parts: [String] = []
-        parts.append(event.tagName)
+    /// Builds a colored NSAttributedString overlay for a SportCut event, respecting watermark options.
+    private func watermarkAttributedString(
+        event: SportCutEvent,
+        source: SportCutSource,
+        playlist: SportCutPlaylist,
+        ordinal: Int,
+        videoTrack: AVAssetTrack?
+    ) -> NSAttributedString {
+        let options = watermarkOptions
+        let videoSize: CGSize? = videoTrack.map {
+            let n = $0.naturalSize.applying($0.preferredTransform)
+            return CGSize(width: abs(n.width), height: abs(n.height))
+        }
+        let fontSize: CGFloat = videoSize.map { max(($0.height / 360) * 13, 10) } ?? 13
 
-        // Labels
-        if let source = session.sources.first(where: { $0.id == event.sourceID }) {
-            let labels = event.labelIDs.compactMap { source.findLabel(byID: $0)?.name }
-            if !labels.isEmpty {
-                parts.append(labels.joined(separator: ", "))
+        let tagAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
+            .foregroundColor: NSColor.systemGreen
+        ]
+        let eventAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
+            .foregroundColor: NSColor.systemOrange
+        ]
+        let groupAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
+            .foregroundColor: NSColor.white
+        ]
+        let labelAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .regular),
+            .foregroundColor: NSColor.white
+        ]
+
+        let result = NSMutableAttributedString()
+
+        // Line 1: [ordinal prefix if enabled] + tag name + [time events if tagAndLabels enabled]
+        if options.showEpisodeNumbering || options.showTagAndLabels {
+            let timeEvents = event.eventIDs.compactMap { id in source.timeEvents.first { $0.id == id } }
+
+            var lineStart = ""
+            if options.showEpisodeNumbering {
+                lineStart += "\(ordinal). "
+            }
+            lineStart += event.tagName
+            result.append(NSAttributedString(string: lineStart, attributes: tagAttrs))
+
+            if options.showTagAndLabels && !timeEvents.isEmpty {
+                result.append(NSAttributedString(string: ", ", attributes: tagAttrs))
+                let eventsStr = timeEvents.enumerated().map { i, e in
+                    e.name + (i < timeEvents.count - 1 ? ", " : "")
+                }.joined() + "\n"
+                result.append(NSAttributedString(string: eventsStr, attributes: eventAttrs))
+            } else {
+                result.append(NSAttributedString(string: "\n", attributes: tagAttrs))
             }
         }
 
-        // Comment
-        let comment = (playlist.eventComments[event.hiddenKey] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !comment.isEmpty {
-            parts.append(comment)
+        // Lines 2+: one line per label group (only when tagAndLabels is enabled)
+        if options.showTagAndLabels {
+            let stampLabels = event.labelIDs.compactMap { source.findLabel(byID: $0) }
+            var grouped: [(group: LabelGroupData, labels: [Label])] = []
+            for label in stampLabels {
+                if let g = source.labelGroups.first(where: { $0.lables.contains(label.id) }) {
+                    if let idx = grouped.firstIndex(where: { $0.group.id == g.id }) {
+                        grouped[idx].labels.append(label)
+                    } else {
+                        grouped.append((group: g, labels: [label]))
+                    }
+                }
+            }
+            grouped.sorted { $0.group.name < $1.group.name }.forEach { item in
+                for (i, label) in item.labels.enumerated() {
+                    let sep = i == item.labels.count - 1 ? "\n" : ", "
+                    result.append(NSAttributedString(string: label.name + sep, attributes: labelAttrs))
+                }
+            }
         }
 
-        return parts.joined(separator: "\n")
+        // Last line: comment (only when comment is enabled)
+        if options.showComment {
+            let comment = (playlist.eventComments[event.hiddenKey] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !comment.isEmpty {
+                result.append(NSAttributedString(string: comment, attributes: labelAttrs))
+            }
+        }
+
+        return result
     }
 
     // MARK: - Drawing insertion helpers
@@ -672,7 +764,13 @@ private final class SportCutExportBackend {
             exportSession.outputFileType = .mp4
 
             if addWatermark, let compVideoTrack = composition.tracks(withMediaType: .video).first {
-                let wmText = watermarkText(for: entry.event, playlist: entry.playlist, session: session)
+                let wmText = watermarkAttributedString(
+                    event: entry.event,
+                    source: source,
+                    playlist: entry.playlist,
+                    ordinal: index + 1,
+                    videoTrack: videoTrack
+                )
                 let seg = (text: wmText, start: CMTime.zero, duration: composition.duration)
                 if let vc = watermarkVideoComposition(
                     segments: [seg],
@@ -813,8 +911,9 @@ private final class SportCutExportBackend {
         _ = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
         var currentTime = CMTime.zero
         var securityURLs: [URL] = []
-        var wmSegments: [(text: String, start: CMTime, duration: CMTime)] = []
+        var wmSegments: [(text: NSAttributedString, start: CMTime, duration: CMTime)] = []
         var firstVideoTrack: AVAssetTrack?
+        var eventOrdinal = 0
 
         for playlist in playlists {
             for rawEvent in playlist.events {
@@ -835,6 +934,7 @@ private final class SportCutExportBackend {
                 let timeRange = CMTimeRange(start: startTime, duration: duration)
 
                 let segStart = currentTime
+                eventOrdinal += 1
 
                 if !drawings.isEmpty {
                     currentTime = insertDrawingsIntoComposition(
@@ -858,7 +958,13 @@ private final class SportCutExportBackend {
 
                 if addWatermark {
                     let segDuration = CMTimeSubtract(currentTime, segStart)
-                    let wmText = watermarkText(for: rawEvent, playlist: playlist, session: session)
+                    let wmText = watermarkAttributedString(
+                        event: rawEvent,
+                        source: source,
+                        playlist: playlist,
+                        ordinal: eventOrdinal,
+                        videoTrack: vTrack
+                    )
                     wmSegments.append((text: wmText, start: segStart, duration: segDuration))
                 }
             }
@@ -916,8 +1022,9 @@ private final class SportCutExportBackend {
 
             var currentTime = CMTime.zero
             var securityURLs: [URL] = []
-            var wmSegments: [(text: String, start: CMTime, duration: CMTime)] = []
+            var wmSegments: [(text: NSAttributedString, start: CMTime, duration: CMTime)] = []
             var firstVideoTrack: AVAssetTrack?
+            var eventOrdinal = 0
 
             for rawEvent in playlist.events {
                 let event = resolvedEvent(rawEvent, session: session)
@@ -937,6 +1044,7 @@ private final class SportCutExportBackend {
                 let timeRange = CMTimeRange(start: startTime, duration: duration)
 
                 let segStart = currentTime
+                eventOrdinal += 1
 
                 if !drawings.isEmpty {
                     currentTime = insertDrawingsIntoComposition(
@@ -960,7 +1068,13 @@ private final class SportCutExportBackend {
 
                 if addWatermark {
                     let segDuration = CMTimeSubtract(currentTime, segStart)
-                    let wmText = watermarkText(for: rawEvent, playlist: playlist, session: session)
+                    let wmText = watermarkAttributedString(
+                        event: rawEvent,
+                        source: source,
+                        playlist: playlist,
+                        ordinal: eventOrdinal,
+                        videoTrack: vTrack
+                    )
                     wmSegments.append((text: wmText, start: segStart, duration: segDuration))
                 }
             }

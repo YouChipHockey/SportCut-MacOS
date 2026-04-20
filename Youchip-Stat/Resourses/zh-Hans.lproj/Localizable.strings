@@ -230,6 +230,9 @@
 "ExportAs" = "导出为:";  // ^String.Titles.exportAs
 "ExportWithDrawings" = "导出时包含绘图";  // ^String.Titles.exportWithDrawings
 "ExportWithDrawingsHelp" = "开启后，绘图将插入到视频的相应时刻。每个绘图的显示时长在创建时设置。";  // ^String.Titles.exportWithDrawingsHelp
+"ExportAddEpisodeNumbering" = "添加集数编号";  // ^String.Titles.exportAddEpisodeNumbering
+"ExportAddTagAndLabels" = "添加标签名称、标签和事件";  // ^String.Titles.exportAddTagAndLabels
+"ExportAddComment" = "添加注释";  // ^String.Titles.exportAddComment
 "EditorTextBoxDefaultText" = "文本";  // ^String.Titles.editorTextBoxDefaultText
 "AIReportTitle" = "AI 报告: %@ vs %@";  // ^String.Titles.aiReportTitle
 "AiReportFileNameFormat" = "AI_报告_%@_vs_%@.pdf";  // ^String.Titles.aiReportFileNameFormat

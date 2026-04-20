@@ -236,6 +236,9 @@ extension String {
         case exportAs
         case exportWithDrawings
         case exportWithDrawingsHelp
+        case exportAddEpisodeNumbering
+        case exportAddTagAndLabels
+        case exportAddComment
         case editorTextBoxDefaultText
         case aiReportTitle
         case aiReportFileNameFormat

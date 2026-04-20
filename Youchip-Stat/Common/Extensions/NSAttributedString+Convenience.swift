@@ -10,19 +10,31 @@ import AppKit
 extension NSAttributedString {
     
     static func attributedStringForTagInfo(overlayItem: OverlayItem) -> NSAttributedString? {
+        let options = overlayItem.watermarkOptions
+        guard options.showEpisodeNumbering || options.showTagAndLabels || options.showComment else {
+            return nil
+        }
+
         let attributedString = NSMutableAttributedString(string: "")
         let timelineManager = TimelineDataManager.shared
         let tagLibrary = TagLibraryManager.shared
-        
+
         let tagName = overlayItem.tag.name
-        let tagGroupNameOptional = tagLibrary.allTagGroups.first { $0.tags.contains(overlayItem.tag.id) }?.name
         let timeEvents = tagLibrary.allTimeEvents.filter { overlayItem.stamp.timeEvents.contains($0.id) }
-        
-        let allStamps: [TimelineStamp] = timelineManager.lines.flatMap { $0.stamps }.sortedByStartTime
-        let allStampsInfo: [(id: UUID, tagIds: [String], name: String)] = allStamps.map { ($0.id, $0.idTags, $0.label) }
-        let stampsOfSingleType = allStampsInfo.filter { $0.tagIds.contains(overlayItem.tag.id) }
-        guard let tagIndex = stampsOfSingleType.firstIndex(where: { $0.id == overlayItem.stamp.id } ) else { return nil }
-        
+
+        // Resolve ordinal: use playlist index when provided (viewer/organizer mode),
+        // otherwise compute position among same-tag stamps (markup mode).
+        let ordinal: Int
+        if let playlistIndex = overlayItem.playlistIndex {
+            ordinal = playlistIndex
+        } else {
+            let allStamps: [TimelineStamp] = timelineManager.lines.flatMap { $0.stamps }.sortedByStartTime
+            let allStampsInfo: [(id: UUID, tagIds: [String], name: String)] = allStamps.map { ($0.id, $0.idTags, $0.label) }
+            let stampsOfSingleType = allStampsInfo.filter { $0.tagIds.contains(overlayItem.tag.id) }
+            guard let tagIndex = stampsOfSingleType.firstIndex(where: { $0.id == overlayItem.stamp.id }) else { return nil }
+            ordinal = tagIndex + 1
+        }
+
         let fontSize: CGFloat
         if let videoSize = overlayItem.videoSize {
             let baseHeight: CGFloat = 360
@@ -47,38 +59,48 @@ extension NSAttributedString {
             .font: NSFont.systemFont(ofSize: fontSize, weight: .regular),
             .foregroundColor: NSColor.white
         ]
-        
-        let tagGroupAndNameString: String
-        if let groupName = tagGroupNameOptional {
-            let uppercasedGroup = groupName.uppercased()
-            tagGroupAndNameString = "\(uppercasedGroup): \(tagName)_\(tagIndex+1)" + (timeEvents.isEmpty ? "" : ", ")
-        } else {
-            // Если группа не найдена, показываем только имя тега/скриншота
-            tagGroupAndNameString = "\(tagName)_\(tagIndex+1)" + (timeEvents.isEmpty ? "" : ", ")
-        }
-        let timeEventsString = timeEvents.enumerated().map { index, event in
-            event.name + (index < timeEvents.count - 1 ? ", " : "")
-        }.joined() + "\n"
-        
-        let tagGroupAndNameAttributedString = NSAttributedString(string: tagGroupAndNameString, attributes: tagNameAttributes)
-        let timeEventsAttributedstring = NSAttributedString(string: timeEventsString, attributes: timeEventAttributes)
-        let descriptionAttributedString = NSMutableAttributedString()
-        
-        overlayItem.selectedLabelGroups.sortedByGroupName.forEach { labelGroupItem in
-            let labelGroupNameAttributedString = NSAttributedString(string: labelGroupItem.group.name.uppercased() + ": ", attributes: labelGroupNameAttributes)
-            descriptionAttributedString.append(labelGroupNameAttributedString)
-            
-            labelGroupItem.selectedLabels.forEach { label in
-                let separator = label == labelGroupItem.selectedLabels.last ? " " : ", "
-                let labelAttributedString = NSMutableAttributedString(string: label.name + separator, attributes: labelNameAttributes)
-                descriptionAttributedString.append(labelAttributedString)
+
+        // Line 1: [ordinal prefix if enabled] + [tag name if either flag is on] + [time events if tagAndLabels enabled]
+        if options.showEpisodeNumbering || options.showTagAndLabels {
+            var lineStart = ""
+            if options.showEpisodeNumbering {
+                lineStart += "\(ordinal). "
+            }
+            lineStart += tagName
+            attributedString.append(NSAttributedString(string: lineStart, attributes: tagNameAttributes))
+
+            if options.showTagAndLabels && !timeEvents.isEmpty {
+                attributedString.append(NSAttributedString(string: ", ", attributes: tagNameAttributes))
+                let timeEventsString = timeEvents.enumerated().map { index, event in
+                    event.name + (index < timeEvents.count - 1 ? ", " : "")
+                }.joined() + "\n"
+                attributedString.append(NSAttributedString(string: timeEventsString, attributes: timeEventAttributes))
+            } else {
+                attributedString.append(NSAttributedString(string: "\n", attributes: tagNameAttributes))
             }
         }
-        attributedString.append(tagGroupAndNameAttributedString)
-        attributedString.append(timeEventsAttributedstring)
-        attributedString.append(descriptionAttributedString)
-        
-        return attributedString
+
+        // Lines 2…N: one line per label group (only when tagAndLabels is enabled)
+        if options.showTagAndLabels {
+            overlayItem.selectedLabelGroups.sortedByGroupName.forEach { labelGroupItem in
+                labelGroupItem.selectedLabels.forEach { label in
+                    let isLast = label == labelGroupItem.selectedLabels.last
+                    let separator = isLast ? "\n" : ", "
+                    attributedString.append(NSAttributedString(string: label.name + separator, attributes: labelNameAttributes))
+                }
+            }
+        }
+
+        // Last line: comment (only when comment is enabled)
+        if options.showComment, let comment = overlayItem.stamp.comment, !comment.isEmpty {
+            let commentAttributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: fontSize, weight: .regular),
+                .foregroundColor: NSColor.white
+            ]
+            attributedString.append(NSAttributedString(string: comment, attributes: commentAttributes))
+        }
+
+        return attributedString.length > 0 ? attributedString : nil
     }
     
 }

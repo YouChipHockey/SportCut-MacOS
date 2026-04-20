@@ -230,6 +230,9 @@
 "ExportAs" = "Export as:";  // ^String.Titles.exportAs
 "ExportWithDrawings" = "Export with drawings";  // ^String.Titles.exportWithDrawings
 "ExportWithDrawingsHelp" = "When enabled, drawings will be inserted at corresponding video moments. The display duration of each drawing is set when it is created.";  // ^String.Titles.exportWithDrawingsHelp
+"ExportAddEpisodeNumbering" = "Add episode numbering";  // ^String.Titles.exportAddEpisodeNumbering
+"ExportAddTagAndLabels" = "Add tag name, labels and events";  // ^String.Titles.exportAddTagAndLabels
+"ExportAddComment" = "Add comment";  // ^String.Titles.exportAddComment
 "EditorTextBoxDefaultText" = "Text";  // ^String.Titles.editorTextBoxDefaultText
 "AIReportTitle" = "AI Report: %@ vs %@";  // ^String.Titles.aiReportTitle
 "AiReportFileNameFormat" = "AI_Report_%@_vs_%@.pdf";  // ^String.Titles.aiReportFileNameFormat

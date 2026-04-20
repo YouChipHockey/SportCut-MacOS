@@ -59,7 +59,7 @@ class ExportHelper: ObservableObject {
     
     // MARK: Public Export Method
     
-    func performExport(selectedExportType: CutsExportType?, mode: ExportMode, withScreenshots: Bool = false, completion: @escaping (Error?) -> Void) {
+    func performExport(selectedExportType: CutsExportType?, mode: ExportMode, withScreenshots: Bool = false, watermarkOptions: ExportWatermarkOptions = .default, completion: @escaping (Error?) -> Void) {
         resetValues()
         
         // Handle screenshots export
@@ -93,7 +93,7 @@ class ExportHelper: ObservableObject {
                     DispatchQueue.main.async { completion(NSError.getErrorWithDescription(^String.Titles.fullControlExportErrorAsset)) }
                     return
                 }
-                self.performExportWithAsset(asset, segments: segments, selectedType: selectedType, mode: mode, effectiveWithScreenshots: effectiveWithScreenshots, completion: completion)
+                self.performExportWithAsset(asset, segments: segments, selectedType: selectedType, mode: mode, effectiveWithScreenshots: effectiveWithScreenshots, watermarkOptions: watermarkOptions, completion: completion)
             }
             return
         }
@@ -103,12 +103,12 @@ class ExportHelper: ObservableObject {
             return
         }
         
-        performExportWithAsset(asset, segments: segments, selectedType: selectedType, mode: mode, effectiveWithScreenshots: effectiveWithScreenshots, completion: completion)
+        performExportWithAsset(asset, segments: segments, selectedType: selectedType, mode: mode, effectiveWithScreenshots: effectiveWithScreenshots, watermarkOptions: watermarkOptions, completion: completion)
     }
     
-    private func performExportWithAsset(_ asset: AVAsset, segments: [ExportSegment], selectedType: CutsExportType, mode: ExportMode, effectiveWithScreenshots: Bool, completion: @escaping (Error?) -> Void) {
+    private func performExportWithAsset(_ asset: AVAsset, segments: [ExportSegment], selectedType: CutsExportType, mode: ExportMode, effectiveWithScreenshots: Bool, watermarkOptions: ExportWatermarkOptions = .default, completion: @escaping (Error?) -> Void) {
         if mode == .film {
-            exportFilm(segments: segments, asset: asset, type: selectedType, withScreenshots: effectiveWithScreenshots) { result in
+            exportFilm(segments: segments, asset: asset, type: selectedType, withScreenshots: effectiveWithScreenshots, watermarkOptions: watermarkOptions) { result in
                 DispatchQueue.main.async {
                     switch result {
                     case .success(let outputURL):
@@ -139,7 +139,7 @@ class ExportHelper: ObservableObject {
                 }
             }
         } else {
-            exportPlaylist(segments: segments, asset: asset, type: selectedType, withScreenshots: effectiveWithScreenshots) { result in
+            exportPlaylist(segments: segments, asset: asset, type: selectedType, withScreenshots: effectiveWithScreenshots, watermarkOptions: watermarkOptions) { result in
                 DispatchQueue.main.async {
                     switch result {
                     case .success(let zipURL):
@@ -219,7 +219,7 @@ class ExportHelper: ObservableObject {
     
     // MARK: - Export Film
     
-    private func exportFilm(segments: [ExportSegment], asset: AVAsset, type: CutsExportType, withScreenshots: Bool = false, completion: @escaping (Result<URL, Error>) -> Void) {
+    private func exportFilm(segments: [ExportSegment], asset: AVAsset, type: CutsExportType, withScreenshots: Bool = false, watermarkOptions: ExportWatermarkOptions = .default, completion: @escaping (Result<URL, Error>) -> Void) {
         // Проверка на пустоту сегментов перед созданием композиции
         if segments.isEmpty {
             completion(.failure(NSError(domain: "Export", code: -1, userInfo: [NSLocalizedDescriptionKey: "No segments to export"])))
@@ -286,7 +286,8 @@ class ExportHelper: ObservableObject {
                             selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labelIDs),
                             start: timeBefore,
                             duration: currentTime - timeBefore,
-                            videoSize: videoSize
+                            videoSize: videoSize,
+                            watermarkOptions: watermarkOptions
                         )
                         overlayItems.append(overlayItem)
                     }
@@ -314,7 +315,8 @@ class ExportHelper: ObservableObject {
                     selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labelIDs),
                     start: currentTime - segment.timeRange.duration,
                     duration: segment.timeRange.duration,
-                    videoSize: videoSize
+                    videoSize: videoSize,
+                    watermarkOptions: watermarkOptions
                 )
                 overlayItems.append(overlayItem)
             }
@@ -406,6 +408,7 @@ class ExportHelper: ObservableObject {
         asset: AVAsset,
         type: CutsExportType,
         withScreenshots: Bool = false,
+        watermarkOptions: ExportWatermarkOptions = .default,
         completion: @escaping (Result<URL, Error>) -> Void
     ) {
         if segments.isEmpty {
@@ -556,7 +559,8 @@ class ExportHelper: ObservableObject {
                     selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labelIDs),
                     start: .zero,
                     duration: segment.timeRange.duration,
-                    videoSize: videoSize
+                    videoSize: videoSize,
+                    watermarkOptions: watermarkOptions
                 )
                 overlayVideoComposition = videoCompositionWithTextOverlay(overlayItem: overlayItem, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
             } else {
@@ -953,68 +957,64 @@ class ExportHelper: ObservableObject {
         parentLayer.addSublayer(videoLayer)
         
         let total = CMTimeGetSeconds(compositionDuration)
-        overlayItems.forEach { item in
-            guard let attributedText = NSAttributedString.attributedStringForTagInfo(overlayItem: item) else { return }
-            
-            let padding: CGFloat = 12
-            let textMaxWidth = renderSize.width - padding * 2
-            
-            let textRect = attributedText.boundingRect(
-                with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
-                options: [.usesLineFragmentOrigin, .usesFontLeading],
-                context: nil
-            )
-            
-            let textHeight = ceil(textRect.height)
-            let overlayHeight = min(textHeight + padding * 2, renderSize.height / 4)
-            
-            let bgLayer = CALayer()
-            bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
-            bgLayer.frame = CGRect(
-                x: 0,
-                y: 0,
-                width: renderSize.width,
-                height: overlayHeight
-            )
-            parentLayer.addSublayer(bgLayer)
-            
-            let textLayer = CATextLayer()
-            textLayer.string = attributedText
-            textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
-            textLayer.alignmentMode = .left
-            textLayer.isWrapped = true
-            textLayer.truncationMode = .end
-            textLayer.frame = CGRect(
-                x: padding,
-                y: padding,
-                width: textMaxWidth,
-                height: overlayHeight - padding * 2
-            )
-            textLayer.displayIfNeeded()
-            parentLayer.addSublayer(textLayer)
-            
-            // Animations
-            let start = CMTimeGetSeconds(item.start)
-            let duration = CMTimeGetSeconds(item.duration)
 
-            let opacity = CAKeyframeAnimation(keyPath: "opacity")
-            opacity.values = [0, 1, 0, 0]
-            opacity.keyTimes = [
-                0,
-                NSNumber(value: start / total),
-                NSNumber(value: (start + duration) / total),
-                1
-            ]
-            opacity.duration = total
-            opacity.beginTime = AVCoreAnimationBeginTimeAtZero
-            opacity.isRemovedOnCompletion = false
-            opacity.fillMode = .forwards
-            opacity.calculationMode = .discrete
+        let buildOverlayLayers = {
+            overlayItems.forEach { item in
+                guard let attributedText = NSAttributedString.attributedStringForTagInfo(overlayItem: item) else { return }
 
-            bgLayer.add(opacity, forKey: "opacity")
+                let padding: CGFloat = 12
+                let textMaxWidth = renderSize.width - padding * 2
 
-            let opacity2 = opacity.copy() as! CAKeyframeAnimation
-            textLayer.add(opacity2, forKey: "opacity")
+                let textRect = attributedText.boundingRect(
+                    with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    context: nil
+                )
+                let minHeight = max(ceil(textRect.height), 20)
+                let overlayHeight = min(minHeight + padding * 2, renderSize.height / 4)
+
+                let bgLayer = CALayer()
+                bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
+                bgLayer.frame = CGRect(x: 0, y: 0, width: renderSize.width, height: overlayHeight)
+                parentLayer.addSublayer(bgLayer)
+
+                let textLayer = CATextLayer()
+                textLayer.string = attributedText
+                textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+                textLayer.alignmentMode = .left
+                textLayer.isWrapped = true
+                textLayer.truncationMode = .end
+                textLayer.frame = CGRect(x: padding, y: padding, width: textMaxWidth, height: overlayHeight - padding * 2)
+                textLayer.displayIfNeeded()
+                parentLayer.addSublayer(textLayer)
+
+                let start = CMTimeGetSeconds(item.start)
+                let duration = CMTimeGetSeconds(item.duration)
+                let endFrac = min(1.0 - 1e-7, (start + duration) / total)
+
+                let opacity = CAKeyframeAnimation(keyPath: "opacity")
+                if start < 1e-6 {
+                    opacity.values = [1, 0, 0]
+                    opacity.keyTimes = [0, NSNumber(value: endFrac), 1]
+                } else {
+                    opacity.values = [0, 1, 0, 0]
+                    opacity.keyTimes = [0, NSNumber(value: start / total), NSNumber(value: endFrac), 1]
+                }
+                opacity.duration = total
+                opacity.beginTime = AVCoreAnimationBeginTimeAtZero
+                opacity.isRemovedOnCompletion = false
+                opacity.fillMode = .both
+                opacity.calculationMode = .discrete
+
+                bgLayer.add(opacity, forKey: "opacity")
+                textLayer.add(opacity.copy() as! CAKeyframeAnimation, forKey: "opacity")
+            }
+        }
+
+        if Thread.isMainThread {
+            buildOverlayLayers()
+        } else {
+            DispatchQueue.main.sync { buildOverlayLayers() }
         }
         
         videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
@@ -1055,46 +1055,42 @@ class ExportHelper: ObservableObject {
         let videoLayer = CALayer()
         videoLayer.frame = parentLayer.frame
         parentLayer.addSublayer(videoLayer)
-        
 
         let attributedText = NSAttributedString.attributedStringForTagInfo(overlayItem: overlayItem) ?? NSAttributedString(string: "")
-        
+
         let padding: CGFloat = 12
-        let textMaxWidth = renderSize.width - padding * 2
-        
-        let textRect = attributedText.boundingRect(
-            with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            context: nil
-        )
-        
-        let textHeight = ceil(textRect.height)
-        let overlayHeight = min(textHeight + padding * 2, renderSize.height / 4)
-        
-        let bgLayer = CALayer()
-        bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
-        bgLayer.frame = CGRect(
-            x: 0,
-            y: 0,
-            width: renderSize.width,
-            height: overlayHeight
-        )
-        parentLayer.addSublayer(bgLayer)
-        
-        let textLayer = CATextLayer()
-        textLayer.string = attributedText
-        textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
-        textLayer.alignmentMode = .left
-        textLayer.isWrapped = true
-        textLayer.truncationMode = .end
-        textLayer.frame = CGRect(
-            x: padding,
-            y: padding,
-            width: textMaxWidth,
-            height: overlayHeight - padding * 2
-        )
-        textLayer.displayIfNeeded()
-        parentLayer.addSublayer(textLayer)
+
+        let buildLayer = {
+            let textMaxWidth = renderSize.width - padding * 2
+            let textRect = attributedText.boundingRect(
+                with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                context: nil
+            )
+            let minHeight = max(ceil(textRect.height), 20)
+            let overlayHeight = min(minHeight + padding * 2, renderSize.height / 4)
+
+            let bgLayer = CALayer()
+            bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
+            bgLayer.frame = CGRect(x: 0, y: 0, width: renderSize.width, height: overlayHeight)
+            parentLayer.addSublayer(bgLayer)
+
+            let textLayer = CATextLayer()
+            textLayer.string = attributedText
+            textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+            textLayer.alignmentMode = .left
+            textLayer.isWrapped = true
+            textLayer.truncationMode = .end
+            textLayer.frame = CGRect(x: padding, y: padding, width: textMaxWidth, height: overlayHeight - padding * 2)
+            textLayer.displayIfNeeded()
+            parentLayer.addSublayer(textLayer)
+        }
+
+        if Thread.isMainThread {
+            buildLayer()
+        } else {
+            DispatchQueue.main.sync { buildLayer() }
+        }
         
         videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
             postProcessingAsVideoLayer: videoLayer,

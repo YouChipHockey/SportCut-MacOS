@@ -230,6 +230,9 @@
 "ExportAs" = "Eksport qilish:";  // ^String.Titles.exportAs
 "ExportWithDrawings" = "Chizmalar bilan eksport qilish";  // ^String.Titles.exportWithDrawings
 "ExportWithDrawingsHelp" = "Yoqilganda chizmalar videoning tegishli momentlariga joylashtiriladi. Har bir chizmaning ko‘rsatilish davomiyligi uni yaratishda belgilanadi.";  // ^String.Titles.exportWithDrawingsHelp
+"ExportAddEpisodeNumbering" = "Epizod raqamlashini qo'shish";  // ^String.Titles.exportAddEpisodeNumbering
+"ExportAddTagAndLabels" = "Teg nomi, yorliqlar va hodisalarni qo'shish";  // ^String.Titles.exportAddTagAndLabels
+"ExportAddComment" = "Izoh qo'shish";  // ^String.Titles.exportAddComment
 "EditorTextBoxDefaultText" = "Matn";  // ^String.Titles.editorTextBoxDefaultText
 "AIReportTitle" = "Sun'iy intellekt hisoboti: %@ vs %@";  // ^String.Titles.aiReportTitle
 "AiReportFileNameFormat" = "AI_Hisobot_%@_vs_%@.pdf";  // ^String.Titles.aiReportFileNameFormat

@@ -230,6 +230,9 @@
 "ExportAs" = "Exportar como:";  // ^String.Titles.exportAs
 "ExportWithDrawings" = "Exportar con dibujos";  // ^String.Titles.exportWithDrawings
 "ExportWithDrawingsHelp" = "Cuando está activado, los dibujos se insertarán en los momentos correspondientes del video. La duración de visualización de cada dibujo se establece al crearlo.";  // ^String.Titles.exportWithDrawingsHelp
+"ExportAddEpisodeNumbering" = "Añadir numeración de episodios";  // ^String.Titles.exportAddEpisodeNumbering
+"ExportAddTagAndLabels" = "Añadir nombre de etiqueta, etiquetas y eventos";  // ^String.Titles.exportAddTagAndLabels
+"ExportAddComment" = "Añadir comentario";  // ^String.Titles.exportAddComment
 "EditorTextBoxDefaultText" = "Texto";  // ^String.Titles.editorTextBoxDefaultText
 "AIReportTitle" = "Informe IA: %@ vs %@";  // ^String.Titles.aiReportTitle
 "AiReportFileNameFormat" = "Informe_IA_%@_vs_%@.pdf";  // ^String.Titles.aiReportFileNameFormat

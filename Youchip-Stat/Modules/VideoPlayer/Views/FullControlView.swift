@@ -106,6 +106,7 @@ struct FullControlView: View {
     @State private var showAiReportSheet: Bool = false
     @State private var showSimpleReportSheet: Bool = false
     @State private var exportWithDrawings: Bool = false
+    @State private var exportWatermarkOptions: ExportWatermarkOptions = .default
     
     @State private var showLabelSelectionSheet: Bool = false
     @State private var showMultiLabelSelectionSheet: Bool = false
@@ -1587,7 +1588,7 @@ struct FullControlView: View {
             ExportModeSelectionSheet(
                 onSelect: { mode in
                     isExporting = true
-                    exportHelper.performExport(selectedExportType: selectedExportType, mode: mode, withScreenshots: exportWithDrawings) { error in
+                    exportHelper.performExport(selectedExportType: selectedExportType, mode: mode, withScreenshots: exportWithDrawings, watermarkOptions: exportWatermarkOptions) { error in
                         isExporting = false
                         showExportModeSheet = false
                         if let error {
@@ -1596,7 +1597,8 @@ struct FullControlView: View {
                         }
                     }
                 },
-                exportWithDrawings: $exportWithDrawings
+                exportWithDrawings: $exportWithDrawings,
+                watermarkOptions: $exportWatermarkOptions
             )
         }
         .sheet(isPresented: $showLabelSelectionSheet) {

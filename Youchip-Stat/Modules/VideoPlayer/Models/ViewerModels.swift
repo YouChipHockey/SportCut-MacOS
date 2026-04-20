@@ -417,6 +417,8 @@ class VideoPlaylistManager: ObservableObject {
     @Published private(set) var isPlaying: Bool = false
     @Published private(set) var playbackSpeed: Double = 1.0
     @Published private(set) var currentComposition: AVMutableComposition?
+    /// The original video asset (before the playlist composition was built). Used for export.
+    private(set) var originalVideoAsset: AVAsset?
     private(set) var compositionSegments: [CompositionSegment] = []
     
     private var player: AVPlayer?
@@ -539,6 +541,7 @@ class VideoPlaylistManager: ObservableObject {
         guard let originalAsset = VideoPlayerManager.shared.player?.currentItem?.asset else {
             return
         }
+        originalVideoAsset = originalAsset
         
         let composition = AVMutableComposition()
         

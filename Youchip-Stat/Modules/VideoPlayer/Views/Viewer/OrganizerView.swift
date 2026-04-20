@@ -20,6 +20,9 @@ struct OrganizerView: View {
     @State private var showDeleteAlert = false
     @State private var playlistToDelete: SavedPlaylist?
     @State private var renamingPlaylistId: UUID?
+    @State private var showExportOptionsSheet = false
+    @State private var exportWithDrawings = false
+    @State private var exportWatermarkOptions: ExportWatermarkOptions = .default
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -31,6 +34,17 @@ struct OrganizerView: View {
         }
         .sheet(isPresented: $showSavePlaylistSheet) {
             SavePlaylistSheet(playlistManager: playlistManager)
+        }
+        .sheet(isPresented: $showExportOptionsSheet) {
+            ExportModeSelectionSheet(
+                onSelect: { mode in
+                    showExportOptionsSheet = false
+                    let viewerMode: ViewerExportMode = mode == .film ? .film : .archive
+                    exportPlaylist(mode: viewerMode, watermarkOptions: exportWatermarkOptions)
+                },
+                exportWithDrawings: $exportWithDrawings,
+                watermarkOptions: $exportWatermarkOptions
+            )
         }
         .sheet(isPresented: $showRenameSheet) {
             RenamePlaylistSheet(onCancel: {
@@ -182,15 +196,7 @@ struct OrganizerView: View {
     @ViewBuilder
     private var exportButton: some View {
         if !playlistManager.currentTags.isEmpty {
-            Menu {
-                Button(^String.Titles.exportAsArchive) {
-                    exportPlaylist(mode: .archive)
-                }
-                
-                Button(^String.Titles.exportAsFilm) {
-                    exportPlaylist(mode: .film)
-                }
-            } label: {
+            Button(action: { showExportOptionsSheet = true }) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.blue)
@@ -398,9 +404,11 @@ struct OrganizerView: View {
         return String(format: "%d:%02d", minutes, remainingSeconds)
     }
     
-    private func exportPlaylist(mode: ViewerExportMode) {
+    private func exportPlaylist(mode: ViewerExportMode, watermarkOptions: ExportWatermarkOptions = .default) {
         exportHelper.resetValues()
-        guard let asset = VideoPlayerManager.shared.player?.currentItem?.asset else {
+        // Use the original video asset (not the current player item, which may be an AVComposition)
+        guard let asset = videoPlaylistManager.originalVideoAsset
+                ?? VideoPlayerManager.shared.player?.currentItem?.asset else {
             return
         }
         
@@ -412,7 +420,7 @@ struct OrganizerView: View {
         isExporting = true
         
         if mode == .film {
-            exportFilm(segments: segments, asset: asset) { result in
+            exportFilm(segments: segments, asset: asset, watermarkOptions: watermarkOptions) { result in
                 DispatchQueue.main.async {
                     self.isExporting = false
                     
@@ -436,7 +444,7 @@ struct OrganizerView: View {
                 }
             }
         } else {
-            exportPlaylistArchive(segments: segments, asset: asset) { result in
+            exportPlaylistArchive(segments: segments, asset: asset, watermarkOptions: watermarkOptions) { result in
                 DispatchQueue.main.async {
                     self.isExporting = false
                     
@@ -492,6 +500,7 @@ struct OrganizerView: View {
                     stampId: tag.stampID,
                     groupName: tag.tagGroupName ?? "",
                     labels: labels.isEmpty ? [] : labels,
+                    eventIDs: tag.eventIDs
                 )
             )
         }
@@ -524,7 +533,7 @@ struct OrganizerView: View {
         return (correctedStart, correctedDuration)
     }
     
-    private func exportFilm(segments: [ExportSegmentOrganaizer], asset: AVAsset, completion: @escaping (Result<URL, Error>) -> Void) {
+    private func exportFilm(segments: [ExportSegmentOrganaizer], asset: AVAsset, watermarkOptions: ExportWatermarkOptions = .default, completion: @escaping (Result<URL, Error>) -> Void) {
         let composition = AVMutableComposition()
         
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
@@ -544,12 +553,12 @@ struct OrganizerView: View {
         
         var overlayItems: [OverlayItem] = []
         var currentTime = CMTime.zero
-        for segment in segments {
+        for (segmentIndex, segment) in segments.enumerated() {
             let transform = videoTrack.preferredTransform
             let naturalSize = videoTrack.naturalSize.applying(transform)
             let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
-            let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
-            let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
+            let stamp = resolvedStamp(for: segment)
+            let tag = resolvedTag(for: segment, stamp: stamp)
             let labelIds = segment.labels.map(\.id)
 
             let segmentScreenshots = exportHelper.screenshots(in: segment.timeRange, stampId: segment.stampId)
@@ -563,19 +572,17 @@ struct OrganizerView: View {
                     screenshots: segmentScreenshots,
                     startTime: currentTime
                 )
-                let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId })
-                    ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
-                if let tag, let stamp {
-                    let overlayItem = OverlayItem(
-                        tag: tag,
-                        stamp: stamp,
-                        selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
-                        start: timeBefore,
-                        duration: currentTime - timeBefore,
-                        videoSize: videoSize
-                    )
-                    overlayItems.append(overlayItem)
-                }
+                let overlayItem = OverlayItem(
+                    tag: tag,
+                    stamp: stamp,
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
+                    start: timeBefore,
+                    duration: currentTime - timeBefore,
+                    videoSize: videoSize,
+                    playlistIndex: segmentIndex + 1,
+                    watermarkOptions: watermarkOptions
+                )
+                overlayItems.append(overlayItem)
                 continue
             }
 
@@ -590,19 +597,17 @@ struct OrganizerView: View {
                 return
             }
 
-            let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId })
-                ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
-            if let tag, let stamp {
-                let overlayItem = OverlayItem(
-                    tag: tag,
-                    stamp: stamp,
-                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
-                    start: currentTime - segment.timeRange.duration,
-                    duration: segment.timeRange.duration,
-                    videoSize: videoSize
-                )
-                overlayItems.append(overlayItem)
-            }
+            let overlayItem = OverlayItem(
+                tag: tag,
+                stamp: stamp,
+                selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
+                start: currentTime - segment.timeRange.duration,
+                duration: segment.timeRange.duration,
+                videoSize: videoSize,
+                playlistIndex: segmentIndex + 1,
+                watermarkOptions: watermarkOptions
+            )
+            overlayItems.append(overlayItem)
         }
         
         let fileName = "\(playlistManager.currentPlaylist?.name ?? ^String.Titles.newPlaylist).mp4"
@@ -631,7 +636,7 @@ struct OrganizerView: View {
         }
     }
     
-    private func exportPlaylistArchive(segments: [ExportSegmentOrganaizer], asset: AVAsset, completion: @escaping (Result<URL, Error>) -> Void) {
+    private func exportPlaylistArchive(segments: [ExportSegmentOrganaizer], asset: AVAsset, watermarkOptions: ExportWatermarkOptions = .default, completion: @escaping (Result<URL, Error>) -> Void) {
         if segments.isEmpty {
             completion(.failure(NSError(domain: "Export", code: -1, userInfo: [NSLocalizedDescriptionKey: "No segments to export"])))
             return
@@ -704,25 +709,25 @@ struct OrganizerView: View {
             let transform = videoTrack.preferredTransform
             let naturalSize = videoTrack.naturalSize.applying(transform)
             let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
-            let overlayVideoComposition: AVVideoComposition?
-            let timelineWithStamp = TimelineDataManager.shared.lines.first { $0.stamps.contains { $0.id == segment.stampId }}
-            let stamp = timelineWithStamp?.stamps.first { $0.id == segment.stampId }
+            let stamp = resolvedStamp(for: segment)
+            let tag = resolvedTag(for: segment, stamp: stamp)
             let labelIds = segment.labels.map(\.id)
-            let tag = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId })
-                ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
-            if let tag, let stamp {
-                let overlayItem = OverlayItem(
-                    tag: tag,
-                    stamp: stamp,
-                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
-                    start: .zero,
-                    duration: segment.timeRange.duration,
-                    videoSize: videoSize
-                )
-                overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItem: overlayItem, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
-            } else {
-                overlayVideoComposition = nil
-            }
+            let overlayItem = OverlayItem(
+                tag: tag,
+                stamp: stamp,
+                selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: labelIds),
+                start: .zero,
+                duration: segment.timeRange.duration,
+                videoSize: videoSize,
+                playlistIndex: index + 1,
+                watermarkOptions: watermarkOptions
+            )
+            let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(
+                overlayItem: overlayItem,
+                videoTrack: videoTrack,
+                compositionVideoTrack: compVideoTrack,
+                compositionDuration: composition.duration
+            )
             
             
             let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
@@ -789,6 +794,51 @@ struct OrganizerView: View {
         } catch {
             completion(.failure(error))
         }
+    }
+
+    private func resolvedStamp(for segment: ExportSegmentOrganaizer) -> TimelineStamp {
+        if let real = TimelineDataManager.shared.lines
+            .first(where: { $0.stamps.contains { $0.id == segment.stampId } })?
+            .stamps.first(where: { $0.id == segment.stampId }) {
+            return real
+        }
+        let start = CMTimeGetSeconds(segment.timeRange.start)
+        let duration = CMTimeGetSeconds(segment.timeRange.duration)
+        return TimelineStamp(
+            id: segment.stampId,
+            tagRefs: [StampTagRef(id: segment.tagId, tagGroupId: "")],
+            primaryID: nil,
+            timeStartSeconds: start,
+            timeFinishSeconds: start + duration,
+            colorHex: "808080",
+            label: segment.tagName,
+            labels: [],
+            timeEvents: segment.eventIDs
+        )
+    }
+
+    private func resolvedTag(for segment: ExportSegmentOrganaizer, stamp: TimelineStamp) -> Tag {
+        if let real = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }) {
+            return real
+        }
+        if let synthetic = Tag.syntheticDrawingTag(for: stamp) {
+            return synthetic
+        }
+        return Tag(
+            id: segment.tagId,
+            primaryID: nil,
+            name: segment.tagName,
+            description: "",
+            color: "808080",
+            defaultTimeBefore: 3.0,
+            defaultTimeAfter: 3.0,
+            collection: nil,
+            lablesGroup: [],
+            hotkey: nil,
+            labelHotkeys: nil,
+            mapEnabled: nil,
+            isInterval: nil
+        )
     }
     
 }

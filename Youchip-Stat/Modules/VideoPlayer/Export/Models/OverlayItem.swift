@@ -7,6 +7,14 @@
 
 import AVKit
 
+struct ExportWatermarkOptions {
+    var showEpisodeNumbering: Bool = true
+    var showTagAndLabels: Bool = true
+    var showComment: Bool = true
+
+    static let `default` = ExportWatermarkOptions()
+}
+
 struct OverlayItem {
     let tag: Tag
     let stamp: TimelineStamp
@@ -14,6 +22,30 @@ struct OverlayItem {
     let start: CMTime
     let duration: CMTime
     let videoSize: CGSize?
+    /// When set, this ordinal is used directly (e.g. playlist position in viewer mode)
+    /// instead of computing it from the timeline stamps.
+    let playlistIndex: Int?
+    let watermarkOptions: ExportWatermarkOptions
+
+    init(
+        tag: Tag,
+        stamp: TimelineStamp,
+        selectedLabelGroups: [OverlayLabelGroupItem],
+        start: CMTime,
+        duration: CMTime,
+        videoSize: CGSize?,
+        playlistIndex: Int? = nil,
+        watermarkOptions: ExportWatermarkOptions = .default
+    ) {
+        self.tag = tag
+        self.stamp = stamp
+        self.selectedLabelGroups = selectedLabelGroups
+        self.start = start
+        self.duration = duration
+        self.videoSize = videoSize
+        self.playlistIndex = playlistIndex
+        self.watermarkOptions = watermarkOptions
+    }
 }
 
 struct OverlayLabelGroupItem: Hashable {
