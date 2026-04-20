@@ -700,6 +700,22 @@ struct SportCutPlaylistCardView: View {
                     .frame(width: w, alignment: .leading)
 
                     drawingMarkerLines(totalWidth: w, totalDuration: miniTimelineTotalDuration)
+
+                    // Smooth 60fps playhead via TimelineView — reads player.currentTime() directly
+                    let isActive = playerManager.currentPlaylistID == playlist.id
+                        && playerManager.currentPlaylistIndex >= 0
+                    TimelineView(.animation(minimumInterval: 1.0 / 60.0,
+                                           paused: !playerManager.isPlaying || !isActive)) { _ in
+                        if let px = miniTimelinePlayheadX(totalWidth: w) {
+                            Rectangle()
+                                .fill(Color.white)
+                                .frame(width: 2, height: 14)
+                                .offset(x: px - 1)
+                                .allowsHitTesting(false)
+                                .shadow(color: .black.opacity(0.6), radius: 1, x: 0, y: 0)
+                                .transaction { $0.animation = nil }
+                        }
+                    }
                 }
                 .frame(width: w, height: 14)
                 .cornerRadius(3)
@@ -713,6 +729,38 @@ struct SportCutPlaylistCardView: View {
         }
         .frame(height: 14)
         .clipped()
+    }
+
+    /// X offset of the playhead within the miniTimeline bar (in points, 0…totalWidth).
+    /// Reads `player.currentTime()` directly so it works inside a 60fps `TimelineView`.
+    private func miniTimelinePlayheadX(totalWidth: CGFloat) -> CGFloat? {
+        guard playerManager.currentPlaylistID == playlist.id,
+              playerManager.currentPlaylistIndex >= 0 else { return nil }
+
+        let t = playerManager.player.currentTime().seconds
+        guard t.isFinite, t >= 0 else { return nil }
+
+        let totalDur = miniTimelineTotalDuration
+        guard totalDur > 0 else { return nil }
+
+        if playerManager.playlistPlaybackKind == .singleFilm {
+            // t is the global film time; map it directly across the full mini-timeline width
+            let fraction = min(max(t / totalDur, 0), 1)
+            return CGFloat(fraction) * totalWidth
+        } else {
+            guard let currentEvent = playerManager.currentEvent else { return nil }
+            var accum = 0.0
+            for event in miniTimelineEvents {
+                let dur = playlist.effectiveDuration(for: event)
+                if event.hiddenKey == currentEvent.hiddenKey {
+                    let fraction = dur > 0 ? min(t / dur, 1.0) : 0
+                    accum += fraction * dur
+                    break
+                }
+                accum += dur
+            }
+            return CGFloat(accum / totalDur) * totalWidth
+        }
     }
 
     /// White vertical lines (full height, inside clipped timeline bar)

@@ -123,6 +123,17 @@ class SportCutPlayerManager: ObservableObject {
         }
     }
 
+    /// Local playback time within the current clip (0…clipDuration).
+    /// In `.sequentialClips` mode this equals `currentTime` directly.
+    /// In `.singleFilm` mode this converts the global film time to a per-segment local time.
+    var currentClipLocalTime: Double {
+        guard playlistPlaybackKind == .singleFilm,
+              let (_, localTime) = filmEventIndexAndLocalTime(globalTime: currentTime) else {
+            return currentTime
+        }
+        return localTime
+    }
+
     var currentEventComment: String? {
         guard let sessionID = sessionID,
               let playlistID = currentPlaylistID,

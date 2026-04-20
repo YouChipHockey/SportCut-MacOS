@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import AVFoundation
 import UniformTypeIdentifiers
 
 /// Верхняя граница зума шкалы SportCut: иначе слишком много подписей/лейаута при ресайзе окна.
@@ -1240,6 +1241,10 @@ private struct SportCutPlaylistSequentialRowView: View {
     @State private var draggingEdge: PlaylistResizeEdge?
     /// Throttle: время последнего seek preview.
     @State private var lastSeekDate: Date = .distantPast
+    /// Immediate visual override: set to the target X before a seek starts, cleared in the
+    /// seek completion handler. Prevents the "flash-back" caused by player.currentTime()
+    /// returning the old value while an async seek is still in flight.
+    @State private var seekLockX: CGFloat? = nil
 
     private var hasSelectionInRow: Bool {
         guard let sel = selection else { return false }
@@ -1297,7 +1302,6 @@ private struct SportCutPlaylistSequentialRowView: View {
         let drawings = playlist.eventDrawings[event.hiddenKey] ?? []
         let isHidden = playlist.hiddenEventKeys.contains(event.hiddenKey)
         let hasComment = !(playlist.eventComments[event.hiddenKey] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
         let times = visualTimes(effStart: effStart, effDur: effDur, isSelected: isSelected, event: event)
 
         SportCutPlaylistStripView(
@@ -1314,17 +1318,15 @@ private struct SportCutPlaylistSequentialRowView: View {
             drawings: drawings,
             sourcePlaylistID: playlist.id,
             eventIndex: index,
-            onTap: {
+            onTap: { fraction in
                 selection = selKey
-                playerManager.sessionID = sessionID
-                if isHidden {
-                    // Скрытый клип: играем только его одного
-                    playerManager.playPlaylist([event], startIndex: 0, playlistID: playlist.id)
-                } else {
-                    // Играем с этого клипа, пропуская скрытые
-                    let playable = events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
-                    let startIdx = playable.firstIndex(of: event) ?? 0
-                    playerManager.playPlaylist(playable, startIndex: startIdx, playlistID: playlist.id)
+                let localTime = Double(fraction) * effDur
+                // Compute x of the tapped position in row-local coordinates and lock the
+                // playhead there immediately so there's no flash-back while the async seek settles.
+                let leftEdge: CGFloat = (0..<index).reduce(0) { $0 + widths[$1] + gapPx }
+                seekLockX = leftEdge + CGFloat(fraction) * stripW
+                performSeek(to: event, localTime: localTime) {
+                    seekLockX = nil  // release when player has settled
                 }
             },
             onEdgeDragChanged: { edge, translationX in
@@ -1466,20 +1468,312 @@ private struct SportCutPlaylistSequentialRowView: View {
 
     private let rightPadding: CGFloat = 8
 
+    // MARK: - Seek helper (used by strip taps)
+
+    /// Core seek: moves playback to `localTime` seconds within `targetEvent`.
+    /// `onComplete` fires on the main queue when the underlying player seek has settled,
+    /// so callers can release any visual lock they held during the async operation.
+    private func performSeek(to targetEvent: SportCutEvent, localTime: Double, onComplete: (() -> Void)? = nil) {
+        let isHidden = playlist.hiddenEventKeys.contains(targetEvent.hiddenKey)
+        let playable: [SportCutEvent] = isHidden
+            ? [targetEvent]
+            : events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
+        guard !playable.isEmpty else { onComplete?(); return }
+
+        let isPlaylistActive = playerManager.currentPlaylistID == playlist.id
+
+        if isPlaylistActive && playerManager.playlistPlaybackKind == .singleFilm {
+            var filmTime = 0.0
+            for ve in events.filter({ !playlist.hiddenEventKeys.contains($0.hiddenKey) }) {
+                if ve.hiddenKey == targetEvent.hiddenKey {
+                    let cm = CMTime(seconds: filmTime + localTime, preferredTimescale: 600)
+                    playerManager.player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                        DispatchQueue.main.async { onComplete?() }
+                    }
+                    return
+                }
+                filmTime += playlist.effectiveDuration(for: ve)
+            }
+            onComplete?()
+        } else if isPlaylistActive && playerManager.currentEvent?.hiddenKey == targetEvent.hiddenKey {
+            let cm = CMTime(seconds: max(0, localTime), preferredTimescale: 600)
+            playerManager.player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                DispatchQueue.main.async { onComplete?() }
+            }
+        } else {
+            guard let idx = playable.firstIndex(where: { $0.hiddenKey == targetEvent.hiddenKey }) else { onComplete?(); return }
+            let wasPlaying = playerManager.isPlaying
+            let shouldPlay = wasPlaying || !isPlaylistActive
+            playerManager.sessionID = sessionID
+            playerManager.playPlaylist(playable, startIndex: idx, playlistID: playlist.id, autoPlayAfterLoad: false) {
+                let cm = CMTime(seconds: max(0, localTime), preferredTimescale: 600)
+                playerManager.player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    DispatchQueue.main.async {
+                        if shouldPlay { playerManager.play() }
+                        onComplete?()
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         let totalGap = gapPx * CGFloat(max(events.count - 1, 0))
         let usableWidth = max(gridWidth - totalGap - rightPadding, CGFloat(events.count) * minStripW)
         let widths = currentWidths(usableWidth: usableWidth)
+        let baseWidths = computeStripWidths(usableWidth: usableWidth)
 
-        HStack(spacing: gapPx) {
-            ForEach(Array(events.indices), id: \.self) { index in
-                stripForEvent(at: index, widths: widths)
+        ZStack(alignment: .leading) {
+            HStack(spacing: gapPx) {
+                ForEach(Array(events.indices), id: \.self) { index in
+                    stripForEvent(at: index, widths: widths)
+                }
+                Spacer(minLength: rightPadding)
             }
-            Spacer(minLength: rightPadding)
+
+            // Smooth 60fps playhead — reads player.currentTime() directly via TimelineView
+            PlayheadLineView(
+                playlist: playlist,
+                events: events,
+                baseWidths: baseWidths,
+                gapPx: gapPx,
+                rowHeight: rowHeight,
+                usableWidth: usableWidth,
+                sessionID: sessionID,
+                isEdgeDragging: draggingEdge != nil,
+                externalSeekLockX: $seekLockX,
+                playerManager: playerManager
+            )
         }
         .frame(height: rowHeight)
         .animation(.easeInOut(duration: 0.15), value: hasSelectionInRow)
         .animation(.linear(duration: 0.06), value: dragTranslation)
+        // Auto-select the currently playing strip as the playhead advances.
+        // Fires only at clip boundaries (not on every currentTime tick).
+        .onChange(of: playerManager.currentEvent) { currentEvent in
+            guard let currentEvent,
+                  playerManager.currentPlaylistID == playlist.id,
+                  let idx = events.firstIndex(where: { $0.hiddenKey == currentEvent.hiddenKey })
+            else { return }
+            let newKey = PlaylistEventSelectionKey(playlistID: playlist.id, eventIndex: idx)
+            if selection != newKey { selection = newKey }
+        }
+    }
+}
+
+// MARK: - Smooth 60fps Playhead
+
+/// A self-contained playhead that reads `player.currentTime()` directly inside a `TimelineView`
+/// firing at the display refresh rate (~60fps). This completely bypasses the 0.1s periodic
+/// time observer, eliminating all jitter and lag visible to the user.
+///
+/// **Seek-lock mechanism**: `externalSeekLockX` is set by the parent immediately before any
+/// async seek starts (tap on a strip). `PlayheadLineView` shows that value as-is until the
+/// parent clears it in the seek completion handler, preventing the "flash-back" caused by
+/// `player.currentTime()` returning the old value while the seek is still in flight.
+/// The same mechanism is used for scrub-end seeks via `internalSeekLockX`.
+private struct PlayheadLineView: View {
+    let playlist: SportCutPlaylist
+    /// All events in the row (visible + dimmed-hidden), matching the `baseWidths` array.
+    let events: [SportCutEvent]
+    /// Strip widths computed from model durations (no drag-resize adjustment).
+    let baseWidths: [CGFloat]
+    let gapPx: CGFloat
+    let rowHeight: CGFloat
+    let usableWidth: CGFloat
+    let sessionID: UUID
+    /// Suppresses the playhead while the user is dragging a clip edge.
+    let isEdgeDragging: Bool
+    /// Set by the parent before a strip-tap seek, cleared when the seek completes.
+    @Binding var externalSeekLockX: CGFloat?
+    @ObservedObject var playerManager: SportCutPlayerManager
+
+    @State private var scrubbing: Bool = false
+    @State private var scrubStartX: CGFloat = 0
+    @State private var scrubVisualX: CGFloat = 0
+    @State private var wasPlayingBeforeScrub: Bool = false
+    /// Internal lock used for scrub-end seeks (mirrors external but lives here).
+    @State private var internalSeekLockX: CGFloat? = nil
+
+    private var isActivePlaylist: Bool {
+        playerManager.currentPlaylistID == playlist.id && playerManager.currentPlaylistIndex >= 0
+    }
+
+    /// The resolved playhead X for rendering. Priority:
+    ///   1. Scrub visual (live drag)
+    ///   2. External seek lock (strip tap)
+    ///   3. Internal seek lock (scrub-end)
+    ///   4. Computed from player.currentTime()
+    private var resolvedLockX: CGFloat? {
+        externalSeekLockX ?? internalSeekLockX
+    }
+
+    /// Resolved pixel X to render on each TimelineView tick (nil → hide the playhead).
+    private func displayX() -> CGFloat? {
+        if isEdgeDragging { return nil }
+        if scrubbing { return scrubVisualX }
+        if let lock = resolvedLockX { return lock }
+        return computePlayheadX()
+    }
+
+    var body: some View {
+        // Keep the timeline running whenever a lock is active so we render the
+        // lock position even if the player is paused or the playlist is inactive.
+        let hasLock = resolvedLockX != nil
+        let paused = isEdgeDragging
+            || (!hasLock && !scrubbing && (!playerManager.isPlaying || !isActivePlaylist))
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: paused)) { _ in
+            if let px = displayX() {
+                ZStack {
+                    Rectangle()
+                        .fill(Color.white)
+                        .frame(width: 2, height: rowHeight + 4)
+                        .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 0)
+                    // Wider transparent grab target
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 20, height: rowHeight + 4)
+                        .contentShape(Rectangle())
+                }
+                .offset(x: px - 10)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            if !scrubbing {
+                                let startPos = computePlayheadX() ?? px
+                                scrubStartX = startPos
+                                scrubVisualX = startPos
+                                wasPlayingBeforeScrub = playerManager.isPlaying
+                                if playerManager.isPlaying { playerManager.pause() }
+                                scrubbing = true
+                            }
+                            scrubVisualX = max(0, min(scrubStartX + value.translation.width, usableWidth))
+                        }
+                        .onEnded { value in
+                            let finalX = max(0, min(scrubStartX + value.translation.width, usableWidth))
+                            // Lock BEFORE releasing scrub so there is no frame where
+                            // player.currentTime() (still at old position) is shown.
+                            internalSeekLockX = finalX
+                            scrubbing = false
+                            seekToRowX(finalX)
+                            if wasPlayingBeforeScrub { playerManager.play() }
+                        }
+                )
+                // Suppress any inherited animations so the playhead never eases/lags
+                .transaction { $0.animation = nil }
+            }
+        }
+        // Don't participate in hit-testing when no drag is active
+        .allowsHitTesting(isActivePlaylist)
+    }
+
+    // MARK: - Position computation (reads player.currentTime() directly)
+
+    private func computePlayheadX() -> CGFloat? {
+        guard isActivePlaylist else { return nil }
+        let t = playerManager.player.currentTime().seconds
+        guard t.isFinite, t >= 0 else { return nil }
+        return playerManager.playlistPlaybackKind == .singleFilm
+            ? computeFilmPlayheadX(globalTime: t)
+            : computeSequentialPlayheadX(localTime: t)
+    }
+
+    /// Seeks within the merged AVComposition by walking visible event durations.
+    private func computeFilmPlayheadX(globalTime: Double) -> CGFloat? {
+        var filmAccum = 0.0
+        for event in events where !playlist.hiddenEventKeys.contains(event.hiddenKey) {
+            let dur = playlist.effectiveDuration(for: event)
+            if globalTime <= filmAccum + dur {
+                guard let rowIdx = events.firstIndex(where: { $0.hiddenKey == event.hiddenKey }),
+                      rowIdx < baseWidths.count else { return nil }
+                let fraction = CGFloat(max(0, (globalTime - filmAccum) / max(dur, 0.001)))
+                var rowAccum: CGFloat = 0
+                for j in 0..<rowIdx { rowAccum += baseWidths[j] + gapPx }
+                return rowAccum + fraction * baseWidths[rowIdx]
+            }
+            filmAccum += dur
+        }
+        return nil
+    }
+
+    /// Walks the strip array to find the current clip and places the head at `localTime` within it.
+    private func computeSequentialPlayheadX(localTime: Double) -> CGFloat? {
+        guard let currentEvent = playerManager.currentEvent else { return nil }
+        var accum: CGFloat = 0
+        for (i, event) in events.enumerated() {
+            guard i < baseWidths.count else { break }
+            let w = baseWidths[i]
+            if event.hiddenKey == currentEvent.hiddenKey {
+                let clipDur = playlist.effectiveDuration(for: event)
+                let fraction = clipDur > 0 ? CGFloat(min(max(localTime / clipDur, 0), 1.0)) : 0
+                return accum + fraction * w
+            }
+            accum += w + gapPx
+        }
+        return nil
+    }
+
+    // MARK: - Scrub seek
+
+    private func seekToRowX(_ x: CGFloat) {
+        var accum: CGFloat = 0
+        for (i, event) in events.enumerated() {
+            guard i < baseWidths.count else { break }
+            let w = baseWidths[i]
+            if x >= accum && x <= accum + w {
+                let fraction = Double(max(0, min((x - accum) / max(w, 1), 1)))
+                performSeek(to: event, localTime: fraction * playlist.effectiveDuration(for: event))
+                return
+            }
+            accum += w + gapPx
+        }
+        // x fell in a gap — release the lock immediately
+        internalSeekLockX = nil
+    }
+
+    private func performSeek(to targetEvent: SportCutEvent, localTime: Double) {
+        let isHidden = playlist.hiddenEventKeys.contains(targetEvent.hiddenKey)
+        let playable: [SportCutEvent] = isHidden
+            ? [targetEvent]
+            : events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
+        guard !playable.isEmpty else { internalSeekLockX = nil; return }
+        let isActive = playerManager.currentPlaylistID == playlist.id
+
+        if isActive && playerManager.playlistPlaybackKind == .singleFilm {
+            var filmTime = 0.0
+            for ve in events where !playlist.hiddenEventKeys.contains(ve.hiddenKey) {
+                if ve.hiddenKey == targetEvent.hiddenKey {
+                    let cm = CMTime(seconds: filmTime + localTime, preferredTimescale: 600)
+                    playerManager.player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                        DispatchQueue.main.async { self.internalSeekLockX = nil }
+                    }
+                    return
+                }
+                filmTime += playlist.effectiveDuration(for: ve)
+            }
+            internalSeekLockX = nil
+        } else if isActive && playerManager.currentEvent?.hiddenKey == targetEvent.hiddenKey {
+            let cm = CMTime(seconds: max(0, localTime), preferredTimescale: 600)
+            playerManager.player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                DispatchQueue.main.async { self.internalSeekLockX = nil }
+            }
+        } else {
+            guard let idx = playable.firstIndex(where: { $0.hiddenKey == targetEvent.hiddenKey }) else {
+                internalSeekLockX = nil; return
+            }
+            let wasPlaying = playerManager.isPlaying
+            let shouldPlay = wasPlaying || !isActive
+            playerManager.sessionID = sessionID
+            playerManager.playPlaylist(playable, startIndex: idx, playlistID: playlist.id, autoPlayAfterLoad: false) {
+                let cm = CMTime(seconds: max(0, localTime), preferredTimescale: 600)
+                playerManager.player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    DispatchQueue.main.async {
+                        if shouldPlay { playerManager.play() }
+                        self.internalSeekLockX = nil
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1499,7 +1793,7 @@ private struct SportCutPlaylistStripView: View {
     let drawings: [SportCutEventDrawing]
     let sourcePlaylistID: UUID
     let eventIndex: Int
-    let onTap: () -> Void
+    let onTap: (_ fraction: CGFloat) -> Void
     let onEdgeDragChanged: (_ edge: PlaylistResizeEdge, _ translationX: CGFloat) -> Void
     let onEdgeDragEnded: (_ edge: PlaylistResizeEdge, _ translationX: CGFloat) -> Void
     let onDeselect: () -> Void
@@ -1605,7 +1899,17 @@ private struct SportCutPlaylistStripView: View {
         .frame(width: stripWidth, height: 24)
         .contentShape(Rectangle())
         .help("\(event.tagName) — \(formatTime(effectiveStart))–\(formatTime(effectiveEnd))")
-        .onTapGesture(perform: onTap)
+        // Location-aware tap: passes the fractional position (0…1) within the strip to onTap.
+        // Only fires on genuine taps (small movement) so reorder-drags are not mistaken for seeks.
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onEnded { value in
+                    let movement = hypot(value.translation.width, value.translation.height)
+                    guard movement < 8 else { return }
+                    let fraction = max(0.0, min(Double(value.startLocation.x / max(stripWidth, 1)), 1.0))
+                    onTap(fraction)
+                }
+        )
         .onDrag {
             let dragData = PlaylistEventDragData(event: event, sourcePlaylistID: sourcePlaylistID)
             let data = (try? JSONEncoder().encode(dragData)) ?? Data()
