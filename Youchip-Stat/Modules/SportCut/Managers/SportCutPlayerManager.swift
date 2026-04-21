@@ -53,10 +53,12 @@ class SportCutPlayerManager: ObservableObject {
     private static let wmOffsetXKey = "SportCutWatermarkOffsetX"
     private static let wmOffsetYKey = "SportCutWatermarkOffsetY"
     /// Fractional X anchor: watermark left edge starts at this fraction of the container width.
-    /// 0.25 places it at the left quarter — visually slightly left of centre.
-    static let watermarkAnchorFraction: CGFloat = 0.25
+    /// Lower = further left. ~0.34 sits clearly left of centre.
+    static let watermarkAnchorFraction: CGFloat = 0.34
     /// Bottom margin inside the video tile (points) above the controls bar.
     static let watermarkBottomInset: CGFloat = 60
+    /// Extra downward shift (+Y) applied with the bottom-anchored layout (default sits ~this many points lower).
+    static let watermarkAnchorVerticalShift: CGFloat = 50
     
     var sessionID: UUID?
     
@@ -79,16 +81,7 @@ class SportCutPlayerManager: ObservableObject {
     private var filmSegmentStartSeconds: [Double] = []
     private var filmSegmentDurationSeconds: [Double] = []
 
-    private static let wmAnchorVersionKey = "SportCutWatermarkAnchorVersion"
-    private static let wmAnchorVersion = 2
-
     init() {
-        // Reset stored offsets when the anchor formula version changes so the new default position applies cleanly.
-        if UserDefaults.standard.integer(forKey: Self.wmAnchorVersionKey) < Self.wmAnchorVersion {
-            UserDefaults.standard.removeObject(forKey: Self.wmOffsetXKey)
-            UserDefaults.standard.removeObject(forKey: Self.wmOffsetYKey)
-            UserDefaults.standard.set(Self.wmAnchorVersion, forKey: Self.wmAnchorVersionKey)
-        }
         let x = UserDefaults.standard.double(forKey: Self.wmOffsetXKey)
         let y = UserDefaults.standard.double(forKey: Self.wmOffsetYKey)
         watermarkDragOffset = CGSize(width: x, height: y)
@@ -116,10 +109,10 @@ class SportCutPlayerManager: ObservableObject {
         let maxX = max(0, W - w)
         let maxYTop = max(0, H - h)
         let rawX = anchorX + watermarkDragOffset.width
-        let rawYTop = H - bottom - h + watermarkDragOffset.height
+        let rawYTop = H - bottom - h + watermarkDragOffset.height + Self.watermarkAnchorVerticalShift
         let x = min(max(rawX, 0), maxX)
         let yTop = min(max(rawYTop, 0), maxYTop)
-        let next = CGSize(width: x - anchorX, height: yTop - (H - bottom - h))
+        let next = CGSize(width: x - anchorX, height: yTop - (H - bottom - h + Self.watermarkAnchorVerticalShift))
         guard next != watermarkDragOffset else { return }
         watermarkDragOffset = next
         UserDefaults.standard.set(next.width, forKey: Self.wmOffsetXKey)

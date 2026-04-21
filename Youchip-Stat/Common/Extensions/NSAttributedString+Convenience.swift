@@ -51,12 +51,12 @@ extension NSAttributedString {
             .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: NSColor.systemGreen
         ]
-        let labelGroupNameAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
-            .foregroundColor: NSColor.white
-        ]
         let labelNameAttributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: fontSize, weight: .regular),
+            .foregroundColor: NSColor.white
+        ]
+        let labelGroupAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: NSColor.white
         ]
 
@@ -70,29 +70,53 @@ extension NSAttributedString {
             attributedString.append(NSAttributedString(string: lineStart, attributes: tagNameAttributes))
 
             if options.showTagAndLabels && !timeEvents.isEmpty {
-                attributedString.append(NSAttributedString(string: ", ", attributes: tagNameAttributes))
+                attributedString.append(NSAttributedString(string: " • ", attributes: tagNameAttributes))
                 let timeEventsString = timeEvents.enumerated().map { index, event in
                     event.name + (index < timeEvents.count - 1 ? ", " : "")
-                }.joined() + "\n"
+                }.joined()
                 attributedString.append(NSAttributedString(string: timeEventsString, attributes: timeEventAttributes))
-            } else {
+            }
+            let hasLabels = options.showTagAndLabels && !overlayItem.selectedLabelGroups.isEmpty
+            let comment = (overlayItem.stamp.comment ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let hasComment = options.showComment && !comment.isEmpty
+            if hasLabels || hasComment {
                 attributedString.append(NSAttributedString(string: "\n", attributes: tagNameAttributes))
             }
         }
 
-        // Lines 2…N: one line per label group (only when tagAndLabels is enabled)
+        // Line 2: all label groups in one row: "Group A: L1, L2 • Group B: L3"
         if options.showTagAndLabels {
-            overlayItem.selectedLabelGroups.sortedByGroupName.forEach { labelGroupItem in
-                labelGroupItem.selectedLabels.forEach { label in
-                    let isLast = label == labelGroupItem.selectedLabels.last
-                    let separator = isLast ? "\n" : ", "
-                    attributedString.append(NSAttributedString(string: label.name + separator, attributes: labelNameAttributes))
+            let groups = overlayItem.selectedLabelGroups.sortedByGroupName
+            for (groupIndex, labelGroupItem) in groups.enumerated() {
+                let labelsJoined = labelGroupItem.selectedLabels.map(\.name).joined(separator: ", ")
+                attributedString.append(
+                    NSAttributedString(
+                        string: "\(labelGroupItem.group.name):",
+                        attributes: labelGroupAttributes
+                    )
+                )
+                attributedString.append(
+                    NSAttributedString(
+                        string: " \(labelsJoined)",
+                        attributes: labelNameAttributes
+                    )
+                )
+                if groupIndex < groups.count - 1 {
+                    attributedString.append(NSAttributedString(string: " • ", attributes: labelNameAttributes))
                 }
+            }
+            let comment = (overlayItem.stamp.comment ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if options.showComment && !comment.isEmpty {
+                attributedString.append(NSAttributedString(string: "\n", attributes: labelNameAttributes))
             }
         }
 
         // Last line: comment (only when comment is enabled)
-        if options.showComment, let comment = overlayItem.stamp.comment, !comment.isEmpty {
+        if options.showComment {
+            let comment = (overlayItem.stamp.comment ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !comment.isEmpty else {
+                return attributedString.length > 0 ? attributedString : nil
+            }
             let commentAttributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: fontSize, weight: .regular),
                 .foregroundColor: NSColor.white

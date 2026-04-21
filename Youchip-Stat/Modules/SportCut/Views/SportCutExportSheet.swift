@@ -240,6 +240,54 @@ private final class SportCutExportBackend {
 
     // MARK: - Watermark overlay
 
+    private func fittedWatermarkText(_ source: NSAttributedString, maxWidth: CGFloat, maxHeight: CGFloat) -> NSAttributedString {
+        let measure: (NSAttributedString) -> CGFloat = { text in
+            text.boundingRect(
+                with: CGSize(width: maxWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                context: nil
+            ).height
+        }
+
+        guard measure(source) > maxHeight, source.length > 1 else { return source }
+
+        var low = 0
+        var high = source.length
+        var best = 0
+
+        while low <= high {
+            let mid = (low + high) / 2
+            let prefix = source.attributedSubstring(from: NSRange(location: 0, length: mid))
+            let candidate = NSMutableAttributedString(attributedString: prefix)
+            let attrs: [NSAttributedString.Key: Any]
+            if source.length > 0 {
+                let attrIdx = min(max(mid - 1, 0), source.length - 1)
+                attrs = source.attributes(at: attrIdx, effectiveRange: nil)
+            } else {
+                attrs = [:]
+            }
+            candidate.append(NSAttributedString(string: "…", attributes: attrs))
+            if measure(candidate) <= maxHeight {
+                best = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+
+        let prefix = source.attributedSubstring(from: NSRange(location: 0, length: best))
+        let result = NSMutableAttributedString(attributedString: prefix)
+        let attrs: [NSAttributedString.Key: Any]
+        if source.length > 0 {
+            let attrIdx = min(max(best - 1, 0), source.length - 1)
+            attrs = source.attributes(at: attrIdx, effectiveRange: nil)
+        } else {
+            attrs = [:]
+        }
+        result.append(NSAttributedString(string: "…", attributes: attrs))
+        return result
+    }
+
     private func watermarkVideoComposition(
         segments: [(text: NSAttributedString, start: CMTime, duration: CMTime)],
         videoTrack: AVAssetTrack,
@@ -273,7 +321,8 @@ private final class SportCutExportBackend {
         var parentLayer: CALayer!
         var videoLayer: CALayer!
 
-        let buildLayers = {
+        let buildLayers = { [weak self] in
+            guard let welf = self else { return }
             parentLayer = CALayer()
             parentLayer.frame = CGRect(origin: .zero, size: renderSize)
             videoLayer = CALayer()
@@ -283,16 +332,19 @@ private final class SportCutExportBackend {
             for seg in segments {
                 let attrStr = seg.text
                 let textMaxWidth = renderSize.width - padding * 2
+                let maxOverlayHeight = renderSize.height * 0.55
+                let maxTextHeight = max(20, maxOverlayHeight - padding * 2)
+                let fittedText = welf.fittedWatermarkText(attrStr, maxWidth: textMaxWidth, maxHeight: maxTextHeight)
 
                 // boundingRect must run on main thread for accurate font metrics
-                let textRect = attrStr.boundingRect(
+                let textRect = fittedText.boundingRect(
                     with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
                     options: [.usesLineFragmentOrigin, .usesFontLeading],
                     context: nil
                 )
                 // Ensure a minimum height so text is never clipped to zero
                 let minHeight = max(ceil(textRect.height), 20)
-                let overlayHeight = min(minHeight + padding * 2, renderSize.height / 4)
+                let overlayHeight = min(minHeight + padding * 2, maxOverlayHeight)
 
                 let bgLayer = CALayer()
                 bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
@@ -300,7 +352,7 @@ private final class SportCutExportBackend {
                 parentLayer.addSublayer(bgLayer)
 
                 let textLayer = CATextLayer()
-                textLayer.string = attrStr
+                textLayer.string = fittedText
                 textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
                 textLayer.alignmentMode = .left
                 textLayer.isWrapped = true
@@ -372,12 +424,12 @@ private final class SportCutExportBackend {
             .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: NSColor.systemOrange
         ]
-        let groupAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
-            .foregroundColor: NSColor.white
-        ]
         let labelAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: fontSize, weight: .regular),
+            .foregroundColor: NSColor.white
+        ]
+        let groupAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: NSColor.white
         ]
 
@@ -395,17 +447,21 @@ private final class SportCutExportBackend {
             result.append(NSAttributedString(string: lineStart, attributes: tagAttrs))
 
             if options.showTagAndLabels && !timeEvents.isEmpty {
-                result.append(NSAttributedString(string: ", ", attributes: tagAttrs))
+                result.append(NSAttributedString(string: " • ", attributes: tagAttrs))
                 let eventsStr = timeEvents.enumerated().map { i, e in
                     e.name + (i < timeEvents.count - 1 ? ", " : "")
-                }.joined() + "\n"
+                }.joined()
                 result.append(NSAttributedString(string: eventsStr, attributes: eventAttrs))
-            } else {
+            }
+            let hasLabels = options.showTagAndLabels && !event.labelIDs.isEmpty
+            let comment = (playlist.eventComments[event.hiddenKey] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let hasComment = options.showComment && !comment.isEmpty
+            if hasLabels || hasComment {
                 result.append(NSAttributedString(string: "\n", attributes: tagAttrs))
             }
         }
 
-        // Lines 2+: one line per label group (only when tagAndLabels is enabled)
+        // Line 2: all label groups in one row: "Group A: L1, L2 • Group B: L3"
         if options.showTagAndLabels {
             let stampLabels = event.labelIDs.compactMap { source.findLabel(byID: $0) }
             var grouped: [(group: LabelGroupData, labels: [Label])] = []
@@ -418,11 +474,28 @@ private final class SportCutExportBackend {
                     }
                 }
             }
-            grouped.sorted { $0.group.name < $1.group.name }.forEach { item in
-                for (i, label) in item.labels.enumerated() {
-                    let sep = i == item.labels.count - 1 ? "\n" : ", "
-                    result.append(NSAttributedString(string: label.name + sep, attributes: labelAttrs))
+            let sortedGroups = grouped.sorted { $0.group.name < $1.group.name }
+            for (groupIndex, item) in sortedGroups.enumerated() {
+                let labelsJoined = item.labels.map(\.name).joined(separator: ", ")
+                result.append(
+                    NSAttributedString(
+                        string: "\(item.group.name):",
+                        attributes: groupAttrs
+                    )
+                )
+                result.append(
+                    NSAttributedString(
+                        string: " \(labelsJoined)",
+                        attributes: labelAttrs
+                    )
+                )
+                if groupIndex < sortedGroups.count - 1 {
+                    result.append(NSAttributedString(string: " • ", attributes: labelAttrs))
                 }
+            }
+            let comment = (playlist.eventComments[event.hiddenKey] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if options.showComment && !comment.isEmpty {
+                result.append(NSAttributedString(string: "\n", attributes: labelAttrs))
             }
         }
 

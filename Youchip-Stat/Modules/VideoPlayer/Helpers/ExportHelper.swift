@@ -925,6 +925,54 @@ class ExportHelper: ObservableObject {
 
     
     // MARK: - Create Overlay
+    private func fittedOverlayText(_ source: NSAttributedString, maxWidth: CGFloat, maxHeight: CGFloat) -> NSAttributedString {
+        let measure: (NSAttributedString) -> CGFloat = { text in
+            text.boundingRect(
+                with: CGSize(width: maxWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                context: nil
+            ).height
+        }
+
+        guard measure(source) > maxHeight, source.length > 1 else { return source }
+
+        var low = 0
+        var high = source.length
+        var best = 0
+
+        while low <= high {
+            let mid = (low + high) / 2
+            let prefix = source.attributedSubstring(from: NSRange(location: 0, length: mid))
+            let candidate = NSMutableAttributedString(attributedString: prefix)
+            let attrs: [NSAttributedString.Key: Any]
+            if source.length > 0 {
+                let attrIdx = min(max(mid - 1, 0), source.length - 1)
+                attrs = source.attributes(at: attrIdx, effectiveRange: nil)
+            } else {
+                attrs = [:]
+            }
+            candidate.append(NSAttributedString(string: "…", attributes: attrs))
+            if measure(candidate) <= maxHeight {
+                best = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+
+        let prefix = source.attributedSubstring(from: NSRange(location: 0, length: best))
+        let result = NSMutableAttributedString(attributedString: prefix)
+        let attrs: [NSAttributedString.Key: Any]
+        if source.length > 0 {
+            let attrIdx = min(max(best - 1, 0), source.length - 1)
+            attrs = source.attributes(at: attrIdx, effectiveRange: nil)
+        } else {
+            attrs = [:]
+        }
+        result.append(NSAttributedString(string: "…", attributes: attrs))
+        return result
+    }
+
     func videoCompositionWithTextOverlay(
         overlayItems: [OverlayItem],
         videoTrack: AVAssetTrack,
@@ -958,20 +1006,24 @@ class ExportHelper: ObservableObject {
         
         let total = CMTimeGetSeconds(compositionDuration)
 
-        let buildOverlayLayers = {
+        let buildOverlayLayers = { [weak self] in
+            guard let welf = self else { return }
             overlayItems.forEach { item in
                 guard let attributedText = NSAttributedString.attributedStringForTagInfo(overlayItem: item) else { return }
 
                 let padding: CGFloat = 12
                 let textMaxWidth = renderSize.width - padding * 2
+                let maxOverlayHeight = renderSize.height * 0.55
+                let maxTextHeight = max(20, maxOverlayHeight - padding * 2)
+                let fittedText = welf.fittedOverlayText(attributedText, maxWidth: textMaxWidth, maxHeight: maxTextHeight)
 
-                let textRect = attributedText.boundingRect(
+                let textRect = fittedText.boundingRect(
                     with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
                     options: [.usesLineFragmentOrigin, .usesFontLeading],
                     context: nil
                 )
                 let minHeight = max(ceil(textRect.height), 20)
-                let overlayHeight = min(minHeight + padding * 2, renderSize.height / 4)
+                let overlayHeight = min(minHeight + padding * 2, maxOverlayHeight)
 
                 let bgLayer = CALayer()
                 bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
@@ -979,7 +1031,7 @@ class ExportHelper: ObservableObject {
                 parentLayer.addSublayer(bgLayer)
 
                 let textLayer = CATextLayer()
-                textLayer.string = attributedText
+                textLayer.string = fittedText
                 textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
                 textLayer.alignmentMode = .left
                 textLayer.isWrapped = true
@@ -1060,15 +1112,19 @@ class ExportHelper: ObservableObject {
 
         let padding: CGFloat = 12
 
-        let buildLayer = {
+        let buildLayer = { [weak self] in
+            guard let welf = self else { return }
             let textMaxWidth = renderSize.width - padding * 2
-            let textRect = attributedText.boundingRect(
+            let maxOverlayHeight = renderSize.height * 0.55
+            let maxTextHeight = max(20, maxOverlayHeight - padding * 2)
+            let fittedText = welf.fittedOverlayText(attributedText, maxWidth: textMaxWidth, maxHeight: maxTextHeight)
+            let textRect = fittedText.boundingRect(
                 with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 context: nil
             )
             let minHeight = max(ceil(textRect.height), 20)
-            let overlayHeight = min(minHeight + padding * 2, renderSize.height / 4)
+            let overlayHeight = min(minHeight + padding * 2, maxOverlayHeight)
 
             let bgLayer = CALayer()
             bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
@@ -1076,7 +1132,7 @@ class ExportHelper: ObservableObject {
             parentLayer.addSublayer(bgLayer)
 
             let textLayer = CATextLayer()
-            textLayer.string = attributedText
+            textLayer.string = fittedText
             textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
             textLayer.alignmentMode = .left
             textLayer.isWrapped = true
