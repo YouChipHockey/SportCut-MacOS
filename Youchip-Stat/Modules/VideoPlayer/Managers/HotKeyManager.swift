@@ -248,7 +248,7 @@ class HotKeyManager: ObservableObject {
                 return nil
             }
             guard self.isEnabled,
-                  !self.blockedSheetActive,
+                  (!self.blockedSheetActive || self.isLabelHotkeyMode),
                   !self.isEditorModeActive,
                   !FocusStateManager.shared.isAnyTextFieldFocused else {
                 return event

@@ -53,9 +53,9 @@ struct TagFormData {
     }
     
     func isLabelHotkeyUsed(_ hotkey: String?, exceptLabel labelID: String) -> Bool {
-        guard let hotkey = hotkey, !hotkey.isEmpty else { return false }
+        guard let normalized = normalizedHotkey(hotkey) else { return false }
         return labelHotkeys.contains { (key, value) in
-            value == hotkey && key != labelID
+            normalizedHotkey(value) == normalized && key != labelID
         }
     }
     
@@ -71,5 +71,12 @@ struct TagFormData {
         
         labelHotkeys[labelID] = hotkey
         return true
+    }
+    
+    private func normalizedHotkey(_ hotkey: String?) -> String? {
+        guard let hotkey = hotkey?.trimmingCharacters(in: .whitespacesAndNewlines), !hotkey.isEmpty else {
+            return nil
+        }
+        return hotkey.lowercased()
     }
 }

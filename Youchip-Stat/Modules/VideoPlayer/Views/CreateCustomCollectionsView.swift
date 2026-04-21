@@ -107,6 +107,7 @@ struct CreateCustomCollectionsView: View {
     @State private var tempImageURL: URL? = nil
     @State private var tempImageBookmark: Data? = nil
     @State private var isCapturingLabelHotkeys: [String: Bool] = [:]
+    @State private var showLabelHotkeyConflictAlert = false
     
     @State private var searchText = ""
     @State private var isSearching = false
@@ -208,6 +209,14 @@ struct CreateCustomCollectionsView: View {
                     secondaryButton: .cancel(Text(^String.Titles.collectionsButtonCancel))
                 )
             }
+        }
+        .alert(
+            ^String.Titles.hotkeyAlreadyUsed,
+            isPresented: $showLabelHotkeyConflictAlert
+        ) {
+            Button(^String.Titles.alertsOkTitle, role: .cancel) {}
+        } message: {
+            Text(^String.Titles.collectionsLabelHotkeyUsed)
         }
         .sheet(isPresented: $showAddTagGroupSheet) {
             addTagGroupSheet()
@@ -789,6 +798,30 @@ struct CreateCustomCollectionsView: View {
                 }
             }
         }
+    }
+    
+    private func assignLabelHotkey(labelID: String, hotkey: String?, excludingTagID: String) {
+        guard let normalized = hotkey?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !normalized.isEmpty else {
+            tagFormData.labelHotkeys.removeValue(forKey: labelID)
+            return
+        }
+        
+        if tagFormData.isLabelHotkeyUsed(normalized, exceptLabel: labelID) ||
+            collectionManager.hasLabelHotkeyConflict(normalized, labelID: labelID, excludingTagID: excludingTagID) {
+            showLabelHotkeyConflictAlert = true
+            return
+        }
+        
+        tagFormData.labelHotkeys[labelID] = normalized
+    }
+    
+    private func canPersistLabelHotkeysForSelectedTag() -> Bool {
+        guard let selectedTagID else { return true }
+        return !collectionManager.hasAnyLabelHotkeyConflicts(
+            labelHotkeys: tagFormData.labelHotkeys,
+            excludingTagID: selectedTagID
+        )
     }
     
     private func countActiveMapTagsOnTimelines() -> Int {
@@ -2307,7 +2340,13 @@ struct CreateCustomCollectionsView: View {
                                                         KeyCaptureView(
                                                             keyString: Binding(
                                                                 get: { tagFormData.labelHotkeys[label.id] },
-                                                                set: { tagFormData.labelHotkeys[label.id] = $0 }
+                                                                set: { newValue in
+                                                                    assignLabelHotkey(
+                                                                        labelID: label.id,
+                                                                        hotkey: newValue,
+                                                                        excludingTagID: tag.id
+                                                                    )
+                                                                }
                                                             ),
                                                             isCapturing: Binding(
                                                                 get: { isCapturingLabelHotkeys[label.id] == true },
@@ -2318,12 +2357,6 @@ struct CreateCustomCollectionsView: View {
                                                     }
                                                 }
                                                 
-                                                if let hotkey = tagFormData.labelHotkeys[label.id],
-                                                   tagFormData.isLabelHotkeyUsed(hotkey, exceptLabel: label.id) {
-                                                    Image(systemName: "exclamationmark.triangle.fill")
-                                                        .foregroundColor(.orange)
-                                                        .help(^String.Titles.hotkeyAlreadyUsed)
-                                                }
                                             }
                                             .padding(.horizontal, 8)
                                             .padding(.vertical, 4)
@@ -2355,6 +2388,10 @@ struct CreateCustomCollectionsView: View {
                 }
                 
                 Button(^String.Titles.collectionsButtonSaveChanges) {
+                    guard canPersistLabelHotkeysForSelectedTag() else {
+                        showLabelHotkeyConflictAlert = true
+                        return
+                    }
                     let success = collectionManager.updateTag(
                         id: tag.id,
                         primaryID: tag.primaryID,
@@ -2376,6 +2413,8 @@ struct CreateCustomCollectionsView: View {
                         
                         _ = collectionManager.saveCollectionToFiles()
                         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    } else if !success {
+                        showLabelHotkeyConflictAlert = true
                     }
                 }
                 .buttonStyle(ModernPrimaryButtonStyle())
@@ -3146,6 +3185,14 @@ struct CreateCustomCollectionsView: View {
                     .buttonStyle(ModernSecondaryButtonStyle())
                     
                     Button(^String.Titles.collectionsButtonAdd) {
+                        if collectionManager.hasAnyLabelHotkeyConflicts(
+                            labelHotkeys: tagFormData.labelHotkeys,
+                            excludingTagID: ""
+                        ) {
+                            showLabelHotkeyConflictAlert = true
+                            return
+                        }
+                        
                         if let groupID = selectedTagGroupID {
                             let newTag = collectionManager.createTag(
                                 name: tagFormData.name,
@@ -3159,7 +3206,7 @@ struct CreateCustomCollectionsView: View {
                             )
                             
                             if !tagFormData.selectedLabelGroups.isEmpty {
-                                collectionManager.updateTag(
+                                let updateSuccess = collectionManager.updateTag(
                                     id: newTag.id,
                                     primaryID: newTag.primaryID,
                                     name: newTag.name,
@@ -3173,6 +3220,11 @@ struct CreateCustomCollectionsView: View {
                                     isInterval: newTag.isInterval ?? false,
                                     mapEnabled: newTag.mapEnabled ?? false
                                 )
+                                if !updateSuccess {
+                                    showLabelHotkeyConflictAlert = true
+                                    collectionManager.deleteTag(id: newTag.id)
+                                    return
+                                }
                             }
                             
                             _ = collectionManager.saveCollectionToFiles()

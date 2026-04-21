@@ -625,13 +625,38 @@ class CustomCollectionManager: ObservableObject {
     }
     
     func isHotkeyAssigned(_ hotkey: String?) -> Bool {
-        guard let hotkey = hotkey, !hotkey.isEmpty else { return false }
-        return tags.contains { $0.hotkey == hotkey }
+        guard let normalized = normalizedHotkey(hotkey) else { return false }
+        return tags.contains { normalizedHotkey($0.hotkey) == normalized }
     }
     
     func isHotkeyAssigned(_ hotkey: String?, excludingTagID: String) -> Bool {
-        guard let hotkey = hotkey, !hotkey.isEmpty else { return false }
-        return tags.contains { $0.hotkey == hotkey && $0.id != excludingTagID }
+        guard let normalized = normalizedHotkey(hotkey) else { return false }
+        return tags.contains { normalizedHotkey($0.hotkey) == normalized && $0.id != excludingTagID }
+    }
+    
+    func hasLabelHotkeyConflict(_ hotkey: String?, labelID: String, excludingTagID: String) -> Bool {
+        guard let normalized = normalizedHotkey(hotkey) else { return false }
+        for tag in tags where tag.id != excludingTagID {
+            guard let labelHotkeys = tag.labelHotkeys else { continue }
+            for (existingLabelID, existingHotkey) in labelHotkeys {
+                if existingLabelID == labelID {
+                    continue
+                }
+                if normalizedHotkey(existingHotkey) == normalized {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    
+    func hasAnyLabelHotkeyConflicts(labelHotkeys: [String: String], excludingTagID: String) -> Bool {
+        for (labelID, hotkey) in labelHotkeys {
+            if hasLabelHotkeyConflict(hotkey, labelID: labelID, excludingTagID: excludingTagID) {
+                return true
+            }
+        }
+        return false
     }
     
     func updateTag(id: String, primaryID: String?, name: String, description: String, color: String,
@@ -639,6 +664,10 @@ class CustomCollectionManager: ObservableObject {
                    labelGroupIDs: [String], hotkey: String?, labelHotkeys: [String: String], isInterval: Bool, mapEnabled: Bool) -> Bool {
         if let hotkey = hotkey, !hotkey.isEmpty,
            isHotkeyAssigned(hotkey, excludingTagID: id) {
+            return false
+        }
+        
+        if hasAnyLabelHotkeyConflicts(labelHotkeys: labelHotkeys, excludingTagID: id) {
             return false
         }
         
@@ -681,6 +710,13 @@ class CustomCollectionManager: ObservableObject {
             return true
         }
         return false
+    }
+    
+    private func normalizedHotkey(_ hotkey: String?) -> String? {
+        guard let hotkey = hotkey?.trimmingCharacters(in: .whitespacesAndNewlines), !hotkey.isEmpty else {
+            return nil
+        }
+        return hotkey.lowercased()
     }
     
     func createTestCollection() {
