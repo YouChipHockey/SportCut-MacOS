@@ -67,12 +67,12 @@ struct SportCutWatermarkOverlay: View {
                 let H = geo.size.height
                 let w = max(measuredSize.width, 1)
                 let h = max(measuredSize.height, 1)
-                let lead = SportCutPlayerManager.watermarkLeadingInset
+                let anchorX = W * SportCutPlayerManager.watermarkAnchorFraction
                 let bottomInset = SportCutPlayerManager.watermarkBottomInset
                 let base = playerManager.watermarkDragOffset
                 let drag = dragTranslation
 
-                let rawX = lead + base.width + drag.width
+                let rawX = anchorX + base.width + drag.width
                 let rawYTop = H - bottomInset - h + base.height + drag.height
                 let x = min(max(rawX, 0), max(0, W - w))
                 let yTop = min(max(rawYTop, 0), max(0, H - h))
