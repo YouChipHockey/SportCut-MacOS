@@ -29,11 +29,13 @@ struct AddLineSheet: View {
                     presentationMode.wrappedValue.dismiss()
                 }
                 Button(^String.Titles.collectionsButtonAdd) {
-                    onAdd(lineName)
+                    let trimmed = lineName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    onAdd(trimmed)
                     NotificationCenter.default.post(name: NSNotification.Name("SheetDismissed"), object: nil)
                     presentationMode.wrappedValue.dismiss()
                 }
-                .disabled(lineName.isEmpty)
+                .disabled(lineName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .keyboardShortcut(.defaultAction)
             }
         }

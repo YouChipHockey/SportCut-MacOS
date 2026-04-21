@@ -116,9 +116,13 @@ class HotKeyManager: ObservableObject {
         NotificationCenter.default.removeObserver(self)
     }
     
-    @objc private func sheetWillAppear(_ notification: Notification) {}
+    @objc private func sheetWillAppear(_ notification: Notification) {
+        blockedSheetActive = true
+    }
     
-    @objc private func sheetDidDisappear(_ notification: Notification) {}
+    @objc private func sheetDidDisappear(_ notification: Notification) {
+        blockedSheetActive = false
+    }
     
     @objc private func addLineSheetAppeared() {
         blockedSheetActive = true

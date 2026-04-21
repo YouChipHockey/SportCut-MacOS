@@ -46,6 +46,7 @@ struct FullControlView: View {
     
     @State private var isEditorModeActive = false
     @State private var isScreenshotDisplayActive = false
+    @State private var notificationObservers: [NSObjectProtocol] = []
     
     private func handleActionWithEditorCheck(_ action: @escaping () -> Void) {
         if isScreenshotDisplayActive {
@@ -1242,6 +1243,11 @@ struct FullControlView: View {
         }
     }
 
+    private var isAnyExportSheetShowing: Bool {
+        showExportModeSheet || showTagSelectionSheet || showLabelSelectionSheet ||
+        showEventSelectionSheet || multiTagSelectionItem != nil || multiLabelSelectionItem != nil
+    }
+
     private func openCutsExportCurrentTimeline() {
         selectedExportType = .currentTimeline
         exitFullscreenAndShowExportSheet()
@@ -1260,27 +1266,25 @@ struct FullControlView: View {
     /// Выходит из fullscreen (если нужно) перед показом sheet экспорта,
     /// чтобы окно не растягивалось на весь экран.
     private func exitFullscreenAndShowExportSheet() {
-        // Если какое-либо из наших окон в fullscreen — выходим.
-        let windows = [
+        guard !showExportModeSheet else { return }
+
+        // Выходим из fullscreen только для окон разметки.
+        let markupWindows = [
             WindowsManager.shared.controlWindow?.window,
             WindowsManager.shared.videoWindow?.window,
             WindowsManager.shared.tagLibraryWindow?.window
         ].compactMap { $0 }
 
         var needsDelay = false
-        for w in windows where w.styleMask.contains(.fullScreen) {
+        for w in markupWindows where w.styleMask.contains(.fullScreen) {
             w.toggleFullScreen(nil)
-            needsDelay = true
-        }
-        // Также проверяем главное окно приложения.
-        if let mainWindow = NSApp.windows.first(where: { $0.styleMask.contains(.fullScreen) && !windows.contains($0) }) {
-            mainWindow.toggleFullScreen(nil)
             needsDelay = true
         }
 
         if needsDelay {
             // Даём macOS время на анимацию выхода из fullscreen.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                guard !self.showExportModeSheet else { return }
                 self.showExportModeSheet = true
             }
         } else {
@@ -1529,19 +1533,21 @@ struct FullControlView: View {
                 parentWindowHeight = geo.size.height
                 setupKeyboardShortcuts()
                 
-                NotificationCenter.default.addObserver(forName: .editorModeChanged, object: nil, queue: .main) { notification in
+                guard notificationObservers.isEmpty else { return }
+                
+                let editorObserver = NotificationCenter.default.addObserver(forName: .editorModeChanged, object: nil, queue: .main) { notification in
                     if let isActive = notification.object as? Bool {
                         self.isEditorModeActive = isActive
                     }
                 }
                 
-                NotificationCenter.default.addObserver(forName: .screenshotDisplayChanged, object: nil, queue: .main) { notification in
+                let screenshotObserver = NotificationCenter.default.addObserver(forName: .screenshotDisplayChanged, object: nil, queue: .main) { notification in
                     if let isActive = notification.object as? Bool {
                         self.isScreenshotDisplayActive = isActive
                     }
                 }
                 
-                NotificationCenter.default.addObserver(forName: .markupModeChanged, object: nil, queue: .main) { notification in
+                let markupModeObserver = NotificationCenter.default.addObserver(forName: .markupModeChanged, object: nil, queue: .main) { notification in
                     if let newMode = notification.object as? MarkupMode {
                         self.markupMode = newMode
                     } else {
@@ -1549,7 +1555,7 @@ struct FullControlView: View {
                     }
                 }
                 
-                NotificationCenter.default.addObserver(
+                let hoverObserver = NotificationCenter.default.addObserver(
                     forName: .timelineStampHoverChanged,
                     object: nil,
                     queue: .main
@@ -1562,15 +1568,16 @@ struct FullControlView: View {
                         }
                     }
                 }
+                
+                notificationObservers = [editorObserver, screenshotObserver, markupModeObserver, hoverObserver]
             }
             .onDisappear {
                 if let monitor = keyEventMonitor {
                     NSEvent.removeMonitor(monitor)
+                    keyEventMonitor = nil
                 }
-                NotificationCenter.default.removeObserver(self, name: .editorModeChanged, object: nil)
-                NotificationCenter.default.removeObserver(self, name: .screenshotDisplayChanged, object: nil)
-                NotificationCenter.default.removeObserver(self, name: .markupModeChanged, object: nil)
-                NotificationCenter.default.removeObserver(self, name: .timelineStampHoverChanged, object: nil)
+                notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+                notificationObservers.removeAll()
             }
             .onChange(of: geo.size) { newSize in
                 parentWindowHeight = newSize.height
@@ -1711,26 +1718,32 @@ struct FullControlView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsCurrentTimeline)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            guard !isAnyExportSheetShowing else { return }
             openCutsExportCurrentTimeline()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsAllTimelines)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            guard !isAnyExportSheetShowing else { return }
             openCutsExportAllTimelines()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsDrawings)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            guard !isAnyExportSheetShowing else { return }
             openCutsExportDrawings()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsByTags)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            guard !isAnyExportSheetShowing else { return }
             showTagSelectionSheet = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsByLabels)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            guard !isAnyExportSheetShowing else { return }
             showLabelSelectionSheet = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsByEvents)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            guard !isAnyExportSheetShowing else { return }
             showEventSelectionSheet = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsReportSimple)) { _ in

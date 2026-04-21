@@ -118,6 +118,7 @@ class TimelineDataManager: ObservableObject {
     
     func addLine(name: String) {
         guard MarkupMode.current == .standard else { return }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         let newLine = TimelineLine(name: name)
         lines.append(newLine)
