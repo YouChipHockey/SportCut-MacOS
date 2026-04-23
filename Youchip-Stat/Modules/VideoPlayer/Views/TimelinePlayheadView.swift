@@ -5,6 +5,7 @@
 //  Created by Alan Erkenov on 19.04.2026.
 //
 
+import AppKit
 import SwiftUI
 
 // Isolated view that owns the playhead rendering and drag gesture.
@@ -23,7 +24,7 @@ struct TimelinePlayheadView: View {
 
     private let hitWidth: CGFloat = 16
 
-    // The position at which the red line is drawn.
+    // The position at which the playhead (stem tip) is drawn.
     // Stamp-edge drag takes priority, then interactive playhead drag (clamped
     // to the visible viewport), then the live playback position.
     private var displayX: CGFloat {
@@ -38,7 +39,10 @@ struct TimelinePlayheadView: View {
     var body: some View {
         Color.clear
             .frame(width: hitWidth)
-            .overlay(Rectangle().fill(Color.red).frame(width: 2))
+            .overlay(
+                PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
+                    .frame(width: hitWidth)
+            )
             .contentShape(Rectangle())
             .offset(x: displayX - (hitWidth / 2 - 1))
             .onHover { isHovering in

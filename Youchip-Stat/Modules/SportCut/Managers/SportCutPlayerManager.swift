@@ -425,6 +425,131 @@ class SportCutPlayerManager: ObservableObject {
         player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
+    // MARK: - Markup timeline playhead (absolute time on source video)
+
+    /// Абсолютное время на шкале исходного видео `sourceID` для плейхеда в режиме разметки SportCut (как `currentTime` на таймлайне плеера).
+    func absoluteVideoTimelineTime(forSourceID sourceID: UUID) -> Double? {
+        guard currentSourceID == sourceID, player.currentItem != nil else { return nil }
+        let t = player.currentTime().seconds
+        guard t.isFinite, t >= 0 else { return nil }
+
+        if previewSourceID == sourceID {
+            return t
+        }
+
+        if playlistPlaybackActive, playlistPlaybackKind == .singleFilm {
+            guard let (idx, local) = filmEventIndexAndLocalTime(globalTime: t),
+                  idx >= 0, idx < playlistEvents.count else { return nil }
+            let ev = playlistEvents[idx]
+            guard ev.sourceID == sourceID else { return nil }
+            let st = playlistStartOverrides[ev.hiddenKey] ?? ev.startTime
+            return st + local
+        }
+
+        if playlistPlaybackActive {
+            guard let ev = currentEvent, ev.sourceID == sourceID else { return nil }
+            let st = playlistStartOverrides[ev.hiddenKey] ?? ev.startTime
+            return st + t
+        }
+
+        guard let ev = currentEvent, ev.sourceID == sourceID else { return nil }
+        let resolved = resolvedAgainstSession(ev)
+        let st = playlistStartOverrides[resolved.hiddenKey] ?? resolved.startTime
+        return st + t
+    }
+
+    /// Границы текущего клипа на абсолютной шкале исходника `sourceID` (для ограничения drag плейхеда в разметке).
+    func currentClipAbsoluteTimeBounds(forSourceID sourceID: UUID) -> (start: Double, end: Double)? {
+        guard currentSourceID == sourceID, player.currentItem != nil else { return nil }
+
+        if previewSourceID == sourceID {
+            let d = CMTimeGetSeconds(player.currentItem?.duration ?? .zero)
+            if d.isFinite, d > 0.001 { return (0, d) }
+            let vd = max(videoDuration, 0.001)
+            return (0, vd)
+        }
+
+        if playlistPlaybackActive, playlistPlaybackKind == .singleFilm {
+            let g = player.currentTime().seconds
+            guard let (idx, _) = filmEventIndexAndLocalTime(globalTime: g),
+                  idx >= 0, idx < playlistEvents.count else { return nil }
+            let ev = playlistEvents[idx]
+            guard ev.sourceID == sourceID else { return nil }
+            let st = playlistStartOverrides[ev.hiddenKey] ?? ev.startTime
+            let dur = max(playlistDurationOverrides[ev.hiddenKey] ?? ev.duration, 1e-3)
+            return (st, st + dur)
+        }
+
+        if playlistPlaybackActive {
+            guard let ev = currentEvent, ev.sourceID == sourceID else { return nil }
+            let st = playlistStartOverrides[ev.hiddenKey] ?? ev.startTime
+            let dur = max(playlistDurationOverrides[ev.hiddenKey] ?? ev.duration, 1e-3)
+            return (st, st + dur)
+        }
+
+        guard let ev = currentEvent, ev.sourceID == sourceID else { return nil }
+        let resolved = resolvedAgainstSession(ev)
+        let st = playlistStartOverrides[resolved.hiddenKey] ?? resolved.startTime
+        let dur = max(playlistDurationOverrides[resolved.hiddenKey] ?? resolved.duration, 1e-3)
+        return (st, st + dur)
+    }
+
+    /// Seek по абсолютному времени на шкале исходника (плейхед в разметке SportCut).
+    func seekToAbsoluteTimeOnSourceTimeline(_ absoluteTime: Double, sourceID: UUID) {
+        guard currentSourceID == sourceID, player.currentItem != nil else { return }
+        let targetAbs = max(0, absoluteTime)
+        let tolZero = CMTime(seconds: 0, preferredTimescale: 600)
+        let tolLoose = CMTime(seconds: 0.05, preferredTimescale: 600)
+
+        if previewSourceID == sourceID {
+            player.seek(to: CMTime(seconds: targetAbs, preferredTimescale: 600), toleranceBefore: tolLoose, toleranceAfter: tolLoose)
+            return
+        }
+
+        if playlistPlaybackActive, playlistPlaybackKind == .singleFilm {
+            for i in playlistEvents.indices {
+                let ev = playlistEvents[i]
+                guard ev.sourceID == sourceID else { continue }
+                let st = playlistStartOverrides[ev.hiddenKey] ?? ev.startTime
+                let dur = playlistDurationOverrides[ev.hiddenKey] ?? ev.duration
+                guard targetAbs >= st - 1e-6, targetAbs <= st + dur + 1e-6 else { continue }
+                guard i < filmSegmentStartSeconds.count else { continue }
+                let g = filmSegmentStartSeconds[i] + (targetAbs - st)
+                let cap = max(videoDuration, 0)
+                let gClamped = min(max(0, g), max(0, cap - 0.001))
+                player.seek(to: CMTime(seconds: gClamped, preferredTimescale: 600), toleranceBefore: tolLoose, toleranceAfter: tolLoose)
+                return
+            }
+            return
+        }
+
+        if playlistPlaybackActive {
+            for (idx, ev) in playlistEvents.enumerated() {
+                guard ev.sourceID == sourceID else { continue }
+                let st = playlistStartOverrides[ev.hiddenKey] ?? ev.startTime
+                let dur = playlistDurationOverrides[ev.hiddenKey] ?? ev.duration
+                guard targetAbs >= st - 1e-6, targetAbs <= st + dur + 1e-6 else { continue }
+                let local = max(0, min(targetAbs - st, dur))
+                if ev.hiddenKey == currentEvent?.hiddenKey {
+                    player.seek(to: CMTime(seconds: local, preferredTimescale: 600), toleranceBefore: tolZero, toleranceAfter: tolZero)
+                } else {
+                    playPlaylist(playlistEvents, startIndex: idx, playlistID: currentPlaylistID, autoPlayAfterLoad: false) {
+                        self.player.seek(to: CMTime(seconds: local, preferredTimescale: 600), toleranceBefore: tolZero, toleranceAfter: tolZero)
+                    }
+                }
+                return
+            }
+            return
+        }
+
+        guard let ev = currentEvent, ev.sourceID == sourceID else { return }
+        let resolved = resolvedAgainstSession(ev)
+        let st = playlistStartOverrides[resolved.hiddenKey] ?? resolved.startTime
+        let dur = playlistDurationOverrides[resolved.hiddenKey] ?? resolved.duration
+        let local = max(0, min(targetAbs - st, dur))
+        player.seek(to: CMTime(seconds: local, preferredTimescale: 600), toleranceBefore: tolZero, toleranceAfter: tolZero)
+    }
+
     /// Покадровая перемотка: +1 кадр (forward = true) или −1 кадр (forward = false).
     func stepFrame(forward: Bool) {
         guard let item = player.currentItem else { return }

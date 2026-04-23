@@ -6,9 +6,13 @@
 import SwiftUI
 import AVFoundation
 import UniformTypeIdentifiers
+import AppKit
 
 /// Верхняя граница зума шкалы SportCut: иначе слишком много подписей/лейаута при ресайзе окна.
 private let sportCutTimelineMaxScale: CGFloat = 40
+
+/// Минимальная ширина штампа на шкале разметки (px); ширина по длительности, как в основном таймлайне плеера.
+private let sportCutMarkupMinStampWidthPx: CGFloat = 4
 
 /// Край тега, который меняется колёсиком.
 private enum PlaylistResizeEdge: String {
@@ -399,6 +403,13 @@ struct SportCutTimelineView: View {
         }
     }
 
+    /// Как `ViewerTimelineView.calculateTimeGridInterval` — шаг сетки совпадает с режимом разметки в плеере.
+    private func sportCutMarkupTimeGridInterval(scale: CGFloat, totalDuration: Double) -> Double {
+        let baseCount = 20 * max(scale, 1.0)
+        let baseInterval = totalDuration / baseCount
+        return max(0.5, baseInterval)
+    }
+
     @ViewBuilder
     private func timelineContent(source: SportCutSource) -> some View {
         let filteredLines = sortedTimelineLines(source.timelines.filter { line in
@@ -413,7 +424,19 @@ struct SportCutTimelineView: View {
             ScrollView(.vertical) {
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Color.clear.frame(width: 180, height: 30)
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.gray.opacity(0.05),
+                            Color.gray.opacity(0.02)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: 180, height: 30, alignment: .leading)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 0)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                    )
                     
                     ForEach(filteredLines) { line in
                         HStack {
@@ -436,6 +459,8 @@ struct SportCutTimelineView: View {
                         }
                     }
                 }
+                .padding(.trailing, 5)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 GeometryReader { geo in
                     let effectiveScale = timelineScale * magnifyScale
@@ -443,33 +468,55 @@ struct SportCutTimelineView: View {
                     let fullVideoDuration = sourceVideoDurations[source.id] ?? stampMax
                     let totalDuration = max(1.0, max(fullVideoDuration, stampMax))
                     let gridWidth = geo.size.width * max(effectiveScale, 1.0)
+                    let gridInterval = sportCutMarkupTimeGridInterval(scale: effectiveScale, totalDuration: totalDuration)
+                    let timeGridHeight = 30 * CGFloat(filteredLines.count + 1)
                     
                     ScrollView(.horizontal) {
-                        VStack(spacing: 0) {
-                            TimelineTimestampsHeaderView(
+                        ZStack(alignment: .topLeading) {
+                            TimeGridView(
                                 duration: totalDuration,
-                                interval: totalDuration / (20 * effectiveScale),
-                                width: gridWidth
+                                interval: gridInterval,
+                                width: gridWidth,
+                                height: timeGridHeight
                             )
-                            .frame(height: 30)
                             
-                            ForEach(filteredLines) { line in
-                                SportCutTimelineLineView(
-                                    line: line,
-                                    source: source,
-                                    totalDuration: totalDuration,
-                                    gridWidth: gridWidth,
-                                    filter: filter,
-                                    playerManager: playerManager,
-                                    sessionID: sessionID,
-                                    selectedStampID: $selectedSportStampID,
-                                    bulkSelectedStampIDs: $bulkSelectedStampIDs
+                            VStack(spacing: 0) {
+                                TimelineTimestampsHeaderView(
+                                    duration: totalDuration,
+                                    interval: gridInterval,
+                                    width: gridWidth
                                 )
                                 .frame(height: 30)
+                                
+                                ForEach(filteredLines) { line in
+                                    SportCutTimelineLineView(
+                                        line: line,
+                                        source: source,
+                                        totalDuration: totalDuration,
+                                        gridWidth: gridWidth,
+                                        filter: filter,
+                                        playerManager: playerManager,
+                                        sessionID: sessionID,
+                                        selectedStampID: $selectedSportStampID,
+                                        bulkSelectedStampIDs: $bulkSelectedStampIDs
+                                    )
+                                    .frame(height: 30)
+                                }
                             }
+                            .frame(width: gridWidth)
+                            .padding(.bottom, 15)
+
+                            SportCutMarkupPlayheadView(
+                                sourceID: source.id,
+                                totalDuration: totalDuration,
+                                gridWidth: gridWidth,
+                                playheadHeight: timeGridHeight,
+                                playerManager: playerManager
+                            )
                         }
-                        .frame(width: gridWidth)
+                        .coordinateSpace(name: "sportCutMarkupTimeline")
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
         }
@@ -581,6 +628,111 @@ struct SportCutTimelineView: View {
     }
 }
 
+// MARK: - Markup playhead (как `TimelinePlayheadView` в плеере)
+
+/// Белая линия + «головка», hit-area 16 pt, drag → seek по абсолютному времени на исходнике.
+private struct SportCutMarkupPlayheadView: View {
+    let sourceID: UUID
+    let totalDuration: Double
+    let gridWidth: CGFloat
+    let playheadHeight: CGFloat
+    @ObservedObject var playerManager: SportCutPlayerManager
+
+    @State private var dragging = false
+    @State private var scrubVisualX: CGFloat = 0
+    @State private var wasPlayingBeforeScrub = false
+    /// Пиксельные границы текущего клипа на шкале (фиксируются в начале drag).
+    @State private var dragClipXPxMinMax: (lo: CGFloat, hi: CGFloat)?
+
+    private let hitWidth: CGFloat = 16
+
+    private func xFromAbsoluteTime(_ abs: Double) -> CGFloat {
+        guard totalDuration > 0, gridWidth > 0 else { return 0 }
+        let p = CGFloat(abs / totalDuration) * gridWidth
+        return max(0, min(p, gridWidth))
+    }
+
+    private func lockedPlaybackX() -> CGFloat? {
+        guard let abs = playerManager.absoluteVideoTimelineTime(forSourceID: sourceID) else { return nil }
+        return xFromAbsoluteTime(abs)
+    }
+
+    private func displayX() -> CGFloat? {
+        if dragging { return scrubVisualX }
+        return lockedPlaybackX()
+    }
+
+    private func clampLocationX(_ x: CGFloat) -> CGFloat {
+        max(0, min(x, gridWidth))
+    }
+
+    private func clipXPxBounds() -> (lo: CGFloat, hi: CGFloat)? {
+        guard let b = playerManager.currentClipAbsoluteTimeBounds(forSourceID: sourceID) else { return nil }
+        let x0 = xFromAbsoluteTime(b.start)
+        let x1 = xFromAbsoluteTime(b.end)
+        return (min(x0, x1), max(x0, x1))
+    }
+
+    private func clampDragXToCurrentClip(_ x: CGFloat) -> CGFloat {
+        let full = clampLocationX(x)
+        if let r = dragClipXPxMinMax ?? clipXPxBounds() {
+            return max(r.lo, min(full, r.hi))
+        }
+        return full
+    }
+
+    var body: some View {
+        let canInteract = lockedPlaybackX() != nil || dragging
+        let pauseDriver = !dragging && !playerManager.isPlaying && lockedPlaybackX() == nil
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: pauseDriver)) { _ in
+            if let px = displayX() {
+                Color.clear
+                    .frame(width: hitWidth, height: playheadHeight)
+                    .overlay(
+                        PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
+                            .frame(width: hitWidth, height: playheadHeight)
+                    )
+                    .contentShape(Rectangle())
+                    .offset(x: px - (hitWidth / 2 - 1))
+                    .onHover { hovering in
+                        NSCursor.setHiddenUntilMouseMoves(false)
+                        if hovering {
+                            NSCursor.openHand.set()
+                        } else {
+                            NSCursor.arrow.set()
+                        }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 0, coordinateSpace: .named("sportCutMarkupTimeline"))
+                            .onChanged { value in
+                                if !dragging {
+                                    dragging = true
+                                    wasPlayingBeforeScrub = playerManager.isPlaying
+                                    if wasPlayingBeforeScrub { playerManager.pause() }
+                                    dragClipXPxMinMax = clipXPxBounds()
+                                    scrubVisualX = lockedPlaybackX() ?? clampDragXToCurrentClip(value.startLocation.x)
+                                }
+                                scrubVisualX = clampDragXToCurrentClip(value.location.x)
+                            }
+                            .onEnded { _ in
+                                let x = scrubVisualX
+                                dragging = false
+                                dragClipXPxMinMax = nil
+                                var absT = Double(x / max(gridWidth, 1)) * totalDuration
+                                if let b = playerManager.currentClipAbsoluteTimeBounds(forSourceID: sourceID) {
+                                    absT = min(max(absT, b.start), b.end)
+                                }
+                                playerManager.seekToAbsoluteTimeOnSourceTimeline(absT, sourceID: sourceID)
+                                if wasPlayingBeforeScrub { playerManager.play() }
+                            }
+                    )
+                    .transaction { $0.animation = nil }
+            }
+        }
+        .allowsHitTesting(canInteract)
+    }
+}
+
 // MARK: - Timeline Line View
 
 struct SportCutTimelineLineView: View {
@@ -603,7 +755,7 @@ struct SportCutTimelineLineView: View {
             ForEach(line.stamps.filter { filter.matches(stamp: $0) }) { stamp in
                 let startRatio = stamp.timeStartSeconds / totalDuration
                 let durationRatio = stamp.duration / totalDuration
-                let stampWidth = max(durationRatio * gridWidth, 4)
+                let stampWidth = max(durationRatio * gridWidth, sportCutMarkupMinStampWidthPx)
                 let stampX = startRatio * gridWidth
 
                 let tag = source.findTag(byID: stamp.idTag)
@@ -672,7 +824,6 @@ struct SportCutStampView: View {
     @State private var dragInitialWidth: CGFloat = 0
     @State private var lastSeekTime = Date()
 
-    private let minStampWidth: CGFloat = 30
     private let stampHeight: CGFloat = 25
     private let seekThrottle: TimeInterval = 0.033
 
@@ -681,7 +832,7 @@ struct SportCutStampView: View {
     }
 
     private var displayWidth: CGFloat {
-        max(visualWidth ?? stampWidth, minStampWidth)
+        max(visualWidth ?? stampWidth, sportCutMarkupMinStampWidthPx)
     }
 
     private var centerX: CGFloat {
@@ -727,14 +878,14 @@ struct SportCutStampView: View {
                     originalStartTime = stamp.timeStartSeconds
                     originalEndTime = stamp.timeFinishSeconds
                     let baseDur = originalEndTime - originalStartTime
-                    dragInitialWidth = max(CGFloat(baseDur / max(totalDuration, 0.001)) * gridWidth, minStampWidth)
+                    dragInitialWidth = max(CGFloat(baseDur / max(totalDuration, 0.001)) * gridWidth, sportCutMarkupMinStampWidthPx)
                     dragInitialOffsetX = CGFloat(originalStartTime / max(totalDuration, 0.001)) * gridWidth
-                    maxVisualOffsetX = dragInitialOffsetX + dragInitialWidth - minStampWidth
+                    maxVisualOffsetX = dragInitialOffsetX + dragInitialWidth - sportCutMarkupMinStampWidthPx
                     visualOffsetX = dragInitialOffsetX
                     visualWidth = dragInitialWidth
                 }
                 let newOffsetX = dragInitialOffsetX + value.translation.width
-                let newWidth = max(dragInitialWidth - value.translation.width, minStampWidth)
+                let newWidth = max(dragInitialWidth - value.translation.width, sportCutMarkupMinStampWidthPx)
                 guard newOffsetX >= 0, newOffsetX <= maxVisualOffsetX ?? 0 else { return }
                 visualOffsetX = newOffsetX
                 visualWidth = newWidth
@@ -758,12 +909,12 @@ struct SportCutStampView: View {
                     originalStartTime = stamp.timeStartSeconds
                     originalEndTime = stamp.timeFinishSeconds
                     let baseDur = originalEndTime - originalStartTime
-                    dragInitialWidth = max(CGFloat(baseDur / max(totalDuration, 0.001)) * gridWidth, minStampWidth)
+                    dragInitialWidth = max(CGFloat(baseDur / max(totalDuration, 0.001)) * gridWidth, sportCutMarkupMinStampWidthPx)
                     dragInitialOffsetX = CGFloat(originalStartTime / max(totalDuration, 0.001)) * gridWidth
                     visualOffsetX = dragInitialOffsetX
                     visualWidth = dragInitialWidth
                 }
-                let newWidth = max(dragInitialWidth + value.translation.width, minStampWidth)
+                let newWidth = max(dragInitialWidth + value.translation.width, sportCutMarkupMinStampWidthPx)
                 guard dragInitialOffsetX + newWidth <= gridWidth else { return }
                 visualWidth = newWidth
                 let wPx = visualWidth ?? newWidth
@@ -1625,11 +1776,8 @@ private struct PlayheadLineView: View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: paused)) { _ in
             if let px = displayX() {
                 ZStack {
-                    Rectangle()
-                        .fill(Color.white)
-                        .frame(width: 2, height: rowHeight + 4)
-                        .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 0)
-                    // Wider transparent grab target
+                    PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
+                        .frame(width: 20, height: rowHeight + 4)
                     Rectangle()
                         .fill(Color.clear)
                         .frame(width: 20, height: rowHeight + 4)

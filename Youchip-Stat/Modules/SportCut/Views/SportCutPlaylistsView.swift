@@ -707,12 +707,10 @@ struct SportCutPlaylistCardView: View {
                     TimelineView(.animation(minimumInterval: 1.0 / 60.0,
                                            paused: !playerManager.isPlaying || !isActive)) { _ in
                         if let px = miniTimelinePlayheadX(totalWidth: w) {
-                            Rectangle()
-                                .fill(Color.white)
-                                .frame(width: 2, height: 14)
-                                .offset(x: px - 1)
+                            PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 10, compact: true)
+                                .frame(width: 12, height: 14)
+                                .offset(x: px - 6)
                                 .allowsHitTesting(false)
-                                .shadow(color: .black.opacity(0.6), radius: 1, x: 0, y: 0)
                                 .transaction { $0.animation = nil }
                         }
                     }
