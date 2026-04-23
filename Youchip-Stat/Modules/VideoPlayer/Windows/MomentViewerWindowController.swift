@@ -12,10 +12,12 @@ class MomentViewerWindowController: NSWindowController, NSWindowDelegate {
     private let session: MomentViewerSession
     
     init(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String, lineID: UUID? = nil, stampID: UUID? = nil) {
+        let assetSeconds = CMTimeGetSeconds(asset.duration)
         let session = MomentViewerSession(
             asset: asset,
             startTime: startTime,
             duration: duration,
+            sourceAssetDuration: assetSeconds.isFinite ? assetSeconds : (startTime + duration + 1),
             tagName: tagName,
             lineName: lineName,
             lineID: lineID,

@@ -54,6 +54,10 @@ final class TimelineScrollController: ObservableObject {
         scrollView?.documentVisibleRect.width ?? 0
     }
 
+    var documentVisibleRect: CGRect {
+        scrollView?.documentVisibleRect ?? .zero
+    }
+
     // Jumps the scroll view to `x` with no animation.
     func scrollTo(x: CGFloat) {
         guard let scrollView = scrollView,

@@ -15,27 +15,96 @@ final class MomentViewerSession: ObservableObject {
     let lineName: String
     let lineID: UUID?
     let stampID: UUID?
-    let displayStartTime: Double
-    let displayDuration: Double
+    /// Длительность исходного ассета (сек), для ограничения видимого окна мини-таймлайна.
+    let sourceAssetDuration: Double
 
+    @Published private(set) var displayStartTime: Double
+    @Published private(set) var displayDuration: Double
+    @Published private(set) var compositionPlaybackSeconds: Double = 0
+
+    private let sourceAsset: AVAsset
     private var endObserver: NSObjectProtocol?
+    private var timeObserver: Any?
     private var didInvalidate = false
+    /// Увеличивается на каждый `configure`, чтобы игнорировать устаревшие completion после `replaceCurrentItem`.
+    private var configureGeneration: Int = 0
+    /// Не перезаписывать время с плеера сразу после seek/reconfigure (убирает «дёрганье» плейхеда у конца).
+    private var suppressPeriodicTimeUntil: Date?
 
-    init(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String, lineID: UUID? = nil, stampID: UUID? = nil) {
+    /// Единый «зазор» у конца локальной шкалы композиции (сек), чтобы плейхед не дёргался между seek и periodic time.
+    private static let compositionEndSlip = 1e-4
+
+    private func maxCompositionLocalSeconds(duration d: Double) -> Double {
+        let dd = max(d, 0.000_001)
+        return max(0, dd * (1 - Self.compositionEndSlip))
+    }
+
+    init(
+        asset: AVAsset,
+        startTime: Double,
+        duration: Double,
+        sourceAssetDuration: Double,
+        tagName: String,
+        lineName: String,
+        lineID: UUID? = nil,
+        stampID: UUID? = nil
+    ) {
+        self.sourceAsset = asset
         self.tagName = tagName
         self.lineName = lineName
         self.lineID = lineID
         self.stampID = stampID
         self.displayStartTime = startTime
-        self.displayDuration = duration
-        configure(asset: asset, startTime: startTime, duration: duration)
+        self.displayDuration = max(duration, 0.000_001)
+        let ad = sourceAssetDuration.isFinite && sourceAssetDuration > 0
+            ? sourceAssetDuration
+            : (startTime + duration + 1)
+        self.sourceAssetDuration = max(ad, startTime + duration + 0.01)
+        configure(anchorAbsoluteTime: nil, resumePlaybackAfterSeek: true)
     }
 
-    private func configure(asset: AVAsset, startTime: Double, duration: Double) {
+    /// Пересобрать клип после изменения границ тега на таймлайне. `anchorAbsoluteTime` — абсолютное время видео, которое остаётся на экране (nil → начало клипа).
+    /// `resumePlaybackAfterSeek`: false при частых обновлениях во время жеста — иначе каждый `replaceCurrentItem` + `play()` даёт «мигание» play/pause.
+    func recompose(startTime: Double, duration: Double, anchorAbsoluteTime: Double?, resumePlaybackAfterSeek: Bool = true) {
+        displayStartTime = startTime
+        displayDuration = max(duration, 0.5)
+        configure(anchorAbsoluteTime: anchorAbsoluteTime, resumePlaybackAfterSeek: resumePlaybackAfterSeek)
+    }
+
+    func pausePlayback() {
+        player.pause()
+    }
+
+    func seekToCompositionTime(_ seconds: Double) {
+        let d = max(displayDuration, 0.000_001)
+        let cap = maxCompositionLocalSeconds(duration: d)
+        let clamped = max(0, min(seconds, cap))
+        suppressPeriodicTimeUntil = Date().addingTimeInterval(0.22)
+        compositionPlaybackSeconds = clamped
+        let cm = CMTime(seconds: clamped, preferredTimescale: 600)
+        player.seek(to: cm, toleranceBefore: CMTime(seconds: 0.02, preferredTimescale: 600), toleranceAfter: CMTime(seconds: 0.02, preferredTimescale: 600)) { [weak self] finished in
+            guard let self, finished, !self.didInvalidate else { return }
+            self.suppressPeriodicTimeUntil = Date().addingTimeInterval(0.16)
+            self.compositionPlaybackSeconds = min(max(0, CMTimeGetSeconds(self.player.currentTime())), cap)
+        }
+    }
+
+    private func configure(anchorAbsoluteTime: Double?, resumePlaybackAfterSeek: Bool) {
+        configureGeneration += 1
+        let generation = configureGeneration
+        if let obs = endObserver {
+            NotificationCenter.default.removeObserver(obs)
+            endObserver = nil
+        }
+        if let old = timeObserver {
+            player.removeTimeObserver(old)
+            timeObserver = nil
+        }
+
         let composition = AVMutableComposition()
 
-        let videoTracks = asset.tracks(withMediaType: .video)
-        let audioTracks = asset.tracks(withMediaType: .audio)
+        let videoTracks = sourceAsset.tracks(withMediaType: .video)
+        let audioTracks = sourceAsset.tracks(withMediaType: .audio)
         guard let sourceVideoTrack = videoTracks.first,
               let compVideoTrack = composition.addMutableTrack(
                 withMediaType: .video,
@@ -50,15 +119,18 @@ final class MomentViewerSession: ObservableObject {
             )
         }
 
-        let assetDuration = CMTimeGetSeconds(asset.duration)
-        let safeStart = max(0.0, min(startTime, assetDuration))
+        let assetDuration = CMTimeGetSeconds(sourceAsset.duration)
+        let safeStart = max(0.0, min(displayStartTime, assetDuration))
         let maxAvailable = max(0.0, assetDuration - safeStart)
-        let safeDuration = min(max(0.0, duration), maxAvailable)
+        let safeDuration = min(max(0.0, displayDuration), maxAvailable)
         guard safeDuration > 0 else { return }
 
-        let startCM    = CMTime(seconds: safeStart, preferredTimescale: 600)
+        displayStartTime = safeStart
+        displayDuration = safeDuration
+
+        let startCM = CMTime(seconds: safeStart, preferredTimescale: 600)
         let durationCM = CMTime(seconds: safeDuration, preferredTimescale: 600)
-        let timeRange  = CMTimeRange(start: startCM, duration: durationCM)
+        let timeRange = CMTimeRange(start: startCM, duration: durationCM)
 
         do {
             try compVideoTrack.insertTimeRange(timeRange, of: sourceVideoTrack, at: .zero)
@@ -72,17 +144,52 @@ final class MomentViewerSession: ObservableObject {
         let item = AVPlayerItem(asset: composition)
         player.replaceCurrentItem(with: item)
 
+        suppressPeriodicTimeUntil = Date().addingTimeInterval(0.22)
+
+        let anchor = anchorAbsoluteTime ?? safeStart
+        let capLocal = maxCompositionLocalSeconds(duration: safeDuration)
+        let localSeek = max(0, min(anchor - safeStart, capLocal))
+        compositionPlaybackSeconds = localSeek
+
+        let interval = CMTime(seconds: 1.0 / 30.0, preferredTimescale: 600)
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            guard let self, !self.didInvalidate else { return }
+            if let u = self.suppressPeriodicTimeUntil, Date() < u { return }
+            let raw = CMTimeGetSeconds(time)
+            guard raw.isFinite else { return }
+            let d = max(self.displayDuration, 0.000_001)
+            let cap = self.maxCompositionLocalSeconds(duration: d)
+            let capped = min(max(0, raw), cap)
+            if abs(capped - self.compositionPlaybackSeconds) < 0.0003 { return }
+            self.compositionPlaybackSeconds = capped
+        }
+
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
         ) { [weak self] _ in
             guard let self, !self.didInvalidate else { return }
-            self.player.seek(to: .zero)
-            self.player.play()
+            let d = max(self.displayDuration, 0.000_001)
+            let endT = self.maxCompositionLocalSeconds(duration: d)
+            self.player.seek(to: CMTime(seconds: endT, preferredTimescale: 600), toleranceBefore: .positiveInfinity, toleranceAfter: .positiveInfinity)
+            self.player.pause()
+            self.compositionPlaybackSeconds = endT
+            self.suppressPeriodicTimeUntil = Date().addingTimeInterval(0.35)
         }
 
-        player.play()
+        let seekCM = CMTime(seconds: localSeek, preferredTimescale: 600)
+        player.seek(to: seekCM, toleranceBefore: CMTime(seconds: 0.02, preferredTimescale: 600), toleranceAfter: CMTime(seconds: 0.02, preferredTimescale: 600)) { [weak self] finished in
+            guard let self, finished, !self.didInvalidate, self.configureGeneration == generation else { return }
+            let d = max(self.displayDuration, 0.000_001)
+            let cap = self.maxCompositionLocalSeconds(duration: d)
+            let t = min(max(0, CMTimeGetSeconds(self.player.currentTime())), cap)
+            self.compositionPlaybackSeconds = t
+            self.suppressPeriodicTimeUntil = Date().addingTimeInterval(0.2)
+            if resumePlaybackAfterSeek {
+                self.player.play()
+            }
+        }
     }
 
     func invalidate() {
@@ -93,16 +200,28 @@ final class MomentViewerSession: ObservableObject {
             NotificationCenter.default.removeObserver(obs)
             endObserver = nil
         }
+        if let t = timeObserver {
+            player.removeTimeObserver(t)
+            timeObserver = nil
+        }
         player.pause()
         player.replaceCurrentItem(with: nil)
     }
 }
+
+/// Совпадает с `momentMiniTimelineMaxScale` в `MomentMiniTimelineView`.
+private let momentViewerMiniTimelineMaxScale: CGFloat = 40
 
 struct MomentViewerView: View {
 
     @ObservedObject var session: MomentViewerSession
     @ObservedObject private var timelineData = TimelineDataManager.shared
     @ObservedObject private var tagLibrary = TagLibraryManager.shared
+
+    /// Масштаб мини-таймлайна (родитель держит слайдер и отдаёт ширину самой полосе).
+    @State private var momentMiniTimelineScale: CGFloat = 1.0
+    /// Увеличивается при каждом показе окна — мини-таймлайн снова ставит ~25% и центрирует тег.
+    @State private var momentMiniLayoutEpoch = 0
 
     private var sourceStamp: TimelineStamp? {
         guard let lineID = session.lineID,
@@ -139,44 +258,109 @@ struct MomentViewerView: View {
             VideoPlayer(player: session.player)
                 .background(Color.black)
 
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(tagTitleWithOrder)
-                        .font(.headline)
-                        .fontWeight(.bold)
-                    if !stampEventNames.isEmpty {
-                        Text("События: \(stampEventNames.joined(separator: ", "))")
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text(tagTitleWithOrder)
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.65)
+                            .truncationMode(.tail)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(maxWidth: 220, alignment: .leading)
+
+                        MomentMiniTimelineView(
+                            session: session,
+                            stamp: sourceStamp,
+                            lineID: session.lineID,
+                            stampID: session.stampID,
+                            timelineScale: $momentMiniTimelineScale,
+                            layoutEpoch: momentMiniLayoutEpoch
+                        )
+                        .frame(height: 72)
+                        .frame(maxWidth: .infinity)
+                        .layoutPriority(1)
                     }
-                    if !stampLabelNames.isEmpty {
-                        Text("Лейблы: \(stampLabelNames.joined(separator: ", "))")
-                            .font(.subheadline)
+
+                    HStack(alignment: .center, spacing: 0) {
+                        Text(String(format: "Длительность: %7.2f с", session.displayDuration))
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
                             .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+
+                        Spacer(minLength: 28)
+
+                        HStack(alignment: .center, spacing: 8) {
+                            Text("Масштаб")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary)
+
+                            Slider(
+                                value: Binding(
+                                    get: { Double(momentMiniTimelineScale) },
+                                    set: { v in
+                                        momentMiniTimelineScale = CGFloat(
+                                            min(momentViewerMiniTimelineMaxScale, max(1, v))
+                                        )
+                                    }
+                                ),
+                                in: 1...Double(momentViewerMiniTimelineMaxScale)
+                            )
+                            .controlSize(.small)
+                            .labelsHidden()
+                            .frame(width: 112)
+                            .accessibilityLabel("Масштаб таймлайна")
+
+                            Text(String(format: "%.1fx", momentMiniTimelineScale))
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .frame(width: 36, alignment: .trailing)
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
                     }
-                    if let comment = sourceStamp?.comment, !comment.isEmpty {
-                        HStack(alignment: .top, spacing: 4) {
-                            Circle()
-                                .fill(Color.red)
-                                .overlay(Circle().stroke(Color.black, lineWidth: 0.8))
-                                .frame(width: 7, height: 7)
-                                .padding(.top, 3)
-                            Text(comment)
-                                .font(.caption)
-                                .foregroundColor(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.controlBackgroundColor))
+
+                if !stampEventNames.isEmpty || !stampLabelNames.isEmpty || !(sourceStamp?.comment ?? "").isEmpty {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        if !stampEventNames.isEmpty {
+                            Text("События: \(stampEventNames.joined(separator: ", "))")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        if !stampLabelNames.isEmpty {
+                            Text("Лейблы: \(stampLabelNames.joined(separator: ", "))")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        if let comment = sourceStamp?.comment, !comment.isEmpty {
+                            HStack(alignment: .top, spacing: 4) {
+                                Circle()
+                                    .fill(Color.red)
+                                    .overlay(Circle().stroke(Color.black, lineWidth: 0.8))
+                                    .frame(width: 7, height: 7)
+                                    .padding(.top, 3)
+                                Text(comment)
+                                    .font(.caption)
+                                    .foregroundColor(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(String(format: "Длительность: %.2f с", session.displayDuration))
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Color(NSColor.windowBackgroundColor))
                 }
             }
-            .padding(8)
-            .background(Color(NSColor.windowBackgroundColor))
+        }
+        .onAppear {
+            momentMiniLayoutEpoch += 1
         }
         .onDisappear {
             session.invalidate()
