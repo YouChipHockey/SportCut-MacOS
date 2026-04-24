@@ -526,7 +526,7 @@ struct FullControlView: View {
         .contextMenu {
             if !timelineData.stampsSelectedForSportCut.isEmpty {
                 Button("Открыть в режиме просмотра") {
-                    WindowsManager.shared.openSportCutFromSelectedStamps()
+                    WindowsManager.shared.openSportCutFromSelectedStamps(forceNewSession: false)
                 }
                 Button("Добавить выбранные в плейлист SportCut") {
                     WindowsManager.shared.appendMarkupSelectionToOpenSportCutPlaylist()

@@ -941,30 +941,16 @@ class WindowsManager: NSObject {
         sportCutWindow?.showWindow(nil)
     }
 
-    func openSportCutFromTimelineStamps(_ pairs: [(TimelineLine, TimelineStamp)]) {
-        VideoPlayerManager.shared.player?.pause()
-
+    /// Добавляет новый плейлист с тегами из разметки в указанную сессию и открывает окно SportCut.
+    private func addMarkupStampsAsNewPlaylistAndOpenWindow(
+        sessionID: UUID,
+        projectID: String,
+        pairs: [(TimelineLine, TimelineStamp)]
+    ) {
         guard !pairs.isEmpty else { return }
-        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else { return }
-        let pid = filesFile.id
+        guard var mutable = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+              let source = mutable.sources.first(where: { $0.projectID == projectID }) else { return }
 
-        if var existing = SportCutSessionManager.shared.sessions.first(where: { sess in
-            sess.sources.contains { $0.projectID == pid }
-        }) {
-            SportCutSessionManager.shared.syncProjectSource(from: filesFile, in: &existing)
-        } else {
-            var s = SportCutSessionManager.shared.createSession(name: filesFile.name)
-            SportCutSessionManager.shared.addProjectSource(to: &s, file: filesFile)
-            if s.playlistGroups.isEmpty {
-                SportCutSessionManager.shared.addPlaylistGroup(to: &s, name: "Основная")
-            }
-        }
-
-        guard var mutable = SportCutSessionManager.shared.sessions.first(where: { sess in
-            sess.sources.contains { $0.projectID == pid }
-        }) else { return }
-
-        guard let source = mutable.sources.first(where: { $0.projectID == pid }) else { return }
         let sortedPairs = pairs.sorted { $0.1.timeStartSeconds < $1.1.timeStartSeconds }
         let events = sortedPairs.map { SportCutEvent.from(stamp: $0.1, line: $0.0, source: source) }
         var eventComments: [String: String] = [:]
@@ -999,7 +985,46 @@ class WindowsManager: NSObject {
         TimelineDataManager.shared.clearSportCutExportSelection()
     }
 
-    func openSportCutFromSelectedStamps() {
+    /// При `forceNewSession == true` всегда создаётся новая сессия (кнопка «Новая сессия просмотра»). Иначе плейлист добавляется в уже существующую сессию с этим проектом, если она есть.
+    func openSportCutFromTimelineStamps(_ pairs: [(TimelineLine, TimelineStamp)], forceNewSession: Bool = false) {
+        VideoPlayerManager.shared.player?.pause()
+
+        guard !pairs.isEmpty else { return }
+        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else { return }
+        let pid = filesFile.id
+
+        if forceNewSession {
+            sportCutWindow?.close()
+            sportCutWindow = nil
+            var session = SportCutSessionManager.shared.createSession(name: filesFile.name)
+            SportCutSessionManager.shared.addProjectSource(to: &session, file: filesFile)
+            if session.playlistGroups.isEmpty {
+                SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
+            }
+            addMarkupStampsAsNewPlaylistAndOpenWindow(sessionID: session.id, projectID: pid, pairs: pairs)
+            return
+        }
+
+        if var existing = SportCutSessionManager.shared.sessions.first(where: { sess in
+            sess.sources.contains { $0.projectID == pid }
+        }) {
+            SportCutSessionManager.shared.syncProjectSource(from: filesFile, in: &existing)
+        } else {
+            var s = SportCutSessionManager.shared.createSession(name: filesFile.name)
+            SportCutSessionManager.shared.addProjectSource(to: &s, file: filesFile)
+            if s.playlistGroups.isEmpty {
+                SportCutSessionManager.shared.addPlaylistGroup(to: &s, name: "Основная")
+            }
+        }
+
+        guard let sessionID = SportCutSessionManager.shared.sessions.first(where: { sess in
+            sess.sources.contains { $0.projectID == pid }
+        })?.id else { return }
+
+        addMarkupStampsAsNewPlaylistAndOpenWindow(sessionID: sessionID, projectID: pid, pairs: pairs)
+    }
+
+    func openSportCutFromSelectedStamps(forceNewSession: Bool = true) {
         let ids = TimelineDataManager.shared.stampsSelectedForSportCut
         guard !ids.isEmpty else { return }
         var pairs: [(TimelineLine, TimelineStamp)] = []
@@ -1008,7 +1033,7 @@ class WindowsManager: NSObject {
                 pairs.append((line, stamp))
             }
         }
-        openSportCutFromTimelineStamps(pairs)
+        openSportCutFromTimelineStamps(pairs, forceNewSession: forceNewSession)
     }
 
     // MARK: - Markup multi-selection → SportCut playlist

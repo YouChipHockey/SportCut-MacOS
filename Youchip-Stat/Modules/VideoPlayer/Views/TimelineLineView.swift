@@ -532,7 +532,7 @@ struct TimelineLineView: View {
         }
 
         Button("Новая сессия просмотра") {
-            WindowsManager.shared.openSportCutFromTimelineStamps([(line, stamp)])
+            WindowsManager.shared.openSportCutFromTimelineStamps([(line, stamp)], forceNewSession: true)
         }
         let existingSessions = SportCutSessionManager.shared.sessions
         if !existingSessions.isEmpty {
