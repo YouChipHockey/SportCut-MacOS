@@ -645,6 +645,8 @@ private struct SportCutMarkupPlayheadView: View {
     @State private var dragClipXPxMinMax: (lo: CGFloat, hi: CGFloat)?
 
     private let hitWidth: CGFloat = 16
+    /// Hit-testing only on the ruler row so the stem does not steal clicks / context menus from stamps on lines below (same height as `TimelineTimestampsHeaderView`).
+    private var playheadDragHitHeight: CGFloat { min(playheadHeight, 30) }
 
     private func xFromAbsoluteTime(_ abs: Double) -> CGFloat {
         guard totalDuration > 0, gridWidth > 0 else { return 0 }
@@ -686,47 +688,50 @@ private struct SportCutMarkupPlayheadView: View {
         let pauseDriver = !dragging && !playerManager.isPlaying && lockedPlaybackX() == nil
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: pauseDriver)) { _ in
             if let px = displayX() {
-                Color.clear
-                    .frame(width: hitWidth, height: playheadHeight)
-                    .overlay(
-                        PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
-                            .frame(width: hitWidth, height: playheadHeight)
-                    )
-                    .contentShape(Rectangle())
-                    .offset(x: px - (hitWidth / 2 - 1))
-                    .onHover { hovering in
-                        NSCursor.setHiddenUntilMouseMoves(false)
-                        if hovering {
-                            NSCursor.openHand.set()
-                        } else {
-                            NSCursor.arrow.set()
+                ZStack(alignment: .top) {
+                    PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
+                        .frame(width: hitWidth, height: playheadHeight)
+                        .allowsHitTesting(false)
+
+                    Color.clear
+                        .frame(width: hitWidth, height: playheadDragHitHeight)
+                        .contentShape(Rectangle())
+                        .onHover { hovering in
+                            NSCursor.setHiddenUntilMouseMoves(false)
+                            if hovering {
+                                NSCursor.openHand.set()
+                            } else {
+                                NSCursor.arrow.set()
+                            }
                         }
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 0, coordinateSpace: .named("sportCutMarkupTimeline"))
-                            .onChanged { value in
-                                if !dragging {
-                                    dragging = true
-                                    wasPlayingBeforeScrub = playerManager.isPlaying
-                                    if wasPlayingBeforeScrub { playerManager.pause() }
-                                    dragClipXPxMinMax = clipXPxBounds()
-                                    scrubVisualX = lockedPlaybackX() ?? clampDragXToCurrentClip(value.startLocation.x)
+                        .gesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .named("sportCutMarkupTimeline"))
+                                .onChanged { value in
+                                    if !dragging {
+                                        dragging = true
+                                        wasPlayingBeforeScrub = playerManager.isPlaying
+                                        if wasPlayingBeforeScrub { playerManager.pause() }
+                                        dragClipXPxMinMax = clipXPxBounds()
+                                        scrubVisualX = lockedPlaybackX() ?? clampDragXToCurrentClip(value.startLocation.x)
+                                    }
+                                    scrubVisualX = clampDragXToCurrentClip(value.location.x)
                                 }
-                                scrubVisualX = clampDragXToCurrentClip(value.location.x)
-                            }
-                            .onEnded { _ in
-                                let x = scrubVisualX
-                                dragging = false
-                                dragClipXPxMinMax = nil
-                                var absT = Double(x / max(gridWidth, 1)) * totalDuration
-                                if let b = playerManager.currentClipAbsoluteTimeBounds(forSourceID: sourceID) {
-                                    absT = min(max(absT, b.start), b.end)
+                                .onEnded { _ in
+                                    let x = scrubVisualX
+                                    dragging = false
+                                    dragClipXPxMinMax = nil
+                                    var absT = Double(x / max(gridWidth, 1)) * totalDuration
+                                    if let b = playerManager.currentClipAbsoluteTimeBounds(forSourceID: sourceID) {
+                                        absT = min(max(absT, b.start), b.end)
+                                    }
+                                    playerManager.seekToAbsoluteTimeOnSourceTimeline(absT, sourceID: sourceID)
+                                    if wasPlayingBeforeScrub { playerManager.play() }
                                 }
-                                playerManager.seekToAbsoluteTimeOnSourceTimeline(absT, sourceID: sourceID)
-                                if wasPlayingBeforeScrub { playerManager.play() }
-                            }
-                    )
-                    .transaction { $0.animation = nil }
+                        )
+                }
+                .frame(width: hitWidth, height: playheadHeight, alignment: .top)
+                .offset(x: px - (hitWidth / 2 - 1))
+                .transaction { $0.animation = nil }
             }
         }
         .allowsHitTesting(canInteract)
@@ -1009,6 +1014,14 @@ struct SportCutStampView: View {
         }
         .frame(width: displayWidth, height: stampHeight)
         .position(x: centerX, y: 15)
+        .contextMenu {
+            Button(^String.Titles.sportCutPlayAction) {
+                playerManager.playEvent(createEvent())
+            }
+            Button(^String.Titles.sportCutAddToPlaylist) {
+                addToCurrentPlaylist()
+            }
+        }
         .onDrag {
             isDraggingExport = true
 
@@ -1042,14 +1055,6 @@ struct SportCutStampView: View {
                 onSelectStamp()
                 let event = createEvent()
                 playerManager.playEvent(event)
-            }
-        }
-        .contextMenu {
-            Button(^String.Titles.sportCutPlayAction) {
-                playerManager.playEvent(createEvent())
-            }
-            Button(^String.Titles.sportCutAddToPlaylist) {
-                addToCurrentPlaylist()
             }
         }
     }
