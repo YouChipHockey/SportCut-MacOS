@@ -39,6 +39,10 @@ struct TimelineLineView: View {
     @State private var visualWidth: CGFloat? = nil
     @State private var visualOffsetX: CGFloat? = nil
     @State private var maxVisualOffsetX: CGFloat? = nil
+
+    @State private var initialVisualWidth: CGFloat = 0
+    @State private var initialVisualOffsetX: CGFloat = 0
+    @State private var dragAnchorX: CGFloat = 0
     
     @State private var lastSeekTime: Date = Date()
     private let seekThrottleInterval: TimeInterval = 0.033 // ~30fps
@@ -114,6 +118,7 @@ struct TimelineLineView: View {
                         )
                     }
                 }
+                .coordinateSpace(name: "lineZStack")
             }
             .frame(width: widthMax, height: lineHeight)
         }
@@ -348,44 +353,47 @@ struct TimelineLineView: View {
     }
     
     private func leftEdgeDragGesture(stamp: TimelineStamp, totalDuration: Double, widthMax: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("lineZStack"))
             .onChanged { value in
                 let minWidth: CGFloat = 30
-                
+
                 if resizingStampID != stamp.id {
                     resizingStampID = stamp.id
                     resizingEdge = .left
                     originalStartTime = stamp.timeStartSeconds
                     originalEndTime = stamp.timeFinishSeconds
                     dragStartTime = originalStartTime
-                    
+
                     videoManager.isResizingTag = true
-                    
+
                     let baseDuration = originalEndTime - originalStartTime
                     let baseDurationRatio = baseDuration / totalDuration
-                    visualWidth = max(baseDurationRatio * widthMax, minWidth)
-                    
+                    let w = max(baseDurationRatio * widthMax, minWidth)
+
                     let baseStartRatio = originalStartTime / totalDuration
-                    visualOffsetX = baseStartRatio * widthMax
-                    maxVisualOffsetX = (visualOffsetX ?? 0) + (visualWidth ?? 0) - minWidth
+                    let ox = baseStartRatio * widthMax
+
+                    initialVisualWidth = w
+                    initialVisualOffsetX = ox
+                    visualWidth = w
+                    visualOffsetX = ox
+
+                    // Remember cursor offset from edge so drag feels anchored
+                    dragAnchorX = value.location.x - ox
                 }
-                
-                let deltaX = value.translation.width
-                let baseWidth = visualWidth ?? 0
-                let baseOffsetX = visualOffsetX ?? 0
-                
-                let newOffsetX = baseOffsetX + deltaX
-                let newWidth = max(baseWidth - deltaX, minWidth)
-                
-                if newOffsetX < 0 || newOffsetX > maxVisualOffsetX ?? 0 {
-                    return
-                }
-                visualOffsetX = newOffsetX
+
+                let rightEdgeX = initialVisualOffsetX + initialVisualWidth
+                let targetLeftX = value.location.x - dragAnchorX
+
+                let clampedLeftX = max(0, min(targetLeftX, rightEdgeX - minWidth))
+                let newWidth = rightEdgeX - clampedLeftX
+
+                visualOffsetX = clampedLeftX
                 visualWidth = newWidth
-                
-                let time = (newOffsetX / widthMax) * totalDuration
-                onTagDragging(newOffsetX)
-                
+
+                let time = (clampedLeftX / widthMax) * totalDuration
+                onTagDragging(clampedLeftX)
+
                 let now = Date()
                 if now.timeIntervalSince(lastSeekTime) >= seekThrottleInterval {
                     lastSeekTime = now
@@ -397,16 +405,16 @@ struct TimelineLineView: View {
                    let finalOffsetX = visualOffsetX,
                    let finalWidth = visualWidth,
                    resizingEdge == .left {
-                    
+
                     let finalStartRatio = finalOffsetX / widthMax
                     let finalStartTime = max(finalStartRatio * totalDuration, 0)
-                    
+
                     let finalDurationRatio = finalWidth / widthMax
                     let finalDuration = finalDurationRatio * totalDuration
                     let finalEndTime = min(finalStartTime + finalDuration, totalDuration)
-                    
+
                     let adjustedStartTime = min(finalStartTime, finalEndTime - 0.5)
-                    
+
                     timelineData.updateStampTime(
                         lineID: line.id,
                         stampID: stampID,
@@ -414,9 +422,9 @@ struct TimelineLineView: View {
                     )
                     onTagDragging(nil)
                 }
-                
+
                 videoManager.isResizingTag = false
-                
+
                 resizingStampID = nil
                 resizingEdge = nil
                 visualWidth = nil
@@ -426,37 +434,44 @@ struct TimelineLineView: View {
 
     
     private func rightEdgeDragGesture(stamp: TimelineStamp, totalDuration: Double, widthMax: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("lineZStack"))
             .onChanged { value in
                 let minWidth: CGFloat = 30
-                
+
                 if resizingStampID != stamp.id {
                     resizingStampID = stamp.id
                     resizingEdge = .right
                     originalStartTime = stamp.timeStartSeconds
                     originalEndTime = stamp.timeFinishSeconds
                     dragStartTime = originalStartTime
-                    
+
                     videoManager.isResizingTag = true
-                    
+
                     let baseStartRatio = originalStartTime / totalDuration
-                    visualOffsetX = baseStartRatio * widthMax
-                    
+                    let ox = baseStartRatio * widthMax
+
                     let baseDuration = originalEndTime - originalStartTime
                     let baseDurationRatio = baseDuration / totalDuration
-                    visualWidth = max(baseDurationRatio * widthMax, minWidth)
+                    let w = max(baseDurationRatio * widthMax, minWidth)
+
+                    initialVisualWidth = w
+                    initialVisualOffsetX = ox
+                    visualOffsetX = ox
+                    visualWidth = w
+
+                    // Remember cursor offset from right edge
+                    dragAnchorX = value.location.x - (ox + w)
                 }
-                
-                let baseWidth = visualWidth ?? 0
-                let newWidth = max(baseWidth + value.translation.width, minWidth) 
-                if let visualOffsetX, visualOffsetX + newWidth > widthMax {
-                    return
-                }
+
+                let targetRightX = value.location.x - dragAnchorX
+                let clampedRightX = max(initialVisualOffsetX + minWidth, min(targetRightX, widthMax))
+                let newWidth = clampedRightX - initialVisualOffsetX
+
                 visualWidth = newWidth
-                
-                let time = originalStartTime + ((visualWidth ?? 0) / widthMax) * totalDuration
-                onTagDragging(time / totalDuration * widthMax)
-                
+
+                let time = (clampedRightX / widthMax) * totalDuration
+                onTagDragging(clampedRightX)
+
                 let now = Date()
                 if now.timeIntervalSince(lastSeekTime) >= seekThrottleInterval {
                     lastSeekTime = now
@@ -467,11 +482,11 @@ struct TimelineLineView: View {
                 if let stampID = resizingStampID,
                    let finalWidth = visualWidth,
                    resizingEdge == .right {
-                    
+
                     let finalDurationRatio = finalWidth / widthMax
                     let finalDuration = finalDurationRatio * totalDuration
                     let finalEndTime = min(originalStartTime + finalDuration, totalDuration)
-                    
+
                     timelineData.updateStampTime(
                         lineID: line.id,
                         stampID: stampID,
@@ -479,9 +494,9 @@ struct TimelineLineView: View {
                     )
                     onTagDragging(nil)
                 }
-                
+
                 videoManager.isResizingTag = false
-                
+
                 resizingStampID = nil
                 resizingEdge = nil
                 visualWidth = nil
