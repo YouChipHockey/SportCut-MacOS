@@ -241,10 +241,10 @@ struct VideoPlayerView: View {
     private func liveStreamContent(geometry: GeometryProxy) -> some View {
         ZStack {
             if videoManager.isBroadcastActive {
-                DirectCameraPreviewView()
+                AdaptiveLivePreviewView()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
-                DirectCameraPreviewView()
+                AdaptiveLivePreviewView()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         ZStack {
@@ -295,7 +295,7 @@ struct VideoPlayerView: View {
                             Text("LIVE")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.red)
-                        DirectCameraPreviewView()
+                        AdaptiveLivePreviewView()
                             .frame(width: 160, height: 120)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .overlay(
@@ -747,6 +747,21 @@ struct CustomVideoPlayer: NSViewRepresentable {
     
     class Coordinator {
         var playerLayer: AVPlayerLayer?
+    }
+}
+
+// MARK: - Adaptive Live Preview
+
+/// Picks the right preview strategy: MTHKView for external capture cards, AVCaptureVideoPreviewLayer for built-in cameras.
+struct AdaptiveLivePreviewView: View {
+    @ObservedObject private var liveStream = LiveStreamManager.shared
+
+    var body: some View {
+        if liveStream.useHaishinKitPreview {
+            LivePreviewView()
+        } else {
+            DirectCameraPreviewView()
+        }
     }
 }
 

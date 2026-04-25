@@ -26,6 +26,8 @@ class LiveStreamManager: NSObject, ObservableObject {
     @Published var liveDuration: Double = 0.0
     @Published var availableVideoDevices: [AVCaptureDevice] = []
     @Published var isSessionConfigured: Bool = false
+    /// External capture devices (AJA, Blackmagic) use MTHKView instead of AVCaptureVideoPreviewLayer.
+    @Published var useHaishinKitPreview: Bool = false
     
     // MARK: - HaishinKit
     
@@ -141,6 +143,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         self.latestFrameCapture = nil
         self.directPreviewSession = nil
         self.isSessionConfigured = false
+        self.useHaishinKitPreview = false
         self.isLive = false
         self.isBroadcastPaused = false
         
@@ -229,17 +232,30 @@ class LiveStreamManager: NSObject, ObservableObject {
                 // Direct AVCaptureSession for recording-independent camera preview.
                 // Uses a separate capture pipeline so H.264 encoding back-pressure
                 // from long recordings never affects preview FPS.
+                // NOTE: External capture cards (AJA, Blackmagic, etc.) only support
+                // a single capture session — creating a second one steals the device
+                // and causes the recording pipeline to freeze. For those devices we
+                // skip the direct session and use MTHKView (HaishinKit Metal preview)
+                // which renders frames from the mixer before H.264 encoding.
                 var directSession: AVCaptureSession? = nil
-                do {
-                    let session = AVCaptureSession()
-                    let directInput = try AVCaptureDeviceInput(device: videoDevice)
-                    if session.canAddInput(directInput) {
-                        session.addInput(directInput)
-                        session.startRunning()
-                        directSession = session
+                let isExternalDevice = videoDevice.deviceType == .externalUnknown
+                if !isExternalDevice {
+                    do {
+                        let session = AVCaptureSession()
+                        let directInput = try AVCaptureDeviceInput(device: videoDevice)
+                        if session.canAddInput(directInput) {
+                            session.addInput(directInput)
+                            session.startRunning()
+                            directSession = session
+                        }
+                    } catch {
+                        print("LiveStreamManager: Direct preview session setup failed: \(error)")
                     }
-                } catch {
-                    print("LiveStreamManager: Direct preview session setup failed: \(error)")
+                }
+
+                // For external devices, add MTHKView as mixer output for preview.
+                if isExternalDevice {
+                    await newMixer.addOutput(view)
                 }
                 
                 await MainActor.run {
@@ -250,6 +266,7 @@ class LiveStreamManager: NSObject, ObservableObject {
                     self.mixer = newMixer
                     self.previewView = view
                     self.latestFrameCapture = frameCapture
+                    self.useHaishinKitPreview = isExternalDevice
                     self.directPreviewSession = directSession
                     self.isSessionConfigured = true
                 }

@@ -19,7 +19,7 @@ struct MirrorMarkupVideoContentView: View {
             Color.black.ignoresSafeArea()
             
             if videoManager.isLiveMode {
-                DirectCameraPreviewView()
+                AdaptiveLivePreviewView()
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             } else if let player = videoManager.player {
                 VideoPlayer(player: player)
