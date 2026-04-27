@@ -1157,12 +1157,25 @@ class ExportHelper: ObservableObject {
     }
     
     // MARK: - Screenshot Export Helper Functions
-    
+
     private func getCurrentFile() -> FilesFile? {
         guard let videoId = timelineData.currentVideoId else {
             return nil
         }
         return VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId })
+    }
+
+    /// Папка скриншотов: для live — Documents/Screenshots/{videoId}, иначе из filesFile.
+    private func currentScreenshotsFolder() -> URL? {
+        if videoManager.isLiveMode {
+            let videoId = WindowsManager.shared.currentVideoId
+            guard !videoId.isEmpty,
+                  let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                return nil
+            }
+            return documentsDir.appendingPathComponent("Screenshots").appendingPathComponent(videoId)
+        }
+        return getCurrentFile()?.screenshotsFolder
     }
     
     /// Returns screenshots linked to the given stamp that fall within the time range.
@@ -1199,16 +1212,14 @@ class ExportHelper: ObservableObject {
         startTime: CMTime
     ) -> CMTime {
         guard let compVideoTrack = composition.tracks(withMediaType: .video).first,
-              let filesFile = getCurrentFile() else {
+              let screenshotsFolder = currentScreenshotsFolder() else {
             return startTime
         }
-        
+
         // Получаем размеры видео с учетом трансформации
         let transform = videoTrack.preferredTransform
         let naturalSize = videoTrack.naturalSize.applying(transform)
         let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
-        
-        let screenshotsFolder = filesFile.screenshotsFolder
         let segmentStart = CMTimeGetSeconds(segmentTimeRange.start)
         var currentTime = startTime
         var lastVideoTime = segmentStart
@@ -1492,18 +1503,16 @@ class ExportHelper: ObservableObject {
     
     private func exportScreenshots(completion: @escaping (Error?) -> Void) {
         let screenshots = ScreenshotsMetadataManager.shared.screenshots
-        
+
         if screenshots.isEmpty {
             completion(NSError.getErrorWithDescription("Нет скриншотов для экспорта"))
             return
         }
-        
-        guard let filesFile = getCurrentFile() else {
+
+        guard let screenshotsFolder = currentScreenshotsFolder() else {
             completion(NSError.getErrorWithDescription("Не найдены файлы проекта"))
             return
         }
-        
-        let screenshotsFolder = filesFile.screenshotsFolder
         var screenshotURLs: [URL] = []
         
         for screenshot in screenshots {

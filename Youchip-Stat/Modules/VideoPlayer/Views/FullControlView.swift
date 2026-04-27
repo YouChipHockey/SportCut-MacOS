@@ -1327,6 +1327,12 @@ struct FullControlView: View {
             Spacer(minLength: 8)
 
             HStack(spacing: 6) {
+                if CameraLogger.shared.hasLogs {
+                    timelineToolsIconButton(systemImage: "doc.text", helpText: "Экспорт логов камеры") {
+                        exportCameraLogs()
+                    }
+                }
+
                 timelineToolsIconButton(systemImage: "map", helpText: ^String.Titles.map) {
                     WindowsManager.shared.showFieldMapVisualizationPicker()
                 }
@@ -1405,6 +1411,22 @@ struct FullControlView: View {
         .help("Фильтры и сортировка таймлайнов")
     }
     
+    private func exportCameraLogs() {
+        let logger = CameraLogger.shared
+        guard logger.hasLogs else { return }
+        let panel = NSSavePanel()
+        panel.allowedFileTypes = ["txt"]
+        panel.nameFieldStringValue = "cameraLogs.txt"
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try FileManager.default.copyItem(at: logger.logFileURL, to: url)
+            } catch {
+                try? FileManager.default.removeItem(at: url)
+                try? FileManager.default.copyItem(at: logger.logFileURL, to: url)
+            }
+        }
+    }
+
     private func applyTimelineSort(mode: TimelineLineSortMode) {
         if timelineLineSortMode == .original, mode != .original {
             originalLineOrderIDs = timelineData.lines.map(\.id)

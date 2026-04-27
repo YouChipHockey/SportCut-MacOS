@@ -85,7 +85,14 @@ class LiveStreamManager: NSObject, ObservableObject {
             position: .unspecified
         )
         availableVideoDevices = videoDiscovery.devices
-        
+
+        let logger = CameraLogger.shared
+        logger.log("discoverDevices: found \(videoDiscovery.devices.count) device(s)")
+        for (i, d) in videoDiscovery.devices.enumerated() {
+            let formatsCount = d.formats.count
+            let activeRes = CMVideoFormatDescriptionGetDimensions(d.activeFormat.formatDescription)
+            logger.log("  [\(i)] \(d.localizedName) | type=\(d.deviceType.rawValue) | uid=\(d.uniqueID) | formats=\(formatsCount) | activeRes=\(activeRes.width)x\(activeRes.height) | isConnected=\(d.isConnected) | isSuspended=\(d.isSuspended)")
+        }
     }
     
     func getAvailableFormats(for device: AVCaptureDevice) -> [(format: AVCaptureDevice.Format, description: String)] {
@@ -123,12 +130,34 @@ class LiveStreamManager: NSObject, ObservableObject {
         audioDevice: AVCaptureDevice?,
         format: AVCaptureDevice.Format?
     ) -> Bool {
+        let logger = CameraLogger.shared
+        let isExternal = videoDevice.deviceType == .externalUnknown
+        let dims = format.map { CMVideoFormatDescriptionGetDimensions($0.formatDescription) }
+        let formatStr: String
+        if let dims = dims {
+            let fps = format?.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 0
+            formatStr = "\(dims.width)x\(dims.height)@\(Int(fps))fps"
+        } else {
+            let ad = CMVideoFormatDescriptionGetDimensions(videoDevice.activeFormat.formatDescription)
+            formatStr = "active \(ad.width)x\(ad.height)"
+        }
+        logger.startSession(
+            deviceName: videoDevice.localizedName,
+            deviceType: videoDevice.deviceType.rawValue,
+            deviceUID: videoDevice.uniqueID,
+            formatDescription: formatStr
+        )
+        logger.log("configureSession: isExternalDevice=\(isExternal), audioDevice=\(audioDevice?.localizedName ?? "none")")
+        logger.log("configureSession: device.isConnected=\(videoDevice.isConnected), isSuspended=\(videoDevice.isSuspended), isInUseByAnotherApplication=\(videoDevice.isInUseByAnotherApplication)")
+        logger.log("configureSession: supportedFrameRateRanges=\(videoDevice.activeFormat.videoSupportedFrameRateRanges.map { "[\(Int($0.minFrameRate))-\(Int($0.maxFrameRate))fps, minDur=\($0.minFrameDuration.value)/\($0.minFrameDuration.timescale)]" })")
+
         AVCaptureDevice.applyFrameDurationPatchIfNeeded(for: videoDevice)
         self.configuredVideoDevice = videoDevice
         let thisSessionId = UUID()
         self.sessionId = thisSessionId
-        
+
         // ── Synchronous teardown of previous session ──
+        logger.log("configureSession: tearing down previous session (mixer=\(self.mixer != nil), recorder=\(self.recorder != nil), directSession=\(self.directPreviewSession != nil))")
         let oldMixer = self.mixer
         let oldRecorder = self.recorder
         let oldPreview = self.previewView
@@ -185,14 +214,14 @@ class LiveStreamManager: NSObject, ObservableObject {
                 try videoDevice.lockForConfiguration()
                 videoDevice.activeFormat = format
                 if let range = format.videoSupportedFrameRateRanges.first {
-                    // Use the device's exact frame durations from the supported range.
-                    // Physical capture cards require these exact values (e.g. 1000000/60000240),
-                    // not arbitrary 1/fps, otherwise setActiveVideoMinFrameDuration throws.
+                    logger.log("configureSession: setting format frameDurations min=\(range.minFrameDuration.value)/\(range.minFrameDuration.timescale) max=\(range.maxFrameDuration.value)/\(range.maxFrameDuration.timescale)")
                     videoDevice.activeVideoMinFrameDuration = range.minFrameDuration
                     videoDevice.activeVideoMaxFrameDuration = range.maxFrameDuration
                 }
                 videoDevice.unlockForConfiguration()
+                logger.log("configureSession: device format set successfully")
             } catch {
+                logger.logError("configureSession: Failed to set device format: \(error)")
                 print("LiveStreamManager: Failed to set device format: \(error)")
             }
         }
@@ -200,8 +229,10 @@ class LiveStreamManager: NSObject, ObservableObject {
         let initialFrameRate = activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30
         Task {
             do {
+                logger.logMixer("attachVideo: starting, initialFrameRate=\(initialFrameRate)")
                 await newMixer.setFrameRate(initialFrameRate)
                 try await newMixer.attachVideo(videoDevice, track: 0)
+                logger.logMixer("attachVideo: success")
                 
                 // Use actual device frame duration after attach so mixer FPS matches capture (avoids slow-mo).
                 // Device may have been clamped by our patch or driver (e.g. 50 fps camera with 60 in format).
@@ -216,7 +247,8 @@ class LiveStreamManager: NSObject, ObservableObject {
                     }
                 } catch { /* keep initialFrameRate */ }
                 await newMixer.setFrameRate(actualFps)
-                
+                logger.logMixer("actualFps after device attach=\(actualFps)")
+
                 // Real-time markup recording is video-only (no audio).
                 
                 var videoMixerSettings = await newMixer.videoMixerSettings
@@ -230,6 +262,7 @@ class LiveStreamManager: NSObject, ObservableObject {
                 // Uses a separate capture pipeline so H.264 encoding back-pressure
                 // from long recordings never affects preview FPS.
                 var directSession: AVCaptureSession? = nil
+                logger.logPreview("creating direct AVCaptureSession for preview (deviceType=\(videoDevice.deviceType.rawValue))")
                 do {
                     let session = AVCaptureSession()
                     let directInput = try AVCaptureDeviceInput(device: videoDevice)
@@ -237,13 +270,18 @@ class LiveStreamManager: NSObject, ObservableObject {
                         session.addInput(directInput)
                         session.startRunning()
                         directSession = session
+                        logger.logPreview("direct AVCaptureSession started successfully")
+                    } else {
+                        logger.logError("direct AVCaptureSession: canAddInput returned false")
                     }
                 } catch {
+                    logger.logError("direct preview session setup failed: \(error)")
                     print("LiveStreamManager: Direct preview session setup failed: \(error)")
                 }
                 
                 await MainActor.run {
                     guard self.sessionId == thisSessionId else {
+                        logger.log("configureSession: sessionId mismatch on MainActor, discarding", level: .warn)
                         directSession?.stopRunning()
                         return
                     }
@@ -252,8 +290,10 @@ class LiveStreamManager: NSObject, ObservableObject {
                     self.latestFrameCapture = frameCapture
                     self.directPreviewSession = directSession
                     self.isSessionConfigured = true
+                    logger.log("configureSession: COMPLETE — directSession=\(directSession != nil)")
                 }
             } catch {
+                logger.logError("configureSession: Failed to configure HaishinKit mixer: \(error)")
                 print("LiveStreamManager: Failed to configure HaishinKit mixer: \(error)")
                 await MainActor.run {
                     guard self.sessionId == thisSessionId else { return }
@@ -268,8 +308,12 @@ class LiveStreamManager: NSObject, ObservableObject {
     // MARK: - Start Live Stream
     
     func startLiveStream(videoId: String, preloadedVideoURL: URL? = nil) {
-        guard let mixer = mixer else { return }
-        
+        let logger = CameraLogger.shared
+        guard let mixer = mixer else {
+            logger.logError("startLiveStream: mixer is nil, aborting")
+            return
+        }
+        logger.log("startLiveStream: videoId=\(videoId), preloadedVideoURL=\(preloadedVideoURL?.lastPathComponent ?? "none")")
         currentVideoId = videoId
         
         let fileManager = FileManager.default
@@ -287,7 +331,8 @@ class LiveStreamManager: NSObject, ObservableObject {
         
         let newRecorder = LiveStreamRecorder(outputURL: tempFileURL!, enableAudio: false)
         self.recorder = newRecorder
-        
+        logger.log("startLiveStream: recorder created, outputURL=\(tempFileURL!.lastPathComponent)")
+
         // Calculate preloaded duration synchronously for local files.
         var calculatedPreloadDuration: Double = 0.0
         if let preloadURL = preloadedVideoURL {
@@ -300,10 +345,14 @@ class LiveStreamManager: NSObject, ObservableObject {
         let baseSegments: [URL] = preloadedVideoURL.map { [$0] } ?? []
         
         Task {
+            logger.logMixer("startLiveStream: adding recorder output to mixer")
             await mixer.addOutput(newRecorder)
+            logger.logMixer("startLiveStream: calling mixer.startRunning()")
             await mixer.startRunning()
+            logger.logMixer("startLiveStream: mixer.startRunning() completed")
             newRecorder.startRecording()
-            
+            logger.logWriter("startLiveStream: recorder.startRecording() called")
+
             await MainActor.run {
                 self.isLive = true
                 self.isBroadcastPaused = false
@@ -318,21 +367,29 @@ class LiveStreamManager: NSObject, ObservableObject {
                 self.reviewFileVersion = preloadedVideoURL != nil ? 1 : 0
                 self.startDurationTimer()
                 self.performStartupPauseResume()
+                logger.log("startLiveStream: live mode active, preloadedBaseDuration=\(calculatedPreloadDuration)")
             }
         }
     }
-    
+
     // MARK: - Startup stabilization
-    
+
     private func performStartupPauseResume() {
-        // Simulate user pressing "pause broadcast" and then "continue"
-        // to stabilize the first frames and avoid black video on new sessions.
+        CameraLogger.shared.log("performStartupPauseResume: scheduling stabilization pause")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            guard LiveStreamManager.shared.isLive else { return }
+            guard LiveStreamManager.shared.isLive else {
+                CameraLogger.shared.log("performStartupPauseResume: not live on pause step, skipping")
+                return
+            }
+            CameraLogger.shared.log("performStartupPauseResume: pausing broadcast for stabilization")
             VideoPlayerManager.shared.stopBroadcast()
-            
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                guard LiveStreamManager.shared.isLive else { return }
+                guard LiveStreamManager.shared.isLive else {
+                    CameraLogger.shared.log("performStartupPauseResume: not live on resume step, skipping")
+                    return
+                }
+                CameraLogger.shared.log("performStartupPauseResume: resuming broadcast after stabilization")
                 VideoPlayerManager.shared.resumeBroadcast()
             }
         }
@@ -342,7 +399,7 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     func pauseBroadcast() {
         guard isLive, !isBroadcastPaused else { return }
-        
+        CameraLogger.shared.log("pauseBroadcast: pausing at duration=\(liveDuration)")
         recorder?.pauseRecording()
         
         DispatchQueue.main.async { [weak self] in
@@ -355,7 +412,7 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     func resumeBroadcast() {
         guard isLive, isBroadcastPaused else { return }
-        
+        CameraLogger.shared.log("resumeBroadcast: resuming at accumulated=\(accumulatedDurationBeforePause)")
         recorder?.resumeRecording()
         
         DispatchQueue.main.async { [weak self] in
@@ -446,7 +503,11 @@ class LiveStreamManager: NSObject, ObservableObject {
 
     /// После экспорта при паузе: подменяем рекордер на новый (пишем в новый файл при возобновлении).
     private func replaceRecorderAfterExport() async {
-        guard let mixer = mixer, let videoId = currentVideoId else { return }
+        guard let mixer = mixer, let videoId = currentVideoId else {
+            CameraLogger.shared.logError("replaceRecorderAfterExport: mixer or videoId is nil")
+            return
+        }
+        CameraLogger.shared.logWriter("replaceRecorderAfterExport: replacing recorder for videoId=\(videoId)")
         let fileManager = FileManager.default
         let liveDir = fileManager.temporaryDirectory.appendingPathComponent("LiveRecordings")
         if !fileManager.fileExists(atPath: liveDir.path) {
@@ -468,39 +529,44 @@ class LiveStreamManager: NSObject, ObservableObject {
     // MARK: - Stop & Finalize
     
     func stopAndFinalize(completion: @escaping (URL?) -> Void) {
+        let logger = CameraLogger.shared
         guard isLive else {
+            logger.log("stopAndFinalize: not live, ignoring")
             completion(nil)
             return
         }
-        
+        logger.log("stopAndFinalize: stopping live stream, duration=\(liveDuration), segments=\(allSegmentURLs.count)")
+
         stopDurationTimer()
         stopReviewRefresher()
         stopDirectPreview()
-        
+
         let mixerToStop = self.mixer
         let recorderToStop = self.recorder
         let previewToRemove = self.previewView
         let finalizeSessionId = self.sessionId
         let currentTempURL = self.tempFileURL
-        
+
         DispatchQueue.main.async { [weak self] in
             guard let self = self, self.sessionId == finalizeSessionId else { return }
             self.isLive = false
             self.isBroadcastPaused = false
         }
-        
+
+        logger.logWriter("stopAndFinalize: calling recorder.stopRecording()")
         recorderToStop?.stopRecording { [weak self] in
             guard let self = self else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
-            
+
             // Add the last segment to the list.
             if let url = currentTempURL {
                 self.allSegmentURLs.append(url)
             }
             let allSegments = self.allSegmentURLs
-            
+            logger.log("stopAndFinalize: total segments for concatenation: \(allSegments.count)")
+
             Task {
                 // Concatenate all segments if there are multiple; otherwise just move the single file.
                 let finalURL: URL?
@@ -509,6 +575,8 @@ class LiveStreamManager: NSObject, ObservableObject {
                 } else {
                     finalURL = await self.concatenateSegmentsToFinalLocation(segments: allSegments)
                 }
+                logger.endSession(reason: "stopAndFinalize", duration: self.liveDuration, segmentCount: allSegments.count)
+                logger.log("stopAndFinalize: finalURL=\(finalURL?.lastPathComponent ?? "nil")")
                 
                 if let mixerToStop = mixerToStop {
                     if let recorderToStop = recorderToStop {
@@ -555,6 +623,7 @@ class LiveStreamManager: NSObject, ObservableObject {
     }
     
     private func concatenateSegmentsToFinalLocation(segments: [URL]) async -> URL? {
+        CameraLogger.shared.log("concatenateSegments: \(segments.count) segments")
         guard let videoId = currentVideoId else { return nil }
         let fileManager = FileManager.default
         let documentsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -590,6 +659,8 @@ class LiveStreamManager: NSObject, ObservableObject {
     }
     
     func abort() {
+        CameraLogger.shared.endSession(reason: "abort", duration: liveDuration, segmentCount: allSegmentURLs.count)
+        CameraLogger.shared.log("abort: aborting live stream")
         let abortSessionId = self.sessionId
         
         stopDurationTimer()
@@ -737,7 +808,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         guard isLive, !isBroadcastPaused, !isReviewRefreshInProgress,
               let currentRecorder = recorder, let videoId = currentVideoId,
               let currentTempURL = tempFileURL else { return }
-        
+        CameraLogger.shared.log("refreshReviewSnapshot: finalizing segment \(allSegmentURLs.count), url=\(currentTempURL.lastPathComponent)")
         isReviewRefreshInProgress = true
         let sessionId = self.sessionId
         
@@ -757,7 +828,11 @@ class LiveStreamManager: NSObject, ObservableObject {
     }
     
     private func startNewSegmentRecorder(videoId: String, sessionId: UUID) async {
-        guard let mixer = mixer, self.sessionId == sessionId else { return }
+        guard let mixer = mixer, self.sessionId == sessionId else {
+            CameraLogger.shared.log("startNewSegmentRecorder: skipped (mixer=\(mixer != nil), sessionMatch=\(self.sessionId == sessionId))", level: .warn)
+            return
+        }
+        CameraLogger.shared.logWriter("startNewSegmentRecorder: creating segment \(allSegmentURLs.count)")
         let fileManager = FileManager.default
         let liveDir = fileManager.temporaryDirectory.appendingPathComponent("LiveRecordings")
         if !fileManager.fileExists(atPath: liveDir.path) {
@@ -811,6 +886,7 @@ class LiveStreamManager: NSObject, ObservableObject {
     }
     
     func fullCleanup() {
+        CameraLogger.shared.endSession(reason: "fullCleanup", duration: liveDuration, segmentCount: allSegmentURLs.count)
         let cleanupSessionId = self.sessionId
         
         stopDurationTimer()
@@ -851,22 +927,48 @@ class LiveStreamManager: NSObject, ObservableObject {
 /// Хранит последний видеокадр из микшера для захвата в редактор (Metal-превью через cacheDisplay даёт чёрный экран).
 /// Конвертация в NSImage откладывается до момента реального запроса (takeSnapshot), чтобы не тратить GPU на каждый кадр.
 final class LiveFrameCaptureOutput: MediaMixerOutput {
-    
+
     var videoTrackId: UInt8? { get async { return UInt8.max } }
     var audioTrackId: UInt8? { get async { return UInt8.max } }
     func selectTrack(_ id: UInt8?, mediaType: CMFormatDescription.MediaType) async {}
-    
+
     // Store the raw pixel buffer – converted to NSImage only when actually requested.
     private var _latestPixelBuffer: CVImageBuffer?
     private let bufferLock = NSLock()
-    
+
     private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
-    
+
+    /// Counters for logging frame flow through the preview capture pipeline.
+    private var _frameCaptureCount: Int = 0
+    private var _lastLoggedCaptureCount: Int = 0
+    private var _firstCaptureDate: Date?
+    private var _lastCaptureDate: Date?
+    private let _captureGapThreshold: Double = 1.0
+
     nonisolated func mixer(_ mixer: MediaMixer, didOutput sampleBuffer: CMSampleBuffer) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         // O(1): just retain the pixel buffer reference; no rendering here.
         bufferLock.lock()
         _latestPixelBuffer = pixelBuffer
+        _frameCaptureCount += 1
+        let count = _frameCaptureCount
+        let now = Date()
+        if _firstCaptureDate == nil {
+            _firstCaptureDate = now
+            CameraLogger.shared.logPreview("FrameCapture: first frame received")
+        }
+        if let last = _lastCaptureDate {
+            let gap = now.timeIntervalSince(last)
+            if gap > _captureGapThreshold {
+                CameraLogger.shared.logPreview("FrameCapture: GAP \(String(format: "%.3f", gap))s between preview frames (count=\(count))")
+            }
+        }
+        _lastCaptureDate = now
+        // Periodic log every 600 frames.
+        if count - _lastLoggedCaptureCount >= 600 {
+            _lastLoggedCaptureCount = count
+            CameraLogger.shared.logPreview("FrameCapture: \(count) frames captured so far")
+        }
         bufferLock.unlock()
     }
     
@@ -925,25 +1027,42 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     private var lastAudioTimestampBeforePause: CMTime = .invalid
     private var needsOffsetRecalculation = false
     private var lastVideoWrittenPTS: CMTime = .invalid
-    
+
+    // Logging counters
+    private var totalFramesReceived: Int = 0
+    private var totalFramesWritten: Int = 0
+    private var totalFramesDropped: Int = 0
+    private var lastLoggedFrameCount: Int = 0
+    private var firstFrameReceivedDate: Date?
+    private var lastFrameReceivedDate: Date?
+    private let frameGapThreshold: Double = 0.5
+
     init(outputURL: URL, enableAudio: Bool = true) {
         self.outputURL = outputURL
         self.enableAudio = enableAudio
     }
-    
+
     func startRecording() {
+        CameraLogger.shared.logWriter("startRecording: outputURL=\(outputURL.lastPathComponent)")
         isPaused = false
         preThrottleLock.lock()
         _preThrottleLastPTS = .invalid
         preThrottleLock.unlock()
         writerQueue.async { [weak self] in
-            self?.isRecording = true
-            self?.totalPauseOffset = .zero
-            self?.pauseStartPTS = .invalid
-            self?.lastVideoWrittenPTS = .invalid
-            self?.lastVideoTimestampBeforePause = .invalid
-            self?.lastAudioTimestampBeforePause = .invalid
-            self?.needsOffsetRecalculation = false
+            guard let self = self else { return }
+            self.isRecording = true
+            self.totalPauseOffset = .zero
+            self.pauseStartPTS = .invalid
+            self.lastVideoWrittenPTS = .invalid
+            self.lastVideoTimestampBeforePause = .invalid
+            self.lastAudioTimestampBeforePause = .invalid
+            self.needsOffsetRecalculation = false
+            self.totalFramesReceived = 0
+            self.totalFramesWritten = 0
+            self.totalFramesDropped = 0
+            self.lastLoggedFrameCount = 0
+            self.firstFrameReceivedDate = nil
+            self.lastFrameReceivedDate = nil
         }
     }
     
@@ -965,24 +1084,34 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                 DispatchQueue.main.async { completion() }
                 return
             }
-            
+            let logger = CameraLogger.shared
+            logger.logWriter("stopRecording: framesReceived=\(self.totalFramesReceived), framesWritten=\(self.totalFramesWritten), framesDropped=\(self.totalFramesDropped)")
+            if let first = self.firstFrameReceivedDate, let last = self.lastFrameReceivedDate {
+                let wallClockDuration = last.timeIntervalSince(first)
+                logger.logWriter("stopRecording: wallClockDuration=\(String(format: "%.2f", wallClockDuration))s")
+            }
+            logger.logWriter("stopRecording: writerStatus=\(self.assetWriter?.status.rawValue ?? -1), lastWrittenPTS=\(self.lastVideoWrittenPTS.seconds)")
+
             self.isRecording = false
-            
+
             guard let writer = self.assetWriter, writer.status == .writing else {
+                logger.logWriter("stopRecording: writer not in .writing state (status=\(self.assetWriter?.status.rawValue ?? -1)), completing immediately")
                 DispatchQueue.main.async { completion() }
                 return
             }
-            
+
             self.videoWriterInput?.markAsFinished()
             self.audioWriterInput?.markAsFinished()
-            
+
             writer.finishWriting {
+                logger.logWriter("stopRecording: finishWriting completed, status=\(writer.status.rawValue), error=\(writer.error?.localizedDescription ?? "none")")
                 DispatchQueue.main.async { completion() }
             }
         }
     }
     
     func cancelRecording() {
+        CameraLogger.shared.logWriter("cancelRecording called")
         writerQueue.async { [weak self] in
             self?.isRecording = false
             self?.assetWriter?.cancelWriting()
@@ -1032,9 +1161,8 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     
     nonisolated func mixer(_ mixer: MediaMixer, didOutput sampleBuffer: CMSampleBuffer) {
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        
+
         guard !isPaused else {
-            // Record pause start PTS with minimal queue overhead.
             writerQueue.async { [weak self] in
                 guard let self = self else { return }
                 if !self.pauseStartPTS.isValid {
@@ -1043,7 +1171,7 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             }
             return
         }
-        
+
         // Pre-throttle: drop frames before dispatching so writerQueue never accumulates
         // a backlog of closures for frames that would be discarded anyway.
         if targetVideoFPS > 0 {
@@ -1059,10 +1187,9 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             }
             if !shouldDrop { _preThrottleLastPTS = pts }
             preThrottleLock.unlock()
-            // Always let the very first frame through (isWriterStarted == false) regardless.
             if shouldDrop && isWriterStarted { return }
         }
-        
+
         writerQueue.async { [weak self] in
             guard let self = self, self.isRecording else { return }
             guard !self.isPaused else {
@@ -1071,7 +1198,23 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                 }
                 return
             }
-            
+
+            self.totalFramesReceived += 1
+            let now = Date()
+            if self.firstFrameReceivedDate == nil {
+                self.firstFrameReceivedDate = now
+                CameraLogger.shared.logFrame("FIRST frame received: pts=\(pts.seconds)")
+            }
+
+            // Detect large gaps between consecutive frames (potential freeze indicator).
+            if let lastDate = self.lastFrameReceivedDate {
+                let gap = now.timeIntervalSince(lastDate)
+                if gap > self.frameGapThreshold {
+                    CameraLogger.shared.logFrame("FRAME GAP DETECTED: \(String(format: "%.3f", gap))s since last frame (pts=\(pts.seconds), prevPTS=\(self.lastVideoWrittenPTS.seconds))")
+                }
+            }
+            self.lastFrameReceivedDate = now
+
             // Initialize writer on the first frame we actually want to record.
             if !self.isWriterStarted {
                 self.setupWriter(with: sampleBuffer)
@@ -1082,19 +1225,30 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                     let frameInterval = 1.0 / Double(self.targetVideoFPS)
                     let delta = CMTimeSubtract(pts, self.lastVideoWrittenPTS)
                     if delta.seconds >= 0 && delta.seconds < frameInterval {
+                        self.totalFramesDropped += 1
                         return
                     }
                 }
             }
-            
+
             guard self.isWriterStarted,
                   let writer = self.assetWriter,
                   writer.status == .writing,
                   let input = self.videoWriterInput,
-                  input.isReadyForMoreMediaData else { return }
-            
+                  input.isReadyForMoreMediaData else {
+                if self.isWriterStarted {
+                    let writerStatus = self.assetWriter?.status.rawValue ?? -1
+                    let ready = self.videoWriterInput?.isReadyForMoreMediaData ?? false
+                    if writerStatus != 1 || !ready {
+                        CameraLogger.shared.logWriter("frame NOT written: writerStatus=\(writerStatus), inputReady=\(ready), writerError=\(self.assetWriter?.error?.localizedDescription ?? "none")")
+                    }
+                }
+                self.totalFramesDropped += 1
+                return
+            }
+
             let adjustedPTS = self.adjustedTimestamp(for: pts, isVideo: true)
-            
+
             if self.totalPauseOffset == .zero {
                 input.append(sampleBuffer)
             } else {
@@ -1102,8 +1256,15 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                     input.append(adjustedBuffer)
                 }
             }
-            
+
+            self.totalFramesWritten += 1
             self.lastVideoWrittenPTS = pts
+
+            // Periodic stats log every 300 frames (~10s at 30fps).
+            if self.totalFramesWritten - self.lastLoggedFrameCount >= 300 {
+                self.lastLoggedFrameCount = self.totalFramesWritten
+                CameraLogger.shared.logFrame("stats: received=\(self.totalFramesReceived) written=\(self.totalFramesWritten) dropped=\(self.totalFramesDropped) pts=\(String(format: "%.2f", pts.seconds))")
+            }
         }
     }
     
@@ -1130,11 +1291,16 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     }
     
     private func setupWriter(with sampleBuffer: CMSampleBuffer) {
+        let logger = CameraLogger.shared
         do {
             let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
-            
-            guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
+
+            guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else {
+                logger.logError("setupWriter: formatDescription is nil")
+                return
+            }
             let dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
+            logger.logWriter("setupWriter: dimensions=\(dimensions.width)x\(dimensions.height)")
             
             // Use actual capture frame rate so recording is not slow-motion (was hardcoded 30 while capture can be 60).
             let frameDuration = CMSampleBufferGetDuration(sampleBuffer)
@@ -1179,14 +1345,16 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             }
             
             self.assetWriter = writer
-            
+
             let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
             writer.startWriting()
             writer.startSession(atSourceTime: timestamp)
             self.isWriterStarted = true
             self.lastVideoTimestampBeforePause = timestamp
-            
+            logger.logWriter("setupWriter: writer started, sourceTime=\(timestamp.seconds), fps=\(clampedFrameRate), status=\(writer.status.rawValue)")
+
         } catch {
+            logger.logError("setupWriter: Failed to create AVAssetWriter: \(error)")
             print("LiveStreamRecorder: Failed to create AVAssetWriter: \(error)")
         }
     }
@@ -1283,11 +1451,17 @@ extension AVCaptureDevice {
 
     @objc fileprivate func _patched_setActiveVideoMinFrameDuration(_ duration: CMTime) {
         let clamped = _clampFrameDurationToSupported(duration, isMin: true)
+        if clamped != duration {
+            CameraLogger.shared.log("frameDurationPatch: minFrameDuration clamped from \(duration.value)/\(duration.timescale) to \(clamped.value)/\(clamped.timescale)", level: .debug)
+        }
         _patched_setActiveVideoMinFrameDuration(clamped)
     }
 
     @objc fileprivate func _patched_setActiveVideoMaxFrameDuration(_ duration: CMTime) {
         let clamped = _clampFrameDurationToSupported(duration, isMin: false)
+        if clamped != duration {
+            CameraLogger.shared.log("frameDurationPatch: maxFrameDuration clamped from \(duration.value)/\(duration.timescale) to \(clamped.value)/\(clamped.timescale)", level: .debug)
+        }
         _patched_setActiveVideoMaxFrameDuration(clamped)
     }
 }

@@ -232,6 +232,7 @@ class WindowsManager: NSObject {
         VideoMarkupActivityBanner.shared.clearTagMarkupHistoryForNewVideoSession()
         
         TimelineDataManager.shared.currentBookmark = nil
+        TimelineDataManager.shared.currentVideoId = videoId
         TimelineDataManager.shared.lines = []
         TimelineDataManager.shared.selectedLineID = nil
         ensureScreenshotsTimelineExists()
@@ -275,8 +276,13 @@ class WindowsManager: NSObject {
         
         // Load existing timelines from the project being appended to.
         TimelineDataManager.shared.currentBookmark = nil
+        TimelineDataManager.shared.currentVideoId = existingId
         TimelineDataManager.shared.lines = existingTimelines
-        TimelineDataManager.shared.selectedLineID = nil
+        if MarkupMode.current == .standard {
+            TimelineDataManager.shared.selectedLineID = existingTimelines.first?.id
+        } else {
+            TimelineDataManager.shared.selectedLineID = nil
+        }
         ensureScreenshotsTimelineExists()
         
         // Use the existing project's screenshots folder.
@@ -311,6 +317,7 @@ class WindowsManager: NSObject {
         VideoMarkupActivityBanner.shared.clearTagMarkupHistoryForNewVideoSession()
         
         TimelineDataManager.shared.currentBookmark = nil
+        TimelineDataManager.shared.currentVideoId = videoId
         TimelineDataManager.shared.lines = []
         TimelineDataManager.shared.selectedLineID = nil
         ensureScreenshotsTimelineExists()
@@ -330,10 +337,12 @@ class WindowsManager: NSObject {
     }
     
     private func openLiveWindows() {
+        HotKeyManager.shared.resumeKeyboardMonitoring()
+
         videoWindow = VideoPlayerWindowController(id: currentVideoId)
         controlWindow = FullControlWindowController()
         tagLibraryWindow = TagLibraryWindowController()
-        
+
         if let screen = NSScreen.main {
             let screenFrame = screen.frame
             let bottomHeight = screenFrame.height * 0.4
@@ -423,23 +432,25 @@ class WindowsManager: NSObject {
                 if wasAppending, let existing = appendTarget {
                     VideoFilesManager.shared.updateVideoURL(for: existing, newURL: finalURL)
                     VideoFilesManager.shared.saveTimelines(timelines, for: existing.id)
-                    
+
                     self.currentVideoId = existing.id
                     TimelineDataManager.shared.currentBookmark = existing.videoData.bookmark
+                    TimelineDataManager.shared.currentVideoId = existing.id
                     TimelineDataManager.shared.lines = timelines
                     TimelineDataManager.shared.selectedLineID = timelines.first?.id
                     self.ensureScreenshotsTimelineExists()
                     ScreenshotsMetadataManager.shared.loadScreenshots(from: existing.screenshotsFolder)
+                    NotificationCenter.default.post(name: .videoIdDidChange, object: existing.id)
                     VideoPlayerManager.shared.transitionToStaticVideo(url: finalURL)
                     HotKeyManager.shared.resumeKeyboardMonitoring()
                     return
                 }
-                
+
                 guard let importedFile = VideoFilesManager.shared.importFile(url: finalURL, newName: fileName) else {
                     print("WindowsManager: import failed after stopping live")
                     return
                 }
-                
+
                 VideoFilesManager.shared.updateTimelines(
                     forVideoId: importedFile.videoData.id,
                     with: timelines
@@ -456,6 +467,7 @@ class WindowsManager: NSObject {
                 TimelineDataManager.shared.selectedLineID = timelines.first?.id
                 self.ensureScreenshotsTimelineExists()
                 ScreenshotsMetadataManager.shared.loadScreenshots(from: importedFile.screenshotsFolder)
+                NotificationCenter.default.post(name: .videoIdDidChange, object: importedFile.id)
                 VideoPlayerManager.shared.transitionToStaticVideo(url: finalURL)
                 HotKeyManager.shared.resumeKeyboardMonitoring()
             }

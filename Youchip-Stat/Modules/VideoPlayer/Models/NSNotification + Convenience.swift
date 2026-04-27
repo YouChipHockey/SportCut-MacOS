@@ -40,6 +40,8 @@ extension NSNotification.Name {
     static let takeReviewScreenshotForEditor = NSNotification.Name("takeReviewScreenshotForEditor")
     /// Запрос скриншота из окна пересмотра.
     static let takeReviewScreenshot = NSNotification.Name("takeReviewScreenshot")
+    /// Обновление videoId в VideoPlayerViewModel после перехода из лайв-режима в обычный.
+    static let videoIdDidChange = NSNotification.Name("videoIdDidChange")
     
     // MARK: - Tools Menu Commands (macOS menu bar)
     static let toolsExportMarkupJSONFull = NSNotification.Name("toolsExportMarkupJSONFull")

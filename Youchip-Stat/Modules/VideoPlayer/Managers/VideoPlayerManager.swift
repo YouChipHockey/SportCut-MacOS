@@ -32,7 +32,11 @@ class VideoPlayerManager: ObservableObject {
     @Published var reviewPlayer: AVPlayer?
     @Published var reviewCurrentTime: Double = 0
     @Published var reviewPlaybackSpeed: Double = 1.0
-    
+
+    // MARK: - Review Screenshot Overlay
+    @Published var reviewScreenshotImage: NSImage?
+    @Published var isShowingReviewScreenshot: Bool = false
+
     private var reviewTimeObserver: Any?
     private var reviewFileVersionCancellable: AnyCancellable?
     private var reviewItemStatusObserver: AnyCancellable?
@@ -123,6 +127,8 @@ class VideoPlayerManager: ObservableObject {
         pendingReviewPlayer = nil
         reviewCurrentTime = 0
         isRefreshingReview = false
+        reviewScreenshotImage = nil
+        isShowingReviewScreenshot = false
 
         LiveStreamManager.shared.stopReviewRefresher()
     }

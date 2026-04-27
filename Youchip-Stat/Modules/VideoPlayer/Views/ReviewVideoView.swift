@@ -18,7 +18,7 @@ struct ReviewVideoView: View {
             
             ZStack {
                 Color.black.ignoresSafeArea()
-                
+
                 if let player = videoManager.reviewPlayer {
                     VideoPlayer(player: player)
                         .ignoresSafeArea()
@@ -32,7 +32,40 @@ struct ReviewVideoView: View {
                             .foregroundColor(.white.opacity(0.7))
                     }
                 }
-                
+
+                // Screenshot overlay
+                if videoManager.isShowingReviewScreenshot, let screenshotImage = videoManager.reviewScreenshotImage {
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+
+                        Image(nsImage: screenshotImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+
+                        // Dismiss button
+                        VStack {
+                            HStack {
+                                Spacer()
+                                Button {
+                                    videoManager.isShowingReviewScreenshot = false
+                                    videoManager.reviewScreenshotImage = nil
+                                    videoManager.reviewPlayer?.play()
+                                    NotificationCenter.default.post(name: .screenshotDisplayChanged, object: false)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .shadow(radius: 4)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .padding(16)
+                            }
+                            Spacer()
+                        }
+                    }
+                    .transition(.opacity)
+                }
+
                 // Version badge
                 VStack {
                     HStack {

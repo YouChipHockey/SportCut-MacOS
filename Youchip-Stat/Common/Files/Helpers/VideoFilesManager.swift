@@ -117,8 +117,10 @@ class VideoFilesManager {
     }
     
     func removeFile(file: FilesFile) {
-        guard let fileIndex = files.firstIndex(of: file), let bookmarkIndex = videosData.firstIndex(where: { $0.id == file.videoData.id }) else {
-            // File not found in our data — just remove from arrays if possible, never delete the actual video
+        let projectId = file.videoData.id
+
+        guard let fileIndex = files.firstIndex(where: { $0.videoData.id == projectId }),
+              let bookmarkIndex = videosData.firstIndex(where: { $0.id == projectId }) else {
             return
         }
 
@@ -137,17 +139,22 @@ class VideoFilesManager {
             DataSyncManager.shared.backupTimelinesForVideo(videoDataWithTimelines)
         }
 
-        // Delete timeline file
-        deleteTimelinesFile(for: videoDataToBackup.id)
+        // Delete timeline file for this project
+        deleteTimelinesFile(for: projectId)
 
-        // Delete cached preview thumbnail (PNG)
-        if let url = file.url {
-            let previewPath = URL.previewsDirectory.appendingPathComponent(url.makePreviewName())
-            try? fileManager.removeItem(at: previewPath)
-            url.stopAccessingSecurityScopedResource()
+        // Check if other projects share the same video before deleting shared resources
+        let otherProjectsWithSameVideo = videosData.filter { $0.id != projectId && $0.bookmark == file.videoData.bookmark }
+
+        if otherProjectsWithSameVideo.isEmpty {
+            // No other projects use this video — safe to delete preview
+            if let url = file.url {
+                let previewPath = URL.previewsDirectory.appendingPathComponent(url.makePreviewName())
+                try? fileManager.removeItem(at: previewPath)
+                url.stopAccessingSecurityScopedResource()
+            }
         }
 
-        // Delete screenshots folder for this project
+        // Delete screenshots folder for this project (unique per project ID)
         let screenshotsFolder = file.screenshotsFolder
         if fileManager.fileExists(atPath: screenshotsFolder.path) {
             try? fileManager.removeItem(at: screenshotsFolder)

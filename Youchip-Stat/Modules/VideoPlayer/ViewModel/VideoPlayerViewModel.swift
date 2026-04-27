@@ -68,7 +68,7 @@ class VideoPlayerViewModel: ObservableObject {
     
     // MARK: - Dependencies
     
-    private let videoId: String
+    private var videoId: String
     
     // MARK: - Initialization
     
@@ -138,6 +138,16 @@ class VideoPlayerViewModel: ObservableObject {
             guard let self = self else { return }
             self.performTakeScreenshotFromReview()
         }
+
+        NotificationCenter.default.addObserver(
+            forName: .videoIdDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let newId = notification.object as? String else { return }
+            self.videoId = newId
+        }
     }
     
     private func setupScreenshotTimeObserver() {
@@ -151,11 +161,16 @@ class VideoPlayerViewModel: ObservableObject {
     
     private func checkForScreenshotAtCurrentTime() {
         guard !state.isEditorMode else { return }
-        
+
         // Don't show screenshots while user is resizing a tag
         guard !VideoPlayerManager.shared.isResizingTag else { return }
-        
-        let currentTime = VideoPlayerManager.shared.currentTime
+
+        let currentTime: Double
+        if VideoPlayerManager.shared.isReviewMode {
+            currentTime = VideoPlayerManager.shared.reviewCurrentTime
+        } else {
+            currentTime = VideoPlayerManager.shared.currentTime
+        }
         let timeDifference = abs(currentTime - state.lastCheckedVideoTime)
         
         // Если скриншот показан и пользователь нажал play, скрываем скриншот и возобновляем воспроизведение
@@ -192,11 +207,10 @@ class VideoPlayerViewModel: ObservableObject {
     }
     
     private func showScreenshotOverlay(metadata: ScreenshotMetadata) {
-        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId }) else {
+        guard let screenshotsFolder = screenshotsFolderForCurrentVideo() else {
             return
         }
-        
-        let screenshotsFolder = filesFile.screenshotsFolder
+
         let imageFileName = metadata.screenshotName.hasSuffix(".png") ? metadata.screenshotName : "\(metadata.screenshotName).png"
         let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
         
@@ -204,16 +218,18 @@ class VideoPlayerViewModel: ObservableObject {
         
         if VideoPlayerManager.shared.isReviewMode {
             VideoPlayerManager.shared.reviewPlayer?.pause()
+            VideoPlayerManager.shared.reviewScreenshotImage = image
+            VideoPlayerManager.shared.isShowingReviewScreenshot = true
         } else {
             VideoPlayerManager.shared.player?.pause()
         }
-        
+
         state.displayedScreenshotImage = image
         state.isShowingScreenshot = true
         state.lastShownScreenshotName = metadata.screenshotName
-        
+
         NotificationCenter.default.post(name: .screenshotDisplayChanged, object: true)
-        
+
         // Убираем автоматический таймер - пользователь сам должен продолжить воспроизведение
         state.screenshotDisplayTimer?.invalidate()
         state.screenshotDisplayTimer = nil
@@ -224,7 +240,12 @@ class VideoPlayerViewModel: ObservableObject {
         state.displayedScreenshotImage = nil
         state.screenshotDisplayTimer?.invalidate()
         state.screenshotDisplayTimer = nil
-        
+
+        if VideoPlayerManager.shared.isReviewMode {
+            VideoPlayerManager.shared.reviewScreenshotImage = nil
+            VideoPlayerManager.shared.isShowingReviewScreenshot = false
+        }
+
         NotificationCenter.default.post(name: .screenshotDisplayChanged, object: false)
         if resumePlayback {
             if VideoPlayerManager.shared.isReviewMode {
