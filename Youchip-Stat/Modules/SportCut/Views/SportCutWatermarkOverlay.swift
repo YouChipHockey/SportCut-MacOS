@@ -427,10 +427,6 @@ private struct SportCutWatermarkDraggableTile: View {
         let yTop = min(max(rawYTop, 0), max(0, H - h))
 
         ZStack(alignment: .topLeading) {
-            Color.clear
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-
             WatermarkChrome(
                 snapshot: snapshot,
                 maxTextWidth: maxTextW,
