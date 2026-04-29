@@ -239,7 +239,14 @@ class TimelineDataManager: ObservableObject {
         }
     }
     
-    func updateStampTime(lineID: UUID, stampID: UUID, newStart: Double? = nil, newEnd: Double? = nil) {
+    func updateStampTime(
+        lineID: UUID,
+        stampID: UUID,
+        newStart: Double? = nil,
+        newEnd: Double? = nil,
+        persistChanges: Bool = true,
+        runScreenshotUnlinkCheck: Bool = true
+    ) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }),
               let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else {
             return
@@ -258,10 +265,14 @@ class TimelineDataManager: ObservableObject {
         }
         
         lines[lineIndex].stamps[stampIndex] = stamp
-        updateTimelines()
+        if persistChanges {
+            updateTimelines()
+        }
         
         // Check if any screenshots need to be unlinked due to time range change
-        checkAndUnlinkScreenshotsOutsideStamp(stampID: stampID, newStart: stamp.timeStartSeconds, newEnd: stamp.timeFinishSeconds)
+        if runScreenshotUnlinkCheck {
+            checkAndUnlinkScreenshotsOutsideStamp(stampID: stampID, newStart: stamp.timeStartSeconds, newEnd: stamp.timeFinishSeconds)
+        }
     }
 
     /// Запись таймлайнов в то же хранилище, что и режим разметки (`UserDefaults` + немедленный сброс JSON на диск). Вызывается из SportCut после изменения границ тега.
