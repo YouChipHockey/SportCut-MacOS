@@ -1241,7 +1241,7 @@ private struct SportCutPlaylistsTimelinePane: View {
         }
     }
 
-    /// Применяет дельту (сек) к текущему выделенному тегу по текущему краю. Возвращает seek-время для preview.
+    /// Применяет дельту (сек) к текущему выделенному тегу по текущему краю.
     private func applyEdgeDelta(_ deltaSec: Double) {
         guard let sel = selection, let session = session else { return }
         let playlistID = sel.playlistID
@@ -1261,8 +1261,6 @@ private struct SportCutPlaylistsTimelinePane: View {
         let curEnd = curStart + curDuration
 
         var updated = session
-        var seekTime: Double = 0
-
         switch resizeEdge {
         case .left:
             let newStart = curStart + deltaSec
@@ -1271,18 +1269,15 @@ private struct SportCutPlaylistsTimelinePane: View {
             let newDuration = curEnd - clampedStart
             updated.playlistGroups[gi].playlists[pi].eventStartOverrides[event.hiddenKey] = clampedStart
             updated.playlistGroups[gi].playlists[pi].eventDurationOverrides[event.hiddenKey] = newDuration
-            seekTime = clampedStart
         case .right:
             let newEnd = curEnd + deltaSec
             let clampedEnd = max(curStart + 1.0, min(newEnd, maxVideoDur))
             guard abs(clampedEnd - curEnd) > 0.001 else { return }
             let newDuration = clampedEnd - curStart
             updated.playlistGroups[gi].playlists[pi].eventDurationOverrides[event.hiddenKey] = newDuration
-            seekTime = clampedEnd
         }
 
         sessionManager.updateSession(updated)
-        playerManager.seekPreviewForPlaylistResize(absoluteVideoTime: seekTime, sourceID: event.sourceID)
     }
 
     private func resetEventOverrides(playlistID: UUID, event: SportCutEvent) {
@@ -1417,6 +1412,9 @@ private struct SportCutPlaylistSequentialRowView: View {
     /// seek completion handler. Prevents the "flash-back" caused by player.currentTime()
     /// returning the old value while an async seek is still in flight.
     @State private var seekLockPos: PlayheadRowPosition? = nil
+    /// Absolute source timeline time captured at resize start; restored after commit.
+    @State private var resizeRestoreAbsoluteTime: Double? = nil
+    @State private var resizeRestoreSourceID: UUID? = nil
 
     private var hasSelectionInRow: Bool {
         guard let sel = selection else { return false }
@@ -1504,7 +1502,12 @@ private struct SportCutPlaylistSequentialRowView: View {
             },
             onEdgeDragChanged: { edge, translationX in
                 let isDragStart = draggingEdge == nil
-                if isDragStart { draggingEdge = edge; resizeEdge = edge }
+                if isDragStart {
+                    draggingEdge = edge
+                    resizeEdge = edge
+                    resizeRestoreSourceID = event.sourceID
+                    resizeRestoreAbsoluteTime = playerManager.absoluteVideoTimelineTime(forSourceID: event.sourceID)
+                }
                 let clampedPx = clampedDragPx(edge: edge, event: event, rawPx: translationX)
                 // Keep left edge fully synchronous, but lightly smooth right edge updates.
                 dragTranslation = smoothedDragPx(edge: edge, targetPx: clampedPx, isDragStart: isDragStart)
@@ -1529,11 +1532,18 @@ private struct SportCutPlaylistSequentialRowView: View {
                 dragTranslation = 0
                 draggingEdge = nil
                 onCommitResize(edge, deltaSec)
+                if let restoreAbs = resizeRestoreAbsoluteTime, let restoreSourceID = resizeRestoreSourceID {
+                    playerManager.seekToAbsoluteTimeOnSourceTimeline(restoreAbs, sourceID: restoreSourceID)
+                }
+                resizeRestoreAbsoluteTime = nil
+                resizeRestoreSourceID = nil
             },
             onDeselect: {
                 selection = nil
                 dragTranslation = 0
                 draggingEdge = nil
+                resizeRestoreAbsoluteTime = nil
+                resizeRestoreSourceID = nil
             },
             onReset: {
                 onReset(event)
@@ -1710,6 +1720,7 @@ private struct SportCutPlaylistSequentialRowView: View {
                 availableWidth: availableWidth,
                 sessionID: sessionID,
                 isEdgeDragging: draggingEdge != nil,
+                selectedEventIndex: hasSelectionInRow ? selection?.eventIndex : nil,
                 externalSeekLockPos: $seekLockPos,
                 playerManager: playerManager,
                 onSeek: { targetEvent, localTime, completion in
@@ -1751,6 +1762,7 @@ private struct WrappedPlayheadLineView: View {
     let availableWidth: CGFloat
     let sessionID: UUID
     let isEdgeDragging: Bool
+    let selectedEventIndex: Int?
     @Binding var externalSeekLockPos: PlayheadRowPosition?
     @ObservedObject var playerManager: SportCutPlayerManager
     var onSeek: (_ event: SportCutEvent, _ localTime: Double, _ completion: (() -> Void)?) -> Void
@@ -1777,12 +1789,38 @@ private struct WrappedPlayheadLineView: View {
         return computePlayheadPosition()
     }
 
+    /// Prevent playhead from stealing mouse down when it crosses selected strip resize handles.
+    private func playheadOverlapsSelectedHandles(_ pos: PlayheadRowPosition) -> Bool {
+        guard let selectedEventIndex,
+              selectedEventIndex >= 0,
+              selectedEventIndex < baseWidths.count else { return false }
+        for row in rows {
+            guard row.id == pos.rowIndex else { continue }
+            guard let localIdx = row.eventIndices.firstIndex(of: selectedEventIndex),
+                  localIdx < row.xOffsets.count else { return false }
+            let stripStartX = row.xOffsets[localIdx]
+            let stripWidth = baseWidths[selectedEventIndex]
+            let handleW: CGFloat = 8
+            let playheadHalfHitW: CGFloat = 10 // matches 20pt gesture hit-width
+            let overlapPadding: CGFloat = 2
+            let leftHandleMin = stripStartX - playheadHalfHitW - overlapPadding
+            let leftHandleMax = stripStartX + handleW + playheadHalfHitW + overlapPadding
+            let rightEdgeX = stripStartX + stripWidth
+            let rightHandleMin = rightEdgeX - handleW - playheadHalfHitW - overlapPadding
+            let rightHandleMax = rightEdgeX + playheadHalfHitW + overlapPadding
+            return (pos.x >= leftHandleMin && pos.x <= leftHandleMax)
+                || (pos.x >= rightHandleMin && pos.x <= rightHandleMax)
+        }
+        return false
+    }
+
     var body: some View {
         let hasLock = resolvedLockPos != nil
         let paused = isEdgeDragging
             || (!hasLock && !scrubbing && (!playerManager.isPlaying || !isActivePlaylist))
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: paused)) { _ in
             if let pos = displayPosition() {
+                let playheadShouldHitTest = isActivePlaylist && !playheadOverlapsSelectedHandles(pos)
                 let yOffset = CGFloat(pos.rowIndex) * rowPitch
                 ZStack {
                     PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
@@ -1819,6 +1857,7 @@ private struct WrappedPlayheadLineView: View {
                         }
                 )
                 .transaction { $0.animation = nil }
+                .allowsHitTesting(playheadShouldHitTest)
             }
         }
         .allowsHitTesting(isActivePlaylist)
