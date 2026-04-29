@@ -51,7 +51,10 @@ struct MomentMiniTimelineView: View {
     private let resizeEdgeScrollMaxStep: CGFloat = 14
     /// Ограничиваем частоту preview при resize (~15 fps).
     private let resizePreviewThrottle: TimeInterval = 0.067
+    /// Throttle seek при scrub-drag (~30 fps).
+    private let seekTrackThrottle: TimeInterval = 0.033
     @State private var lastResizePreviewAt = Date.distantPast
+    @State private var lastSeekTrackAt = Date.distantPast
     /// Замороженное время края тега пока курсор в edge-зоне.
     @State private var resizeLockedTime: Double? = nil
     /// Ширина полосы из `GeometryReader` — нужна для пересчёта viewport при зуме/перецентровке.
@@ -363,6 +366,7 @@ struct MomentMiniTimelineView: View {
                     width: contentW,
                     height: trackHeight
                 )
+                .drawingGroup()
                 .allowsHitTesting(false)
 
                 let tagLeft = worldX(time: tagStart, contentW: contentW)
@@ -478,6 +482,9 @@ struct MomentMiniTimelineView: View {
                 case .idle:
                     break
                 case .seekTrack:
+                    let now = Date()
+                    guard now.timeIntervalSince(lastSeekTrackAt) >= seekTrackThrottle else { break }
+                    lastSeekTrackAt = now
                     let absolute = timeAtWorldX(vx, contentW: contentW)
                     let composition = absolute - tagStart
                     session.seekToCompositionTime(composition)
@@ -515,6 +522,7 @@ struct MomentMiniTimelineView: View {
                 let mode = dragMode
                 let endedResize = mode == .resizeLeft || mode == .resizeRight
                 lastResizePreviewAt = .distantPast
+                lastSeekTrackAt = .distantPast
                 defer {
                     resizeLockedTime = nil
                     scrollController.stopAutoScrollFollow()
@@ -659,7 +667,7 @@ private struct MomentMiniEvenSpacedTimeLabels: View {
         let ad = max(assetDuration, 0.000_001)
         let cw = max(contentWidth, 1)
         let spacing = max(44, labelSpacingPx)
-        let maxLabels = 240
+        let maxLabels = 60
         let rawCount = Int(floor((cw - 8) / spacing)) + 1
         let n = max(1, min(maxLabels, rawCount))
         let xs: [CGFloat] = (0..<n).map { 6 + CGFloat($0) * spacing }.filter { $0 <= cw - 4 }
