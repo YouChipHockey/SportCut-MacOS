@@ -1241,7 +1241,9 @@ private struct SportCutPlaylistsTimelinePane: View {
         }
     }
 
-    /// Применяет дельту (сек) к текущему выделенному тегу по текущему краю. Возвращает seek-время для preview.
+    /// Применяет дельту (сек) к текущему выделенному тегу.
+    /// Визуально тег всегда растет/сжимается вправо. Для левого хэндла дополнительно
+    /// сдвигаем начало клипа (start override), чтобы менялся момент старта видео.
     private func applyEdgeDelta(_ deltaSec: Double) {
         guard let sel = selection, let session = session else { return }
         let playlistID = sel.playlistID
@@ -1265,13 +1267,15 @@ private struct SportCutPlaylistsTimelinePane: View {
 
         switch resizeEdge {
         case .left:
+            // Меняем только start, оставляя end фиксированным.
             let newStart = curStart + deltaSec
-            let clampedStart = max(0, min(newStart, curEnd - 1.0))
+            let clampedStart = max(0.0, min(newStart, curEnd - 1.0))
             guard abs(clampedStart - curStart) > 0.001 else { return }
             let newDuration = curEnd - clampedStart
             updated.playlistGroups[gi].playlists[pi].eventStartOverrides[event.hiddenKey] = clampedStart
             updated.playlistGroups[gi].playlists[pi].eventDurationOverrides[event.hiddenKey] = newDuration
             seekTime = clampedStart
+
         case .right:
             let newEnd = curEnd + deltaSec
             let clampedEnd = max(curStart + 1.0, min(newEnd, maxVideoDur))
@@ -1411,6 +1415,12 @@ private struct SportCutPlaylistSequentialRowView: View {
     @State private var dragTranslation: CGFloat = 0
     /// Край, который сейчас тянут.
     @State private var draggingEdge: PlaylistResizeEdge?
+    /// Левый край выбранного тега в стабильной row-coordinate системе на старте drag.
+    @State private var initialLeftEdgeX: CGFloat = 0
+    /// Правый край выбранного тега в стабильной row-coordinate системе на старте drag.
+    @State private var initialRightEdgeX: CGFloat = 0
+    /// Смещение курсора от правого края, чтобы край шел за курсором 1:1.
+    @State private var dragAnchorX: CGFloat = 0
     /// Throttle: время последнего seek preview.
     @State private var lastSeekDate: Date = .distantPast
     /// Immediate visual override: set to the target position before a seek starts, cleared in the
@@ -1426,7 +1436,9 @@ private struct SportCutPlaylistSequentialRowView: View {
     /// Фиксированный масштаб: 1 секунда = pixelsPerSecond пикселей.
     private var secPerPixel: Double { 1.0 / Double(pixelsPerSecond) }
 
-    /// Clamp drag так, чтобы не уйти за 0, за видео, за другой край (min 1 сек).
+    /// Clamp drag для каждого хэндла:
+    /// - левый: меняем только start (end фиксирован, min длительность 1 сек)
+    /// - правый: меняем только end (start фиксирован, min длительность 1 сек)
     private func clampedDragPx(edge: PlaylistResizeEdge, event: SportCutEvent, rawPx: CGFloat) -> CGFloat {
         let effStart = playlist.effectiveStartTime(for: event)
         let effDur = playlist.effectiveDuration(for: event)
@@ -1438,31 +1450,21 @@ private struct SportCutPlaylistSequentialRowView: View {
         let videoDur = source?.videoDuration() ?? 0
         let maxTime = videoDur > 0 ? videoDur : max(effEnd * 3, 60)
 
+        let deltaSec = Double(rawPx) * spp
         switch edge {
         case .left:
-            // Тянем left handle: translation > 0 = вправо = start увеличивается = ширина уменьшается
-            let deltaSec = Double(rawPx) * spp
             let newStart = effStart + deltaSec
-            let clamped = max(0, min(newStart, effEnd - 1.0))
-            return CGFloat((clamped - effStart) / spp)
+            let clampedStart = max(0.0, min(newStart, effEnd - 1.0))
+            return CGFloat((clampedStart - effStart) / spp)
         case .right:
-            // Тянем right handle: translation > 0 = вправо = end увеличивается = ширина увеличивается
-            let deltaSec = Double(rawPx) * spp
             let newEnd = effEnd + deltaSec
-            let clamped = max(effStart + 1.0, min(newEnd, maxTime))
-            return CGFloat((clamped - effEnd) / spp)
+            let clampedEnd = max(effStart + 1.0, min(newEnd, maxTime))
+            return CGFloat((clampedEnd - effEnd) / spp)
         }
     }
 
-    /// Slightly smooth right-edge translation to reduce micro-jitter while handle itself moves.
-    private func smoothedDragPx(edge: PlaylistResizeEdge, targetPx: CGFloat, isDragStart: Bool) -> CGFloat {
-        guard edge == .right, !isDragStart else { return targetPx }
-        let smoothingFactor: CGFloat = 0.6
-        return dragTranslation + (targetPx - dragTranslation) * smoothingFactor
-    }
-
     @ViewBuilder
-    private func stripForEvent(at index: Int, widths: [CGFloat]) -> some View {
+    private func stripForEvent(at index: Int, widths: [CGFloat], stripStartX: CGFloat) -> some View {
         let event = events[index]
         let stripW = index < widths.count ? widths[index] : minStripW
         let selKey = PlaylistEventSelectionKey(playlistID: playlist.id, eventIndex: index)
@@ -1502,38 +1504,58 @@ private struct SportCutPlaylistSequentialRowView: View {
                     seekLockPos = nil  // release when player has settled
                 }
             },
-            onEdgeDragChanged: { edge, translationX in
+            onEdgeDragChanged: { edge, translationX, locationX in
                 let isDragStart = draggingEdge == nil
-                if isDragStart { draggingEdge = edge; resizeEdge = edge }
-                let clampedPx = clampedDragPx(edge: edge, event: event, rawPx: translationX)
-                // Keep left edge fully synchronous, but lightly smooth right edge updates.
-                dragTranslation = smoothedDragPx(edge: edge, targetPx: clampedPx, isDragStart: isDragStart)
-                // Throttle seek preview — не чаще 12 fps, чтобы не нагружать AVPlayer
+                if isDragStart {
+                    draggingEdge = edge
+                    resizeEdge = edge
+                    initialLeftEdgeX = stripStartX
+                    initialRightEdgeX = stripStartX + stripW
+                    dragAnchorX = locationX - (edge == .left ? initialLeftEdgeX : initialRightEdgeX)
+                }
+
+                let targetX = locationX - dragAnchorX
+                let deltaFromStart = edge == .left
+                    ? (targetX - initialLeftEdgeX)
+                    : (targetX - initialRightEdgeX)
+                let clampedPx = clampedDragPx(edge: edge, event: event, rawPx: deltaFromStart)
+                dragTranslation = clampedPx
+                // Throttle seek preview близко к TimelineLineView (~30fps)
                 let now = Date()
-                if now.timeIntervalSince(lastSeekDate) >= 0.08 {
+                if now.timeIntervalSince(lastSeekDate) >= 0.033 {
                     lastSeekDate = now
                     let previewPx = dragTranslation
-                    let seekSec = edge == .left
-                        ? effStart + Double(previewPx) * spp
-                        : effStart + effDur + Double(previewPx) * spp
+                    let deltaSec = Double(previewPx) * spp
+                    let seekSec: Double
+                    if edge == .left {
+                        let candidateStart = effStart + deltaSec
+                        seekSec = max(0.0, min(candidateStart, effStart + effDur - 1.0))
+                    } else {
+                        seekSec = effStart + effDur + deltaSec
+                    }
                     playerManager.seekPreviewForPlaylistResize(
                         absoluteVideoTime: max(0, seekSec),
                         sourceID: event.sourceID
                     )
                 }
             },
-            onEdgeDragEnded: { edge, translationX in
-                let clampedPx = clampedDragPx(edge: edge, event: event, rawPx: translationX)
-                let deltaSec = Double(clampedPx) * spp
+            onEdgeDragEnded: { edge, _ in
+                let deltaSec = Double(dragTranslation) * spp
                 // Reset drag state immediately to avoid animated "rubber-band" artifacts.
                 dragTranslation = 0
                 draggingEdge = nil
+                initialLeftEdgeX = 0
+                initialRightEdgeX = 0
+                dragAnchorX = 0
                 onCommitResize(edge, deltaSec)
             },
             onDeselect: {
                 selection = nil
                 dragTranslation = 0
                 draggingEdge = nil
+                initialLeftEdgeX = 0
+                initialRightEdgeX = 0
+                dragAnchorX = 0
             },
             onReset: {
                 onReset(event)
@@ -1552,12 +1574,12 @@ private struct SportCutPlaylistSequentialRowView: View {
         guard isSelected, let edge = draggingEdge else {
             return (effStart, effStart + effDur)
         }
-        let clampedPx = clampedDragPx(edge: edge, event: event, rawPx: dragTranslation)
         let spp = secPerPixel
-        if edge == .left {
-            return (effStart + Double(clampedPx) * spp, effStart + effDur)
-        } else {
-            return (effStart, effStart + effDur + Double(clampedPx) * spp)
+        switch edge {
+        case .left:
+            return (effStart + Double(dragTranslation) * spp, effStart + effDur)
+        case .right:
+            return (effStart, effStart + effDur + Double(dragTranslation) * spp)
         }
     }
 
@@ -1575,13 +1597,11 @@ private struct SportCutPlaylistSequentialRowView: View {
               let edge = draggingEdge, sel.eventIndex < widths.count else {
             return widths
         }
-        let event = events[sel.eventIndex]
-        let clampedPx = clampedDragPx(edge: edge, event: event, rawPx: dragTranslation)
         switch edge {
         case .left:
-            widths[sel.eventIndex] = max(widths[sel.eventIndex] - clampedPx, minStripW)
+            widths[sel.eventIndex] = max(widths[sel.eventIndex] - dragTranslation, minStripW)
         case .right:
-            widths[sel.eventIndex] = max(widths[sel.eventIndex] + clampedPx, minStripW)
+            widths[sel.eventIndex] = max(widths[sel.eventIndex] + dragTranslation, minStripW)
         }
         return widths
     }
@@ -1683,14 +1703,17 @@ private struct SportCutPlaylistSequentialRowView: View {
         let baseWidths = baseTagWidths()
         let rows = computeRows(widths: widths, availableWidth: availableWidth)
         let baseRows = computeRows(widths: baseWidths, availableWidth: availableWidth)
-        let totalH = max(CGFloat(rows.count), 1) * rowPitch
+        let isResizing = draggingEdge != nil
+        let renderedRows = isResizing ? baseRows : rows
+        let totalH = max(CGFloat(renderedRows.count), 1) * rowPitch
 
         ZStack(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: rowPitch - stripHeight) {
-                ForEach(rows) { row in
+                ForEach(renderedRows) { row in
                     HStack(spacing: gapPx) {
-                        ForEach(row.eventIndices, id: \.self) { eventIdx in
-                            stripForEvent(at: eventIdx, widths: widths)
+                        ForEach(Array(row.eventIndices.enumerated()), id: \.element) { localIdx, eventIdx in
+                            let stripStartX = localIdx < row.xOffsets.count ? row.xOffsets[localIdx] : 0
+                            stripForEvent(at: eventIdx, widths: widths, stripStartX: stripStartX)
                         }
                         Spacer(minLength: 0)
                     }
@@ -1717,6 +1740,7 @@ private struct SportCutPlaylistSequentialRowView: View {
                 }
             )
         }
+        .coordinateSpace(name: "playlistTimelineRow")
         .frame(height: totalH)
         // Auto-select the currently playing strip as the playhead advances.
         .onChange(of: playerManager.currentEvent) { currentEvent in
@@ -1959,7 +1983,7 @@ private struct SportCutPlaylistStripView: View {
     let sourcePlaylistID: UUID
     let eventIndex: Int
     let onTap: (_ fraction: CGFloat) -> Void
-    let onEdgeDragChanged: (_ edge: PlaylistResizeEdge, _ translationX: CGFloat) -> Void
+    let onEdgeDragChanged: (_ edge: PlaylistResizeEdge, _ translationX: CGFloat, _ locationX: CGFloat) -> Void
     let onEdgeDragEnded: (_ edge: PlaylistResizeEdge, _ translationX: CGFloat) -> Void
     let onDeselect: () -> Void
     let onReset: () -> Void
@@ -2037,9 +2061,9 @@ private struct SportCutPlaylistStripView: View {
                         .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
                         .frame(width: handleW, height: handleH)
                         .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in onEdgeDragChanged(.left, value.translation.width) }
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .named("playlistTimelineRow"))
+                                .onChanged { value in onEdgeDragChanged(.left, value.translation.width, value.location.x) }
                                 .onEnded { value in onEdgeDragEnded(.left, value.translation.width) }
                         )
 
@@ -2052,9 +2076,9 @@ private struct SportCutPlaylistStripView: View {
                         .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
                         .frame(width: handleW, height: handleH)
                         .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in onEdgeDragChanged(.right, value.translation.width) }
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .named("playlistTimelineRow"))
+                                .onChanged { value in onEdgeDragChanged(.right, value.translation.width, value.location.x) }
                                 .onEnded { value in onEdgeDragEnded(.right, value.translation.width) }
                         )
                 }

@@ -795,7 +795,11 @@ struct SportCutPlaylistCardView: View {
                         )
                     }
                     Button(^String.Titles.sportCutDeleteDrawing, role: .destructive) {
-                        playerManager.deleteDrawing(marker.drawing)
+                        playerManager.deleteDrawing(
+                            marker.drawing,
+                            event: marker.event,
+                            playlistID: playlist.id
+                        )
                     }
                 }
         }
@@ -863,6 +867,7 @@ struct SportCutPlaylistCardView: View {
                     isHidden: isHidden,
                     isDropTarget: isDropTarget,
                     hasDrawing: !(playlist.eventDrawings[event.hiddenKey] ?? []).isEmpty,
+                    drawings: playlist.eventDrawings[event.hiddenKey] ?? [],
                     onAddDrawing: {
                         playerManager.sessionID = sessionID
                         playerManager.captureNewDrawingForPlaylistClip(
@@ -878,6 +883,23 @@ struct SportCutPlaylistCardView: View {
                     },
                     onDelete: {
                         removeEvent(at: index)
+                    },
+                    onEditDrawing: { drawing in
+                        playerManager.sessionID = sessionID
+                        playerManager.editExistingDrawing(
+                            drawing: drawing,
+                            event: event,
+                            visiblePlaylistEvents: visibleEventsForEditing(event),
+                            playlistID: playlist.id
+                        )
+                    },
+                    onDeleteDrawing: { drawing in
+                        playerManager.sessionID = sessionID
+                        playerManager.deleteDrawing(
+                            drawing,
+                            event: event,
+                            playlistID: playlist.id
+                        )
                     },
                     onComment: {
                         openCommentEditor(for: event)
@@ -1114,6 +1136,15 @@ struct SportCutPlaylistCardView: View {
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
     }
+
+    /// Editor API expects target event inside the provided array.
+    /// Hidden events are not in `visibleEvents`, so include them explicitly.
+    private func visibleEventsForEditing(_ event: SportCutEvent) -> [SportCutEvent] {
+        if visibleEvents.contains(where: { $0.hiddenKey == event.hiddenKey }) {
+            return visibleEvents
+        }
+        return [event] + visibleEvents
+    }
 }
 
 // MARK: - Playlist Event Row
@@ -1127,9 +1158,12 @@ struct PlaylistEventRowView: View {
     let isHidden: Bool
     let isDropTarget: Bool
     let hasDrawing: Bool
+    let drawings: [SportCutEventDrawing]
     let onAddDrawing: () -> Void
     let onTap: () -> Void
     let onDelete: () -> Void
+    let onEditDrawing: (_ drawing: SportCutEventDrawing) -> Void
+    let onDeleteDrawing: (_ drawing: SportCutEventDrawing) -> Void
     let onComment: () -> Void
     let hasComment: Bool
     let onToggleHidden: () -> Void
@@ -1222,6 +1256,26 @@ struct PlaylistEventRowView: View {
         .contextMenu {
             Button(hasComment ? ^String.Titles.sportCutEditComment : ^String.Titles.sportCutAddComment) { onComment() }
             Button(^String.Titles.sportCutCreateDrawing) { onAddDrawing() }
+            if !drawings.isEmpty {
+                Divider()
+                if drawings.count == 1, let drawing = drawings.first {
+                    Button(^String.Titles.sportCutEditDrawing) { onEditDrawing(drawing) }
+                    Button(^String.Titles.sportCutDeleteDrawing, role: .destructive) { onDeleteDrawing(drawing) }
+                } else {
+                    Menu(^String.Titles.sportCutDrawing) {
+                        ForEach(Array(drawings.enumerated()), id: \.element.imageName) { idx, drawing in
+                            let title = "\(String.Titles.sportCutDrawing) \(idx + 1)"
+                            Button("\(title) — \(String(format: "%.1fs", drawing.videoTime)) • \(^String.Titles.sportCutEditDrawing)") {
+                                onEditDrawing(drawing)
+                            }
+                            Button("\(title) — \(String(format: "%.1fs", drawing.videoTime)) • \(^String.Titles.sportCutDeleteDrawing)", role: .destructive) {
+                                onDeleteDrawing(drawing)
+                            }
+                            if idx < drawings.count - 1 { Divider() }
+                        }
+                    }
+                }
+            }
             Button(isHidden ? ^String.Titles.sportCutShowEvent : ^String.Titles.sportCutHideEvent) { onToggleHidden() }
             Divider()
             Button(^String.Titles.sportCutMoveUp) { onMoveUp() }

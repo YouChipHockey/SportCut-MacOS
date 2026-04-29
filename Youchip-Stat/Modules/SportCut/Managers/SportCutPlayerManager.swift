@@ -70,6 +70,10 @@ class SportCutPlayerManager: ObservableObject {
     /// Tracks which sourceID is currently loaded as a direct file asset for resize preview.
     /// nil means the current item is a composition (normal playback), not a raw file preview.
     private var previewSourceID: UUID?
+    /// Prevents flooding AVPlayer with overlapping preview seeks during timeline edge drag.
+    private var previewSeekInFlight: Bool = false
+    /// Latest pending preview seek request; only the newest is kept ("last seek wins").
+    private var pendingPreviewSeek: (absoluteVideoTime: Double, sourceID: UUID)?
     
     private var playlistEvents: [SportCutEvent] = []
     @Published private(set) var playlistPlaybackKind: SportCutPlaylistPlaybackKind = .sequentialClips
@@ -575,41 +579,66 @@ class SportCutPlayerManager: ObservableObject {
     /// On first call for a sourceID (or after normal playback reset), loads the raw video file.
     /// On subsequent calls for the same sourceID, only seeks — no item replacement, no black flash.
     func seekPreviewForPlaylistResize(absoluteVideoTime: Double, sourceID: UUID) {
-        player.pause()
-        isPlaying = false
+        pendingPreviewSeek = (absoluteVideoTime: max(0, absoluteVideoTime), sourceID: sourceID)
+        processNextPreviewSeekIfNeeded()
+    }
 
-        let cm = CMTime(seconds: max(0, absoluteVideoTime), preferredTimescale: 600)
+    private func processNextPreviewSeekIfNeeded() {
+        guard !previewSeekInFlight, let request = pendingPreviewSeek else { return }
+        previewSeekInFlight = true
+        pendingPreviewSeek = nil
+
+        if isPlaying {
+            player.pause()
+            isPlaying = false
+        }
+
+        let cm = CMTime(seconds: request.absoluteVideoTime, preferredTimescale: 600)
         let tol = CMTime(seconds: 0.05, preferredTimescale: 600)
+
+        let finish: (Bool) -> Void = { [weak self] _ in
+            guard let self else { return }
+            self.previewSeekInFlight = false
+            self.processNextPreviewSeekIfNeeded()
+        }
 
         // If the raw file for this source is already loaded as the current item — just seek.
         // previewSourceID is nil when a composition is loaded (normal playback), so we
         // correctly reload on the first drag gesture after playback.
-        if previewSourceID == sourceID {
-            player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+        if previewSourceID == request.sourceID {
+            player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol, completionHandler: finish)
             return
         }
 
-        guard let source = sources.first(where: { $0.id == sourceID }) ?? {
+        guard let source = sources.first(where: { $0.id == request.sourceID }) ?? {
             guard let sessionID,
                   let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
-                  let s = session.sources.first(where: { $0.id == sourceID }) else { return nil }
+                  let s = session.sources.first(where: { $0.id == request.sourceID }) else { return nil }
             return s
-        }() else { return }
+        }() else {
+            previewSeekInFlight = false
+            processNextPreviewSeekIfNeeded()
+            return
+        }
 
-        guard let url = source.resolveVideoURL() else { return }
+        guard let url = source.resolveVideoURL() else {
+            previewSeekInFlight = false
+            processNextPreviewSeekIfNeeded()
+            return
+        }
         let asset: AVAsset
-        if let cached = loadedAssets[sourceID] {
+        if let cached = loadedAssets[request.sourceID] {
             asset = cached
         } else {
             asset = AVAsset(url: url)
-            loadedAssets[sourceID] = asset
+            loadedAssets[request.sourceID] = asset
         }
 
-        currentSourceID = sourceID
-        previewSourceID = sourceID
+        currentSourceID = request.sourceID
+        previewSourceID = request.sourceID
         let item = AVPlayerItem(asset: asset)
         player.replaceCurrentItem(with: item)
-        player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+        player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol, completionHandler: finish)
     }
 
     func changePlaybackSpeed(to speed: Double) {
@@ -1141,20 +1170,22 @@ class SportCutPlayerManager: ObservableObject {
         shownDrawingNames.insert(matched.imageName)
     }
 
-    func deleteDrawing(_ drawing: SportCutEventDrawing) {
-        guard let sessionID = sessionID,
-              let playlistID = currentPlaylistID,
-              let event = currentEvent else { return }
+    func deleteDrawing(_ drawing: SportCutEventDrawing, event: SportCutEvent? = nil, playlistID: UUID? = nil) {
+        guard let sessionID = sessionID else { return }
+
+        let targetPlaylistID = playlistID ?? currentPlaylistID
+        let targetEvent = event ?? currentEvent
+        guard let targetPlaylistID, let targetEvent else { return }
 
         if var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) {
             for gi in session.playlistGroups.indices {
-                if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == playlistID }) {
-                    var arr = session.playlistGroups[gi].playlists[pi].eventDrawings[event.hiddenKey] ?? []
+                if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == targetPlaylistID }) {
+                    var arr = session.playlistGroups[gi].playlists[pi].eventDrawings[targetEvent.hiddenKey] ?? []
                     arr.removeAll { $0.imageName == drawing.imageName }
                     if arr.isEmpty {
-                        session.playlistGroups[gi].playlists[pi].eventDrawings.removeValue(forKey: event.hiddenKey)
+                        session.playlistGroups[gi].playlists[pi].eventDrawings.removeValue(forKey: targetEvent.hiddenKey)
                     } else {
-                        session.playlistGroups[gi].playlists[pi].eventDrawings[event.hiddenKey] = arr
+                        session.playlistGroups[gi].playlists[pi].eventDrawings[targetEvent.hiddenKey] = arr
                     }
                     let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
                     try? FileManager.default.removeItem(at: folder.appendingPathComponent(drawing.imageName))
