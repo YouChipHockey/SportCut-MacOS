@@ -26,6 +26,7 @@ struct MomentMiniTimelineView: View {
     @ObservedObject private var timelineData = TimelineDataManager.shared
 
     @StateObject private var scrollController = TimelineScrollController()
+    @StateObject private var dragState = MomentMiniTimelineDragState()
 
     @GestureState private var magnifyScale: CGFloat = 1.0
     /// Последний `layoutEpoch`, для которого уже выставили стартовый масштаб (при появлении `stamp`).
@@ -51,9 +52,12 @@ struct MomentMiniTimelineView: View {
     private let resizeEdgeScrollMaxStep: CGFloat = 14
     /// Ограничиваем частоту preview при resize (~15 fps).
     private let resizePreviewThrottle: TimeInterval = 0.067
+    /// Throttle визуального обновления края во время resize (~60 fps).
+    private let resizeVisualThrottle: TimeInterval = 0.016
     /// Throttle seek при scrub-drag (~30 fps).
     private let seekTrackThrottle: TimeInterval = 0.033
     @State private var lastResizePreviewAt = Date.distantPast
+    @State private var lastResizeVisualAt = Date.distantPast
     @State private var lastSeekTrackAt = Date.distantPast
     /// Замороженное время края тега пока курсор в edge-зоне.
     @State private var resizeLockedTime: Double? = nil
@@ -62,13 +66,17 @@ struct MomentMiniTimelineView: View {
     @State private var lastTimelineScaleForScrollSync: CGFloat = 1.0
     /// Стартовый `applyInitialTimelineScaleIfNeeded` не должен дёргать скролл (его делает `scheduleScrollToTagCenter`).
     @State private var skipTimelineScaleScrollPreserve = false
+    /// Для медленных машин: после первой стабильной ширины делаем дополнительный re-center.
+    @State private var didStabilizeInitialWidthCentering = false
 
     private var canResize: Bool {
         lineID != nil && stampID != nil && stamp != nil
     }
 
-    private var tagStart: Double { stamp?.timeStartSeconds ?? session.displayStartTime }
-    private var tagEnd: Double { stamp?.timeFinishSeconds ?? (tagStart + session.displayDuration) }
+    private var baseTagStart: Double { stamp?.timeStartSeconds ?? session.displayStartTime }
+    private var baseTagEnd: Double { stamp?.timeFinishSeconds ?? (baseTagStart + session.displayDuration) }
+    private var tagStart: Double { dragState.previewStart ?? baseTagStart }
+    private var tagEnd: Double { dragState.previewEnd ?? baseTagEnd }
     private var tagDuration: Double { max(tagEnd - tagStart, 0.000_001) }
 
     private var assetDuration: Double {
@@ -193,6 +201,7 @@ struct MomentMiniTimelineView: View {
                 .onAppear {
                     lastLayoutFullWidth = max(W, 1)
                     lastTimelineScaleForScrollSync = timelineScale
+                    didStabilizeInitialWidthCentering = false
                     applyInitialTimelineScaleIfNeeded()
                     scheduleScrollToTagCenter(proxy: proxy, fullWidth: W)
                 }
@@ -213,6 +222,9 @@ struct MomentMiniTimelineView: View {
                 }
                 .onChange(of: outerGeo.size.width) { newWidth in
                     lastLayoutFullWidth = max(newWidth, 1)
+                    guard !didStabilizeInitialWidthCentering, newWidth > 120 else { return }
+                    didStabilizeInitialWidthCentering = true
+                    scheduleScrollToTagCenter(proxy: proxy, fullWidth: newWidth)
                 }
                 .onChange(of: timelineScale) { newValue in
                     handleTimelineScaleChanged(newValue)
@@ -278,15 +290,23 @@ struct MomentMiniTimelineView: View {
         scrollViewport: CGFloat,
         contentW: CGFloat
     ) {
-        let vw = max(scrollViewport, 1)
-        let cw = max(contentW, 1)
-        guard cw > vw + 0.5 else { return }
-        let cx = worldX(time: tagCenter, contentW: cw)
-        if scrollController.scrollView != nil {
-            let maxScroll = max(0, cw - vw)
-            let target = min(maxScroll, max(0, cx - vw * 0.5))
+        let fallbackVW = max(scrollViewport, 1)
+        let fallbackCW = max(contentW, 1)
+        guard fallbackCW > fallbackVW + 0.5 else { return }
+        if let sv = scrollController.scrollView,
+           let doc = sv.documentView,
+           scrollController.visibleWidth > 1 {
+            // Критично для старых Intel: центрируем по ФАКТИЧЕСКОМУ document width,
+            // а не по предварительному расчёту SwiftUI layout.
+            let actualVW = max(scrollController.visibleWidth, 1)
+            let actualCW = max(doc.frame.width, actualVW)
+            let cx = worldX(time: tagCenter, contentW: actualCW)
+            let maxScroll = max(0, actualCW - actualVW)
+            let target = min(maxScroll, max(0, cx - actualVW * 0.5))
             scrollController.scrollTo(x: target)
         } else {
+            let cx = worldX(time: tagCenter, contentW: fallbackCW)
+            guard cx.isFinite else { return }
             var t = Transaction()
             t.animation = nil
             withTransaction(t) {
@@ -422,6 +442,9 @@ struct MomentMiniTimelineView: View {
                     scrollable: scrollable
                 )
             )
+            .transaction { t in
+                t.animation = nil
+            }
         }
         .frame(width: contentW, height: height)
     }
@@ -465,11 +488,15 @@ struct MomentMiniTimelineView: View {
                 if dragMode == .idle {
                     if canResize, abs(vx - tagLeftWorld) <= handleHitSlop * 0.55 {
                         dragMode = .resizeLeft
+                        dragState.previewStart = baseTagStart
+                        dragState.previewEnd = baseTagEnd
                         resizeLockedTime = nil
                         scrollController.stopAutoScrollFollow()
                         session.pausePlayback()
                     } else if canResize, abs(vx - tagRightWorld) <= handleHitSlop * 0.55 {
                         dragMode = .resizeRight
+                        dragState.previewStart = baseTagStart
+                        dragState.previewEnd = baseTagEnd
                         resizeLockedTime = nil
                         scrollController.stopAutoScrollFollow()
                         session.pausePlayback()
@@ -489,32 +516,32 @@ struct MomentMiniTimelineView: View {
                     let composition = absolute - tagStart
                     session.seekToCompositionTime(composition)
                 case .resizeLeft:
-                    guard let lid = lineID, let sid = stampID else { break }
+                    guard lineID != nil, stampID != nil else { break }
                     let resolvedTime = resolveResizeCursorTime(
                         cursorX: vx,
                         docLeft: docLeft, docRight: docRight,
                         contentW: contentW, scrollable: scrollable
                     )
                     let clamped = max(0, min(resolvedTime, tagEnd - 0.5))
-                    timelineData.updateStampTime(
-                        lineID: lid, stampID: sid,
-                        newStart: clamped,
-                        persistChanges: false, runScreenshotUnlinkCheck: false
-                    )
+                    let now = Date()
+                    if now.timeIntervalSince(lastResizeVisualAt) >= resizeVisualThrottle {
+                        lastResizeVisualAt = now
+                        dragState.previewStart = clamped
+                    }
                     previewResizeIfNeeded(edgeAnchorAbsolute: clamped)
                 case .resizeRight:
-                    guard let lid = lineID, let sid = stampID else { break }
+                    guard lineID != nil, stampID != nil else { break }
                     let resolvedTime = resolveResizeCursorTime(
                         cursorX: vx,
                         docLeft: docLeft, docRight: docRight,
                         contentW: contentW, scrollable: scrollable
                     )
                     let clamped = min(assetDuration, max(resolvedTime, tagStart + 0.5))
-                    timelineData.updateStampTime(
-                        lineID: lid, stampID: sid,
-                        newEnd: clamped,
-                        persistChanges: false, runScreenshotUnlinkCheck: false
-                    )
+                    let now = Date()
+                    if now.timeIntervalSince(lastResizeVisualAt) >= resizeVisualThrottle {
+                        lastResizeVisualAt = now
+                        dragState.previewEnd = clamped
+                    }
                     previewResizeIfNeeded(edgeAnchorAbsolute: clamped)
                 }
             }
@@ -523,27 +550,33 @@ struct MomentMiniTimelineView: View {
                 let endedResize = mode == .resizeLeft || mode == .resizeRight
                 lastResizePreviewAt = .distantPast
                 lastSeekTrackAt = .distantPast
+                lastResizeVisualAt = .distantPast
                 defer {
                     resizeLockedTime = nil
+                    dragState.reset()
                     scrollController.stopAutoScrollFollow()
                     dragMode = .idle
                 }
                 /// После `recompose` плейхед у края, за который тянули (начало / конец клипа), без сохранения старой позиции воспроизведения.
                 let edgeAnchorAbsolute: Double? = {
-                    guard endedResize, let b = freshStampBounds() else { return nil }
+                    guard endedResize else { return nil }
+                    let finalStart = dragState.previewStart ?? baseTagStart
+                    let finalEnd = dragState.previewEnd ?? baseTagEnd
                     switch mode {
-                    case .resizeLeft: return b.0
-                    case .resizeRight: return b.1
+                    case .resizeLeft: return finalStart
+                    case .resizeRight: return finalEnd
                     case .idle, .seekTrack: return nil
                     }
                 }()
                 if endedResize {
-                    if let lid = lineID, let sid = stampID, let b = freshStampBounds() {
+                    if let lid = lineID, let sid = stampID {
+                        let finalStart = dragState.previewStart ?? baseTagStart
+                        let finalEnd = dragState.previewEnd ?? baseTagEnd
                         timelineData.updateStampTime(
                             lineID: lid,
                             stampID: sid,
-                            newStart: b.0,
-                            newEnd: b.1,
+                            newStart: finalStart,
+                            newEnd: finalEnd,
                             persistChanges: true,
                             runScreenshotUnlinkCheck: true
                         )
@@ -602,14 +635,6 @@ struct MomentMiniTimelineView: View {
         return timeAtWorldX(min(max(cursorX, 0), contentW), contentW: contentW)
     }
 
-    private func freshStampBounds() -> (Double, Double)? {
-        guard let lid = lineID, let sid = stampID,
-              let line = timelineData.lines.first(where: { $0.id == lid }),
-              let st = line.stamps.first(where: { $0.id == sid }) else { return nil }
-        return (st.timeStartSeconds, st.timeFinishSeconds)
-    }
-
-
     private func recomposeSessionAfterStampEdit(anchor: Double?) {
         guard let lid = lineID, let sid = stampID,
               let line = timelineData.lines.first(where: { $0.id == lid }),
@@ -650,6 +675,19 @@ struct MomentMiniTimelineView: View {
                 .frame(width: 2, height: max(trackHeight - 18, 12))
         }
         .frame(width: 18, height: trackHeight)
+    }
+}
+
+/// Локальное состояние интерактивного resize мини-таймлайна.
+/// Изолирует частые drag-апдейты от общей модели `TimelineDataManager`.
+@MainActor
+final class MomentMiniTimelineDragState: ObservableObject {
+    @Published var previewStart: Double?
+    @Published var previewEnd: Double?
+
+    func reset() {
+        previewStart = nil
+        previewEnd = nil
     }
 }
 
