@@ -1244,7 +1244,7 @@ private struct SportCutPlaylistsTimelinePane: View {
     /// Применяет дельту (сек) к текущему выделенному тегу.
     /// Визуально тег всегда растет/сжимается вправо. Для левого хэндла дополнительно
     /// сдвигаем начало клипа (start override), чтобы менялся момент старта видео.
-    private func applyEdgeDelta(_ deltaSec: Double) {
+    private func applyEdgeDelta(_ deltaSec: Double, edge: PlaylistResizeEdge) {
         guard let sel = selection, let session = session else { return }
         let playlistID = sel.playlistID
         guard let gi = session.playlistGroups.firstIndex(where: { $0.playlists.contains(where: { $0.id == playlistID }) }),
@@ -1264,8 +1264,9 @@ private struct SportCutPlaylistsTimelinePane: View {
 
         var updated = session
         var seekTime: Double = 0
+        let eventKey = event.hiddenKey
 
-        switch resizeEdge {
+        switch edge {
         case .left:
             // Меняем только start, оставляя end фиксированным.
             let newStart = curStart + deltaSec
@@ -1274,7 +1275,7 @@ private struct SportCutPlaylistsTimelinePane: View {
             let newDuration = curEnd - clampedStart
             updated.playlistGroups[gi].playlists[pi].eventStartOverrides[event.hiddenKey] = clampedStart
             updated.playlistGroups[gi].playlists[pi].eventDurationOverrides[event.hiddenKey] = newDuration
-            seekTime = clampedStart
+            seekTime = clampedStart + newDuration / 3.0
 
         case .right:
             let newEnd = curEnd + deltaSec
@@ -1282,11 +1283,68 @@ private struct SportCutPlaylistsTimelinePane: View {
             guard abs(clampedEnd - curEnd) > 0.001 else { return }
             let newDuration = clampedEnd - curStart
             updated.playlistGroups[gi].playlists[pi].eventDurationOverrides[event.hiddenKey] = newDuration
-            seekTime = clampedEnd
+            seekTime = curStart + (newDuration * 2.0 / 3.0)
         }
 
         sessionManager.updateSession(updated)
-        playerManager.seekPreviewForPlaylistResize(absoluteVideoTime: seekTime, sourceID: event.sourceID)
+        seekEditedClipAfterResize(
+            updatedSession: updated,
+            playlistID: playlistID,
+            eventKey: eventKey,
+            sourceID: event.sourceID,
+            absoluteSeekTime: seekTime
+        )
+    }
+
+    /// После resize возвращает плеер в режим клипа/плейлиста (не raw full source)
+    /// и выставляет плейхэд в рассчитанную абсолютную точку исходника.
+    private func seekEditedClipAfterResize(
+        updatedSession: SportCutSession,
+        playlistID: UUID,
+        eventKey: String,
+        sourceID: UUID,
+        absoluteSeekTime: Double
+    ) {
+        guard let playlist = updatedSession.playlistGroups
+            .flatMap(\.playlists)
+            .first(where: { $0.id == playlistID }) else { return }
+
+        let visible = visibleEvents(in: playlist)
+        guard let targetIndex = visible.firstIndex(where: { $0.hiddenKey == eventKey }) else { return }
+        let targetEvent = visible[targetIndex]
+
+        let clipStart = playlist.effectiveStartTime(for: targetEvent)
+        let clipDuration = playlist.effectiveDuration(for: targetEvent)
+        let clipEnd = clipStart + clipDuration
+        let clampedAbsolute = min(max(absoluteSeekTime, clipStart), clipEnd)
+        let localSeek = max(0, clampedAbsolute - clipStart)
+
+        let targetPlaybackKind: SportCutPlaylistPlaybackKind = playerManager.currentPlaylistID == playlistID
+            ? playerManager.playlistPlaybackKind
+            : .singleFilm
+
+        playerManager.sessionID = sessionID
+        playerManager.playPlaylist(
+            visible,
+            startIndex: targetIndex,
+            playlistID: playlistID,
+            playbackKind: targetPlaybackKind,
+            autoPlayAfterLoad: false
+        ) {
+            if targetPlaybackKind == .singleFilm {
+                var filmTime = 0.0
+                for (idx, item) in visible.enumerated() {
+                    if idx == targetIndex { break }
+                    filmTime += playlist.effectiveDuration(for: item)
+                }
+                let globalSeek = filmTime + localSeek
+                let cm = CMTime(seconds: max(0, globalSeek), preferredTimescale: 600)
+                playerManager.player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero)
+            } else {
+                let cm = CMTime(seconds: max(0, localSeek), preferredTimescale: 600)
+                playerManager.player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero)
+            }
+        }
     }
 
     private func resetEventOverrides(playlistID: UUID, event: SportCutEvent) {
@@ -1342,7 +1400,7 @@ private struct SportCutPlaylistsTimelinePane: View {
                                     selection: $selection,
                                     resizeEdge: $resizeEdge,
                                     onCommitResize: { edge, deltaSec in
-                                        applyEdgeDelta(deltaSec)
+                                        applyEdgeDelta(deltaSec, edge: edge)
                                     },
                                     onReset: { event in
                                         resetEventOverrides(playlistID: playlist.id, event: event)
@@ -1784,6 +1842,8 @@ private struct WrappedPlayheadLineView: View {
     @State private var scrubVisualPos: PlayheadRowPosition?
     @State private var wasPlayingBeforeScrub: Bool = false
     @State private var internalSeekLockPos: PlayheadRowPosition? = nil
+    /// Gesture-priority zone near clip edges where resize handles must win over playhead drag.
+    private let resizeHandlePriorityZone: CGFloat = 10
 
     private var isActivePlaylist: Bool {
         playerManager.currentPlaylistID == playlist.id && playerManager.currentPlaylistIndex >= 0
@@ -1799,6 +1859,24 @@ private struct WrappedPlayheadLineView: View {
         if scrubbing { return scrubVisualPos }
         if let lock = resolvedLockPos { return lock }
         return computePlayheadPosition()
+    }
+
+    /// When the playhead is at clip edges, disable its drag hit-testing so edge resize handles
+    /// receive the gesture even if the playhead is visually above.
+    private func isInResizePriorityZone(_ pos: PlayheadRowPosition?) -> Bool {
+        guard let pos, pos.rowIndex >= 0, pos.rowIndex < rows.count else { return false }
+        let row = rows[pos.rowIndex]
+        for (localIdx, eventIdx) in row.eventIndices.enumerated() {
+            guard localIdx < row.xOffsets.count, eventIdx < baseWidths.count else { continue }
+            let stripStart = row.xOffsets[localIdx]
+            let stripEnd = stripStart + baseWidths[eventIdx]
+            guard pos.x >= stripStart && pos.x <= stripEnd else { continue }
+
+            let leftDistance = abs(pos.x - stripStart)
+            let rightDistance = abs(stripEnd - pos.x)
+            return leftDistance <= resizeHandlePriorityZone || rightDistance <= resizeHandlePriorityZone
+        }
+        return false
     }
 
     var body: some View {
@@ -1842,6 +1920,7 @@ private struct WrappedPlayheadLineView: View {
                             if wasPlayingBeforeScrub { playerManager.play() }
                         }
                 )
+                .allowsHitTesting(!isInResizePriorityZone(pos))
                 .transaction { $0.animation = nil }
             }
         }

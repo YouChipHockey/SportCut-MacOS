@@ -221,18 +221,7 @@ struct VideoThumbnailView: View {
             
             Divider()
             
-            Button(action: {
-                viewModel.action.send(.appendToVideo(file: file))
-            }) {
-                HStack {
-                    Image(systemName: "plus.rectangle.on.rectangle")
-                        .foregroundColor(.blue)
-                    Text(^String.Titles.appendToVideo)
-                }
-            }
-            
-            Divider()
-            
+            // TODO: Restore context menu item "appendToVideo" for selected file.
             Button(action: {
                 viewModel.action.send(.exportProject(file: file))
             }) {
