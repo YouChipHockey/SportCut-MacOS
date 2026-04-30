@@ -180,35 +180,39 @@ private func sportCutWatermarkBuildSnapshot(playerManager: SportCutPlayerManager
         }
     }
 
-    if playerManager.showCommentsWatermark,
-       let event = playerManager.currentEvent,
+    if let event = playerManager.currentEvent,
        let sessionID = playerManager.sessionID,
        let session = sessions.first(where: { $0.id == sessionID }) {
         if currentSession == nil { currentSession = session }
         if currentEvent == nil { currentEvent = event }
 
-        // 1) Preferred source in playlist mode: per-playlist comments.
+        // Keep playlist index independent from comment visibility.
         if let playlistID = playerManager.currentPlaylistID,
            let playlist = session.playlistGroups.flatMap(\.playlists).first(where: { $0.id == playlistID }) {
             if let idx = playlist.events.firstIndex(where: { $0.hiddenKey == event.hiddenKey }) {
                 playlistIndexPrefix = idx + 1
             }
-            let raw = playlist.eventComments[event.hiddenKey] ?? ""
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                comment = trimmed
-            }
-        }
-
-        // 2) Fallback in markup mode: original stamp comment from timeline.
-        if comment == nil {
-            let source = currentSource ?? session.sources.first(where: { $0.id == event.sourceID })
-            if let source,
-               let stamp = source.timelines.flatMap(\.stamps).first(where: { $0.id == event.stampID }) {
-                let raw = stamp.comment ?? ""
+            if playerManager.showCommentsWatermark {
+                // 1) Preferred source in playlist mode: per-playlist comments.
+                let raw = playlist.eventComments[event.hiddenKey] ?? ""
                 let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty {
                     comment = trimmed
+                }
+            }
+        }
+
+        if playerManager.showCommentsWatermark {
+            // 2) Fallback in markup mode: original stamp comment from timeline.
+            if comment == nil {
+                let source = currentSource ?? session.sources.first(where: { $0.id == event.sourceID })
+                if let source,
+                   let stamp = source.timelines.flatMap(\.stamps).first(where: { $0.id == event.stampID }) {
+                    let raw = stamp.comment ?? ""
+                    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        comment = trimmed
+                    }
                 }
             }
         }
@@ -427,10 +431,6 @@ private struct SportCutWatermarkDraggableTile: View {
         let yTop = min(max(rawYTop, 0), max(0, H - h))
 
         ZStack(alignment: .topLeading) {
-            Color.clear
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-
             WatermarkChrome(
                 snapshot: snapshot,
                 maxTextWidth: maxTextW,
@@ -486,9 +486,11 @@ private struct SportCutWatermarkDraggableTile: View {
 /// Draggable watermark: text hugs intrinsic size; background matches text + padding.
 struct SportCutWatermarkOverlay: View {
     @ObservedObject var playerManager: SportCutPlayerManager
+    @ObservedObject private var sessionManager = SportCutSessionManager.shared
 
     private var snapshot: WatermarkRichSnapshot? {
-        sportCutWatermarkBuildSnapshot(playerManager: playerManager)
+        _ = sessionManager.sessions
+        return sportCutWatermarkBuildSnapshot(playerManager: playerManager)
     }
 
     var body: some View {

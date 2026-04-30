@@ -420,7 +420,7 @@ class WindowsManager: NSObject {
                     self.appendingFile = nil
                     self.liveVideoId = nil
                     self.liveFileName = nil
-                    self.setMarkupMode(.standard)
+                    self.setMarkupMode(.tagBased)
                     LiveStreamManager.shared.fullCleanup()
                 }
                 

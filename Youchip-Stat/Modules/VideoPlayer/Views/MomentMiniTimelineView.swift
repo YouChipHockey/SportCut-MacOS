@@ -43,11 +43,21 @@ struct MomentMiniTimelineView: View {
     private let handleHitSlop: CGFloat = 14
     /// Доля видимой ширины таймлайна, которую изначально занимает тег (~25%).
     private let initialTagWidthFractionOfViewport: CGFloat = 0.25
-    private let resizeViewportEdgePadding: CGFloat = 14
-    private let resizeViewportClampInterval: TimeInterval = 0.012
-    @State private var lastViewportClampAt = Date.distantPast
-    @State private var lastResizeStripContentW: CGFloat = 1
-    /// Ширина полосы из `GeometryReader` — для `preserveScroll` при смене масштаба извне (слайдер в родителе).
+    /// Отступ от края viewport, на котором край тега замораживается во время edge-scroll.
+    private let resizeEdgeFreezeOffset: CGFloat = 14
+    /// Ширина зоны у края, в которой активируется edge-scroll (больше freeze-offset).
+    private let resizeEdgeScrollZone: CGFloat = 40
+    /// Максимальный шаг скролла за одно drag-событие (pts).
+    private let resizeEdgeScrollMaxStep: CGFloat = 14
+    /// Ограничиваем частоту preview при resize (~15 fps).
+    private let resizePreviewThrottle: TimeInterval = 0.067
+    /// Throttle seek при scrub-drag (~30 fps).
+    private let seekTrackThrottle: TimeInterval = 0.033
+    @State private var lastResizePreviewAt = Date.distantPast
+    @State private var lastSeekTrackAt = Date.distantPast
+    /// Замороженное время края тега пока курсор в edge-зоне.
+    @State private var resizeLockedTime: Double? = nil
+    /// Ширина полосы из `GeometryReader` — нужна для пересчёта viewport при зуме/перецентровке.
     @State private var lastLayoutFullWidth: CGFloat = 1
     @State private var lastTimelineScaleForScrollSync: CGFloat = 1.0
     /// Стартовый `applyInitialTimelineScaleIfNeeded` не должен дёргать скролл (его делает `scheduleScrollToTagCenter`).
@@ -232,8 +242,7 @@ struct MomentMiniTimelineView: View {
         let old = lastTimelineScaleForScrollSync
         lastTimelineScaleForScrollSync = newValue
         guard abs(old - newValue) > 0.001 else { return }
-        let vw = scrollViewportFromFullWidth(lastLayoutFullWidth)
-        preserveScrollAfterScaleChange(oldScale: old, newScale: newValue, scrollViewport: vw)
+        centerViewportByTagAfterScaleChange(newScale: newValue)
     }
 
     private func applyInitialTimelineScaleIfNeeded() {
@@ -246,22 +255,22 @@ struct MomentMiniTimelineView: View {
         timelineScale = min(momentMiniTimelineMaxScale, max(1.0, target))
     }
 
-    /// Центрирование тега; `fullWidth` — ширина `GeometryReader` полосы (пересчитываем `scrollViewport` от актуального `timelineScale`).
+    /// Центрирование тега; `fullWidth` используется только для первого мгновенного прохода.
+    /// Отложенные повторы всегда берут актуальную `lastLayoutFullWidth`, чтобы не прыгать
+    /// к позиции, рассчитанной по устаревшей ширине контейнера.
     private func scheduleScrollToTagCenter(proxy: ScrollViewProxy, fullWidth: CGFloat?) {
-        func attempt() {
-            let wBase = max(fullWidth ?? lastLayoutFullWidth, 1)
+        func attempt(widthOverride: CGFloat? = nil) {
+            let wBase = max(widthOverride ?? lastLayoutFullWidth, 1)
             let vw = scrollViewportFromFullWidth(wBase)
             let cw = contentWidth(viewportWidth: vw, effectiveScale: timelineScale)
             scrollMiniTimelineToTagCenter(proxy: proxy, scrollViewport: vw, contentW: cw)
         }
-        attempt()
+        attempt(widthOverride: fullWidth)
         DispatchQueue.main.async {
             attempt()
             DispatchQueue.main.async { attempt() }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { attempt() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { attempt() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { attempt() }
     }
 
     private func scrollMiniTimelineToTagCenter(
@@ -295,20 +304,22 @@ struct MomentMiniTimelineView: View {
         // Сохранение скролла — в `onChange(of: timelineScale)`.
     }
 
-    private func preserveScrollAfterScaleChange(oldScale: CGFloat, newScale: CGFloat, scrollViewport: CGFloat) {
-        let vw = max(scrollViewport, 1)
-        let oldCW = vw * oldScale
-        let newCW = vw * newScale
-        let oldCx = worldX(time: tagCenter, contentW: oldCW)
-        let newCx = worldX(time: tagCenter, contentW: newCW)
-        let delta = newCx - oldCx
-        let oldScroll = scrollController.currentScrollX
-        let sc = scrollController
-        DispatchQueue.main.async {
-            if sc.scrollView != nil {
-                sc.scrollTo(x: oldScroll + delta)
-            }
+    /// При зуме мини-таймлайна держим тег в центре видимой области.
+    private func centerViewportByTagAfterScaleChange(newScale: CGFloat) {
+        func attempt() {
+            let rawViewport = scrollController.visibleWidth > 1
+                ? scrollController.visibleWidth
+                : scrollViewportFromFullWidth(lastLayoutFullWidth)
+            let vw = max(rawViewport, 1)
+            let cw = contentWidth(viewportWidth: vw, effectiveScale: newScale)
+            guard cw > vw + 0.5 else { return }
+            let cx = worldX(time: tagCenter, contentW: cw)
+            let maxScroll = max(0, cw - vw)
+            let target = min(maxScroll, max(0, cx - vw * 0.5))
+            scrollController.scrollTo(x: target)
         }
+        attempt()
+        DispatchQueue.main.async { attempt() }
     }
 
     @ViewBuilder
@@ -355,6 +366,7 @@ struct MomentMiniTimelineView: View {
                     width: contentW,
                     height: trackHeight
                 )
+                .drawingGroup()
                 .allowsHitTesting(false)
 
                 let tagLeft = worldX(time: tagStart, contentW: contentW)
@@ -412,8 +424,6 @@ struct MomentMiniTimelineView: View {
             )
         }
         .frame(width: contentW, height: height)
-        .onAppear { lastResizeStripContentW = contentW }
-        .onChange(of: contentW) { lastResizeStripContentW = $0 }
     }
 
     private var markupTrackBackground: some View {
@@ -455,10 +465,12 @@ struct MomentMiniTimelineView: View {
                 if dragMode == .idle {
                     if canResize, abs(vx - tagLeftWorld) <= handleHitSlop * 0.55 {
                         dragMode = .resizeLeft
+                        resizeLockedTime = nil
                         scrollController.stopAutoScrollFollow()
                         session.pausePlayback()
                     } else if canResize, abs(vx - tagRightWorld) <= handleHitSlop * 0.55 {
                         dragMode = .resizeRight
+                        resizeLockedTime = nil
                         scrollController.stopAutoScrollFollow()
                         session.pausePlayback()
                     } else {
@@ -470,44 +482,52 @@ struct MomentMiniTimelineView: View {
                 case .idle:
                     break
                 case .seekTrack:
+                    let now = Date()
+                    guard now.timeIntervalSince(lastSeekTrackAt) >= seekTrackThrottle else { break }
+                    lastSeekTrackAt = now
                     let absolute = timeAtWorldX(vx, contentW: contentW)
                     let composition = absolute - tagStart
                     session.seekToCompositionTime(composition)
                 case .resizeLeft:
                     guard let lid = lineID, let sid = stampID else { break }
-                    let newStart = timeAtWorldX(vx, contentW: contentW)
-                    let end = tagEnd
-                    let clamped = max(0, min(newStart, end - 0.5))
-                    timelineData.updateStampTime(lineID: lid, stampID: sid, newStart: clamped)
-                    if scrollable, let b = freshStampBounds() {
-                        let tl = worldX(time: b.0, contentW: contentW)
-                        clampDraggedTagEdgeInViewport(
-                            edgeWorld: tl,
-                            docLeft: docLeft,
-                            docRight: docRight,
-                            contentW: contentW
-                        )
-                    }
+                    let resolvedTime = resolveResizeCursorTime(
+                        cursorX: vx,
+                        docLeft: docLeft, docRight: docRight,
+                        contentW: contentW, scrollable: scrollable
+                    )
+                    let clamped = max(0, min(resolvedTime, tagEnd - 0.5))
+                    timelineData.updateStampTime(
+                        lineID: lid, stampID: sid,
+                        newStart: clamped,
+                        persistChanges: false, runScreenshotUnlinkCheck: false
+                    )
+                    previewResizeIfNeeded(edgeAnchorAbsolute: clamped)
                 case .resizeRight:
                     guard let lid = lineID, let sid = stampID else { break }
-                    let newEnd = timeAtWorldX(vx, contentW: contentW)
-                    let start = tagStart
-                    let clamped = min(assetDuration, max(newEnd, start + 0.5))
-                    timelineData.updateStampTime(lineID: lid, stampID: sid, newEnd: clamped)
-                    if scrollable, let b = freshStampBounds() {
-                        let tr = worldX(time: b.1, contentW: contentW)
-                        clampDraggedTagEdgeInViewport(
-                            edgeWorld: tr,
-                            docLeft: docLeft,
-                            docRight: docRight,
-                            contentW: contentW
-                        )
-                    }
+                    let resolvedTime = resolveResizeCursorTime(
+                        cursorX: vx,
+                        docLeft: docLeft, docRight: docRight,
+                        contentW: contentW, scrollable: scrollable
+                    )
+                    let clamped = min(assetDuration, max(resolvedTime, tagStart + 0.5))
+                    timelineData.updateStampTime(
+                        lineID: lid, stampID: sid,
+                        newEnd: clamped,
+                        persistChanges: false, runScreenshotUnlinkCheck: false
+                    )
+                    previewResizeIfNeeded(edgeAnchorAbsolute: clamped)
                 }
             }
             .onEnded { _ in
                 let mode = dragMode
                 let endedResize = mode == .resizeLeft || mode == .resizeRight
+                lastResizePreviewAt = .distantPast
+                lastSeekTrackAt = .distantPast
+                defer {
+                    resizeLockedTime = nil
+                    scrollController.stopAutoScrollFollow()
+                    dragMode = .idle
+                }
                 /// После `recompose` плейхед у края, за который тянули (начало / конец клипа), без сохранения старой позиции воспроизведения.
                 let edgeAnchorAbsolute: Double? = {
                     guard endedResize, let b = freshStampBounds() else { return nil }
@@ -518,11 +538,68 @@ struct MomentMiniTimelineView: View {
                     }
                 }()
                 if endedResize {
+                    if let lid = lineID, let sid = stampID, let b = freshStampBounds() {
+                        timelineData.updateStampTime(
+                            lineID: lid,
+                            stampID: sid,
+                            newStart: b.0,
+                            newEnd: b.1,
+                            persistChanges: true,
+                            runScreenshotUnlinkCheck: true
+                        )
+                    }
                     recomposeSessionAfterStampEdit(anchor: edgeAnchorAbsolute)
-                    finalizeResizeSmoothScroll()
                 }
-                dragMode = .idle
             }
+    }
+
+    /// Единая логика для обоих edge-направлений при resize.
+    /// Если курсор попал в зону у ЛЕВОГО или ПРАВОГО края viewport:
+    ///   — скроллим таймлайн со скоростью пропорциональной дистанции от края
+    ///   — замораживаем время тега у freeze-offset и возвращаем его
+    /// Если курсор внутри — возвращаем реальное время под курсором, сбрасываем lock.
+    private func resolveResizeCursorTime(
+        cursorX: CGFloat,
+        docLeft: CGFloat,
+        docRight: CGFloat,
+        contentW: CGFloat,
+        scrollable: Bool
+    ) -> Double {
+        let vw = max(docRight - docLeft, 1)
+        let maxScroll = max(0, contentW - vw)
+        let atLeft = scrollController.currentScrollX <= 0.5
+        let atRight = scrollController.currentScrollX >= maxScroll - 0.5
+
+        // Левый edge: курсор левее зоны и ещё есть куда скроллить влево
+        if cursorX < docLeft + resizeEdgeScrollZone, !atLeft {
+            if scrollable {
+                let overshoot = max(0, (docLeft + resizeEdgeScrollZone) - cursorX)
+                let step = min(overshoot / resizeEdgeScrollZone, 1) * resizeEdgeScrollMaxStep
+                scrollController.scrollTo(x: max(0, scrollController.currentScrollX - step))
+            }
+            // Пересчитываем каждый раз от текущего docLeft, чтобы тег
+            // продолжал тянуться по мере того как таймлайн скроллится.
+            let t = timeAtWorldX(max(0, docLeft + resizeEdgeFreezeOffset), contentW: contentW)
+            resizeLockedTime = t
+            return t
+        }
+
+        // Правый edge: курсор правее зоны и ещё есть куда скроллить вправо
+        if cursorX > docRight - resizeEdgeScrollZone, !atRight {
+            if scrollable {
+                let overshoot = max(0, cursorX - (docRight - resizeEdgeScrollZone))
+                let step = min(overshoot / resizeEdgeScrollZone, 1) * resizeEdgeScrollMaxStep
+                scrollController.scrollTo(x: min(maxScroll, scrollController.currentScrollX + step))
+            }
+            // Пересчитываем каждый раз от текущего docRight — тег ползёт дальше по мере скролла.
+            let t = timeAtWorldX(min(contentW, docRight - resizeEdgeFreezeOffset), contentW: contentW)
+            resizeLockedTime = t
+            return t
+        }
+
+        // Курсор в свободной зоне — тег свободно следует за курсором
+        resizeLockedTime = nil
+        return timeAtWorldX(min(max(cursorX, 0), contentW), contentW: contentW)
     }
 
     private func freshStampBounds() -> (Double, Double)? {
@@ -532,63 +609,6 @@ struct MomentMiniTimelineView: View {
         return (st.timeStartSeconds, st.timeFinishSeconds)
     }
 
-    /// Перетаскиваемый край тега не выходит за видимую полосу (NSScrollView).
-    private func clampDraggedTagEdgeInViewport(
-        edgeWorld: CGFloat,
-        docLeft: CGFloat,
-        docRight: CGFloat,
-        contentW: CGFloat
-    ) {
-        let now = Date()
-        guard now.timeIntervalSince(lastViewportClampAt) >= resizeViewportClampInterval else { return }
-        guard scrollController.scrollView != nil, edgeWorld.isFinite else { return }
-        let vw = docRight - docLeft
-        guard vw > 1 else { return }
-        let maxScroll = max(0, contentW - vw)
-        let p = resizeViewportEdgePadding
-        var target: CGFloat?
-        if edgeWorld < docLeft + p {
-            target = max(0, edgeWorld - p)
-        } else if edgeWorld > docRight - p {
-            target = min(maxScroll, edgeWorld - vw + p)
-        }
-        guard let t = target, abs(t - docLeft) > 0.25 else { return }
-        lastViewportClampAt = now
-        scrollController.scrollTo(x: t)
-    }
-
-    /// После отпускания — плавно подтянуть скролл к «ровному» положению относительно тега.
-    private func finalizeResizeSmoothScroll() {
-        guard scrollController.scrollView != nil else { return }
-        let cw = max(lastResizeStripContentW, 1)
-        guard let b = freshStampBounds() else { return }
-        let tl = worldX(time: b.0, contentW: cw)
-        let tr = worldX(time: b.1, contentW: cw)
-        let vis = scrollController.documentVisibleRect
-        guard vis.width > 1 else { return }
-
-        let docL = vis.origin.x
-        let docR = vis.origin.x + vis.width
-        let vw = vis.width
-        let m: CGFloat = 12
-        let maxScroll = max(0, cw - vw)
-
-        var target = docL
-        if tl < docL + m {
-            target = max(0, tl - m)
-        } else if tr > docR - m {
-            target = min(maxScroll, tr - vw + m)
-        } else if tl - docL > m * 3 {
-            target = min(maxScroll, max(0, tl - m))
-        } else if docR - tr > m * 3 {
-            target = min(maxScroll, max(0, tr - vw + m))
-        } else {
-            return
-        }
-
-        guard abs(target - docL) > 1.5 else { return }
-        scrollController.setAutoScrollTarget(x: target)
-    }
 
     private func recomposeSessionAfterStampEdit(anchor: Double?) {
         guard let lid = lineID, let sid = stampID,
@@ -601,6 +621,15 @@ struct MomentMiniTimelineView: View {
             anchorAbsoluteTime: anchor,
             resumePlaybackAfterSeek: true
         )
+    }
+
+    /// Покадровый preview во время resize: не чаще `resizePreviewThrottle`,
+    /// seek по исходному ассету без постоянного `replaceCurrentItem`.
+    private func previewResizeIfNeeded(edgeAnchorAbsolute: Double) {
+        let now = Date()
+        guard now.timeIntervalSince(lastResizePreviewAt) >= resizePreviewThrottle else { return }
+        lastResizePreviewAt = now
+        session.seekPreviewDuringResize(absoluteVideoTime: edgeAnchorAbsolute)
     }
 
     private func handleCapsule(trackHeight: CGFloat) -> some View {
@@ -638,7 +667,7 @@ private struct MomentMiniEvenSpacedTimeLabels: View {
         let ad = max(assetDuration, 0.000_001)
         let cw = max(contentWidth, 1)
         let spacing = max(44, labelSpacingPx)
-        let maxLabels = 240
+        let maxLabels = 60
         let rawCount = Int(floor((cw - 8) / spacing)) + 1
         let n = max(1, min(maxLabels, rawCount))
         let xs: [CGFloat] = (0..<n).map { 6 + CGFloat($0) * spacing }.filter { $0 <= cw - 4 }

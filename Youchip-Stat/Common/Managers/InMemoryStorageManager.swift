@@ -8,6 +8,9 @@ final class InMemoryStorageManager {
     
     private let userDefaults = UserDefaults.standard
     private let fileManager = FileManager.default
+    /// Platform guard for CFPreferences payload size.
+    /// Keep a small safety margin below the 4 MB hard limit.
+    private let maxUserDefaultsBlobSize = 4_000_000
     
     private var saveToDiskTimer: Timer?
     private var pendingSave = false
@@ -35,8 +38,15 @@ final class InMemoryStorageManager {
     func saveTimelines(_ timelines: [TimelineLine], for videoId: String) {
         let key = "timeline_\(videoId)"
         if let data = try? JSONEncoder().encode(timelines) {
-            userDefaults.set(data, forKey: key)
-            scheduleSaveToDisk()
+            if data.count > maxUserDefaultsBlobSize {
+                // Large timelines must bypass UserDefaults to avoid CFPreferences
+                // hard-limit warnings/errors and UI stalls on save.
+                userDefaults.removeObject(forKey: key)
+                saveTimelineDataToFile(data, videoId: videoId)
+            } else {
+                userDefaults.set(data, forKey: key)
+                scheduleSaveToDisk()
+            }
         }
     }
     
@@ -148,8 +158,19 @@ final class InMemoryStorageManager {
         }
         
         let key = "timeline_\(videoId)"
-        userDefaults.set(data, forKey: key)
+        if data.count <= maxUserDefaultsBlobSize {
+            userDefaults.set(data, forKey: key)
+        } else {
+            userDefaults.removeObject(forKey: key)
+        }
         return timelines
+    }
+
+    private func saveTimelineDataToFile(_ data: Data, videoId: String) {
+        let timelinesDirectory = getTimelinesDirectory()
+        fileManager.createDirectoryIfNeeded(url: timelinesDirectory)
+        let fileURL = timelinesDirectory.appendingPathComponent("\(videoId).json")
+        try? data.write(to: fileURL, options: .atomic)
     }
     
     private func deleteTimelinesFile(for videoId: String) {

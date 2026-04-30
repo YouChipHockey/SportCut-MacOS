@@ -26,6 +26,8 @@ final class MomentViewerSession: ObservableObject {
     private var endObserver: NSObjectProtocol?
     private var timeObserver: Any?
     private var didInvalidate = false
+    /// Во время resize-preview загружен исходный ассет и идут только seek'и (без постоянного replace item).
+    private var isResizePreviewMode = false
     /// Увеличивается на каждый `configure`, чтобы игнорировать устаревшие completion после `replaceCurrentItem`.
     private var configureGeneration: Int = 0
     /// Не перезаписывать время с плеера сразу после seek/reconfigure (убирает «дёрганье» плейхеда у конца).
@@ -89,9 +91,42 @@ final class MomentViewerSession: ObservableObject {
         }
     }
 
+    /// Preview при изменении границ тега: один раз переключаемся на исходный ассет, дальше только seek.
+    /// Это убирает "черные кадры" от частого `replaceCurrentItem` во время drag.
+    func seekPreviewDuringResize(absoluteVideoTime: Double) {
+        guard !didInvalidate else { return }
+        player.pause()
+        let targetAbs = max(0, min(absoluteVideoTime, sourceAssetDuration))
+        let cm = CMTime(seconds: targetAbs, preferredTimescale: 600)
+        let tol = CMTime(seconds: 0.05, preferredTimescale: 600)
+
+        if isResizePreviewMode {
+            player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+            return
+        }
+
+        if let obs = endObserver {
+            NotificationCenter.default.removeObserver(obs)
+            endObserver = nil
+        }
+        if let old = timeObserver {
+            player.removeTimeObserver(old)
+            timeObserver = nil
+        }
+
+        isResizePreviewMode = true
+        let item = AVPlayerItem(asset: sourceAsset)
+        player.replaceCurrentItem(with: item)
+        suppressPeriodicTimeUntil = Date().addingTimeInterval(0.2)
+        let local = max(0, min(targetAbs - displayStartTime, maxCompositionLocalSeconds(duration: displayDuration)))
+        compositionPlaybackSeconds = local
+        player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+    }
+
     private func configure(anchorAbsoluteTime: Double?, resumePlaybackAfterSeek: Bool) {
         configureGeneration += 1
         let generation = configureGeneration
+        isResizePreviewMode = false
         if let obs = endObserver {
             NotificationCenter.default.removeObserver(obs)
             endObserver = nil

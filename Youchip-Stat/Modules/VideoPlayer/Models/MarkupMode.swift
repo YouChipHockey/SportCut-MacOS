@@ -14,9 +14,9 @@ enum MarkupMode: String, Codable {
     static var current: MarkupMode {
         get {
             guard let storedMode = UserDefaults.standard.string(forKey: "appMarkupMode") else {
-                return .standard
+                return .tagBased
             }
-            return MarkupMode(rawValue: storedMode) ?? .standard
+            return MarkupMode(rawValue: storedMode) ?? .tagBased
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: "appMarkupMode")
