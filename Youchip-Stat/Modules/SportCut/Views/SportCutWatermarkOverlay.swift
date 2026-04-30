@@ -22,28 +22,78 @@ private extension View {
     }
 }
 
-/// Tight text size (word-wrap at `maxLineWidth`) for layout; plain string mirrors line breaks.
-/// When only the tag line is shown, measure with the same 13 pt semibold as SwiftUI — otherwise 12 pt medium
-/// underestimates width and `frame(width:)` forces a spurious wrap (e.g. short Cyrillic "ее").
-private func sportCutWatermarkTextContentSize(text: String, maxLineWidth: CGFloat, tagLineOnly: Bool) -> CGSize {
-    let maxW = max(1, maxLineWidth)
-    let font: NSFont = tagLineOnly
-        ? NSFont.systemFont(ofSize: 13, weight: .semibold)
-        : NSFont.systemFont(ofSize: 12, weight: .medium)
+/// Builds an attributed string whose fonts match `WatermarkChrome` (tag / time / labels / comment).
+/// Single-font measurement of `plainTextForLayout` was systematically too narrow vs SwiftUI mixed styles.
+private func sportCutWatermarkAttributedString(for snapshot: WatermarkRichSnapshot) -> NSAttributedString {
+    let body12 = NSFont.systemFont(ofSize: 12, weight: .medium)
+    let tag13 = NSFont.systemFont(ofSize: 13, weight: .semibold)
+    let time12 = NSFont.systemFont(ofSize: 12, weight: .semibold)
+    let labelSemi = NSFont.systemFont(ofSize: 12, weight: .semibold)
+    let labelReg = NSFont.systemFont(ofSize: 12, weight: .regular)
+
     let style = NSMutableParagraphStyle()
     style.lineBreakMode = .byWordWrapping
-    let attrs: [NSAttributedString.Key: Any] = [
-        .font: font,
-        .paragraphStyle: style,
-    ]
-    let attributed = NSAttributedString(string: text, attributes: attrs)
-    let rect = attributed.boundingRect(
-        with: CGSize(width: maxW, height: CGFloat.greatestFiniteMagnitude),
+    func withParagraph(_ font: NSFont) -> [NSAttributedString.Key: Any] {
+        [.font: font, .paragraphStyle: style]
+    }
+
+    let out = NSMutableAttributedString()
+    var headPieces: [NSAttributedString] = []
+
+    if !snapshot.tagLine.isEmpty {
+        if let t = snapshot.timeEventsLine, !t.isEmpty {
+            let line = NSMutableAttributedString()
+            line.append(NSAttributedString(string: snapshot.tagLine, attributes: withParagraph(tag13)))
+            line.append(NSAttributedString(string: " • ", attributes: withParagraph(tag13)))
+            line.append(NSAttributedString(string: t, attributes: withParagraph(time12)))
+            headPieces.append(line)
+        } else {
+            headPieces.append(NSAttributedString(string: snapshot.tagLine, attributes: withParagraph(tag13)))
+        }
+    } else if let t = snapshot.timeEventsLine, !t.isEmpty {
+        headPieces.append(NSAttributedString(string: t, attributes: withParagraph(time12)))
+    }
+
+    if !snapshot.labelGroups.isEmpty {
+        let row = NSMutableAttributedString()
+        for (idx, chunk) in snapshot.labelGroups.enumerated() {
+            if idx > 0 {
+                row.append(NSAttributedString(string: " • ", attributes: withParagraph(labelReg)))
+            }
+            row.append(NSAttributedString(string: "\(chunk.groupName):", attributes: withParagraph(labelSemi)))
+            row.append(NSAttributedString(string: " \(chunk.labelsJoined)", attributes: withParagraph(labelReg)))
+        }
+        headPieces.append(row)
+    }
+
+    let newline = NSAttributedString(string: "\n", attributes: withParagraph(body12))
+    for (idx, piece) in headPieces.enumerated() {
+        if idx > 0 { out.append(newline) }
+        out.append(piece)
+    }
+
+    if let c = snapshot.comment, !c.isEmpty {
+        if out.length > 0 {
+            out.append(NSAttributedString(string: "\n\n", attributes: withParagraph(body12)))
+        }
+        out.append(NSAttributedString(string: c, attributes: withParagraph(body12)))
+    }
+
+    return out
+}
+
+private func sportCutWatermarkAttributedBoundingSize(_ attributed: NSAttributedString, maxLineWidth: CGFloat) -> CGSize {
+    let maxW = max(1, maxLineWidth)
+    let loose = CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+    let naturalRect = attributed.boundingRect(with: loose, options: [.usesLineFragmentOrigin, .usesFontLeading])
+    /// Extra slack so AppKit width doesn’t land slightly under SwiftUI Text (+ retina / font linking).
+    let naturalW = ceil(naturalRect.width) + 4
+    let layoutW = min(maxW, max(1, naturalW))
+    let wrappedRect = attributed.boundingRect(
+        with: CGSize(width: layoutW, height: CGFloat.greatestFiniteMagnitude),
         options: [.usesLineFragmentOrigin, .usesFontLeading]
     )
-    let width = min(maxW, ceil(rect.width) + (tagLineOnly ? 2 : 0))
-    let height = max(1, ceil(rect.height))
-    return CGSize(width: width, height: height)
+    return CGSize(width: layoutW, height: max(1, ceil(wrappedRect.height)))
 }
 
 private struct ChipLayout: Equatable {
@@ -53,12 +103,8 @@ private struct ChipLayout: Equatable {
 }
 
 private func sportCutWatermarkComputeChipLayout(snapshot: WatermarkRichSnapshot, maxTextW: CGFloat, maxTextH: CGFloat) -> ChipLayout {
-    let text = snapshot.plainTextForLayout
-    let contentSize = sportCutWatermarkTextContentSize(
-        text: text,
-        maxLineWidth: maxTextW,
-        tagLineOnly: snapshot.isTagLineOnly || snapshot.isTagPlusTimeOnlyPlain
-    )
+    let attributed = sportCutWatermarkAttributedString(for: snapshot)
+    let contentSize = sportCutWatermarkAttributedBoundingSize(attributed, maxLineWidth: maxTextW)
     let needsScroll = contentSize.height > maxTextH + 0.5
     let chipW: CGFloat
     let chipH: CGFloat
@@ -252,6 +298,11 @@ private struct WatermarkChrome: View, Equatable {
             && lhs.needsVerticalScroll == rhs.needsVerticalScroll
     }
 
+    /// Width for text wrapping: tight `contentSize` when not scrolling (matches chip), full column when scrolling.
+    private var layoutTextWidth: CGFloat {
+        needsVerticalScroll ? maxTextWidth : contentSize.width
+    }
+
     private var tagAndTimeFirstLine: Text {
         let tag = Text(snapshot.tagLine)
             .font(.system(size: 13, weight: .semibold))
@@ -281,7 +332,7 @@ private struct WatermarkChrome: View, Equatable {
                 } else {
                     tagAndTimeFirstLine
                         .multilineTextAlignment(.leading)
-                        .frame(maxWidth: maxTextWidth, alignment: .leading)
+                        .frame(maxWidth: layoutTextWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else if let time = snapshot.timeEventsLine, !time.isEmpty {
@@ -292,7 +343,7 @@ private struct WatermarkChrome: View, Equatable {
             if !snapshot.labelGroups.isEmpty {
                 labelGroupsText
                     .multilineTextAlignment(.leading)
-                    .frame(maxWidth: maxTextWidth, alignment: .leading)
+                    .frame(maxWidth: layoutTextWidth, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -325,7 +376,7 @@ private struct WatermarkChrome: View, Equatable {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.leading)
-                .frame(maxWidth: maxTextWidth, alignment: .leading)
+                .frame(maxWidth: layoutTextWidth, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
