@@ -59,13 +59,13 @@ struct MomentMiniTimelineView: View {
     @State private var lastResizePreviewAt = Date.distantPast
     @State private var lastResizeVisualAt = Date.distantPast
     @State private var lastSeekTrackAt = Date.distantPast
+    /// Локальное время композиции под пальцем при scrub трека (мини-плейхэд без ожидания seek).
+    @State private var seekTrackVisualComposition: Double?
     /// Замороженное время края тега пока курсор в edge-зоне.
     @State private var resizeLockedTime: Double? = nil
     /// Ширина полосы из `GeometryReader` — нужна для пересчёта viewport при зуме/перецентровке.
     @State private var lastLayoutFullWidth: CGFloat = 1
     @State private var lastTimelineScaleForScrollSync: CGFloat = 1.0
-    /// Стартовый `applyInitialTimelineScaleIfNeeded` не должен дёргать скролл (его делает `scheduleScrollToTagCenter`).
-    @State private var skipTimelineScaleScrollPreserve = false
     /// Для медленных машин: после первой стабильной ширины делаем дополнительный re-center.
     @State private var didStabilizeInitialWidthCentering = false
 
@@ -79,10 +79,18 @@ struct MomentMiniTimelineView: View {
     private var tagEnd: Double { dragState.previewEnd ?? baseTagEnd }
     private var tagDuration: Double { max(tagEnd - tagStart, 0.000_001) }
 
-    private var assetDuration: Double {
-        max(session.sourceAssetDuration, tagEnd + 0.01)
+    /// Ось времени мини-таймлайна — только длина исходника (не раздуваем при preview ресайза, иначе разъезжается маппинг и сетка).
+    private var timelineMappingDuration: Double {
+        max(session.sourceAssetDuration, 0.000_001)
     }
-    private var tagCenter: Double { tagStart + tagDuration * 0.5 }
+
+    private var clampedTagStart: Double {
+        min(max(tagStart, 0), timelineMappingDuration)
+    }
+    private var clampedTagEnd: Double {
+        min(max(tagEnd, clampedTagStart + 0.000_001), timelineMappingDuration)
+    }
+    private var tagCenter: Double { (clampedTagStart + clampedTagEnd) * 0.5 }
 
     /// Как `SportCutTimelineView.sportCutMarkupTimeGridInterval`.
     private func sportCutMarkupTimeGridInterval(scale: CGFloat, totalDuration: Double) -> Double {
@@ -98,11 +106,11 @@ struct MomentMiniTimelineView: View {
     }
 
     private func worldX(time: Double, contentW: CGFloat) -> CGFloat {
-        CGFloat(time / max(assetDuration, 0.000_001)) * contentW
+        CGFloat(time / timelineMappingDuration) * contentW
     }
 
     private func timeAtWorldX(_ x: CGFloat, contentW: CGFloat) -> Double {
-        Double(x / max(contentW, 1)) * assetDuration
+        min(max(0, Double(x / max(contentW, 1)) * timelineMappingDuration), timelineMappingDuration)
     }
 
     private var stampColor: Color {
@@ -126,7 +134,7 @@ struct MomentMiniTimelineView: View {
                 : wFull
             let contentW = contentWidth(viewportWidth: scrollViewport, effectiveScale: effectiveScale)
             let scrollable = contentW > scrollViewport + 0.5
-            let gridInterval = sportCutMarkupTimeGridInterval(scale: effectiveScale, totalDuration: assetDuration)
+            let gridInterval = sportCutMarkupTimeGridInterval(scale: effectiveScale, totalDuration: timelineMappingDuration)
 
             ScrollViewReader { proxy in
                 HStack(spacing: 4) {
@@ -246,11 +254,6 @@ struct MomentMiniTimelineView: View {
     }
 
     private func handleTimelineScaleChanged(_ newValue: CGFloat) {
-        if skipTimelineScaleScrollPreserve {
-            skipTimelineScaleScrollPreserve = false
-            lastTimelineScaleForScrollSync = newValue
-            return
-        }
         let old = lastTimelineScaleForScrollSync
         lastTimelineScaleForScrollSync = newValue
         guard abs(old - newValue) > 0.001 else { return }
@@ -262,9 +265,15 @@ struct MomentMiniTimelineView: View {
         if lastAppliedInitialLayoutEpoch == layoutEpoch { return }
         lastAppliedInitialLayoutEpoch = layoutEpoch
         let td = max(tagDuration, 0.000_001)
-        let target = CGFloat(assetDuration * Double(initialTagWidthFractionOfViewport) / td)
-        skipTimelineScaleScrollPreserve = true
+        let target = CGFloat(timelineMappingDuration * Double(initialTagWidthFractionOfViewport) / td)
         timelineScale = min(momentMiniTimelineMaxScale, max(1.0, target))
+        let applied = timelineScale
+        DispatchQueue.main.async {
+            centerViewportByTagAfterScaleChange(newScale: applied)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            centerViewportByTagAfterScaleChange(newScale: applied)
+        }
     }
 
     /// Центрирование тега; `fullWidth` используется только для первого мгновенного прохода.
@@ -283,6 +292,7 @@ struct MomentMiniTimelineView: View {
             DispatchQueue.main.async { attempt() }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { attempt() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { attempt() }
     }
 
     private func scrollMiniTimelineToTagCenter(
@@ -356,16 +366,21 @@ struct MomentMiniTimelineView: View {
     ) -> some View {
         let absolutePlayheadTime: Double = {
             switch dragMode {
-            case .resizeLeft: return tagStart
-            case .resizeRight: return tagEnd
-            case .idle, .seekTrack: return tagStart + session.compositionPlaybackSeconds
+            case .resizeLeft: return clampedTagStart
+            case .resizeRight: return clampedTagEnd
+            case .idle: return clampedTagStart + session.compositionPlaybackSeconds
+            case .seekTrack:
+                return clampedTagStart + (seekTrackVisualComposition ?? session.compositionPlaybackSeconds)
             }
         }()
         let cx = worldX(time: tagCenter, contentW: contentW)
 
+        let tagLeft = worldX(time: clampedTagStart, contentW: contentW)
+        let tagRight = worldX(time: clampedTagEnd, contentW: contentW)
+
         VStack(spacing: 0) {
             MomentMiniEvenSpacedTimeLabels(
-                assetDuration: assetDuration,
+                assetDuration: timelineMappingDuration,
                 contentWidth: contentW,
                 rowHeight: labelRowHeight
             )
@@ -381,16 +396,13 @@ struct MomentMiniTimelineView: View {
                     .allowsHitTesting(false)
 
                 TimeGridView(
-                    duration: assetDuration,
+                    duration: timelineMappingDuration,
                     interval: gridInterval,
                     width: contentW,
                     height: trackHeight
                 )
                 .drawingGroup()
                 .allowsHitTesting(false)
-
-                let tagLeft = worldX(time: tagStart, contentW: contentW)
-                let tagRight = worldX(time: tagEnd, contentW: contentW)
 
                 if tagRight > tagLeft + 0.5 {
                     RoundedRectangle(cornerRadius: 5)
@@ -436,8 +448,8 @@ struct MomentMiniTimelineView: View {
                 resizeOrSeekGesture(
                     viewportWidth: W,
                     contentWidth: contentW,
-                    tagLeftWorld: worldX(time: tagStart, contentW: contentW),
-                    tagRightWorld: worldX(time: tagEnd, contentW: contentW),
+                    tagLeftWorld: tagLeft,
+                    tagRightWorld: tagRight,
                     scrollProxy: scrollProxy,
                     scrollable: scrollable
                 )
@@ -509,12 +521,13 @@ struct MomentMiniTimelineView: View {
                 case .idle:
                     break
                 case .seekTrack:
+                    let absolute = timeAtWorldX(vx, contentW: contentW)
+                    let composition = absolute - clampedTagStart
+                    seekTrackVisualComposition = session.clampedCompositionLocal(composition)
                     let now = Date()
                     guard now.timeIntervalSince(lastSeekTrackAt) >= seekTrackThrottle else { break }
                     lastSeekTrackAt = now
-                    let absolute = timeAtWorldX(vx, contentW: contentW)
-                    let composition = absolute - tagStart
-                    session.seekToCompositionTime(composition)
+                    session.seekToCompositionTime(seekTrackVisualComposition ?? composition)
                 case .resizeLeft:
                     guard lineID != nil, stampID != nil else { break }
                     let resolvedTime = resolveResizeCursorTime(
@@ -522,7 +535,7 @@ struct MomentMiniTimelineView: View {
                         docLeft: docLeft, docRight: docRight,
                         contentW: contentW, scrollable: scrollable
                     )
-                    let clamped = max(0, min(resolvedTime, tagEnd - 0.5))
+                    let clamped = max(0, min(resolvedTime, min(tagEnd - 0.5, timelineMappingDuration - 0.5)))
                     let now = Date()
                     if now.timeIntervalSince(lastResizeVisualAt) >= resizeVisualThrottle {
                         lastResizeVisualAt = now
@@ -536,7 +549,7 @@ struct MomentMiniTimelineView: View {
                         docLeft: docLeft, docRight: docRight,
                         contentW: contentW, scrollable: scrollable
                     )
-                    let clamped = min(assetDuration, max(resolvedTime, tagStart + 0.5))
+                    let clamped = min(timelineMappingDuration, max(resolvedTime, clampedTagStart + 0.5))
                     let now = Date()
                     if now.timeIntervalSince(lastResizeVisualAt) >= resizeVisualThrottle {
                         lastResizeVisualAt = now
@@ -548,6 +561,7 @@ struct MomentMiniTimelineView: View {
             .onEnded { _ in
                 let mode = dragMode
                 let endedResize = mode == .resizeLeft || mode == .resizeRight
+                seekTrackVisualComposition = nil
                 lastResizePreviewAt = .distantPast
                 lastSeekTrackAt = .distantPast
                 lastResizeVisualAt = .distantPast
@@ -557,21 +571,20 @@ struct MomentMiniTimelineView: View {
                     scrollController.stopAutoScrollFollow()
                     dragMode = .idle
                 }
-                /// После `recompose` плейхед у края, за который тянули (начало / конец клипа), без сохранения старой позиции воспроизведения.
-                let edgeAnchorAbsolute: Double? = {
-                    guard endedResize else { return nil }
-                    let finalStart = dragState.previewStart ?? baseTagStart
-                    let finalEnd = dragState.previewEnd ?? baseTagEnd
-                    switch mode {
-                    case .resizeLeft: return finalStart
-                    case .resizeRight: return finalEnd
-                    case .idle, .seekTrack: return nil
-                    }
-                }()
                 if endedResize {
                     if let lid = lineID, let sid = stampID {
-                        let finalStart = dragState.previewStart ?? baseTagStart
-                        let finalEnd = dragState.previewEnd ?? baseTagEnd
+                        let cap = timelineMappingDuration
+                        let rawStart = dragState.previewStart ?? baseTagStart
+                        let rawEnd = dragState.previewEnd ?? baseTagEnd
+                        let finalStart = min(max(0, rawStart), max(0, cap - 0.5))
+                        let finalEnd = min(max(finalStart + 0.5, rawEnd), cap)
+                        let edgeAnchorAbsolute: Double? = {
+                            switch mode {
+                            case .resizeLeft: return finalStart
+                            case .resizeRight: return finalEnd
+                            case .idle, .seekTrack: return nil
+                            }
+                        }()
                         timelineData.updateStampTime(
                             lineID: lid,
                             stampID: sid,
@@ -580,8 +593,8 @@ struct MomentMiniTimelineView: View {
                             persistChanges: true,
                             runScreenshotUnlinkCheck: true
                         )
+                        recomposeSessionAfterStampEdit(anchor: edgeAnchorAbsolute)
                     }
-                    recomposeSessionAfterStampEdit(anchor: edgeAnchorAbsolute)
                 }
             }
     }
@@ -600,6 +613,10 @@ struct MomentMiniTimelineView: View {
     ) -> Double {
         let vw = max(docRight - docLeft, 1)
         let maxScroll = max(0, contentW - vw)
+        if !scrollable || maxScroll < 2 {
+            resizeLockedTime = nil
+            return timeAtWorldX(min(max(cursorX, 0), contentW), contentW: contentW)
+        }
         let atLeft = scrollController.currentScrollX <= 0.5
         let atRight = scrollController.currentScrollX >= maxScroll - 0.5
 
@@ -612,7 +629,7 @@ struct MomentMiniTimelineView: View {
             }
             // Пересчитываем каждый раз от текущего docLeft, чтобы тег
             // продолжал тянуться по мере того как таймлайн скроллится.
-            let t = timeAtWorldX(max(0, docLeft + resizeEdgeFreezeOffset), contentW: contentW)
+            let t = min(timeAtWorldX(max(0, docLeft + resizeEdgeFreezeOffset), contentW: contentW), timelineMappingDuration)
             resizeLockedTime = t
             return t
         }
@@ -625,7 +642,7 @@ struct MomentMiniTimelineView: View {
                 scrollController.scrollTo(x: min(maxScroll, scrollController.currentScrollX + step))
             }
             // Пересчитываем каждый раз от текущего docRight — тег ползёт дальше по мере скролла.
-            let t = timeAtWorldX(min(contentW, docRight - resizeEdgeFreezeOffset), contentW: contentW)
+            let t = min(timeAtWorldX(min(contentW, docRight - resizeEdgeFreezeOffset), contentW: contentW), timelineMappingDuration)
             resizeLockedTime = t
             return t
         }

@@ -23,6 +23,9 @@ struct TimelinePlayheadView: View {
     let isResizingTag: Bool
 
     private let hitWidth: CGFloat = 16
+    @State private var lastScrubVideoPreviewAt = Date.distantPast
+    private let scrubVideoPreviewMinInterval: TimeInterval = 0.033
+    @State private var wasPlayingBeforePlayheadDrag = false
 
     // The position at which the playhead (stem tip) is drawn.
     // Stamp-edge drag takes priority, then interactive playhead drag (clamped
@@ -62,6 +65,12 @@ struct TimelinePlayheadView: View {
                                 scrollController: scrollController
                             )
                         } else {
+                            lastScrubVideoPreviewAt = .distantPast
+                            let vm = VideoPlayerManager.shared
+                            wasPlayingBeforePlayheadDrag = vm.player?.timeControlStatus == .playing
+                            if wasPlayingBeforePlayheadDrag {
+                                vm.player?.pause()
+                            }
                             dragController.beginDrag(
                                 at: value.location.x,
                                 gridWidth: gridWidth,
@@ -69,10 +78,22 @@ struct TimelinePlayheadView: View {
                                 scrollController: scrollController
                             )
                         }
+                        let now = Date()
+                        guard duration > 0, gridWidth > 0,
+                              now.timeIntervalSince(lastScrubVideoPreviewAt) >= scrubVideoPreviewMinInterval else { return }
+                        lastScrubVideoPreviewAt = now
+                        let lo = scrollController.currentScrollX
+                        let hi = lo + scrollController.visibleWidth - 2
+                        let x = max(lo, min(dragController.dragX, hi))
+                        let t = Double(x / gridWidth) * duration
+                        VideoPlayerManager.shared.seekForTimelineScrubPreview(to: t)
                     }
                     .onEnded { _ in
                         let time = dragController.endDrag()
-                        VideoPlayerManager.shared.seek(to: time)
+                        let resume = wasPlayingBeforePlayheadDrag
+                        wasPlayingBeforePlayheadDrag = false
+                        lastScrubVideoPreviewAt = .distantPast
+                        VideoPlayerManager.shared.seek(to: time, resumePlaybackAfterSeek: resume)
                     }
             )
     }

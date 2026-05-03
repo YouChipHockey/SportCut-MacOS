@@ -62,7 +62,9 @@ final class MomentViewerSession: ObservableObject {
             ? sourceAssetDuration
             : (startTime + duration + 1)
         self.sourceAssetDuration = max(ad, startTime + duration + 0.01)
-        configure(anchorAbsoluteTime: nil, resumePlaybackAfterSeek: true)
+        // Без автоплея при открытии: иначе короткий клип уходит в конец, мини-таймлайн на Intel успевает
+        // отрисоваться с неверным скроллом до первого центрирования — тег «мигает» и пропадает.
+        configure(anchorAbsoluteTime: nil, resumePlaybackAfterSeek: false)
     }
 
     /// Пересобрать клип после изменения границ тега на таймлайне. `anchorAbsoluteTime` — абсолютное время видео, которое остаётся на экране (nil → начало клипа).
@@ -75,6 +77,13 @@ final class MomentViewerSession: ObservableObject {
 
     func pausePlayback() {
         player.pause()
+    }
+
+    /// Локальное время внутри композиции (0…cap), то же ограничение, что в `seekToCompositionTime`.
+    func clampedCompositionLocal(_ localSeconds: Double) -> Double {
+        let d = max(displayDuration, 0.000_001)
+        let cap = maxCompositionLocalSeconds(duration: d)
+        return max(0, min(localSeconds, cap))
     }
 
     func seekToCompositionTime(_ seconds: Double) {

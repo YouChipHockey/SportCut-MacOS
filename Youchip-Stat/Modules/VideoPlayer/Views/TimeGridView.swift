@@ -20,10 +20,18 @@ struct TimeGridView: View {
     
     var body: some View {
         Canvas { context, size in
-            let numberOfLines = Int(duration / interval) + 1
+            let d = max(duration, 0.000_001)
+            var gridInterval = max(interval, 0.000_001)
+            var lineCount = Int(ceil(d / gridInterval)) + 1
+            let maxLines = 550
+            while lineCount > maxLines {
+                gridInterval *= 1.35
+                lineCount = Int(ceil(d / gridInterval)) + 1
+            }
+            let numberOfLines = max(1, lineCount)
             for i in 0..<numberOfLines {
-                let timePosition = Double(i) * interval
-                let xPosition = (timePosition / duration) * Double(width)
+                let timePosition = Double(i) * gridInterval
+                let xPosition = (timePosition / d) * Double(width)
                 
                 var path = Path()
                 path.move(to: CGPoint(x: xPosition, y: 0))

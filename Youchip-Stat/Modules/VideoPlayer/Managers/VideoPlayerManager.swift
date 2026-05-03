@@ -61,6 +61,8 @@ class VideoPlayerManager: ObservableObject {
     }
     private var timeObserverToken: Any?
     private var isSeeking = false
+    /// Пока активен, периодический observer не перезаписывает `currentTime` (скраб плейхэда по таймлайну).
+    private var scrubTimelinePreviewSuppressUntil: Date?
     private var cancellables = Set<AnyCancellable>()
     private var liveDurationCancellable: AnyCancellable?
     
@@ -327,8 +329,22 @@ class VideoPlayerManager: ObservableObject {
         isLiveMode = false
         isBroadcastActive = false
     }
-    func seek(to time: Double) {
+    /// Лёгкий seek во время перетаскивания плейхэда: обновляет картинку и `currentTime`, не снимая periodic observer.
+    func seekForTimelineScrubPreview(to time: Double) {
+        guard let player = player, !isLiveMode, !isReviewMode else { return }
+        let dur = timelineDuration
+        guard dur > 0 else { return }
+        let t = max(0, min(time, dur))
+        scrubTimelinePreviewSuppressUntil = Date().addingTimeInterval(0.14)
+        currentTime = t
+        let cm = CMTime(seconds: t, preferredTimescale: 600)
+        let tol = CMTime(seconds: 0.06, preferredTimescale: 600)
+        player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+    }
+
+    func seek(to time: Double, resumePlaybackAfterSeek: Bool = false) {
         guard let player = player else { return }
+        scrubTimelinePreviewSuppressUntil = nil
         isSeeking = true
         if let token = timeObserverToken {
             player.removeTimeObserver(token)
@@ -341,6 +357,10 @@ class VideoPlayerManager: ObservableObject {
             self.isSeeking = false
             self.currentTime = self.player?.currentTime().seconds ?? time
             self.startTimeObserver()
+            if resumePlaybackAfterSeek, finished {
+                self.player?.play()
+                self.player?.rate = Float(self.playbackSpeed)
+            }
         }
     }
     func deleteVideo() {
@@ -367,6 +387,7 @@ class VideoPlayerManager: ObservableObject {
         timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self else { return }
             guard !self.isSeeking else { return }
+            if let u = self.scrubTimelinePreviewSuppressUntil, Date() < u { return }
             self.currentTime = CMTimeGetSeconds(time)
         }
     }

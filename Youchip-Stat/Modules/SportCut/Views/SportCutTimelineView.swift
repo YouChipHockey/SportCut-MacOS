@@ -641,6 +641,7 @@ private struct SportCutMarkupPlayheadView: View {
     @State private var dragging = false
     @State private var scrubVisualX: CGFloat = 0
     @State private var wasPlayingBeforeScrub = false
+    @State private var lastMarkupScrubPreviewAt = Date.distantPast
     /// Пиксельные границы текущего клипа на шкале (фиксируются в начале drag).
     @State private var dragClipXPxMinMax: (lo: CGFloat, hi: CGFloat)?
 
@@ -708,6 +709,7 @@ private struct SportCutMarkupPlayheadView: View {
                             DragGesture(minimumDistance: 0, coordinateSpace: .named("sportCutMarkupTimeline"))
                                 .onChanged { value in
                                     if !dragging {
+                                        lastMarkupScrubPreviewAt = .distantPast
                                         dragging = true
                                         wasPlayingBeforeScrub = playerManager.isPlaying
                                         if wasPlayingBeforeScrub { playerManager.pause() }
@@ -715,10 +717,20 @@ private struct SportCutMarkupPlayheadView: View {
                                         scrubVisualX = lockedPlaybackX() ?? clampDragXToCurrentClip(value.startLocation.x)
                                     }
                                     scrubVisualX = clampDragXToCurrentClip(value.location.x)
+                                    let now = Date()
+                                    guard now.timeIntervalSince(lastMarkupScrubPreviewAt) >= 0.033 else { return }
+                                    lastMarkupScrubPreviewAt = now
+                                    let x = scrubVisualX
+                                    var absT = Double(x / max(gridWidth, 1)) * totalDuration
+                                    if let b = playerManager.currentClipAbsoluteTimeBounds(forSourceID: sourceID) {
+                                        absT = min(max(absT, b.start), b.end)
+                                    }
+                                    playerManager.seekPreviewDuringMarkupPlayheadDrag(absoluteTime: absT, sourceID: sourceID)
                                 }
                                 .onEnded { _ in
                                     let x = scrubVisualX
                                     dragging = false
+                                    lastMarkupScrubPreviewAt = .distantPast
                                     dragClipXPxMinMax = nil
                                     var absT = Double(x / max(gridWidth, 1)) * totalDuration
                                     if let b = playerManager.currentClipAbsoluteTimeBounds(forSourceID: sourceID) {
@@ -1241,6 +1253,28 @@ private struct SportCutPlaylistsTimelinePane: View {
         }
     }
 
+    /// Если во время жеста края подтянули raw-файл, а сессия не изменилась — снова грузим композицию клипа.
+    private func restoreClipCompositionAfterResizePreviewIfNeeded(
+        session: SportCutSession,
+        playlistID: UUID,
+        playlist: SportCutPlaylist,
+        event: SportCutEvent
+    ) {
+        guard playerManager.isPlaylistRawResizePreviewActive else { return }
+        let clipStart = playlist.effectiveStartTime(for: event)
+        let clipEnd = clipStart + playlist.effectiveDuration(for: event)
+        let absT = playerManager.player.currentTime().seconds
+        guard absT.isFinite else { return }
+        let seekTime = min(max(absT, clipStart), clipEnd)
+        seekEditedClipAfterResize(
+            updatedSession: session,
+            playlistID: playlistID,
+            eventKey: event.hiddenKey,
+            sourceID: event.sourceID,
+            absoluteSeekTime: seekTime
+        )
+    }
+
     /// Применяет дельту (сек) к текущему выделенному тегу.
     /// Визуально тег всегда растет/сжимается вправо. Для левого хэндла дополнительно
     /// сдвигаем начало клипа (start override), чтобы менялся момент старта видео.
@@ -1271,19 +1305,27 @@ private struct SportCutPlaylistsTimelinePane: View {
             // Меняем только start, оставляя end фиксированным.
             let newStart = curStart + deltaSec
             let clampedStart = max(0.0, min(newStart, curEnd - 1.0))
-            guard abs(clampedStart - curStart) > 0.001 else { return }
+            guard abs(clampedStart - curStart) > 0.001 else {
+                restoreClipCompositionAfterResizePreviewIfNeeded(session: session, playlistID: playlistID, playlist: playlist, event: event)
+                return
+            }
             let newDuration = curEnd - clampedStart
             updated.playlistGroups[gi].playlists[pi].eventStartOverrides[event.hiddenKey] = clampedStart
             updated.playlistGroups[gi].playlists[pi].eventDurationOverrides[event.hiddenKey] = newDuration
-            seekTime = clampedStart + newDuration / 3.0
+            // Плейхэд — на новый старт клипа (тянули левый край).
+            seekTime = clampedStart
 
         case .right:
             let newEnd = curEnd + deltaSec
             let clampedEnd = max(curStart + 1.0, min(newEnd, maxVideoDur))
-            guard abs(clampedEnd - curEnd) > 0.001 else { return }
+            guard abs(clampedEnd - curEnd) > 0.001 else {
+                restoreClipCompositionAfterResizePreviewIfNeeded(session: session, playlistID: playlistID, playlist: playlist, event: event)
+                return
+            }
             let newDuration = clampedEnd - curStart
             updated.playlistGroups[gi].playlists[pi].eventDurationOverrides[event.hiddenKey] = newDuration
-            seekTime = curStart + (newDuration * 2.0 / 3.0)
+            // Плейхэд — на новый конец клипа (тянули правый край).
+            seekTime = clampedEnd
         }
 
         sessionManager.updateSession(updated)
@@ -1842,8 +1884,13 @@ private struct WrappedPlayheadLineView: View {
     @State private var scrubVisualPos: PlayheadRowPosition?
     @State private var wasPlayingBeforeScrub: Bool = false
     @State private var internalSeekLockPos: PlayheadRowPosition? = nil
-    /// Gesture-priority zone near clip edges where resize handles must win over playhead drag.
-    private let resizeHandlePriorityZone: CGFloat = 10
+    @State private var lastPlaylistScrubVideoPreviewAt = Date.distantPast
+    /// Horizontal half-width of the grab head used for edge overlap (matches `headBaseWidth` / 2 in `PlayheadStemWithGrabHead`).
+    private let playheadGrabHalfWidth: CGFloat = 6
+    /// Ширина зоны drag плейхэда (визуальный стержень по центру; изначально 20pt — сейчас в 2 раза уже).
+    private let playheadHitWidth: CGFloat = 10
+    /// Width of playlist strip edge resize handles (`SportCutPlaylistStripView.handleW`).
+    private let stripEdgeHandleWidth: CGFloat = 8
 
     private var isActivePlaylist: Bool {
         playerManager.currentPlaylistID == playlist.id && playerManager.currentPlaylistIndex >= 0
@@ -1866,15 +1913,19 @@ private struct WrappedPlayheadLineView: View {
     private func isInResizePriorityZone(_ pos: PlayheadRowPosition?) -> Bool {
         guard let pos, pos.rowIndex >= 0, pos.rowIndex < rows.count else { return false }
         let row = rows[pos.rowIndex]
+        let g = playheadGrabHalfWidth
+        let ew = stripEdgeHandleWidth
+        let leftBound = pos.x - g
+        let rightBound = pos.x + g
         for (localIdx, eventIdx) in row.eventIndices.enumerated() {
             guard localIdx < row.xOffsets.count, eventIdx < baseWidths.count else { continue }
             let stripStart = row.xOffsets[localIdx]
             let stripEnd = stripStart + baseWidths[eventIdx]
             guard pos.x >= stripStart && pos.x <= stripEnd else { continue }
 
-            let leftDistance = abs(pos.x - stripStart)
-            let rightDistance = abs(stripEnd - pos.x)
-            return leftDistance <= resizeHandlePriorityZone || rightDistance <= resizeHandlePriorityZone
+            let overlapsLeftHandle = rightBound > stripStart && leftBound < stripStart + ew
+            let overlapsRightHandle = rightBound > stripEnd - ew && leftBound < stripEnd
+            return overlapsLeftHandle || overlapsRightHandle
         }
         return false
     }
@@ -1888,17 +1939,18 @@ private struct WrappedPlayheadLineView: View {
                 let yOffset = CGFloat(pos.rowIndex) * rowPitch
                 ZStack {
                     PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
-                        .frame(width: 20, height: stripHeight + 4)
+                        .frame(width: playheadHitWidth, height: stripHeight + 4)
                     Rectangle()
                         .fill(Color.clear)
-                        .frame(width: 20, height: stripHeight + 4)
+                        .frame(width: playheadHitWidth, height: stripHeight + 4)
                         .contentShape(Rectangle())
                 }
-                .offset(x: pos.x - 10, y: yOffset - 2)
+                .offset(x: pos.x - playheadHitWidth / 2, y: yOffset - 2)
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             if !scrubbing {
+                                lastPlaylistScrubVideoPreviewAt = .distantPast
                                 let startPos = computePlayheadPosition()
                                 let startLinear = startPos.flatMap { posToLinearX($0) } ?? 0
                                 scrubStartLinearX = startLinear
@@ -1909,6 +1961,12 @@ private struct WrappedPlayheadLineView: View {
                             let totalLinear = totalLinearWidth()
                             let newLinear = max(0, min(scrubStartLinearX + value.translation.width, totalLinear))
                             scrubVisualPos = linearXToPosition(newLinear)
+                            let now = Date()
+                            guard now.timeIntervalSince(lastPlaylistScrubVideoPreviewAt) >= 0.033 else { return }
+                            lastPlaylistScrubVideoPreviewAt = now
+                            if let sec = playerSecondsForScrubPreview(linearX: newLinear) {
+                                playerManager.scrubPreviewPlayheadAtPlayerSeconds(sec)
+                            }
                         }
                         .onEnded { value in
                             let totalLinear = totalLinearWidth()
@@ -1916,6 +1974,7 @@ private struct WrappedPlayheadLineView: View {
                             let finalPos = linearXToPosition(finalLinear)
                             internalSeekLockPos = finalPos
                             scrubbing = false
+                            lastPlaylistScrubVideoPreviewAt = .distantPast
                             seekToLinearX(finalLinear)
                             if wasPlayingBeforeScrub { playerManager.play() }
                         }
@@ -2026,6 +2085,33 @@ private struct WrappedPlayheadLineView: View {
     }
 
     // MARK: - Scrub seek
+
+    /// Секунды на шкале `AVPlayer` для превью при scrub (глобальное время «фильма» или локальное в клипе).
+    private func playerSecondsForScrubPreview(linearX: CGFloat) -> Double? {
+        guard !baseWidths.isEmpty, isActivePlaylist else { return nil }
+        var accum: CGFloat = 0
+        for (i, w) in baseWidths.enumerated() {
+            guard i < events.count else { break }
+            if linearX <= accum + w {
+                let wf = max(Double(w), 1e-9)
+                let fraction = Double(max(0, min(Double(linearX - accum) / wf, 1)))
+                let event = events[i]
+                let dur = playlist.effectiveDuration(for: event)
+                let local = fraction * dur
+                if playerManager.playlistPlaybackKind == .singleFilm {
+                    var globalT = 0.0
+                    for k in 0..<i {
+                        globalT += playlist.effectiveDuration(for: events[k])
+                    }
+                    return globalT + local
+                }
+                guard event.hiddenKey == playerManager.currentEvent?.hiddenKey else { return nil }
+                return local
+            }
+            accum += w + gapPx
+        }
+        return nil
+    }
 
     private func seekToLinearX(_ linearX: CGFloat) {
         var accum: CGFloat = 0

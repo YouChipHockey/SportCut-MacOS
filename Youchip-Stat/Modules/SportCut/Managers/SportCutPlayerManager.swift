@@ -70,6 +70,9 @@ class SportCutPlayerManager: ObservableObject {
     /// Tracks which sourceID is currently loaded as a direct file asset for resize preview.
     /// nil means the current item is a composition (normal playback), not a raw file preview.
     private var previewSourceID: UUID?
+    /// Пока активен, periodic time observer не затирает `currentTime` (скраб плейхэда / превью разметки).
+    private var scrubPreviewSuppressTimeObserverUntil: Date?
+
     /// Prevents flooding AVPlayer with overlapping preview seeks during timeline edge drag.
     private var previewSeekInFlight: Bool = false
     /// Latest pending preview seek request; only the newest is kept ("last seek wins").
@@ -135,12 +138,11 @@ class SportCutPlayerManager: ObservableObject {
     /// In `.sequentialClips` mode this equals `currentTime` directly.
     /// In `.singleFilm` mode this converts the global film time to a per-segment local time.
     var currentClipLocalTime: Double {
-        guard playlistPlaybackKind == .singleFilm,
-              let (_, localTime) = filmEventIndexAndLocalTime(globalTime: currentTime) else {
-            return currentTime
-        }
-        return localTime
+        clipLocalTimeFromPlayerSeconds(currentTime)
     }
+
+    /// Плеер временно на полном исходнике из‑за превью ресайза края плейлиста (см. `seekPreviewForPlaylistResize`).
+    var isPlaylistRawResizePreviewActive: Bool { previewSourceID != nil }
 
     var currentEventComment: String? {
         guard let sessionID = sessionID,
@@ -178,6 +180,7 @@ class SportCutPlayerManager: ObservableObject {
         onSeekComplete: (() -> Void)? = nil
     ) {
         guard !events.isEmpty else { return }
+        pendingPreviewSeek = nil
         let mapped: [SportCutEvent]
         if let sessionID,
            let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) {
@@ -498,6 +501,26 @@ class SportCutPlayerManager: ObservableObject {
         return (st, st + dur)
     }
 
+    /// Превью-seek по разметочному плейхэду во время drag (throttle вызывать снаружи).
+    func seekPreviewDuringMarkupPlayheadDrag(absoluteTime: Double, sourceID: UUID) {
+        scrubPreviewSuppressTimeObserverUntil = Date().addingTimeInterval(0.14)
+        seekToAbsoluteTimeOnSourceTimeline(absoluteTime, sourceID: sourceID)
+    }
+
+    /// Превью-seek при перетаскивании плейхэда плейлиста: `seconds` — то, что отдаёт `AVPlayer` (глобальное время «фильма» или локальное в клипе).
+    func scrubPreviewPlayheadAtPlayerSeconds(_ seconds: Double) {
+        guard playlistPlaybackActive else { return }
+        guard seconds.isFinite, seconds >= 0 else { return }
+        scrubPreviewSuppressTimeObserverUntil = Date().addingTimeInterval(0.14)
+        currentTime = seconds
+        if playlistPlaybackKind == .singleFilm {
+            updateFilmModeCurrentEventIfNeeded(globalTime: seconds)
+        }
+        let cm = CMTime(seconds: seconds, preferredTimescale: 600)
+        let tol = CMTime(seconds: 0.06, preferredTimescale: 600)
+        player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+    }
+
     /// Seek по абсолютному времени на шкале исходника (плейхед в разметке SportCut).
     func seekToAbsoluteTimeOnSourceTimeline(_ absoluteTime: Double, sourceID: UUID) {
         guard currentSourceID == sourceID, player.currentItem != nil else { return }
@@ -559,6 +582,12 @@ class SportCutPlayerManager: ObservableObject {
         guard let item = player.currentItem else { return }
         if isPlaying { pause() }
         item.step(byCount: forward ? 1 : -1)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let t = self.player.currentTime().seconds
+            guard t.isFinite else { return }
+            self.currentTime = t
+        }
     }
 
     /// Предпросмотр при ресайзе тега на таймлайне SportCut: время в **исходном видео**, плеер крутит локальное время внутри текущего клипа.
@@ -679,6 +708,9 @@ class SportCutPlayerManager: ObservableObject {
         var cursor = CMTime.zero
         var totalDuration: Double = 0
         var builtEvents: [SportCutEvent] = []
+        var segmentSourceTracks: [AVAssetTrack] = []
+        var segmentCompositionStarts: [CMTime] = []
+        var segmentCompositionDurations: [CMTime] = []
 
         for event in events {
             let ev = resolvedAgainstSession(event)
@@ -723,6 +755,9 @@ class SportCutPlayerManager: ObservableObject {
 
             filmSegmentStartSeconds.append(totalDuration)
             filmSegmentDurationSeconds.append(safeDuration)
+            segmentSourceTracks.append(sourceVideoTrack)
+            segmentCompositionStarts.append(cursor)
+            segmentCompositionDurations.append(durationCM)
             totalDuration += safeDuration
             builtEvents.append(ev)
             cursor = CMTimeAdd(cursor, durationCM)
@@ -733,6 +768,59 @@ class SportCutPlayerManager: ObservableObject {
             return
         }
 
+        // Build video composition to scale segments of different resolutions to a common size
+        var scalingComposition: AVMutableVideoComposition? = nil
+        if segmentSourceTracks.count > 1 {
+            var maxW: CGFloat = 0
+            var maxH: CGFloat = 0
+            for track in segmentSourceTracks {
+                let oriented = track.naturalSize.applying(track.preferredTransform)
+                maxW = max(maxW, abs(oriented.width))
+                maxH = max(maxH, abs(oriented.height))
+            }
+            let renderSize = CGSize(width: maxW, height: maxH)
+            let hasDifferentSizes = maxW > 0 && maxH > 0 && segmentSourceTracks.contains { track in
+                let o = track.naturalSize.applying(track.preferredTransform)
+                return abs(abs(o.width) - renderSize.width) > 1 || abs(abs(o.height) - renderSize.height) > 1
+            }
+            if hasDifferentSizes {
+                let vc = AVMutableVideoComposition()
+                vc.renderSize = renderSize
+                vc.frameDuration = CMTime(value: 1, timescale: 30)
+                var instructions: [AVMutableVideoCompositionInstruction] = []
+                for i in segmentSourceTracks.indices {
+                    let srcTrack = segmentSourceTracks[i]
+                    let range = CMTimeRange(start: segmentCompositionStarts[i], duration: segmentCompositionDurations[i])
+                    let instruction = AVMutableVideoCompositionInstruction()
+                    instruction.timeRange = range
+                    let layerInstr = AVMutableVideoCompositionLayerInstruction(assetTrack: compVideoTrack)
+                    let oriented = srcTrack.naturalSize.applying(srcTrack.preferredTransform)
+                    let srcW = abs(oriented.width)
+                    let srcH = abs(oriented.height)
+                    if srcW > 0, srcH > 0, (abs(srcW - renderSize.width) > 1 || abs(srcH - renderSize.height) > 1) {
+                        let scaleX = renderSize.width / srcW
+                        let scaleY = renderSize.height / srcH
+                        let scale = min(scaleX, scaleY)
+                        let scaledW = srcW * scale
+                        let scaledH = srcH * scale
+                        let tx = (renderSize.width - scaledW) / 2
+                        let ty = (renderSize.height - scaledH) / 2
+                        layerInstr.setTransform(
+                            CGAffineTransform(scaleX: scale, y: scale)
+                                .concatenating(CGAffineTransform(translationX: tx, y: ty)),
+                            at: range.start
+                        )
+                    } else {
+                        layerInstr.setTransform(.identity, at: range.start)
+                    }
+                    instruction.layerInstructions = [layerInstr]
+                    instructions.append(instruction)
+                }
+                vc.instructions = instructions
+                scalingComposition = vc
+            }
+        }
+
         playlistEvents = builtEvents
         currentPlaylistIndex = 0
         currentEvent = builtEvents[0]
@@ -740,6 +828,9 @@ class SportCutPlayerManager: ObservableObject {
 
         previewSourceID = nil
         let playerItem = AVPlayerItem(asset: composition)
+        if let vc = scalingComposition {
+            playerItem.videoComposition = vc
+        }
         player.replaceCurrentItem(with: playerItem)
         videoDuration = totalDuration
 
@@ -789,7 +880,23 @@ class SportCutPlayerManager: ObservableObject {
         return (0, 0)
     }
 
+    /// Maps `player.currentTime` to local seconds inside the active clip. During playlist edge-resize preview
+    /// the item is the **raw source file**, so time is absolute on that file — not film-global composition time.
+    private func clipLocalTimeFromPlayerSeconds(_ globalPlayerSeconds: Double) -> Double {
+        if previewSourceID != nil, let ev = currentEvent {
+            let st = playlistStartOverrides[ev.hiddenKey] ?? ev.startTime
+            return max(0, globalPlayerSeconds - st)
+        }
+        if playlistPlaybackKind == .singleFilm,
+           let (_, localTime) = filmEventIndexAndLocalTime(globalTime: globalPlayerSeconds) {
+            return localTime
+        }
+        return globalPlayerSeconds
+    }
+
     private func updateFilmModeCurrentEventIfNeeded(globalTime: Double) {
+        // Raw-file preview breaks film-global timing; never remap `currentEvent` while it is active.
+        guard previewSourceID == nil else { return }
         guard let (idx, _) = filmEventIndexAndLocalTime(globalTime: globalTime) else { return }
         if idx != currentPlaylistIndex {
             currentPlaylistIndex = idx
@@ -903,6 +1010,7 @@ class SportCutPlayerManager: ObservableObject {
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self else { return }
+            if let u = self.scrubPreviewSuppressTimeObserverUntil, Date() < u { return }
             let sec = time.seconds
             self.currentTime = sec
             self.updateFilmModeCurrentEventIfNeeded(globalTime: sec)
@@ -934,7 +1042,9 @@ class SportCutPlayerManager: ObservableObject {
         let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         tempScreenshotImage = nsImage
         let globalT = time.seconds
-        if playlistPlaybackKind == .singleFilm, let (idx, local) = filmEventIndexAndLocalTime(globalTime: globalT) {
+        if previewSourceID != nil, currentEvent != nil {
+            editorScreenshotVideoTime = clipLocalTimeFromPlayerSeconds(globalT)
+        } else if playlistPlaybackKind == .singleFilm, let (idx, local) = filmEventIndexAndLocalTime(globalTime: globalT) {
             currentPlaylistIndex = idx
             currentEvent = resolvedAgainstSession(playlistEvents[idx])
             currentSourceID = playlistEvents[idx].sourceID
@@ -1133,12 +1243,7 @@ class SportCutPlayerManager: ObservableObject {
             updateFilmModeCurrentEventIfNeeded(globalTime: globalT)
         }
         // compareTime = локальное время внутри текущего клипа (с учётом overrides)
-        let compareTime: Double
-        if playlistPlaybackKind == .singleFilm, let (_, local) = filmEventIndexAndLocalTime(globalTime: globalT) {
-            compareTime = local
-        } else {
-            compareTime = globalT
-        }
+        let compareTime = clipLocalTimeFromPlayerSeconds(globalT)
 
         let drawings = currentEventDrawings()
         guard !drawings.isEmpty else { return }

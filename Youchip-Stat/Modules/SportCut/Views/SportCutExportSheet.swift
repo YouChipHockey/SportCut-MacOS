@@ -292,25 +292,72 @@ private final class SportCutExportBackend {
         segments: [(text: NSAttributedString, start: CMTime, duration: CMTime)],
         videoTrack: AVAssetTrack,
         compositionVideoTrack: AVMutableCompositionTrack,
-        compositionDuration: CMTime
+        compositionDuration: CMTime,
+        allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)]? = nil
     ) -> AVVideoComposition? {
         guard !segments.isEmpty else { return nil }
 
-        let transform = videoTrack.preferredTransform
-        let natural = videoTrack.naturalSize.applying(transform)
-        let renderSize = CGSize(width: abs(natural.width), height: abs(natural.height))
+        // Compute render size: max across all segment tracks, or from single videoTrack
+        let renderSize: CGSize
+        if let allTracks = allSegmentTracks, !allTracks.isEmpty {
+            var maxW: CGFloat = 0
+            var maxH: CGFloat = 0
+            for info in allTracks {
+                let o = info.sourceTrack.naturalSize.applying(info.sourceTrack.preferredTransform)
+                maxW = max(maxW, abs(o.width))
+                maxH = max(maxH, abs(o.height))
+            }
+            renderSize = CGSize(width: maxW, height: maxH)
+        } else {
+            let transform = videoTrack.preferredTransform
+            let natural = videoTrack.naturalSize.applying(transform)
+            renderSize = CGSize(width: abs(natural.width), height: abs(natural.height))
+        }
         guard renderSize.width > 0, renderSize.height > 0 else { return nil }
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = renderSize
         videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
 
-        let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: compositionDuration)
-        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
-        layerInstruction.setTransform(transform, at: .zero)
-        instruction.layerInstructions = [layerInstruction]
-        videoComposition.instructions = [instruction]
+        // Per-segment instructions with scaling transforms for different resolutions
+        if let allTracks = allSegmentTracks, !allTracks.isEmpty {
+            var instructions: [AVMutableVideoCompositionInstruction] = []
+            for info in allTracks {
+                let instruction = AVMutableVideoCompositionInstruction()
+                instruction.timeRange = CMTimeRange(start: info.start, duration: info.duration)
+                let layerInstr = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
+                let oriented = info.sourceTrack.naturalSize.applying(info.sourceTrack.preferredTransform)
+                let srcW = abs(oriented.width)
+                let srcH = abs(oriented.height)
+                if srcW > 0, srcH > 0, (abs(srcW - renderSize.width) > 1 || abs(srcH - renderSize.height) > 1) {
+                    let scaleX = renderSize.width / srcW
+                    let scaleY = renderSize.height / srcH
+                    let scale = min(scaleX, scaleY)
+                    let scaledW = srcW * scale
+                    let scaledH = srcH * scale
+                    let tx = (renderSize.width - scaledW) / 2
+                    let ty = (renderSize.height - scaledH) / 2
+                    layerInstr.setTransform(
+                        CGAffineTransform(scaleX: scale, y: scale)
+                            .concatenating(CGAffineTransform(translationX: tx, y: ty)),
+                        at: info.start
+                    )
+                } else {
+                    layerInstr.setTransform(.identity, at: info.start)
+                }
+                instruction.layerInstructions = [layerInstr]
+                instructions.append(instruction)
+            }
+            videoComposition.instructions = instructions
+        } else {
+            let transform = videoTrack.preferredTransform
+            let instruction = AVMutableVideoCompositionInstruction()
+            instruction.timeRange = CMTimeRange(start: .zero, duration: compositionDuration)
+            let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
+            layerInstruction.setTransform(transform, at: .zero)
+            instruction.layerInstructions = [layerInstruction]
+            videoComposition.instructions = [instruction]
+        }
 
         let total = CMTimeGetSeconds(compositionDuration)
         guard total > 0 else { return nil }
@@ -739,6 +786,61 @@ private final class SportCutExportBackend {
         }
     }
 
+    /// Creates a video composition that scales all segments to a uniform render size (no watermark).
+    private func scalingVideoComposition(
+        compositionVideoTrack: AVMutableCompositionTrack,
+        allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)]
+    ) -> AVMutableVideoComposition? {
+        guard allSegmentTracks.count > 1 else { return nil }
+        var maxW: CGFloat = 0
+        var maxH: CGFloat = 0
+        for info in allSegmentTracks {
+            let o = info.sourceTrack.naturalSize.applying(info.sourceTrack.preferredTransform)
+            maxW = max(maxW, abs(o.width))
+            maxH = max(maxH, abs(o.height))
+        }
+        guard maxW > 0, maxH > 0 else { return nil }
+        let renderSize = CGSize(width: maxW, height: maxH)
+        let hasDifferentSizes = allSegmentTracks.contains { info in
+            let o = info.sourceTrack.naturalSize.applying(info.sourceTrack.preferredTransform)
+            return abs(abs(o.width) - renderSize.width) > 1 || abs(abs(o.height) - renderSize.height) > 1
+        }
+        guard hasDifferentSizes else { return nil }
+
+        let vc = AVMutableVideoComposition()
+        vc.renderSize = renderSize
+        vc.frameDuration = CMTime(value: 1, timescale: 30)
+        var instructions: [AVMutableVideoCompositionInstruction] = []
+        for info in allSegmentTracks {
+            let instruction = AVMutableVideoCompositionInstruction()
+            instruction.timeRange = CMTimeRange(start: info.start, duration: info.duration)
+            let layerInstr = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
+            let oriented = info.sourceTrack.naturalSize.applying(info.sourceTrack.preferredTransform)
+            let srcW = abs(oriented.width)
+            let srcH = abs(oriented.height)
+            if srcW > 0, srcH > 0, (abs(srcW - renderSize.width) > 1 || abs(srcH - renderSize.height) > 1) {
+                let scaleX = renderSize.width / srcW
+                let scaleY = renderSize.height / srcH
+                let scale = min(scaleX, scaleY)
+                let scaledW = srcW * scale
+                let scaledH = srcH * scale
+                let tx = (renderSize.width - scaledW) / 2
+                let ty = (renderSize.height - scaledH) / 2
+                layerInstr.setTransform(
+                    CGAffineTransform(scaleX: scale, y: scale)
+                        .concatenating(CGAffineTransform(translationX: tx, y: ty)),
+                    at: info.start
+                )
+            } else {
+                layerInstr.setTransform(.identity, at: info.start)
+            }
+            instruction.layerInstructions = [layerInstr]
+            instructions.append(instruction)
+        }
+        vc.instructions = instructions
+        return vc
+    }
+
     private func exportAsClips(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession) {
         let sink = ui
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -987,6 +1089,7 @@ private final class SportCutExportBackend {
         var wmSegments: [(text: NSAttributedString, start: CMTime, duration: CMTime)] = []
         var firstVideoTrack: AVAssetTrack?
         var eventOrdinal = 0
+        var allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)] = []
 
         for playlist in playlists {
             for rawEvent in playlist.events {
@@ -1029,6 +1132,8 @@ private final class SportCutExportBackend {
                     } catch { continue }
                 }
 
+                allSegmentTracks.append((start: segStart, duration: CMTimeSubtract(currentTime, segStart), sourceTrack: vTrack))
+
                 if addWatermark {
                     let segDuration = CMTimeSubtract(currentTime, segStart)
                     let wmText = watermarkAttributedString(
@@ -1061,7 +1166,15 @@ private final class SportCutExportBackend {
                 segments: wmSegments,
                 videoTrack: vTrack,
                 compositionVideoTrack: compVideoTrack,
-                compositionDuration: composition.duration
+                compositionDuration: composition.duration,
+                allSegmentTracks: allSegmentTracks
+            ) {
+                exportSession.videoComposition = vc
+            }
+        } else if let compVideoTrack = composition.tracks(withMediaType: .video).first {
+            if let vc = scalingVideoComposition(
+                compositionVideoTrack: compVideoTrack,
+                allSegmentTracks: allSegmentTracks
             ) {
                 exportSession.videoComposition = vc
             }
@@ -1098,6 +1211,7 @@ private final class SportCutExportBackend {
             var wmSegments: [(text: NSAttributedString, start: CMTime, duration: CMTime)] = []
             var firstVideoTrack: AVAssetTrack?
             var eventOrdinal = 0
+            var allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)] = []
 
             for rawEvent in playlist.events {
                 let event = resolvedEvent(rawEvent, session: session)
@@ -1138,6 +1252,8 @@ private final class SportCutExportBackend {
                         currentTime = currentTime + duration
                     } catch { continue }
                 }
+
+                allSegmentTracks.append((start: segStart, duration: CMTimeSubtract(currentTime, segStart), sourceTrack: vTrack))
 
                 if addWatermark {
                     let segDuration = CMTimeSubtract(currentTime, segStart)
@@ -1175,7 +1291,15 @@ private final class SportCutExportBackend {
                     segments: wmSegments,
                     videoTrack: vTrack,
                     compositionVideoTrack: compVideoTrack,
-                    compositionDuration: composition.duration
+                    compositionDuration: composition.duration,
+                    allSegmentTracks: allSegmentTracks
+                ) {
+                    exportSession.videoComposition = vc
+                }
+            } else if let compVideoTrack = composition.tracks(withMediaType: .video).first {
+                if let vc = scalingVideoComposition(
+                    compositionVideoTrack: compVideoTrack,
+                    allSegmentTracks: allSegmentTracks
                 ) {
                     exportSession.videoComposition = vc
                 }
