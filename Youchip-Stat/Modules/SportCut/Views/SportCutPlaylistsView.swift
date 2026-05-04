@@ -860,6 +860,7 @@ struct SportCutPlaylistCardView: View {
                 
                 PlaylistEventRowView(
                     event: event,
+                    effectiveDuration: playlist.effectiveDuration(for: event),
                     index: index,
                     canMoveUp: index > 0,
                     canMoveDown: index < playlist.events.count - 1,
@@ -1151,6 +1152,7 @@ struct SportCutPlaylistCardView: View {
 
 struct PlaylistEventRowView: View {
     let event: SportCutEvent
+    let effectiveDuration: Double
     let index: Int
     let canMoveUp: Bool
     let canMoveDown: Bool
@@ -1212,7 +1214,7 @@ struct PlaylistEventRowView: View {
             
             Spacer()
             
-            Text(formatDuration(event.duration))
+            Text(formatDuration(effectiveDuration))
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(.secondary)
 

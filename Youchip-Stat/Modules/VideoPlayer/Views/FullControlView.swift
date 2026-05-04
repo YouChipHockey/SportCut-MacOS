@@ -1327,11 +1327,12 @@ struct FullControlView: View {
             Spacer(minLength: 8)
 
             HStack(spacing: 6) {
-                if CameraLogger.shared.hasLogs {
-                    timelineToolsIconButton(systemImage: "doc.text", helpText: "Экспорт логов камеры") {
-                        exportCameraLogs()
-                    }
-                }
+                // TODO: временно скрыта кнопка экспорта логов камеры
+//                if CameraLogger.shared.hasLogs {
+//                    timelineToolsIconButton(systemImage: "doc.text", helpText: "Экспорт логов камеры") {
+//                        exportCameraLogs()
+//                    }
+//                }
 
                 timelineToolsIconButton(systemImage: "map", helpText: ^String.Titles.map) {
                     WindowsManager.shared.showFieldMapVisualizationPicker()
