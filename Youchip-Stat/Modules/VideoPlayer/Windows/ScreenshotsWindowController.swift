@@ -18,6 +18,7 @@ class ScreenshotsWindowController: NSWindowController, NSWindowDelegate {
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.fullControlButtonScreenshots
+        window.tabbingMode = .disallowed
         
         super.init(window: window)
         window.delegate = self

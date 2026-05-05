@@ -34,6 +34,7 @@ class FieldMapVisualizationWindowController: NSWindowController, ObservableObjec
         self.window = NSWindow(contentViewController: hosting)
         self.windowContent = hosting
         self.window?.title = ^String.Titles.fieldMapVisualization
+        self.window?.tabbingMode = .disallowed
         self.window?.styleMask = [.titled, .closable, .miniaturizable]
         self.window?.center()
     }

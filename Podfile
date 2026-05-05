@@ -21,6 +21,13 @@ post_install do |installer|
         config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
       end
     end
+
+    if target.name.start_with?('Firebase') || target.name.start_with?('Google')
+      target.build_configurations.each do |config|
+        config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+        config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+      end
+    end
   end
   
   installer.generated_projects.each do |project|

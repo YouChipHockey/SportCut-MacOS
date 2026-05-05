@@ -13,6 +13,7 @@ class ReviewVideoWindowController: NSWindowController, NSWindowDelegate {
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Пересмотр"
+        window.tabbingMode = .disallowed
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         super.init(window: window)
         window.delegate = self

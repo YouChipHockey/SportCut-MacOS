@@ -19,6 +19,7 @@ class VideoPlayerWindowController: NSWindowController, NSWindowDelegate {
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.video
         super.init(window: window)
+        window.tabbingMode = .disallowed
         window.styleMask.insert(.closable)
         window.delegate = self
         window.makeKeyAndOrderFront(nil)

@@ -19,6 +19,7 @@ class FieldMapSelectionWindowController: NSWindowController, NSWindowDelegate {
         let window = NSWindow(contentViewController: hostingController)
         window.title = "\(^String.Titles.selectMapPositionForTag) \(tag.name)"
         super.init(window: window)
+        window.tabbingMode = .disallowed
         window.styleMask = [.titled, .closable, .resizable]
         window.delegate = self
     }

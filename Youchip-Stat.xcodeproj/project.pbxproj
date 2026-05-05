@@ -22,8 +22,8 @@
 		BFE84A002F3DD033005458F4 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE849FF2F3DD033005458F4 /* KeychainHelper.swift */; };
 		BFE84FBC2F3FA95C005458F4 /* InMemoryStorageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE84FBB2F3FA95C005458F4 /* InMemoryStorageManager.swift */; };
 		BFFEC8772F1D32AF00464BF0 /* CircularPercentProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFFEC8762F1D32AF00464BF0 /* CircularPercentProgressView.swift */; };
-		DD1BF67F2DBAFB8A00CB2AE0 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		DD1DAEE32E81E65E00850FAC /* (null) in Sources */ = {isa = PBXBuildFile; };
+		DD1BF67F2DBAFB8A00CB2AE0 /* BuildFile in Sources */ = {isa = PBXBuildFile; };
+		DD1DAEE32E81E65E00850FAC /* BuildFile in Sources */ = {isa = PBXBuildFile; };
 		DD2A70562D74C33E00287BA8 /* FilesFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70552D74C33D00287BA8 /* FilesFile.swift */; };
 		DD2A70582D74C35F00287BA8 /* URL+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70572D74C35E00287BA8 /* URL+Convenience.swift */; };
 		DD2A705A2D74C37D00287BA8 /* FilesFileFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2A70592D74C37D00287BA8 /* FilesFileFormat.swift */; };
@@ -168,16 +168,22 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		DD8971AA2E420A6A00DD2AB8 /* BaseCollections */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = BaseCollections;
 			sourceTree = "<group>";
 		};
 		DDAAF3732EE820000037060D /* Modules */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = Modules;
 			sourceTree = "<group>";
 		};
 		DDFB1A352DE510CF00175D97 /* web/dist */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = web/dist;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -455,7 +461,7 @@
 			mainGroup = DDB401882D749E0F004A12C2;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AABB0001F0000000000001 /* XCRemoteSwiftPackageReference "HaishinKit" */,
+				AABB0001F0000000000001 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DDB401922D749E0F004A12C2 /* Products */;
@@ -525,13 +531,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -587,7 +589,7 @@
 				DD5CF9F52E04687D009CD51A /* String+Conveniece.swift in Sources */,
 				DD32C28B2D74A1190052B5C6 /* AppDelegate.swift in Sources */,
 				DD2A70782D74D79B00287BA8 /* FileOpenHelper.swift in Sources */,
-				DD1DAEE32E81E65E00850FAC /* (null) in Sources */,
+				DD1DAEE32E81E65E00850FAC /* BuildFile in Sources */,
 				DD5CF9D92E046760009CD51A /* Notification+Conveniece.swift in Sources */,
 				DD32C28F2D74A19A0052B5C6 /* AppSetupManager.swift in Sources */,
 				DD5CF9C52E046581009CD51A /* NSColor+Convenience.swift in Sources */,
@@ -601,7 +603,7 @@
 				DD32C2A42D74A1C80052B5C6 /* UInt64+Convenience.swift in Sources */,
 				DD2A70642D74D28E00287BA8 /* CustomTypes.swift in Sources */,
 				DD2A705A2D74C37D00287BA8 /* FilesFileFormat.swift in Sources */,
-				DD1BF67F2DBAFB8A00CB2AE0 /* (null) in Sources */,
+				DD1BF67F2DBAFB8A00CB2AE0 /* BuildFile in Sources */,
 				BF6715C02EF6E69700A71E47 /* NSAttributedString+Convenience.swift in Sources */,
 				BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */,
 				BFE84FBC2F3FA95C005458F4 /* InMemoryStorageManager.swift in Sources */,
@@ -902,7 +904,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		AABB0001F0000000000001 /* XCRemoteSwiftPackageReference "HaishinKit" */ = {
+		AABB0001F0000000000001 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/HaishinKit/HaishinKit.swift";
 			requirement = {
@@ -915,7 +917,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		AABB0001F0000000000002 /* HaishinKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AABB0001F0000000000001 /* XCRemoteSwiftPackageReference "HaishinKit" */;
+			package = AABB0001F0000000000001 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */;
 			productName = HaishinKit;
 		};
 /* End XCSwiftPackageProductDependency section */

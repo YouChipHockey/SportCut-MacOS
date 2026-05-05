@@ -33,6 +33,7 @@ final class MirroredVideoWindowController: NSWindowController, NSWindowDelegate 
         let hosting = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hosting)
         window.title = ^String.Titles.videoMirrorWindowTitle
+        window.tabbingMode = .disallowed
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         window.setContentSize(NSSize(width: 720, height: 405))
         

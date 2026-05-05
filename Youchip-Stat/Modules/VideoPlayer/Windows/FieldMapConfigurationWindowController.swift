@@ -20,6 +20,7 @@ class FieldMapConfigurationWindowController: NSWindowController, NSWindowDelegat
         self.window = NSWindow(contentViewController: hosting)
         self.windowContent = hosting
         self.window?.title = ^String.Titles.fieldMapVisualizationSettings
+        self.window?.tabbingMode = .disallowed
         self.window?.styleMask = [.titled, .closable, .miniaturizable]
         self.window?.center()
         self.window?.delegate = self

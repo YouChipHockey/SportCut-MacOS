@@ -21,6 +21,7 @@ class TagLibraryWindowController: NSWindowController, NSWindowDelegate {
         let w = NSWindow(contentViewController: hostingController)
         w.title = ^String.Titles.tagLibrary
         super.init(window: w)
+        w.tabbingMode = .disallowed
         w.styleMask.insert(NSWindow.StyleMask.closable)
         w.delegate = self
         w.makeKeyAndOrderFront(nil)

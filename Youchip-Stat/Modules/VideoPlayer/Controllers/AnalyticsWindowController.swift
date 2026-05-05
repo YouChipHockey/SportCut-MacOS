@@ -16,6 +16,7 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.layoutAnalytics
         super.init(window: window)
+        window.tabbingMode = .disallowed
         window.styleMask.insert(NSWindow.StyleMask.closable)
         window.delegate = self
         window.makeKeyAndOrderFront(nil)

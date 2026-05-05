@@ -36,6 +36,7 @@ class SportCutWindowController: NSWindowController {
         let window = SportCutWindow(contentViewController: hostingController)
         
         window.title = "Просмотр: \(session.name)"
+        window.tabbingMode = .disallowed
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
         
         if let screen = NSScreen.main {
