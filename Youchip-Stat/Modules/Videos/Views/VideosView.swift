@@ -348,7 +348,23 @@ struct VideosView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
 
-                // TODO: Restore live stream recording button (showLiveSourceSelection / recordVideo UI).
+                Button(action: {
+                    viewModel.action.send(.showLiveSourceSelection)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "record.circle")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(^String.Titles.recordVideo)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.red)
+                    .cornerRadius(8)
+                    .shadow(color: .red.opacity(0.3), radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)

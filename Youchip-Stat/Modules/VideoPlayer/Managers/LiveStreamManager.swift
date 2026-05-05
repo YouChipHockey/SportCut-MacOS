@@ -227,13 +227,22 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
         let activeFormat = format ?? videoDevice.activeFormat
         let initialFrameRate = activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30
+
+        // ── Diagnostic: dump ALL frame rate ranges for the active format ──
+        logger.log("DIAG configureSession: activeFormat mediaSubType=\(activeFormat.formatDescription.mediaSubType)")
+        for (ri, range) in activeFormat.videoSupportedFrameRateRanges.enumerated() {
+            logger.log("DIAG configureSession: range[\(ri)] fps=[\(String(format: "%.2f", range.minFrameRate))-\(String(format: "%.2f", range.maxFrameRate))] minDur=\(range.minFrameDuration.value)/\(range.minFrameDuration.timescale) maxDur=\(range.maxFrameDuration.value)/\(range.maxFrameDuration.timescale)")
+        }
+        logger.log("DIAG configureSession: device.activeVideoMinFrameDuration=\(videoDevice.activeVideoMinFrameDuration.value)/\(videoDevice.activeVideoMinFrameDuration.timescale) activeVideoMaxFrameDuration=\(videoDevice.activeVideoMaxFrameDuration.value)/\(videoDevice.activeVideoMaxFrameDuration.timescale)")
+        logger.log("DIAG configureSession: initialFrameRate=\(initialFrameRate), total format count=\(videoDevice.formats.count)")
+
         Task {
             do {
                 logger.logMixer("attachVideo: starting, initialFrameRate=\(initialFrameRate)")
                 await newMixer.setFrameRate(initialFrameRate)
                 try await newMixer.attachVideo(videoDevice, track: 0)
                 logger.logMixer("attachVideo: success")
-                
+
                 // Use actual device frame duration after attach so mixer FPS matches capture (avoids slow-mo).
                 // Device may have been clamped by our patch or driver (e.g. 50 fps camera with 60 in format).
                 var actualFps: Double = initialFrameRate
@@ -241,10 +250,13 @@ class LiveStreamManager: NSObject, ObservableObject {
                     try videoDevice.lockForConfiguration()
                     defer { videoDevice.unlockForConfiguration() }
                     let minDuration = videoDevice.activeVideoMinFrameDuration
+                    let maxDuration = videoDevice.activeVideoMaxFrameDuration
                     let sec = CMTimeGetSeconds(minDuration)
                     if sec > 0 {
                         actualFps = 1.0 / sec
                     }
+                    logger.logMixer("DIAG postAttach: activeVideoMinFrameDuration=\(minDuration.value)/\(minDuration.timescale) (\(String(format: "%.4f", CMTimeGetSeconds(minDuration)))s = \(String(format: "%.2f", sec > 0 ? 1.0/sec : 0))fps)")
+                    logger.logMixer("DIAG postAttach: activeVideoMaxFrameDuration=\(maxDuration.value)/\(maxDuration.timescale) (\(String(format: "%.4f", CMTimeGetSeconds(maxDuration)))s)")
                 } catch { /* keep initialFrameRate */ }
                 await newMixer.setFrameRate(actualFps)
                 logger.logMixer("actualFps after device attach=\(actualFps)")
@@ -1036,6 +1048,16 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     private var firstFrameReceivedDate: Date?
     private var lastFrameReceivedDate: Date?
     private let frameGapThreshold: Double = 0.5
+    // DIAG: extra counters for detailed FPS analysis
+    private var preThrottleDropCount: Int = 0
+    private var inQueueThrottleDropCount: Int = 0
+    private var writerNotReadyDropCount: Int = 0
+    private var lastReceivedPTS: CMTime = .invalid
+    private var minInterFrameInterval: Double = .greatestFiniteMagnitude
+    private var maxInterFrameInterval: Double = 0
+    private var sumInterFrameInterval: Double = 0
+    private var interFrameCount: Int = 0
+    private var diagStatsTimer: Date?
 
     init(outputURL: URL, enableAudio: Bool = true) {
         self.outputURL = outputURL
@@ -1063,6 +1085,15 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             self.lastLoggedFrameCount = 0
             self.firstFrameReceivedDate = nil
             self.lastFrameReceivedDate = nil
+            self.preThrottleDropCount = 0
+            self.inQueueThrottleDropCount = 0
+            self.writerNotReadyDropCount = 0
+            self.lastReceivedPTS = .invalid
+            self.minInterFrameInterval = .greatestFiniteMagnitude
+            self.maxInterFrameInterval = 0
+            self.sumInterFrameInterval = 0
+            self.interFrameCount = 0
+            self.diagStatsTimer = Date()
         }
     }
     
@@ -1086,10 +1117,15 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             }
             let logger = CameraLogger.shared
             logger.logWriter("stopRecording: framesReceived=\(self.totalFramesReceived), framesWritten=\(self.totalFramesWritten), framesDropped=\(self.totalFramesDropped)")
+            logger.logWriter("DIAG stopRecording drops: preThrottle=\(self.preThrottleDropCount), inQueueThrottle=\(self.inQueueThrottleDropCount), writerNotReady=\(self.writerNotReadyDropCount)")
             if let first = self.firstFrameReceivedDate, let last = self.lastFrameReceivedDate {
                 let wallClockDuration = last.timeIntervalSince(first)
-                logger.logWriter("stopRecording: wallClockDuration=\(String(format: "%.2f", wallClockDuration))s")
+                let avgWriteFps = wallClockDuration > 0 ? Double(self.totalFramesWritten) / wallClockDuration : 0
+                let avgReceiveFps = wallClockDuration > 0 ? Double(self.totalFramesReceived) / wallClockDuration : 0
+                logger.logWriter("DIAG stopRecording: wallClockDuration=\(String(format: "%.2f", wallClockDuration))s, avgReceiveFps=\(String(format: "%.2f", avgReceiveFps)), avgWriteFps=\(String(format: "%.2f", avgWriteFps))")
             }
+            let avgInterval = self.interFrameCount > 0 ? self.sumInterFrameInterval / Double(self.interFrameCount) : 0
+            logger.logWriter("DIAG stopRecording: interFrameIntervals min=\(String(format: "%.4f", self.minInterFrameInterval == .greatestFiniteMagnitude ? 0 : self.minInterFrameInterval)) avg=\(String(format: "%.4f", avgInterval)) max=\(String(format: "%.4f", self.maxInterFrameInterval)) count=\(self.interFrameCount)")
             logger.logWriter("stopRecording: writerStatus=\(self.assetWriter?.status.rawValue ?? -1), lastWrittenPTS=\(self.lastVideoWrittenPTS.seconds)")
 
             self.isRecording = false
@@ -1187,7 +1223,10 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             }
             if !shouldDrop { _preThrottleLastPTS = pts }
             preThrottleLock.unlock()
-            if shouldDrop && isWriterStarted { return }
+            if shouldDrop && isWriterStarted {
+                writerQueue.async { [weak self] in self?.preThrottleDropCount += 1 }
+                return
+            }
         }
 
         writerQueue.async { [weak self] in
@@ -1203,8 +1242,20 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             let now = Date()
             if self.firstFrameReceivedDate == nil {
                 self.firstFrameReceivedDate = now
-                CameraLogger.shared.logFrame("FIRST frame received: pts=\(pts.seconds)")
+                let dur = CMSampleBufferGetDuration(sampleBuffer)
+                CameraLogger.shared.logFrame("FIRST frame received: pts=\(String(format: "%.6f", pts.seconds)) (\(pts.value)/\(pts.timescale)), duration=\(dur.value)/\(dur.timescale), targetVideoFPS=\(self.targetVideoFPS)")
             }
+            // DIAG: track inter-frame PTS intervals
+            if self.lastReceivedPTS.isValid {
+                let delta = CMTimeGetSeconds(CMTimeSubtract(pts, self.lastReceivedPTS))
+                if delta > 0 {
+                    self.minInterFrameInterval = min(self.minInterFrameInterval, delta)
+                    self.maxInterFrameInterval = max(self.maxInterFrameInterval, delta)
+                    self.sumInterFrameInterval += delta
+                    self.interFrameCount += 1
+                }
+            }
+            self.lastReceivedPTS = pts
 
             // Detect large gaps between consecutive frames (potential freeze indicator).
             if let lastDate = self.lastFrameReceivedDate {
@@ -1226,6 +1277,7 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                     let delta = CMTimeSubtract(pts, self.lastVideoWrittenPTS)
                     if delta.seconds >= 0 && delta.seconds < frameInterval {
                         self.totalFramesDropped += 1
+                        self.inQueueThrottleDropCount += 1
                         return
                     }
                 }
@@ -1237,10 +1289,11 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                   let input = self.videoWriterInput,
                   input.isReadyForMoreMediaData else {
                 if self.isWriterStarted {
+                    self.writerNotReadyDropCount += 1
                     let writerStatus = self.assetWriter?.status.rawValue ?? -1
                     let ready = self.videoWriterInput?.isReadyForMoreMediaData ?? false
                     if writerStatus != 1 || !ready {
-                        CameraLogger.shared.logWriter("frame NOT written: writerStatus=\(writerStatus), inputReady=\(ready), writerError=\(self.assetWriter?.error?.localizedDescription ?? "none")")
+                        CameraLogger.shared.logWriter("frame NOT written: writerStatus=\(writerStatus), inputReady=\(ready), writerNotReadyTotal=\(self.writerNotReadyDropCount), writerError=\(self.assetWriter?.error?.localizedDescription ?? "none")")
                     }
                 }
                 self.totalFramesDropped += 1
@@ -1260,10 +1313,21 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             self.totalFramesWritten += 1
             self.lastVideoWrittenPTS = pts
 
-            // Periodic stats log every 300 frames (~10s at 30fps).
-            if self.totalFramesWritten - self.lastLoggedFrameCount >= 300 {
+            // Periodic stats log every 150 frames (~5s at 30fps).
+            let shouldLogStats: Bool
+            if self.totalFramesWritten <= 30 {
+                // Log every frame for the first 30 frames to capture startup behavior
+                shouldLogStats = true
+            } else {
+                shouldLogStats = self.totalFramesWritten - self.lastLoggedFrameCount >= 150
+            }
+            if shouldLogStats && self.totalFramesWritten > self.lastLoggedFrameCount {
                 self.lastLoggedFrameCount = self.totalFramesWritten
-                CameraLogger.shared.logFrame("stats: received=\(self.totalFramesReceived) written=\(self.totalFramesWritten) dropped=\(self.totalFramesDropped) pts=\(String(format: "%.2f", pts.seconds))")
+                let avgInterval = self.interFrameCount > 0 ? self.sumInterFrameInterval / Double(self.interFrameCount) : 0
+                let effectiveFps = avgInterval > 0 ? 1.0 / avgInterval : 0
+                let wallElapsed = self.diagStatsTimer.map { Date().timeIntervalSince($0) } ?? 0
+                let actualWriteFps = wallElapsed > 0 ? Double(self.totalFramesWritten) / wallElapsed : 0
+                CameraLogger.shared.logFrame("DIAG stats: received=\(self.totalFramesReceived) written=\(self.totalFramesWritten) dropped=\(self.totalFramesDropped) [preThrottle=\(self.preThrottleDropCount) inQueue=\(self.inQueueThrottleDropCount) writerNotReady=\(self.writerNotReadyDropCount)] pts=\(String(format: "%.3f", pts.seconds)) interFrame=[min=\(String(format: "%.4f", self.minInterFrameInterval == .greatestFiniteMagnitude ? 0 : self.minInterFrameInterval)) avg=\(String(format: "%.4f", avgInterval)) max=\(String(format: "%.4f", self.maxInterFrameInterval))]s effectiveCaptureFps=\(String(format: "%.2f", effectiveFps)) actualWriteFps=\(String(format: "%.2f", actualWriteFps)) wallTime=\(String(format: "%.1f", wallElapsed))s")
             }
         }
     }
@@ -1300,15 +1364,19 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
                 return
             }
             let dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
-            logger.logWriter("setupWriter: dimensions=\(dimensions.width)x\(dimensions.height)")
-            
+            let mediaSubType = CMFormatDescriptionGetMediaSubType(formatDescription)
+            logger.logWriter("setupWriter: dimensions=\(dimensions.width)x\(dimensions.height), mediaSubType=\(mediaSubType)")
+
             // Use actual capture frame rate so recording is not slow-motion (was hardcoded 30 while capture can be 60).
             let frameDuration = CMSampleBufferGetDuration(sampleBuffer)
             let frameRateSeconds = CMTimeGetSeconds(frameDuration)
+            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            logger.logWriter("DIAG setupWriter: firstSampleBuffer PTS=\(String(format: "%.6f", pts.seconds)) (\(pts.value)/\(pts.timescale)), duration=\(frameDuration.value)/\(frameDuration.timescale) (\(String(format: "%.6f", frameRateSeconds))s)")
             let sourceFrameRate: Int = frameRateSeconds > 0
                 ? Int(round(1.0 / frameRateSeconds))
                 : 30
             let clampedFrameRate = min(max(sourceFrameRate, 15), 60)
+            logger.logWriter("DIAG setupWriter: sourceFrameRate=\(sourceFrameRate), clampedFrameRate=\(clampedFrameRate), targetVideoFPS=\(targetVideoFPS)")
             
             let videoSettings: [String: Any] = [
                 AVVideoCodecKey: AVVideoCodecType.h264,
@@ -1451,17 +1519,17 @@ extension AVCaptureDevice {
 
     @objc fileprivate func _patched_setActiveVideoMinFrameDuration(_ duration: CMTime) {
         let clamped = _clampFrameDurationToSupported(duration, isMin: true)
-        if clamped != duration {
-            CameraLogger.shared.log("frameDurationPatch: minFrameDuration clamped from \(duration.value)/\(duration.timescale) to \(clamped.value)/\(clamped.timescale)", level: .debug)
-        }
+        let reqFps = CMTimeGetSeconds(duration) > 0 ? 1.0 / CMTimeGetSeconds(duration) : 0
+        let clampedFps = CMTimeGetSeconds(clamped) > 0 ? 1.0 / CMTimeGetSeconds(clamped) : 0
+        CameraLogger.shared.log("DIAG frameDurationPatch: setMinFrameDuration requested=\(duration.value)/\(duration.timescale) (\(String(format: "%.2f", reqFps))fps) → applied=\(clamped.value)/\(clamped.timescale) (\(String(format: "%.2f", clampedFps))fps) changed=\(clamped != duration)")
         _patched_setActiveVideoMinFrameDuration(clamped)
     }
 
     @objc fileprivate func _patched_setActiveVideoMaxFrameDuration(_ duration: CMTime) {
         let clamped = _clampFrameDurationToSupported(duration, isMin: false)
-        if clamped != duration {
-            CameraLogger.shared.log("frameDurationPatch: maxFrameDuration clamped from \(duration.value)/\(duration.timescale) to \(clamped.value)/\(clamped.timescale)", level: .debug)
-        }
+        let reqFps = CMTimeGetSeconds(duration) > 0 ? 1.0 / CMTimeGetSeconds(duration) : 0
+        let clampedFps = CMTimeGetSeconds(clamped) > 0 ? 1.0 / CMTimeGetSeconds(clamped) : 0
+        CameraLogger.shared.log("DIAG frameDurationPatch: setMaxFrameDuration requested=\(duration.value)/\(duration.timescale) (\(String(format: "%.2f", reqFps))fps) → applied=\(clamped.value)/\(clamped.timescale) (\(String(format: "%.2f", clampedFps))fps) changed=\(clamped != duration)")
         _patched_setActiveVideoMaxFrameDuration(clamped)
     }
 }

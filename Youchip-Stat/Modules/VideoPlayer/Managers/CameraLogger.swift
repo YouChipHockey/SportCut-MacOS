@@ -110,6 +110,13 @@ final class CameraLogger {
         FileManager.default.fileExists(atPath: fileURL.path)
     }
 
+    func clearLogs() {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            try? FileManager.default.removeItem(at: self.fileURL)
+        }
+    }
+
     // MARK: - Log Levels
 
     enum LogLevel: String {
