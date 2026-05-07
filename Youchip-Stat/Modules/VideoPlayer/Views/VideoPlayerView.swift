@@ -241,10 +241,10 @@ struct VideoPlayerView: View {
     private func liveStreamContent(geometry: GeometryProxy) -> some View {
         ZStack {
             if videoManager.isBroadcastActive {
-                DirectCameraPreviewView()
+                AdaptiveLiveCameraPreviewView()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
-                DirectCameraPreviewView()
+                AdaptiveLiveCameraPreviewView()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         ZStack {
@@ -295,7 +295,7 @@ struct VideoPlayerView: View {
                             Text("LIVE")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.red)
-                        DirectCameraPreviewView()
+                        AdaptiveLiveCameraPreviewView()
                             .frame(width: 160, height: 120)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .overlay(
@@ -772,6 +772,26 @@ struct LivePreviewView: NSViewRepresentable {
     }
 }
 
+/// Uses direct AVCapture preview when available, otherwise falls back to mixer-driven MTHKView.
+/// For pro capture cards (AJA mode): renders preview manually from captured sample buffers
+/// to avoid AVCaptureVideoPreviewLayer contention with the data output.
+struct AdaptiveLiveCameraPreviewView: View {
+    @ObservedObject private var liveManager = LiveStreamManager.shared
+
+    var body: some View {
+        Group {
+            if liveManager.directPreviewSession != nil {
+                DirectCameraPreviewView()
+            } else if liveManager.externalCaptureSession != nil {
+                // AJA/pro card mode: no preview layer, render from captured frames
+                SampleBufferPreviewView()
+            } else {
+                LivePreviewView()
+            }
+        }
+    }
+}
+
 // MARK: - Direct Camera Preview (recording-independent)
 
 /// Wraps AVCaptureVideoPreviewLayer in SwiftUI for smooth camera preview
@@ -822,6 +842,92 @@ struct DirectCameraPreviewView: NSViewRepresentable {
     
     class Coordinator {
         var previewLayer: AVCaptureVideoPreviewLayer?
+    }
+}
+
+// MARK: - Sample Buffer Preview (manual rendering for pro capture cards)
+
+/// Renders preview from captured pixel buffers using a CVDisplayLink-driven CALayer.
+/// Avoids AVCaptureVideoPreviewLayer which competes with AVCaptureVideoDataOutput
+/// for session frame delivery bandwidth on pro cards (AJA, Blackmagic).
+struct SampleBufferPreviewView: NSViewRepresentable {
+
+    func makeNSView(context: Context) -> NSView {
+        let view = SampleBufferPreviewNSView()
+        view.wantsLayer = true
+        view.startDisplayLink()
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+/// NSView that renders the latest captured pixel buffer at display refresh rate.
+final class SampleBufferPreviewNSView: NSView {
+    private var displayLink: CVDisplayLink?
+    private var previewLayer: CALayer?
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    private var lastRenderedBuffer: CVImageBuffer?
+
+    override func layout() {
+        super.layout()
+        previewLayer?.frame = bounds
+    }
+
+    func startDisplayLink() {
+        let renderLayer = CALayer()
+        renderLayer.contentsGravity = .resizeAspect
+        renderLayer.frame = bounds
+        renderLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        layer?.addSublayer(renderLayer)
+        previewLayer = renderLayer
+
+        var link: CVDisplayLink?
+        CVDisplayLinkCreateWithActiveCGDisplays(&link)
+        guard let link = link else { return }
+
+        let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo -> CVReturn in
+            guard let userInfo = userInfo else { return kCVReturnSuccess }
+            let view = Unmanaged<SampleBufferPreviewNSView>.fromOpaque(userInfo).takeUnretainedValue()
+            view.renderLatestFrame()
+            return kCVReturnSuccess
+        }
+
+        CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(self).toOpaque())
+        CVDisplayLinkStart(link)
+        displayLink = link
+    }
+
+    private func renderLatestFrame() {
+        let manager = LiveStreamManager.shared
+        manager.latestExternalPixelBufferLock.lock()
+        let pixelBuffer = manager.latestExternalPixelBuffer
+        manager.latestExternalPixelBufferLock.unlock()
+
+        guard let pixelBuffer = pixelBuffer else { return }
+
+        // Skip rendering if we already rendered this exact buffer
+        if let last = lastRenderedBuffer, last === pixelBuffer { return }
+        lastRenderedBuffer = pixelBuffer
+
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let extent = ciImage.extent
+        guard extent.width >= 1, extent.height >= 1,
+              let cgImage = ciContext.createCGImage(ciImage, from: extent) else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let layer = self.previewLayer else { return }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.contents = cgImage
+            CATransaction.commit()
+        }
+    }
+
+    deinit {
+        if let link = displayLink {
+            CVDisplayLinkStop(link)
+        }
     }
 }
 

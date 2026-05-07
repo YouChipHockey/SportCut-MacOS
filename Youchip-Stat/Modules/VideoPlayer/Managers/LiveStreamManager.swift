@@ -15,7 +15,7 @@ import ObjectiveC
 
 /// Manages live capture using HaishinKit's MediaMixer for camera/mic capture and MTHKView for preview.
 /// Recording is done via a custom MediaMixerOutput that writes to AVAssetWriter.
-class LiveStreamManager: NSObject, ObservableObject {
+class LiveStreamManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     
     static let shared = LiveStreamManager()
     
@@ -44,7 +44,45 @@ class LiveStreamManager: NSObject, ObservableObject {
     /// Separate AVCaptureSession for direct camera preview, independent of HaishinKit recording pipeline.
     /// Prevents recording back-pressure from degrading preview FPS during long sessions.
     private(set) var directPreviewSession: AVCaptureSession?
+    private(set) var externalCaptureSession: AVCaptureSession?
+    private var externalVideoOutput: AVCaptureVideoDataOutput?
+    private let externalCaptureQueue = DispatchQueue(label: "com.youchip.live.externalCapture", qos: .userInteractive)
+    /// Latest pixel buffer from external capture — read by SampleBufferPreviewView for manual rendering.
+    private(set) var latestExternalPixelBuffer: CVImageBuffer?
+    let latestExternalPixelBufferLock = NSLock()
+    private static let externalSnapshotCIContext = CIContext(options: [.useSoftwareRenderer: false])
     private var configuredVideoDevice: AVCaptureDevice?
+    private var configuredTargetFrameRate: Int = 30
+    private var isConfiguredExternalDevice: Bool = false
+    private var configuredWriterQoS: DispatchQoS.QoSClass = .utility
+    /// When true, AVCaptureVideoDataOutput uses native pixel format (no conversion).
+    /// Eliminates yuvs→420v conversion overhead on pro capture cards (AJA, Blackmagic, etc.).
+    var useNativePixelFormat: Bool = false
+    
+    private func shouldUseDirectPreviewSession(for device: AVCaptureDevice) -> Bool {
+        // External capture cards (AJA, UVC dongles) often cannot sustain two parallel capture sessions.
+        // Running preview and recording from one mixer pipeline avoids device-level contention and FPS drops.
+        return device.deviceType != .externalUnknown
+    }
+
+    private func updateLatestExternalFrame(_ sampleBuffer: CMSampleBuffer) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        latestExternalPixelBufferLock.lock()
+        latestExternalPixelBuffer = pixelBuffer
+        latestExternalPixelBufferLock.unlock()
+    }
+
+    private func snapshotFromExternalCapture() -> NSImage? {
+        latestExternalPixelBufferLock.lock()
+        let pixelBuffer = latestExternalPixelBuffer
+        latestExternalPixelBufferLock.unlock()
+        guard let pixelBuffer else { return nil }
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let extent = ciImage.extent
+        guard extent.width >= 1, extent.height >= 1,
+              let cgImage = LiveStreamManager.externalSnapshotCIContext.createCGImage(ciImage, from: extent) else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
     
     // MARK: - Recording state
     
@@ -69,6 +107,12 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     /// Unique session ID to prevent stale async callbacks from overwriting a newer session.
     private var sessionId: UUID = UUID()
+
+    /// Diagnostics: number of frames dropped by AVCaptureVideoDataOutput BEFORE our delegate.
+    /// Distinct from drops in LiveStreamRecorder — this measures "frames lost in the OS pipeline".
+    private var externalAVDropCount: Int = 0
+    private var lastExternalAVDropLog: Int = 0
+    private let externalAVDropLogInterval: Int = 30
     
     // MARK: - Init
     
@@ -128,7 +172,8 @@ class LiveStreamManager: NSObject, ObservableObject {
     func configureSession(
         videoDevice: AVCaptureDevice,
         audioDevice: AVCaptureDevice?,
-        format: AVCaptureDevice.Format?
+        format: AVCaptureDevice.Format?,
+        preferredFrameRate: Int? = nil
     ) -> Bool {
         let logger = CameraLogger.shared
         let isExternal = videoDevice.deviceType == .externalUnknown
@@ -153,6 +198,10 @@ class LiveStreamManager: NSObject, ObservableObject {
 
         AVCaptureDevice.applyFrameDurationPatchIfNeeded(for: videoDevice)
         self.configuredVideoDevice = videoDevice
+        self.isConfiguredExternalDevice = isExternal
+        self.configuredWriterQoS = isExternal ? .userInteractive : .utility
+        self.externalAVDropCount = 0
+        self.lastExternalAVDropLog = 0
         let thisSessionId = UUID()
         self.sessionId = thisSessionId
 
@@ -163,12 +212,16 @@ class LiveStreamManager: NSObject, ObservableObject {
         let oldPreview = self.previewView
         let oldFrameCapture = self.latestFrameCapture
         let oldDirectSession = self.directPreviewSession
+        let oldExternalSession = self.externalCaptureSession
+        let oldExternalOutput = self.externalVideoOutput
         
         self.mixer = nil
         self.recorder = nil
         self.previewView = nil
         self.latestFrameCapture = nil
         self.directPreviewSession = nil
+        self.externalCaptureSession = nil
+        self.externalVideoOutput = nil
         self.isSessionConfigured = false
         self.isLive = false
         self.isBroadcastPaused = false
@@ -195,9 +248,22 @@ class LiveStreamManager: NSObject, ObservableObject {
                 oldDirectSession.stopRunning()
             }
         }
+        if let oldExternalOutput = oldExternalOutput {
+            oldExternalOutput.setSampleBufferDelegate(nil, queue: nil)
+        }
+        if let oldExternalSession = oldExternalSession {
+            DispatchQueue.global(qos: .userInitiated).async {
+                oldExternalSession.stopRunning()
+            }
+        }
         
         // ── Create new session ──
-        let newMixer = MediaMixer(useManualCapture: true)
+        // External capture cards (AJA/UVC dongles) can behave poorly with manual capture mode
+        // and occasionally collapse to ~10 fps despite negotiated device frame duration.
+        // Let HaishinKit drive capture automatically for those devices.
+        let useManualCapture = !isExternal
+        logger.log("configureSession: creating MediaMixer(useManualCapture=\(useManualCapture))")
+        let newMixer = MediaMixer(useManualCapture: useManualCapture)
         
         // Reuse existing preview view if it already exists in the SwiftUI hierarchy.
         let view: MTHKView
@@ -213,20 +279,34 @@ class LiveStreamManager: NSObject, ObservableObject {
             do {
                 try videoDevice.lockForConfiguration()
                 videoDevice.activeFormat = format
-                if let range = format.videoSupportedFrameRateRanges.first {
-                    logger.log("configureSession: setting format frameDurations min=\(range.minFrameDuration.value)/\(range.minFrameDuration.timescale) max=\(range.maxFrameDuration.value)/\(range.maxFrameDuration.timescale)")
+                if let selectedDuration = Self.selectFrameDuration(for: format, preferredFrameRate: preferredFrameRate) {
+                    logger.log("configureSession: setting preferred frameDuration=\(selectedDuration.value)/\(selectedDuration.timescale), preferredFPS=\(preferredFrameRate.map(String.init) ?? "none")")
+                    videoDevice.activeVideoMinFrameDuration = selectedDuration
+                    videoDevice.activeVideoMaxFrameDuration = selectedDuration
+                } else if let range = format.videoSupportedFrameRateRanges.first {
+                    logger.log("configureSession: setting fallback frameDurations min=\(range.minFrameDuration.value)/\(range.minFrameDuration.timescale) max=\(range.maxFrameDuration.value)/\(range.maxFrameDuration.timescale)")
                     videoDevice.activeVideoMinFrameDuration = range.minFrameDuration
                     videoDevice.activeVideoMaxFrameDuration = range.maxFrameDuration
                 }
+                let activeDuration = videoDevice.activeVideoMinFrameDuration
+                let activeSeconds = CMTimeGetSeconds(activeDuration)
+                let activeFPS = activeSeconds > 0 ? Int(round(1.0 / activeSeconds)) : 30
+                self.configuredTargetFrameRate = min(max(activeFPS, 15), 60)
+                logger.log("configureSession: active configured fps=\(self.configuredTargetFrameRate)")
                 videoDevice.unlockForConfiguration()
                 logger.log("configureSession: device format set successfully")
             } catch {
                 logger.logError("configureSession: Failed to set device format: \(error)")
                 print("LiveStreamManager: Failed to set device format: \(error)")
             }
+        } else if let preferredFrameRate {
+            self.configuredTargetFrameRate = min(max(preferredFrameRate, 15), 60)
+            logger.log("configureSession: no explicit format, target fps set to \(self.configuredTargetFrameRate)")
         }
         let activeFormat = format ?? videoDevice.activeFormat
-        let initialFrameRate = activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30
+        let activeDuration = videoDevice.activeVideoMinFrameDuration
+        let activeSeconds = CMTimeGetSeconds(activeDuration)
+        let initialFrameRate = activeSeconds > 0 ? (1.0 / activeSeconds) : (activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30)
 
         // ── Diagnostic: dump ALL frame rate ranges for the active format ──
         logger.log("DIAG configureSession: activeFormat mediaSubType=\(activeFormat.formatDescription.mediaSubType)")
@@ -238,75 +318,221 @@ class LiveStreamManager: NSObject, ObservableObject {
 
         Task {
             do {
-                logger.logMixer("attachVideo: starting, initialFrameRate=\(initialFrameRate)")
-                await newMixer.setFrameRate(initialFrameRate)
-                try await newMixer.attachVideo(videoDevice, track: 0)
-                logger.logMixer("attachVideo: success")
-
-                // Use actual device frame duration after attach so mixer FPS matches capture (avoids slow-mo).
-                // Device may have been clamped by our patch or driver (e.g. 50 fps camera with 60 in format).
-                var actualFps: Double = initialFrameRate
-                do {
-                    try videoDevice.lockForConfiguration()
-                    defer { videoDevice.unlockForConfiguration() }
-                    let minDuration = videoDevice.activeVideoMinFrameDuration
-                    let maxDuration = videoDevice.activeVideoMaxFrameDuration
-                    let sec = CMTimeGetSeconds(minDuration)
-                    if sec > 0 {
-                        actualFps = 1.0 / sec
-                    }
-                    logger.logMixer("DIAG postAttach: activeVideoMinFrameDuration=\(minDuration.value)/\(minDuration.timescale) (\(String(format: "%.4f", CMTimeGetSeconds(minDuration)))s = \(String(format: "%.2f", sec > 0 ? 1.0/sec : 0))fps)")
-                    logger.logMixer("DIAG postAttach: activeVideoMaxFrameDuration=\(maxDuration.value)/\(maxDuration.timescale) (\(String(format: "%.4f", CMTimeGetSeconds(maxDuration)))s)")
-                } catch { /* keep initialFrameRate */ }
-                await newMixer.setFrameRate(actualFps)
-                logger.logMixer("actualFps after device attach=\(actualFps)")
-
-                // Real-time markup recording is video-only (no audio).
-                
-                var videoMixerSettings = await newMixer.videoMixerSettings
-                videoMixerSettings.mode = .passthrough
-                await newMixer.setVideoMixerSettings(videoMixerSettings)
-                
-                let frameCapture = LiveFrameCaptureOutput()
-                await newMixer.addOutput(frameCapture)
-                
-                // Direct AVCaptureSession for recording-independent camera preview.
-                // Uses a separate capture pipeline so H.264 encoding back-pressure
-                // from long recordings never affects preview FPS.
-                var directSession: AVCaptureSession? = nil
-                logger.logPreview("creating direct AVCaptureSession for preview (deviceType=\(videoDevice.deviceType.rawValue))")
-                do {
+                if isExternal {
+                    logger.log("configureSession: external device path — using direct AVCaptureVideoDataOutput pipeline")
                     let session = AVCaptureSession()
-                    let directInput = try AVCaptureDeviceInput(device: videoDevice)
-                    if session.canAddInput(directInput) {
-                        session.addInput(directInput)
-                        session.startRunning()
-                        directSession = session
-                        logger.logPreview("direct AVCaptureSession started successfully")
-                    } else {
-                        logger.logError("direct AVCaptureSession: canAddInput returned false")
+
+                    // On macOS there is no `.inputPriority` preset, but the session's default preset still resets
+                    // device-level `activeFormat` / frame durations on `addInput`. Wrapping setup in
+                    // begin/commitConfiguration and re-pinning format + frame durations AFTER input has joined
+                    // is the supported workaround. This is the root cause of AJA U-TAP / UVC capture cards
+                    // collapsing to ~10 fps despite a successful 60 fps configuration upstream.
+                    session.beginConfiguration()
+
+                    let input = try AVCaptureDeviceInput(device: videoDevice)
+                    guard session.canAddInput(input) else {
+                        session.commitConfiguration()
+                        throw NSError(domain: "LiveStreamManager", code: -101, userInfo: [NSLocalizedDescriptionKey: "external session canAddInput returned false"])
                     }
-                } catch {
-                    logger.logError("direct preview session setup failed: \(error)")
-                    print("LiveStreamManager: Direct preview session setup failed: \(error)")
-                }
-                
-                await MainActor.run {
-                    guard self.sessionId == thisSessionId else {
-                        logger.log("configureSession: sessionId mismatch on MainActor, discarding", level: .warn)
-                        directSession?.stopRunning()
-                        return
+                    session.addInput(input)
+
+                    let output = AVCaptureVideoDataOutput()
+                    // Pro capture cards (AJA U-TAP, etc.) have a slower UVC driver path on
+                    // M-series Macs. With `alwaysDiscardsLateVideoFrames=true` any tiny stall
+                    // in our delegate makes the system drop the *next* frame too, compounding
+                    // judder. For pro cards we let the system buffer late frames briefly so
+                    // small jitter on our side doesn't cascade into perceived slow-mo.
+                    // For consumer USB cards we keep the original "drop late" behaviour to
+                    // avoid memory pressure when the encoder back-pressures.
+                    output.alwaysDiscardsLateVideoFrames = !self.useNativePixelFormat
+
+                    // DIAG: log available pixel formats and native format of the device
+                    let availablePixelFormats = output.availableVideoPixelFormatTypes as [NSNumber]
+                    let formatNames = availablePixelFormats.prefix(10).map { fmt -> String in
+                        let code = fmt.uint32Value
+                        let c1 = Character(UnicodeScalar((code >> 24) & 0xFF)!)
+                        let c2 = Character(UnicodeScalar((code >> 16) & 0xFF)!)
+                        let c3 = Character(UnicodeScalar((code >> 8) & 0xFF)!)
+                        let c4 = Character(UnicodeScalar(code & 0xFF)!)
+                        let fourCC = String([c1, c2, c3, c4])
+                        return "\(fourCC)(\(code))"
                     }
-                    self.mixer = newMixer
-                    self.previewView = view
-                    self.latestFrameCapture = frameCapture
-                    self.directPreviewSession = directSession
-                    self.isSessionConfigured = true
-                    logger.log("configureSession: COMPLETE — directSession=\(directSession != nil)")
+                    let deviceNativeSubType = CMFormatDescriptionGetMediaSubType(videoDevice.activeFormat.formatDescription)
+                    let n1 = Character(UnicodeScalar((deviceNativeSubType >> 24) & 0xFF)!)
+                    let n2 = Character(UnicodeScalar((deviceNativeSubType >> 16) & 0xFF)!)
+                    let n3 = Character(UnicodeScalar((deviceNativeSubType >> 8) & 0xFF)!)
+                    let n4 = Character(UnicodeScalar(deviceNativeSubType & 0xFF)!)
+                    let nativeFourCC = String([n1, n2, n3, n4])
+                    logger.log("DIAG external pixelFormats: device native=\(nativeFourCC)(\(deviceNativeSubType)), output.availableFormats=[\(formatNames.joined(separator: ", "))] (total=\(availablePixelFormats.count)), useNativePixelFormat=\(self.useNativePixelFormat)")
+
+                    // Always request 420v from the data output.
+                    //
+                    // Empirical result on AJA U-TAP HDMI / 1920x1080 over USB on M1 Pro:
+                    //   - 420v request: ~22 fps real, jittery (33-70ms interFrame) — 1080p50 target
+                    //   - yuvs request: ~11 fps real, very steady (92ms interFrame) — 1080p60 target
+                    // Asking the data output to deliver native yuvs (4:2:2 = 4 MB / frame) makes the
+                    // device or USB stack drop to half the rate. Requesting 420v (3 MB / frame) lets
+                    // AVCaptureSession do an internal hardware-accelerated 4:2:2 → 4:2:0 conversion
+                    // that, while not free, keeps a higher overall throughput.
+                    //
+                    // The `useNativePixelFormat` toggle now only controls preview path: with it on
+                    // we render via SampleBufferPreviewView instead of AVCaptureVideoPreviewLayer,
+                    // so the layer doesn't compete with the data output for session bandwidth.
+                    output.videoSettings = [
+                        kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
+                    ]
+                    let conversionNeeded = deviceNativeSubType != kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+                    logger.log("DIAG external pixelFormats: 420v mode — conversionNeeded=\(conversionNeeded), useNativePixelFormat(manual preview)=\(self.useNativePixelFormat), discardsLate=\(output.alwaysDiscardsLateVideoFrames)")
+
+                    output.setSampleBufferDelegate(self, queue: externalCaptureQueue)
+                    guard session.canAddOutput(output) else {
+                        session.commitConfiguration()
+                        throw NSError(domain: "LiveStreamManager", code: -102, userInfo: [NSLocalizedDescriptionKey: "external session canAddOutput returned false"])
+                    }
+                    session.addOutput(output)
+
+                    // Re-apply device format / frame durations AFTER input has joined the session.
+                    // Even with `.inputPriority` some UVC stacks reset frame duration on `addInput`, so we
+                    // re-pin both the device-level and connection-level frame duration here. Connection-level
+                    // pinning is more reliably honored by AJA / UVC dongles than device-level alone.
+                    if let format = format {
+                        do {
+                            try videoDevice.lockForConfiguration()
+                            videoDevice.activeFormat = format
+                            let selectedDuration = Self.selectFrameDuration(for: format, preferredFrameRate: preferredFrameRate)
+                                ?? format.videoSupportedFrameRateRanges.first?.minFrameDuration
+                            if let dur = selectedDuration {
+                                videoDevice.activeVideoMinFrameDuration = dur
+                                videoDevice.activeVideoMaxFrameDuration = dur
+                                logger.log("configureSession: external re-applied device frameDuration=\(dur.value)/\(dur.timescale) after addInput")
+                                if let connection = output.connection(with: .video) {
+                                    let minSupported = connection.isVideoMinFrameDurationSupported
+                                    let maxSupported = connection.isVideoMaxFrameDurationSupported
+                                    if minSupported {
+                                        connection.videoMinFrameDuration = dur
+                                    }
+                                    if maxSupported {
+                                        connection.videoMaxFrameDuration = dur
+                                    }
+                                    logger.log("configureSession: external pinned connection frameDuration (minSupported=\(minSupported), maxSupported=\(maxSupported))")
+                                }
+                            }
+                            videoDevice.unlockForConfiguration()
+                        } catch {
+                            logger.logError("configureSession: external re-apply format failed: \(error)")
+                        }
+                    }
+
+                    session.commitConfiguration()
+                    session.startRunning()
+                    logger.log("configureSession: external AVCaptureSession started")
+
+                    let postDims = CMVideoFormatDescriptionGetDimensions(videoDevice.activeFormat.formatDescription)
+                    let postMin = videoDevice.activeVideoMinFrameDuration
+                    let postMax = videoDevice.activeVideoMaxFrameDuration
+                    let postMinSec = CMTimeGetSeconds(postMin)
+                    let postFps = postMinSec > 0 ? 1.0 / postMinSec : 0
+                    logger.log("DIAG external postStart: activeFormat=\(postDims.width)x\(postDims.height) mediaSubType=\(videoDevice.activeFormat.formatDescription.mediaSubType)")
+                    logger.log("DIAG external postStart: device activeVideoMinFrameDuration=\(postMin.value)/\(postMin.timescale) (\(String(format: "%.2f", postFps))fps) max=\(postMax.value)/\(postMax.timescale)")
+                    if let connection = output.connection(with: .video) {
+                        let cMin = connection.videoMinFrameDuration
+                        let cMax = connection.videoMaxFrameDuration
+                        let cMinSec = CMTimeGetSeconds(cMin)
+                        let cFps = cMinSec > 0 ? 1.0 / cMinSec : 0
+                        logger.log("DIAG external postStart: connection.videoMinFrameDuration=\(cMin.value)/\(cMin.timescale) (\(String(format: "%.2f", cFps))fps) max=\(cMax.value)/\(cMax.timescale)")
+                    }
+
+                    let useManualPreview = self.useNativePixelFormat
+                    await MainActor.run {
+                        guard self.sessionId == thisSessionId else {
+                            logger.log("configureSession: sessionId mismatch on MainActor, discarding external session", level: .warn)
+                            output.setSampleBufferDelegate(nil, queue: nil)
+                            session.stopRunning()
+                            return
+                        }
+                        self.mixer = nil
+                        self.previewView = nil
+                        self.latestFrameCapture = nil
+                        self.externalVideoOutput = output
+                        self.externalCaptureSession = session
+                        // When useNativePixelFormat (AJA mode): do NOT expose session as directPreviewSession.
+                        // This prevents AVCaptureVideoPreviewLayer from being created, which competes with
+                        // the data output for session frame delivery bandwidth. Preview will be rendered
+                        // manually from captured frames via SampleBufferPreviewView.
+                        self.directPreviewSession = useManualPreview ? nil : session
+                        self.isSessionConfigured = true
+                        logger.log("configureSession: COMPLETE — external direct session, manualPreview=\(useManualPreview)")
+                    }
+                } else {
+                    logger.logMixer("attachVideo: starting, initialFrameRate=\(initialFrameRate)")
+                    await newMixer.setFrameRate(initialFrameRate)
+                    try await newMixer.attachVideo(videoDevice, track: 0)
+                    logger.logMixer("attachVideo: success")
+
+                    // Use actual device frame duration after attach so mixer FPS matches capture (avoids slow-mo).
+                    var actualFps: Double = initialFrameRate
+                    do {
+                        try videoDevice.lockForConfiguration()
+                        defer { videoDevice.unlockForConfiguration() }
+                        let minDuration = videoDevice.activeVideoMinFrameDuration
+                        let maxDuration = videoDevice.activeVideoMaxFrameDuration
+                        let sec = CMTimeGetSeconds(minDuration)
+                        if sec > 0 {
+                            actualFps = 1.0 / sec
+                        }
+                        logger.logMixer("DIAG postAttach: activeVideoMinFrameDuration=\(minDuration.value)/\(minDuration.timescale) (\(String(format: "%.4f", CMTimeGetSeconds(minDuration)))s = \(String(format: "%.2f", sec > 0 ? 1.0/sec : 0))fps)")
+                        logger.logMixer("DIAG postAttach: activeVideoMaxFrameDuration=\(maxDuration.value)/\(maxDuration.timescale) (\(String(format: "%.4f", CMTimeGetSeconds(maxDuration)))s)")
+                    } catch { /* keep initialFrameRate */ }
+                    await newMixer.setFrameRate(actualFps)
+                    logger.logMixer("actualFps after device attach=\(actualFps)")
+
+                    var videoMixerSettings = await newMixer.videoMixerSettings
+                    videoMixerSettings.mode = .passthrough
+                    await newMixer.setVideoMixerSettings(videoMixerSettings)
+                    await newMixer.addOutput(view)
+
+                    let frameCapture = LiveFrameCaptureOutput()
+                    await newMixer.addOutput(frameCapture)
+
+                    var directSession: AVCaptureSession? = nil
+                    if shouldUseDirectPreviewSession(for: videoDevice) {
+                        logger.logPreview("creating direct AVCaptureSession for preview (deviceType=\(videoDevice.deviceType.rawValue))")
+                        do {
+                            let session = AVCaptureSession()
+                            let directInput = try AVCaptureDeviceInput(device: videoDevice)
+                            if session.canAddInput(directInput) {
+                                session.addInput(directInput)
+                                session.startRunning()
+                                directSession = session
+                                logger.logPreview("direct AVCaptureSession started successfully")
+                            } else {
+                                logger.logError("direct AVCaptureSession: canAddInput returned false")
+                            }
+                        } catch {
+                            logger.logError("direct preview session setup failed: \(error)")
+                            print("LiveStreamManager: Direct preview session setup failed: \(error)")
+                        }
+                    }
+
+                    await MainActor.run {
+                        guard self.sessionId == thisSessionId else {
+                            logger.log("configureSession: sessionId mismatch on MainActor, discarding", level: .warn)
+                            directSession?.stopRunning()
+                            return
+                        }
+                        self.mixer = newMixer
+                        self.previewView = view
+                        self.latestFrameCapture = frameCapture
+                        self.externalVideoOutput = nil
+                        self.externalCaptureSession = nil
+                        self.directPreviewSession = directSession
+                        self.isSessionConfigured = true
+                        logger.log("configureSession: COMPLETE — directSession=\(directSession != nil)")
+                    }
                 }
             } catch {
-                logger.logError("configureSession: Failed to configure HaishinKit mixer: \(error)")
-                print("LiveStreamManager: Failed to configure HaishinKit mixer: \(error)")
+                logger.logError("configureSession: Failed to configure capture pipeline: \(error)")
+                print("LiveStreamManager: Failed to configure capture pipeline: \(error)")
                 await MainActor.run {
                     guard self.sessionId == thisSessionId else { return }
                     self.isSessionConfigured = false
@@ -321,8 +547,8 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     func startLiveStream(videoId: String, preloadedVideoURL: URL? = nil) {
         let logger = CameraLogger.shared
-        guard let mixer = mixer else {
-            logger.logError("startLiveStream: mixer is nil, aborting")
+        guard mixer != nil || externalCaptureSession != nil else {
+            logger.logError("startLiveStream: capture pipeline is not configured")
             return
         }
         logger.log("startLiveStream: videoId=\(videoId), preloadedVideoURL=\(preloadedVideoURL?.lastPathComponent ?? "none")")
@@ -341,9 +567,14 @@ class LiveStreamManager: NSObject, ObservableObject {
             try? fileManager.removeItem(at: url)
         }
         
-        let newRecorder = LiveStreamRecorder(outputURL: tempFileURL!, enableAudio: false)
+        let newRecorder = LiveStreamRecorder(
+            outputURL: tempFileURL!,
+            enableAudio: false,
+            targetVideoFPS: configuredTargetFrameRate,
+            writerQoS: configuredWriterQoS
+        )
         self.recorder = newRecorder
-        logger.log("startLiveStream: recorder created, outputURL=\(tempFileURL!.lastPathComponent)")
+        logger.log("startLiveStream: recorder created, outputURL=\(tempFileURL!.lastPathComponent), targetFPS=\(configuredTargetFrameRate), writerQoS=\(configuredWriterQoS.rawValue)")
 
         // Calculate preloaded duration synchronously for local files.
         var calculatedPreloadDuration: Double = 0.0
@@ -357,11 +588,15 @@ class LiveStreamManager: NSObject, ObservableObject {
         let baseSegments: [URL] = preloadedVideoURL.map { [$0] } ?? []
         
         Task {
-            logger.logMixer("startLiveStream: adding recorder output to mixer")
-            await mixer.addOutput(newRecorder)
-            logger.logMixer("startLiveStream: calling mixer.startRunning()")
-            await mixer.startRunning()
-            logger.logMixer("startLiveStream: mixer.startRunning() completed")
+            if let mixer = self.mixer {
+                logger.logMixer("startLiveStream: adding recorder output to mixer")
+                await mixer.addOutput(newRecorder)
+                logger.logMixer("startLiveStream: calling mixer.startRunning()")
+                await mixer.startRunning()
+                logger.logMixer("startLiveStream: mixer.startRunning() completed")
+            } else {
+                logger.log("startLiveStream: external direct capture active, recorder consumes AVCaptureVideoDataOutput frames")
+            }
             newRecorder.startRecording()
             logger.logWriter("startLiveStream: recorder.startRecording() called")
 
@@ -387,6 +622,10 @@ class LiveStreamManager: NSObject, ObservableObject {
     // MARK: - Startup stabilization
 
     private func performStartupPauseResume() {
+        if isConfiguredExternalDevice {
+            CameraLogger.shared.log("performStartupPauseResume: skipped for external capture device")
+            return
+        }
         CameraLogger.shared.log("performStartupPauseResume: scheduling stabilization pause")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             guard LiveStreamManager.shared.isLive else {
@@ -438,7 +677,10 @@ class LiveStreamManager: NSObject, ObservableObject {
     /// Захват текущего кадра для редактора (режим real-time). Берёт последний кадр из потока микшера (Metal-превью не даёт растр). Вызывать с main queue.
     func captureCurrentFrame() -> NSImage? {
         guard Thread.isMainThread else { return nil }
-        return latestFrameCapture?.takeSnapshot()
+        if let mixerSnapshot = latestFrameCapture?.takeSnapshot() {
+            return mixerSnapshot
+        }
+        return snapshotFromExternalCapture()
     }
     
     /// Финализирует текущий фрагмент записи и отдаёт копию файла для экспорта (при паузе или во время записи); затем запускает новый рекордер.
@@ -515,8 +757,8 @@ class LiveStreamManager: NSObject, ObservableObject {
 
     /// После экспорта при паузе: подменяем рекордер на новый (пишем в новый файл при возобновлении).
     private func replaceRecorderAfterExport() async {
-        guard let mixer = mixer, let videoId = currentVideoId else {
-            CameraLogger.shared.logError("replaceRecorderAfterExport: mixer or videoId is nil")
+        guard let videoId = currentVideoId else {
+            CameraLogger.shared.logError("replaceRecorderAfterExport: videoId is nil")
             return
         }
         CameraLogger.shared.logWriter("replaceRecorderAfterExport: replacing recorder for videoId=\(videoId)")
@@ -527,9 +769,16 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
         let newTempURL = liveDir.appendingPathComponent("\(videoId)_resumed_\(UUID().uuidString).mov")
         let oldRecorder = recorder
-        let newRecorder = LiveStreamRecorder(outputURL: newTempURL, enableAudio: false)
-        await mixer.removeOutput(oldRecorder!)
-        await mixer.addOutput(newRecorder)
+        let newRecorder = LiveStreamRecorder(
+            outputURL: newTempURL,
+            enableAudio: false,
+            targetVideoFPS: configuredTargetFrameRate,
+            writerQoS: configuredWriterQoS
+        )
+        if let mixer = mixer, let oldRecorder = oldRecorder {
+            await mixer.removeOutput(oldRecorder)
+            await mixer.addOutput(newRecorder)
+        }
         await MainActor.run { [weak self] in
             guard let self = self else { return }
             self.recorder = newRecorder
@@ -840,8 +1089,8 @@ class LiveStreamManager: NSObject, ObservableObject {
     }
     
     private func startNewSegmentRecorder(videoId: String, sessionId: UUID) async {
-        guard let mixer = mixer, self.sessionId == sessionId else {
-            CameraLogger.shared.log("startNewSegmentRecorder: skipped (mixer=\(mixer != nil), sessionMatch=\(self.sessionId == sessionId))", level: .warn)
+        guard self.sessionId == sessionId else {
+            CameraLogger.shared.log("startNewSegmentRecorder: skipped (session mismatch)", level: .warn)
             return
         }
         CameraLogger.shared.logWriter("startNewSegmentRecorder: creating segment \(allSegmentURLs.count)")
@@ -853,11 +1102,18 @@ class LiveStreamManager: NSObject, ObservableObject {
         let segIndex = allSegmentURLs.count
         let newTempURL = liveDir.appendingPathComponent("\(videoId)_seg\(segIndex).mov")
         let oldRecorder = recorder
-        let newRecorder = LiveStreamRecorder(outputURL: newTempURL, enableAudio: false)
-        if let oldRecorder = oldRecorder {
-            await mixer.removeOutput(oldRecorder)
+        let newRecorder = LiveStreamRecorder(
+            outputURL: newTempURL,
+            enableAudio: false,
+            targetVideoFPS: configuredTargetFrameRate,
+            writerQoS: configuredWriterQoS
+        )
+        if let mixer = mixer {
+            if let oldRecorder = oldRecorder {
+                await mixer.removeOutput(oldRecorder)
+            }
+            await mixer.addOutput(newRecorder)
         }
-        await mixer.addOutput(newRecorder)
         await MainActor.run { [weak self] in
             guard let self = self, self.sessionId == sessionId else { return }
             self.recorder = newRecorder
@@ -871,14 +1127,58 @@ class LiveStreamManager: NSObject, ObservableObject {
     }
     
     // MARK: - Direct Preview
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard output === externalVideoOutput else { return }
+        updateLatestExternalFrame(sampleBuffer)
+
+        if !isLive {
+            return
+        }
+        recorder?.appendVideoSampleBuffer(sampleBuffer)
+    }
+
+    /// Called by AVCaptureVideoDataOutput when it drops a sample buffer before delivery.
+    /// With `alwaysDiscardsLateVideoFrames=true`, this fires for every "late" frame the
+    /// session decided to skip. Most useful for diagnosing why effectiveCaptureFps is low
+    /// despite the device reporting a high frame rate — if this counter rises in lockstep
+    /// with the gap between configured fps and actual fps, the bottleneck is in the
+    /// capture session / driver path (NOT our writer pipeline).
+    func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard output === externalVideoOutput else { return }
+        externalAVDropCount += 1
+        if externalAVDropCount - lastExternalAVDropLog >= externalAVDropLogInterval {
+            lastExternalAVDropLog = externalAVDropCount
+            var reasonCode: CFString? = nil
+            if let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[CFString: Any]],
+               let first = attachments.first,
+               let reason = first[kCMSampleBufferAttachmentKey_DroppedFrameReason] as? String {
+                reasonCode = reason as CFString
+            }
+            CameraLogger.shared.logFrame("DIAG AVCapture didDrop: total=\(externalAVDropCount), reason=\(reasonCode ?? "unknown" as CFString) — these are frames AVCaptureSession dropped BEFORE reaching our delegate")
+        }
+    }
     
     private func stopDirectPreview() {
         let session = directPreviewSession
+        let externalSession = externalCaptureSession
+        let externalOutput = externalVideoOutput
         directPreviewSession = nil
+        externalCaptureSession = nil
+        externalVideoOutput = nil
         configuredVideoDevice = nil
+        externalOutput?.setSampleBufferDelegate(nil, queue: nil)
+        latestExternalPixelBufferLock.lock()
+        latestExternalPixelBuffer = nil
+        latestExternalPixelBufferLock.unlock()
         if let session = session {
             DispatchQueue.global(qos: .userInitiated).async {
                 session.stopRunning()
+            }
+        }
+        if let externalSession = externalSession, externalSession !== session {
+            DispatchQueue.global(qos: .userInitiated).async {
+                externalSession.stopRunning()
             }
         }
     }
@@ -892,6 +1192,8 @@ class LiveStreamManager: NSObject, ObservableObject {
             guard self.sessionId == cleanupSessionId else { return }
             self.mixer = nil
             self.recorder = nil
+            self.externalCaptureSession = nil
+            self.externalVideoOutput = nil
             self.isSessionConfigured = false
             self.currentVideoId = nil
         }
@@ -1012,9 +1314,9 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     private let outputURL: URL
     private let enableAudio: Bool
     // .utility keeps disk writes off the high-priority capture thread pool, reducing preview FPS drops.
-    private let writerQueue = DispatchQueue(label: "com.youchip.liveRecorder", qos: .utility)
+    private let writerQueue: DispatchQueue
     /// Target FPS for recording (preview can be higher).
-    private let targetVideoFPS: Int = 30
+    private let targetVideoFPS: Int
     
     // Pre-throttle state – checked BEFORE dispatching to avoid flooding writerQueue with dropped frames.
     private let preThrottleLock = NSLock()
@@ -1059,9 +1361,11 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     private var interFrameCount: Int = 0
     private var diagStatsTimer: Date?
 
-    init(outputURL: URL, enableAudio: Bool = true) {
+    init(outputURL: URL, enableAudio: Bool = true, targetVideoFPS: Int = 30, writerQoS: DispatchQoS.QoSClass = .utility) {
         self.outputURL = outputURL
         self.enableAudio = enableAudio
+        self.targetVideoFPS = min(max(targetVideoFPS, 1), 120)
+        self.writerQueue = DispatchQueue(label: "com.youchip.liveRecorder", qos: DispatchQoS(qosClass: writerQoS, relativePriority: 0))
     }
 
     func startRecording() {
@@ -1196,6 +1500,10 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
     }
     
     nonisolated func mixer(_ mixer: MediaMixer, didOutput sampleBuffer: CMSampleBuffer) {
+        appendVideoSampleBuffer(sampleBuffer)
+    }
+
+    func appendVideoSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
 
         guard !isPaused else {
@@ -1378,24 +1686,35 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
             let clampedFrameRate = min(max(sourceFrameRate, 15), 60)
             logger.logWriter("DIAG setupWriter: sourceFrameRate=\(sourceFrameRate), clampedFrameRate=\(clampedFrameRate), targetVideoFPS=\(targetVideoFPS)")
             
+            // Resolution/fps-aware bitrate: 4 Mbps fits 720p30 but is far too low for 1080p60
+            // (encoder thrashes the rate controller and produces visible blocking, perceived as stutter).
+            // Heuristic: ~0.10 bits/pixel/frame for Main profile gives clean output without exploding file size.
+            let pixelsPerFrame = Int(dimensions.width) * Int(dimensions.height)
+            let computedBitrate = Int(Double(pixelsPerFrame) * Double(clampedFrameRate) * 0.10)
+            let bitrate = min(max(computedBitrate, 4_000_000), 25_000_000)
+            // Main profile is hardware-accelerated on Apple Silicon and gives noticeably better quality at
+            // the same bitrate than Baseline, with effectively the same encoder load. We keep B-frames
+            // disabled to preserve real-time encoder latency.
             let videoSettings: [String: Any] = [
                 AVVideoCodecKey: AVVideoCodecType.h264,
                 AVVideoWidthKey: Int(dimensions.width),
                 AVVideoHeightKey: Int(dimensions.height),
                 AVVideoCompressionPropertiesKey: [
-                    AVVideoAverageBitRateKey: 4_000_000,
+                    AVVideoAverageBitRateKey: bitrate,
                     AVVideoExpectedSourceFrameRateKey: clampedFrameRate,
                     // Longer keyframe interval = fewer I-frames = lower encoder CPU load.
                     AVVideoMaxKeyFrameIntervalKey: clampedFrameRate * 2,
-                    // Baseline profile: no B-frames, least encoder complexity.
-                    AVVideoProfileLevelKey: AVVideoProfileLevelH264BaselineAutoLevel,
+                    AVVideoProfileLevelKey: AVVideoProfileLevelH264MainAutoLevel,
                     // Disable B-frames explicitly – reduces encoder latency and CPU.
                     AVVideoAllowFrameReorderingKey: false
                 ]
             ]
+            logger.logWriter("setupWriter: encoder bitrate=\(bitrate) bps for \(dimensions.width)x\(dimensions.height)@\(clampedFrameRate)fps (Main profile, no B-frames)")
             
             let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
             videoInput.expectsMediaDataInRealTime = true
+            // Keep encoded orientation exactly as delivered by capture pipeline.
+            videoInput.transform = .identity
             if writer.canAdd(videoInput) { writer.add(videoInput) }
             self.videoWriterInput = videoInput
             
@@ -1531,5 +1850,42 @@ extension AVCaptureDevice {
         let clampedFps = CMTimeGetSeconds(clamped) > 0 ? 1.0 / CMTimeGetSeconds(clamped) : 0
         CameraLogger.shared.log("DIAG frameDurationPatch: setMaxFrameDuration requested=\(duration.value)/\(duration.timescale) (\(String(format: "%.2f", reqFps))fps) → applied=\(clamped.value)/\(clamped.timescale) (\(String(format: "%.2f", clampedFps))fps) changed=\(clamped != duration)")
         _patched_setActiveVideoMaxFrameDuration(clamped)
+    }
+}
+
+private extension LiveStreamManager {
+    static func selectFrameDuration(for format: AVCaptureDevice.Format, preferredFrameRate: Int?) -> CMTime? {
+        let ranges = format.videoSupportedFrameRateRanges
+        guard !ranges.isEmpty else { return nil }
+        guard let preferredFrameRate else {
+            return ranges.first?.minFrameDuration
+        }
+
+        let preferred = Double(preferredFrameRate)
+        var bestRange: AVFrameRateRange?
+        var bestDistance = Double.greatestFiniteMagnitude
+
+        for range in ranges {
+            let minFPS = Double(range.minFrameRate)
+            let maxFPS = Double(range.maxFrameRate)
+            let clamped = min(max(preferred, minFPS), maxFPS)
+            let distance = abs(clamped - preferred)
+            if distance < bestDistance {
+                bestDistance = distance
+                bestRange = range
+            }
+            if distance == 0 {
+                break
+            }
+        }
+
+        guard let selected = bestRange else { return nil }
+        let minFPS = Double(selected.minFrameRate)
+        let maxFPS = Double(selected.maxFrameRate)
+        let targetFPS = min(max(preferred, minFPS), maxFPS)
+        if minFPS == maxFPS {
+            return selected.minFrameDuration
+        }
+        return CMTime(seconds: 1.0 / targetFPS, preferredTimescale: 60000)
     }
 }

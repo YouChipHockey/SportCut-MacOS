@@ -19,6 +19,7 @@ class ViewerWindowController: NSWindowController {
         let window = NSWindow(contentViewController: hostingController)
         
         window.title = ^String.Titles.view
+        window.tabbingMode = .disallowed
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         
         if let screen = NSScreen.main {

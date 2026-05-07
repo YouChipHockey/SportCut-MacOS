@@ -15,9 +15,12 @@ struct LiveSourceSelectionView: View {
     @State private var selectedVideoDevice: AVCaptureDevice?
     @State private var availableFormats: [(format: AVCaptureDevice.Format, description: String)] = []
     @State private var selectedFormatIndex: Int = 0
+    @State private var selectedFrameRate: Int = 30
     @State private var errorMessage: String?
     @State private var isConfiguring: Bool = false
     @State private var selectedPreloadURL: URL? = nil
+    @State private var isProCaptureCard: Bool = false
+    private let frameRateOptions: [Int] = [30, 40, 50, 60]
     
     /// When true the sheet was opened via "Append to video" — the preloaded video picker is hidden.
     var isAppendMode: Bool = false
@@ -32,6 +35,8 @@ struct LiveSourceSelectionView: View {
                 VStack(spacing: 20) {
                     videoSourceSection
                     qualitySection
+                    frameRateSection
+                    proCaptureCardSection
                     if !isAppendMode {
                         preloadedVideoSection
                     }
@@ -159,6 +164,68 @@ struct LiveSourceSelectionView: View {
     
     // MARK: - Preloaded Video Section
     
+    private var frameRateSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Frame Rate (FPS)")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+            
+            Picker("", selection: $selectedFrameRate) {
+                ForEach(frameRateOptions, id: \.self) { fps in
+                    if isFrameRateSupported(fps) {
+                        Text("\(fps) fps").tag(fps)
+                    } else {
+                        Text("\(fps) fps (nearest)").tag(fps)
+                    }
+                }
+            }
+            .pickerStyle(MenuPickerStyle())
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            )
+            
+            Text("Будет запрошен выбранный FPS. Если формат не поддерживает его точно, будет выбран ближайший доступный.")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+    }
+    
+    // MARK: - Pro Capture Card Toggle
+
+    private var proCaptureCardSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $isProCaptureCard) {
+                HStack(spacing: 8) {
+                    Image(systemName: "bolt.horizontal.fill")
+                        .foregroundColor(isProCaptureCard ? .orange : .secondary)
+                        .font(.system(size: 14))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Карта AJA / Blackmagic")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        Text("Нативный формат пикселей (без конвертации yuvs→420v)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .toggleStyle(SwitchToggleStyle(tint: .orange))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(isProCaptureCard ? Color.orange.opacity(0.08) : Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isProCaptureCard ? Color.orange.opacity(0.4) : Color(NSColor.separatorColor), lineWidth: 1)
+            )
+        }
+    }
+
     private var preloadedVideoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(^String.Titles.liveStreamPreloadedVideo)
@@ -359,6 +426,7 @@ struct LiveSourceSelectionView: View {
     private func updateFormats(for device: AVCaptureDevice) {
         availableFormats = liveManager.getAvailableFormats(for: device)
         selectedFormatIndex = 0
+        selectedFrameRate = bestDefaultFrameRate(for: device)
     }
     
     private func configureAndStart() {
@@ -368,11 +436,13 @@ struct LiveSourceSelectionView: View {
         errorMessage = nil
         
         let format = availableFormats.isEmpty ? nil : availableFormats[selectedFormatIndex].format
-        
+
+        liveManager.useNativePixelFormat = isProCaptureCard
         _ = liveManager.configureSession(
             videoDevice: videoDevice,
             audioDevice: nil,
-            format: format
+            format: format,
+            preferredFrameRate: selectedFrameRate
         )
         
         pollForConfiguration(videoDevice: videoDevice, format: format, attempts: 0)
@@ -392,5 +462,28 @@ struct LiveSourceSelectionView: View {
                 pollForConfiguration(videoDevice: videoDevice, format: format, attempts: attempts + 1)
             }
         }
+    }
+
+    private func selectedFormat() -> AVCaptureDevice.Format? {
+        guard !availableFormats.isEmpty else { return nil }
+        guard selectedFormatIndex >= 0, selectedFormatIndex < availableFormats.count else { return nil }
+        return availableFormats[selectedFormatIndex].format
+    }
+
+    private func isFrameRateSupported(_ fps: Int) -> Bool {
+        guard let format = selectedFormat() else { return false }
+        return format.videoSupportedFrameRateRanges.contains { range in
+            let min = Double(range.minFrameRate)
+            let max = Double(range.maxFrameRate)
+            return Double(fps) >= min && Double(fps) <= max
+        }
+    }
+
+    private func bestDefaultFrameRate(for device: AVCaptureDevice) -> Int {
+        let activeRanges = device.activeFormat.videoSupportedFrameRateRanges
+        guard let firstRange = activeRanges.first else { return 30 }
+        let maxFPS = Int(round(firstRange.maxFrameRate))
+        let nearest = frameRateOptions.min(by: { abs($0 - maxFPS) < abs($1 - maxFPS) })
+        return nearest ?? 30
     }
 }
