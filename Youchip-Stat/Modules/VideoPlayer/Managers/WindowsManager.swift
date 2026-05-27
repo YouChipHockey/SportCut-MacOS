@@ -929,7 +929,7 @@ class WindowsManager: NSObject {
         SportCutSessionManager.shared.addProjectSource(to: &session, file: filesFile)
 
         if session.playlistGroups.isEmpty {
-            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
+            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: ^String.Titles.sportCutDefaultGroupName)
         }
 
         sportCutWindow = SportCutWindowController(session: session)
@@ -974,13 +974,13 @@ class WindowsManager: NSObject {
         }
 
         if mutable.playlistGroups.isEmpty {
-            SportCutSessionManager.shared.addPlaylistGroup(to: &mutable, name: "Основная")
+            SportCutSessionManager.shared.addPlaylistGroup(to: &mutable, name: ^String.Titles.sportCutDefaultGroupName)
         }
         let df = DateFormatter()
         df.locale = Locale.current
         df.timeStyle = .short
         df.dateStyle = .short
-        let playlistName = "Теги (\(df.string(from: Date())))"
+        let playlistName = String.Titles.sportCutTagsPlaylistPrefix.format(df.string(from: Date()))
         let newPlaylist = SportCutPlaylist(name: playlistName, events: events, eventComments: eventComments)
         mutable.playlistGroups[0].playlists.append(newPlaylist)
         SportCutSessionManager.shared.updateSession(mutable)
@@ -1011,7 +1011,7 @@ class WindowsManager: NSObject {
             var session = SportCutSessionManager.shared.createSession(name: filesFile.name)
             SportCutSessionManager.shared.addProjectSource(to: &session, file: filesFile)
             if session.playlistGroups.isEmpty {
-                SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
+                SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: ^String.Titles.sportCutDefaultGroupName)
             }
             addMarkupStampsAsNewPlaylistAndOpenWindow(sessionID: session.id, projectID: pid, pairs: pairs)
             return
@@ -1025,7 +1025,7 @@ class WindowsManager: NSObject {
             var s = SportCutSessionManager.shared.createSession(name: filesFile.name)
             SportCutSessionManager.shared.addProjectSource(to: &s, file: filesFile)
             if s.playlistGroups.isEmpty {
-                SportCutSessionManager.shared.addPlaylistGroup(to: &s, name: "Основная")
+                SportCutSessionManager.shared.addPlaylistGroup(to: &s, name: ^String.Titles.sportCutDefaultGroupName)
             }
         }
 
@@ -1193,7 +1193,7 @@ class WindowsManager: NSObject {
         guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return }
 
         if session.playlistGroups.isEmpty {
-            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
+            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: ^String.Titles.sportCutDefaultGroupName)
         }
         let groupIndex = 0
         let playlistName = "\(session.playlistGroups[groupIndex].playlists.count + 1)"
@@ -1216,7 +1216,7 @@ class WindowsManager: NSObject {
 
         // Создаём новый плейлист в первой группе
         if session.playlistGroups.isEmpty {
-            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: "Основная")
+            SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: ^String.Titles.sportCutDefaultGroupName)
         }
         let groupIndex = 0
         let playlistName = "\(session.playlistGroups[groupIndex].playlists.count + 1)"

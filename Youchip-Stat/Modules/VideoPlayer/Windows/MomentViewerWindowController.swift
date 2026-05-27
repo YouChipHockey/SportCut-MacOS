@@ -29,7 +29,7 @@ class MomentViewerWindowController: NSWindowController, NSWindowDelegate {
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
-        window.title = "Момент: \(tagName)"
+        window.title = String.Titles.momentWindowTitlePrefix.format(tagName)
         window.tabbingMode = .disallowed
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         

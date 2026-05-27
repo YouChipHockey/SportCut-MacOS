@@ -64,8 +64,8 @@ private enum SportCutBottomPane: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .markup: return "Разметка"
-        case .table: return "Таблица"
+        case .markup: return ^String.Titles.sportCutPaneMarkup
+        case .table: return ^String.Titles.sportCutPaneTable
         }
     }
 
@@ -90,9 +90,9 @@ private enum SportCutTimelineLineSort: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .original: return "Как в проекте"
-        case .nameAsc: return "Таймлайны А→Я"
-        case .nameDesc: return "Таймлайны Я→А"
+        case .original: return ^String.Titles.sportCutSortOriginal
+        case .nameAsc: return ^String.Titles.sportCutSortTimelinesAsc
+        case .nameDesc: return ^String.Titles.sportCutSortTimelinesDesc
         }
     }
 }

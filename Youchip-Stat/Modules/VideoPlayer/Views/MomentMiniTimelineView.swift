@@ -149,7 +149,7 @@ struct MomentMiniTimelineView: View {
                                     .font(.system(size: 10, weight: .semibold))
                             }
                             .buttonStyle(.borderless)
-                            .help("Прокрутить влево")
+                            .help(^String.Titles.momentScrollLeftHelp)
                         } else {
                             Color.clear
                         }
@@ -190,7 +190,7 @@ struct MomentMiniTimelineView: View {
                                     .font(.system(size: 10, weight: .semibold))
                             }
                             .buttonStyle(.borderless)
-                            .help("Прокрутить вправо")
+                            .help(^String.Titles.momentScrollRightHelp)
                         } else {
                             Color.clear
                         }

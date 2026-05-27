@@ -389,7 +389,7 @@ struct AnalyticsView: View {
             VStack(alignment: .leading) {
                 Text(stat.name)
                     .font(.headline)
-                Text("Количество тегов: \(stat.tagCount)")
+                Text(String.Titles.analyticsTagCount.format(stat.tagCount))
                 Text("\(^String.Titles.totalDuration) \(secondsToTimeString(stat.totalDuration))")
                 ForEach(stat.tagPercentages, id: \.tagName) { tagData in
                     Text("\(tagData.tagName): \(String(format: "%.1f", tagData.percentage))%")

@@ -328,7 +328,7 @@ struct MomentViewerView: View {
                     }
 
                     HStack(alignment: .center, spacing: 0) {
-                        Text(String(format: "Длительность: %7.2f с", session.displayDuration))
+                        Text(String(format: ^String.Titles.momentDurationLabel, session.displayDuration))
                             .font(.system(size: 11, weight: .regular, design: .monospaced))
                             .foregroundColor(.secondary)
                             .lineLimit(1)
@@ -337,7 +337,7 @@ struct MomentViewerView: View {
                         Spacer(minLength: 28)
 
                         HStack(alignment: .center, spacing: 8) {
-                            Text("Масштаб")
+                            Text(^String.Titles.momentScaleLabel)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.secondary)
 
@@ -355,7 +355,7 @@ struct MomentViewerView: View {
                             .controlSize(.small)
                             .labelsHidden()
                             .frame(width: 112)
-                            .accessibilityLabel("Масштаб таймлайна")
+                            .accessibilityLabel(^String.Titles.momentScaleAccessibility)
 
                             Text(String(format: "%.1fx", momentMiniTimelineScale))
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -374,12 +374,12 @@ struct MomentViewerView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         if !stampEventNames.isEmpty {
-                            Text("События: \(stampEventNames.joined(separator: ", "))")
+                            Text(String.Titles.momentEventsPrefix.format(stampEventNames.joined(separator: ", ")))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
                         if !stampLabelNames.isEmpty {
-                            Text("Лейблы: \(stampLabelNames.joined(separator: ", "))")
+                            Text(String.Titles.momentLabelsPrefix.format(stampLabelNames.joined(separator: ", ")))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }

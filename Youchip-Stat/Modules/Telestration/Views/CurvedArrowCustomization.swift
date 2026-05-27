@@ -40,7 +40,7 @@ struct CurvedArrowCustomization: View {
             Divider()
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("Высота центра параболы")
+                Text(^String.Titles.curvedArrowHeightLabel)
                     .font(.subheadline)
                 
                 HStack {

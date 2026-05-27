@@ -975,6 +975,142 @@ extension String {
         case sportCutGroupPrefix
         case sportCutSessionPrefix
         case sportCutAddCount
+
+        // SportCut Viewing Mode
+        case sportCutWindowTitlePrefix
+        case sportCutExportTypeClips
+        case sportCutExportTypeFilm
+        case sportCutExportTypeFilmPerPlaylist
+        case sportCutSortTimeAsc
+        case sportCutSortTimeDesc
+        case sportCutSortDurationAsc
+        case sportCutSortDurationDesc
+        case sportCutSortTagNameAsc
+        case sportCutSortProjectAsc
+        case sportCutPaneMarkup
+        case sportCutPaneTable
+        case sportCutSortOriginal
+        case sportCutSortTimelinesAsc
+        case sportCutSortTimelinesDesc
+        case sportCutTagsPlaylistPrefix
+
+        // Viewing Mode UI
+        case viewingSelectedTags
+        case viewingTotalDuration
+        case viewingNewSession
+        case viewingToExistingSession
+        case viewingDeselectAll
+        case viewingOpenInMode
+        case viewingAddSelectedToPlaylist
+        case viewingLiveModeHelp
+        case viewingReviewLabel
+        case viewingReviewHelp
+        case viewingSortReset
+        case viewingSortAlphaAsc
+        case viewingSortAlphaDesc
+        case viewingSortTagCountDesc
+        case viewingSortTagCountAsc
+        case viewingSortLastTagChronological
+        case viewingSortLastTagReverse
+        case viewingTimelineFiltersHelp
+        case viewingViewMoment
+        case viewingAddComment
+        case viewingEditComment
+        case viewingDeleteComment
+
+        // MomentViewer
+        case momentDurationLabel
+        case momentScaleLabel
+        case momentScaleAccessibility
+        case momentEventsPrefix
+        case momentLabelsPrefix
+        case momentWindowTitlePrefix
+
+        // ReviewVideo
+        case reviewLoadingRecording
+        case reviewBadgeUpdated
+        case reviewEditorButton
+        case reviewEditorHelp
+        case reviewPlayPauseHelp
+        case reviewWindowTitle
+
+        // StampComment
+        case stampCommentTitle
+
+        // Analytics
+        case analyticsTagCount
+
+        // VideoPlayer
+        case videoHistoryToggle
+        case videoHistoryHelp
+        case videoBroadcastPauseHelp
+        case videoBroadcastResumeHelp
+        case videoBroadcastStopHelp
+        case videoCloseScreenshotHelp
+        case videoTelestrationHelp
+        case videoOpenEditorHelp
+        case videoZoomOutHelp
+        case videoZoomInHelp
+        case videoZoomResetHelp
+
+        // MomentMiniTimeline
+        case momentScrollLeftHelp
+        case momentScrollRightHelp
+
+        // ViewerTimeline
+        case viewerAddAllTagsHelp
+        case viewerSwitchModeHelp
+        case viewerFilterStampsHelp
+        case viewerClearFiltersHelp
+
+        // CurvedArrow
+        case curvedArrowHeightLabel
+
+        // TagFreeLayoutEditor
+        case freeLayoutTitle
+        case freeLayoutCanvasSettings
+        case freeLayoutSelectElement
+        case freeLayoutShowGrid
+        case freeLayoutSnapToGrid
+        case freeLayoutSectionShape
+        case freeLayoutSectionFill
+        case freeLayoutOpacity
+        case freeLayoutTransparent
+        case freeLayoutOpaque
+        case freeLayoutSectionStroke
+        case freeLayoutColor
+        case freeLayoutThickness
+        case freeLayoutStrokeSolid
+        case freeLayoutStrokeDashed
+        case freeLayoutSectionText
+        case freeLayoutShowLabel
+        case freeLayoutFontSize
+        case freeLayoutSectionGeometry
+        case freeLayoutCornerRadius
+        case freeLayoutLockAspect
+        case freeLayoutSectionShadow
+        case freeLayoutShadowEnabled
+        case freeLayoutShadowIntensity
+        case freeLayoutSectionOrder
+        case freeLayoutSectionAlignment
+        case freeLayoutCenterHorizontal
+        case freeLayoutCenterVertical
+
+        // Main Tabs
+        case mainTabMarkup
+        case mainTabViewing
+
+        // Tools Menu
+        case toolsExportMarkup
+        case toolsExportMarkupJsonFull
+        case toolsExportMarkupJsonSimple
+        case toolsExportCuts
+        case toolsReport
+        case toolsReportSimple
+        case toolsReportAdvanced
+
+        // Version Alert
+        case versionOutdatedMessage
     }
     
 }

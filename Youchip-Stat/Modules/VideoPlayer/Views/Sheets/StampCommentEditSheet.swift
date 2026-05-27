@@ -19,7 +19,7 @@ struct StampCommentEditSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Комментарий")
+            Text(^String.Titles.stampCommentTitle)
                 .font(.headline)
 
             TextEditor(text: $commentText)
@@ -31,14 +31,14 @@ struct StampCommentEditSheet: View {
                 )
 
             HStack {
-                Button("Отмена") {
+                Button(^String.Titles.cancelButtonTitle) {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
 
                 Spacer()
 
-                Button("Сохранить") {
+                Button(^String.Titles.saveButtonTitle) {
                     onSave(commentText)
                     presentationMode.wrappedValue.dismiss()
                 }

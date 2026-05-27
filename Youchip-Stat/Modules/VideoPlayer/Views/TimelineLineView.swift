@@ -534,7 +534,7 @@ struct TimelineLineView: View {
             Divider()
         }
         
-        Button("Посмотреть момент") {
+        Button(^String.Titles.viewingViewMoment) {
             let stampDuration = max(stamp.timeFinishSeconds - stamp.timeStartSeconds, 1.0)
             WindowsManager.shared.openMomentViewer(
                 stampStart: stamp.timeStartSeconds,
@@ -546,12 +546,12 @@ struct TimelineLineView: View {
             )
         }
 
-        Button("Новая сессия просмотра") {
+        Button(^String.Titles.viewingNewSession) {
             WindowsManager.shared.openSportCutFromTimelineStamps([(line, stamp)], forceNewSession: true)
         }
         let existingSessions = SportCutSessionManager.shared.sessions
         if !existingSessions.isEmpty {
-            Menu("В существующую сессию") {
+            Menu(^String.Titles.viewingToExistingSession) {
                 ForEach(existingSessions, id: \.id) { sess in
                     Button(sess.name) {
                         WindowsManager.shared.appendStampsToSportCutSession(pairs: [(line, stamp)], sessionID: sess.id)
@@ -562,11 +562,11 @@ struct TimelineLineView: View {
 
         Divider()
 
-        Button(stamp.comment == nil ? "Добавить комментарий" : "Редактировать комментарий") {
+        Button(stamp.comment == nil ? ^String.Titles.viewingAddComment : ^String.Titles.viewingEditComment) {
             commentEditingStamp = stamp
         }
         if stamp.comment != nil {
-            Button("Удалить комментарий") {
+            Button(^String.Titles.viewingDeleteComment) {
                 if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }),
                    let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stamp.id }) {
                     timelineData.lines[lineIndex].stamps[stampIndex].comment = nil

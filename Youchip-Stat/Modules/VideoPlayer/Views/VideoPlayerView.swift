@@ -125,12 +125,12 @@ struct VideoPlayerView: View {
             )) {
                 HStack(spacing: 5) {
                     Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                    Text("История")
+                    Text(^String.Titles.videoHistoryToggle)
                 }
                 .font(.system(size: 12, weight: .medium))
             }
             .toggleStyle(.switch)
-            .help("Показать или скрыть историю действий на видео")
+            .help(^String.Titles.videoHistoryHelp)
             
             Spacer()
             
@@ -195,7 +195,7 @@ struct VideoPlayerView: View {
                 )
             }
             .buttonStyle(PlainButtonStyle())
-            .help(videoManager.isBroadcastActive ? "Пауза трансляции" : "Продолжить трансляцию")
+            .help(videoManager.isBroadcastActive ? ^String.Titles.videoBroadcastPauseHelp : ^String.Titles.videoBroadcastResumeHelp)
             
             // Stop live session and switch to normal markup mode
             Button(action: {
@@ -211,7 +211,7 @@ struct VideoPlayerView: View {
                     )
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Завершить трансляцию и перейти в обычный режим разметки")
+            .help(^String.Titles.videoBroadcastStopHelp)
             
             // Duration display
             Text(formatDuration(videoManager.currentTime))
@@ -496,7 +496,7 @@ struct VideoPlayerView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         .padding(16)
-                        .help("Закрыть скриншот и продолжить воспроизведение")
+                        .help(^String.Titles.videoCloseScreenshotHelp)
                     }
                 }
                 .zIndex(10)
@@ -561,7 +561,7 @@ struct VideoPlayerView: View {
         } label: {
             Text(^String.Titles.editorTelestration)
         }
-        .help("Создать скриншот для телестрации")
+        .help(^String.Titles.videoTelestrationHelp)
     }
     
     private var editorButton: some View {
@@ -570,7 +570,7 @@ struct VideoPlayerView: View {
         } label: {
             Text(^String.Titles.editorTitle)
         }
-        .help("Открыть редактор")
+        .help(^String.Titles.videoOpenEditorHelp)
     }
     
     private var duplicateVideoWindowButton: some View {
@@ -596,27 +596,27 @@ struct VideoPlayerView: View {
                 Image(systemName: "minus.magnifyingglass")
             }
             .disabled(viewModel.state.videoScale <= 1.0)
-            .help("Уменьшить масштаб")
-            
+            .help(^String.Titles.videoZoomOutHelp)
+
             Text(String(format: "%.0f%%", viewModel.state.videoScale * 100))
                 .font(.system(size: 12, design: .monospaced))
                 .frame(minWidth: 45)
-            
+
             Button {
                 viewModel.action.send(.zoomIn)
             } label: {
                 Image(systemName: "plus.magnifyingglass")
             }
             .disabled(viewModel.state.videoScale >= 4.0)
-            .help("Увеличить масштаб")
-            
+            .help(^String.Titles.videoZoomInHelp)
+
             if viewModel.state.videoScale > 1.0 {
                 Button {
                     viewModel.action.send(.resetZoom)
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
-                .help("Сбросить масштаб")
+                .help(^String.Titles.videoZoomResetHelp)
             }
         }
     }

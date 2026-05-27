@@ -950,3 +950,139 @@
 "SportCutGroupPrefix" = "Группа %d";
 "SportCutSessionPrefix" = "Сессия %@";
 "SportCutAddCount" = "Добавить (%d)";
+
+// SportCut Viewing Mode
+"SportCutWindowTitlePrefix" = "Просмотр: %@";
+"SportCutExportTypeClips" = "Клипы";
+"SportCutExportTypeFilm" = "Фильм";
+"SportCutExportTypeFilmPerPlaylist" = "Фильм для каждого плейлиста";
+"SportCutSortTimeAsc" = "Время ↑";
+"SportCutSortTimeDesc" = "Время ↓";
+"SportCutSortDurationAsc" = "Длительность ↑";
+"SportCutSortDurationDesc" = "Длительность ↓";
+"SportCutSortTagNameAsc" = "Тег А→Я";
+"SportCutSortProjectAsc" = "Проект А→Я";
+"SportCutPaneMarkup" = "Разметка";
+"SportCutPaneTable" = "Таблица";
+"SportCutSortOriginal" = "Как в проекте";
+"SportCutSortTimelinesAsc" = "Таймлайны А→Я";
+"SportCutSortTimelinesDesc" = "Таймлайны Я→А";
+"SportCutTagsPlaylistPrefix" = "Теги (%@)";
+
+// Viewing Mode UI
+"ViewingSelectedTags" = "Выбрано тегов: %d";
+"ViewingTotalDuration" = "Суммарная длина: %@";
+"ViewingNewSession" = "Новая сессия просмотра";
+"ViewingToExistingSession" = "В существующую сессию";
+"ViewingDeselectAll" = "Снять выделение";
+"ViewingOpenInMode" = "Открыть в режиме просмотра";
+"ViewingAddSelectedToPlaylist" = "Добавить выбранные в плейлист SportCut";
+"ViewingLiveModeHelp" = "Лайв режим — разметка в реальном времени";
+"ViewingReviewLabel" = "Пересмотр";
+"ViewingReviewHelp" = "Пересмотр — анализ записи с возможностью разметки";
+"ViewingSortReset" = "Сброс (как было)";
+"ViewingSortAlphaAsc" = "По алфавиту (А → Я)";
+"ViewingSortAlphaDesc" = "По алфавиту (Я → А)";
+"ViewingSortTagCountDesc" = "По количеству тегов (больше → меньше)";
+"ViewingSortTagCountAsc" = "По количеству тегов (меньше → больше)";
+"ViewingSortLastTagChronological" = "По времени последнего тега (раньше → позже)";
+"ViewingSortLastTagReverse" = "По времени последнего тега (позже → раньше)";
+"ViewingTimelineFiltersHelp" = "Фильтры и сортировка таймлайнов";
+"ViewingViewMoment" = "Посмотреть момент";
+"ViewingAddComment" = "Добавить комментарий";
+"ViewingEditComment" = "Редактировать комментарий";
+"ViewingDeleteComment" = "Удалить комментарий";
+
+// MomentViewer
+"MomentDurationLabel" = "Длительность: %7.2f с";
+"MomentScaleLabel" = "Масштаб";
+"MomentScaleAccessibility" = "Масштаб таймлайна";
+"MomentEventsPrefix" = "События: %@";
+"MomentLabelsPrefix" = "Лейблы: %@";
+"MomentWindowTitlePrefix" = "Момент: %@";
+
+// ReviewVideo
+"ReviewLoadingRecording" = "Загрузка записи...";
+"ReviewBadgeUpdated" = "Пересмотр · обновлено";
+"ReviewEditorButton" = "Редактор";
+"ReviewEditorHelp" = "Открыть редактор рисования на текущем кадре пересмотра";
+"ReviewPlayPauseHelp" = "Воспроизведение / Пауза (Пробел)";
+"ReviewWindowTitle" = "Пересмотр";
+
+// StampComment
+"StampCommentTitle" = "Комментарий";
+
+// Analytics
+"AnalyticsTagCount" = "Количество тегов: %d";
+
+// VideoPlayer
+"VideoHistoryToggle" = "История";
+"VideoHistoryHelp" = "Показать или скрыть историю действий на видео";
+"VideoBroadcastPauseHelp" = "Пауза трансляции";
+"VideoBroadcastResumeHelp" = "Продолжить трансляцию";
+"VideoBroadcastStopHelp" = "Завершить трансляцию и перейти в обычный режим разметки";
+"VideoCloseScreenshotHelp" = "Закрыть скриншот и продолжить воспроизведение";
+"VideoTelestrationHelp" = "Создать скриншот для телестрации";
+"VideoOpenEditorHelp" = "Открыть редактор";
+"VideoZoomOutHelp" = "Уменьшить масштаб";
+"VideoZoomInHelp" = "Увеличить масштаб";
+"VideoZoomResetHelp" = "Сбросить масштаб";
+
+// MomentMiniTimeline
+"MomentScrollLeftHelp" = "Прокрутить влево";
+"MomentScrollRightHelp" = "Прокрутить вправо";
+
+// ViewerTimeline
+"ViewerAddAllTagsHelp" = "Добавить все отображаемые теги в органайзер";
+"ViewerSwitchModeHelp" = "Переключить режим отображения";
+"ViewerFilterStampsHelp" = "Фильтровать таймстемпы";
+"ViewerClearFiltersHelp" = "Очистить фильтры";
+
+// CurvedArrow
+"CurvedArrowHeightLabel" = "Высота центра параболы";
+
+// TagFreeLayoutEditor
+"FreeLayoutTitle" = "Свободное отображение тегов";
+"FreeLayoutCanvasSettings" = "Настройки холста";
+"FreeLayoutSelectElement" = "Выберите элемент\nдля настройки";
+"FreeLayoutShowGrid" = "Показать сетку";
+"FreeLayoutSnapToGrid" = "Привязка к сетке";
+"FreeLayoutSectionShape" = "Форма";
+"FreeLayoutSectionFill" = "Заливка";
+"FreeLayoutOpacity" = "Прозрачность";
+"FreeLayoutTransparent" = "Прозрачный";
+"FreeLayoutOpaque" = "Непрозрачный";
+"FreeLayoutSectionStroke" = "Обводка";
+"FreeLayoutColor" = "Цвет";
+"FreeLayoutThickness" = "Толщина";
+"FreeLayoutStrokeSolid" = "Сплошная";
+"FreeLayoutStrokeDashed" = "Пунктир";
+"FreeLayoutSectionText" = "Текст";
+"FreeLayoutShowLabel" = "Показывать подпись";
+"FreeLayoutFontSize" = "Размер";
+"FreeLayoutSectionGeometry" = "Геометрия";
+"FreeLayoutCornerRadius" = "Скругление";
+"FreeLayoutLockAspect" = "Фиксировать пропорции";
+"FreeLayoutSectionShadow" = "Тень";
+"FreeLayoutShadowEnabled" = "Включена";
+"FreeLayoutShadowIntensity" = "Интенсивность";
+"FreeLayoutSectionOrder" = "Порядок";
+"FreeLayoutSectionAlignment" = "Выравнивание";
+"FreeLayoutCenterHorizontal" = "По центру ↔";
+"FreeLayoutCenterVertical" = "По центру ↕";
+
+// Main Tabs
+"MainTabMarkup" = "Разметка";
+"MainTabViewing" = "Просмотр";
+
+// Tools Menu
+"ToolsExportMarkup" = "Экспорт разметки";
+"ToolsExportMarkupJsonFull" = "JSON (полный)";
+"ToolsExportMarkupJsonSimple" = "JSON (простой)";
+"ToolsExportCuts" = "Экспорт нарезки";
+"ToolsReport" = "Отчет";
+"ToolsReportSimple" = "Обычный";
+"ToolsReportAdvanced" = "Продвинутый";
+
+// Version Alert
+"VersionOutdatedMessage" = "Ваша версия устарела, обновитесь до актуальной версии";

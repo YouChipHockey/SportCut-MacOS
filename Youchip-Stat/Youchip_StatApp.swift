@@ -49,30 +49,30 @@ struct Youchip_StatApp: App {
                             NSApplication.shared.terminate(nil)
                         }
                     } message: {
-                        Text("Ваша версия устарела, обновитесь до актуальной версии")
+                        Text(^String.Titles.versionOutdatedMessage)
                     }
             }
         }
         .handlesExternalEvents(matching: [])
         .commands {
             CommandMenu("Tools") {
-                Menu("Экспорт разметки") {
-                    Button("JSON (полный)") {
+                Menu(^String.Titles.toolsExportMarkup) {
+                    Button(^String.Titles.toolsExportMarkupJsonFull) {
                         NotificationCenter.default.post(name: .toolsExportMarkupJSONFull, object: nil)
                     }
                     .keyboardShortcut("e", modifiers: [.command])
-                    
-                    Button("JSON (простой)") {
+
+                    Button(^String.Titles.toolsExportMarkupJsonSimple) {
                         NotificationCenter.default.post(name: .toolsExportMarkupJSONSimple, object: nil)
                     }
-                    
+
                     Button("XML") {
                         NotificationCenter.default.post(name: .toolsExportMarkupXML, object: nil)
                     }
                     .keyboardShortcut("i", modifiers: [.command])
                 }
-                
-                Menu("Экспорт нарезки") {
+
+                Menu(^String.Titles.toolsExportCuts) {
                     Button(^String.Titles.fullControlButtonExportTimeline) {
                         NotificationCenter.default.post(name: .toolsExportCutsCurrentTimeline, object: nil)
                     }
@@ -93,13 +93,13 @@ struct Youchip_StatApp: App {
                     }
                 }
                 
-                Menu("Отчет") {
-                    Button("Обычный") {
+                Menu(^String.Titles.toolsReport) {
+                    Button(^String.Titles.toolsReportSimple) {
                         NotificationCenter.default.post(name: .toolsReportSimple, object: nil)
                     }
                     .keyboardShortcut("r", modifiers: [.command])
-                    
-                    Button("Продвинутый") {
+
+                    Button(^String.Titles.toolsReportAdvanced) {
                         NotificationCenter.default.post(name: .toolsReportAdvanced, object: nil)
                     }
                     .keyboardShortcut("t", modifiers: [.command])
@@ -166,8 +166,8 @@ enum MainTab: String, CaseIterable {
     
     var title: String {
         switch self {
-        case .markup: return "Разметка"
-        case .viewing: return "Просмотр"
+        case .markup: return ^String.Titles.mainTabMarkup
+        case .viewing: return ^String.Titles.mainTabViewing
         }
     }
     

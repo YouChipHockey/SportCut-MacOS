@@ -917,6 +917,142 @@
 "SportCutSessionPrefix" = "Session %@";
 "SportCutAddCount" = "Ajouter (%d)";
 
+// SportCut Viewing Mode
+"SportCutWindowTitlePrefix" = "Visionnage : %@";
+"SportCutExportTypeClips" = "Clips";
+"SportCutExportTypeFilm" = "Film";
+"SportCutExportTypeFilmPerPlaylist" = "Film par playlist";
+"SportCutSortTimeAsc" = "Temps ↑";
+"SportCutSortTimeDesc" = "Temps ↓";
+"SportCutSortDurationAsc" = "Durée ↑";
+"SportCutSortDurationDesc" = "Durée ↓";
+"SportCutSortTagNameAsc" = "Tag A→Z";
+"SportCutSortProjectAsc" = "Projet A→Z";
+"SportCutPaneMarkup" = "Balisage";
+"SportCutPaneTable" = "Tableau";
+"SportCutSortOriginal" = "Comme dans le projet";
+"SportCutSortTimelinesAsc" = "Chronologies A→Z";
+"SportCutSortTimelinesDesc" = "Chronologies Z→A";
+"SportCutTagsPlaylistPrefix" = "Tags (%@)";
+
+// Viewing Mode UI
+"ViewingSelectedTags" = "Tags sélectionnés : %d";
+"ViewingTotalDuration" = "Durée totale : %@";
+"ViewingNewSession" = "Nouvelle session de visionnage";
+"ViewingToExistingSession" = "Vers une session existante";
+"ViewingDeselectAll" = "Tout désélectionner";
+"ViewingOpenInMode" = "Ouvrir en mode visionnage";
+"ViewingAddSelectedToPlaylist" = "Ajouter la sélection à la playlist SportCut";
+"ViewingLiveModeHelp" = "Mode en direct — balisage en temps réel";
+"ViewingReviewLabel" = "Revue";
+"ViewingReviewHelp" = "Revue — analyse de l'enregistrement avec balisage";
+"ViewingSortReset" = "Réinitialiser (original)";
+"ViewingSortAlphaAsc" = "Alphabétique (A → Z)";
+"ViewingSortAlphaDesc" = "Alphabétique (Z → A)";
+"ViewingSortTagCountDesc" = "Par nombre de tags (plus → moins)";
+"ViewingSortTagCountAsc" = "Par nombre de tags (moins → plus)";
+"ViewingSortLastTagChronological" = "Par temps du dernier tag (plus tôt → plus tard)";
+"ViewingSortLastTagReverse" = "Par temps du dernier tag (plus tard → plus tôt)";
+"ViewingTimelineFiltersHelp" = "Filtres et tri des chronologies";
+"ViewingViewMoment" = "Voir le moment";
+"ViewingAddComment" = "Ajouter un commentaire";
+"ViewingEditComment" = "Modifier le commentaire";
+"ViewingDeleteComment" = "Supprimer le commentaire";
+
+// MomentViewer
+"MomentDurationLabel" = "Durée : %7.2f s";
+"MomentScaleLabel" = "Échelle";
+"MomentScaleAccessibility" = "Échelle de la chronologie";
+"MomentEventsPrefix" = "Événements : %@";
+"MomentLabelsPrefix" = "Étiquettes : %@";
+"MomentWindowTitlePrefix" = "Moment : %@";
+
+// ReviewVideo
+"ReviewLoadingRecording" = "Chargement de l'enregistrement...";
+"ReviewBadgeUpdated" = "Revue · mis à jour";
+"ReviewEditorButton" = "Éditeur";
+"ReviewEditorHelp" = "Ouvrir l'éditeur de dessin sur l'image actuelle de la revue";
+"ReviewPlayPauseHelp" = "Lecture / Pause (Espace)";
+"ReviewWindowTitle" = "Revue";
+
+// StampComment
+"StampCommentTitle" = "Commentaire";
+
+// Analytics
+"AnalyticsTagCount" = "Nombre de tags : %d";
+
+// VideoPlayer
+"VideoHistoryToggle" = "Historique";
+"VideoHistoryHelp" = "Afficher ou masquer l'historique des actions sur la vidéo";
+"VideoBroadcastPauseHelp" = "Mettre la diffusion en pause";
+"VideoBroadcastResumeHelp" = "Reprendre la diffusion";
+"VideoBroadcastStopHelp" = "Arrêter la diffusion et passer en mode balisage normal";
+"VideoCloseScreenshotHelp" = "Fermer la capture et reprendre la lecture";
+"VideoTelestrationHelp" = "Prendre une capture pour la télestration";
+"VideoOpenEditorHelp" = "Ouvrir l'éditeur";
+"VideoZoomOutHelp" = "Dézoomer";
+"VideoZoomInHelp" = "Zoomer";
+"VideoZoomResetHelp" = "Réinitialiser le zoom";
+
+// MomentMiniTimeline
+"MomentScrollLeftHelp" = "Défiler à gauche";
+"MomentScrollRightHelp" = "Défiler à droite";
+
+// ViewerTimeline
+"ViewerAddAllTagsHelp" = "Ajouter tous les tags affichés à l'organisateur";
+"ViewerSwitchModeHelp" = "Changer le mode d'affichage";
+"ViewerFilterStampsHelp" = "Filtrer les horodatages";
+"ViewerClearFiltersHelp" = "Effacer les filtres";
+
+// CurvedArrow
+"CurvedArrowHeightLabel" = "Hauteur du centre de la parabole";
+
+// TagFreeLayoutEditor
+"FreeLayoutTitle" = "Affichage libre des tags";
+"FreeLayoutCanvasSettings" = "Paramètres du canevas";
+"FreeLayoutSelectElement" = "Sélectionnez un élément\nà configurer";
+"FreeLayoutShowGrid" = "Afficher la grille";
+"FreeLayoutSnapToGrid" = "Aligner sur la grille";
+"FreeLayoutSectionShape" = "Forme";
+"FreeLayoutSectionFill" = "Remplissage";
+"FreeLayoutOpacity" = "Opacité";
+"FreeLayoutTransparent" = "Transparent";
+"FreeLayoutOpaque" = "Opaque";
+"FreeLayoutSectionStroke" = "Contour";
+"FreeLayoutColor" = "Couleur";
+"FreeLayoutThickness" = "Épaisseur";
+"FreeLayoutStrokeSolid" = "Plein";
+"FreeLayoutStrokeDashed" = "Pointillé";
+"FreeLayoutSectionText" = "Texte";
+"FreeLayoutShowLabel" = "Afficher l'étiquette";
+"FreeLayoutFontSize" = "Taille";
+"FreeLayoutSectionGeometry" = "Géométrie";
+"FreeLayoutCornerRadius" = "Rayon de coin";
+"FreeLayoutLockAspect" = "Verrouiller les proportions";
+"FreeLayoutSectionShadow" = "Ombre";
+"FreeLayoutShadowEnabled" = "Activée";
+"FreeLayoutShadowIntensity" = "Intensité";
+"FreeLayoutSectionOrder" = "Ordre";
+"FreeLayoutSectionAlignment" = "Alignement";
+"FreeLayoutCenterHorizontal" = "Centrer ↔";
+"FreeLayoutCenterVertical" = "Centrer ↕";
+
+// Main Tabs
+"MainTabMarkup" = "Balisage";
+"MainTabViewing" = "Visionnage";
+
+// Tools Menu
+"ToolsExportMarkup" = "Exporter le balisage";
+"ToolsExportMarkupJsonFull" = "JSON (complet)";
+"ToolsExportMarkupJsonSimple" = "JSON (simple)";
+"ToolsExportCuts" = "Exporter les coupes";
+"ToolsReport" = "Rapport";
+"ToolsReportSimple" = "Simple";
+"ToolsReportAdvanced" = "Avancé";
+
+// Version Alert
+"VersionOutdatedMessage" = "Votre version est obsolète, veuillez mettre à jour vers la dernière version";
+
 // Free Tag Mode
 "FreeTagModeGrouped" = "Par groupes";
 "FreeTagModeFree" = "Affichage libre";

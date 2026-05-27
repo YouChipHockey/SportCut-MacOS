@@ -61,7 +61,7 @@ struct ViewerTimelineView: View {
                     .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Добавить все отображаемые теги в органайзер")
+                .help(^String.Titles.viewerAddAllTagsHelp)
                 
                 HStack(spacing: 2) {
                     ForEach(TimelineDisplayMode.allCases, id: \.self) { mode in
@@ -81,7 +81,7 @@ struct ViewerTimelineView: View {
                             .cornerRadius(6)
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .help("Переключить режим отображения")
+                        .help(^String.Titles.viewerSwitchModeHelp)
                     }
                 }
                 
@@ -101,7 +101,7 @@ struct ViewerTimelineView: View {
                     .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Фильтровать таймстемпы")
+                .help(^String.Titles.viewerFilterStampsHelp)
                 
                 if filter.hasActiveFilters() {
                     Button(action: {
@@ -112,7 +112,7 @@ struct ViewerTimelineView: View {
                             .foregroundColor(.red)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .help("Очистить фильтры")
+                    .help(^String.Titles.viewerClearFiltersHelp)
                 }
                 
                 HStack(spacing: 4) {
@@ -123,13 +123,13 @@ struct ViewerTimelineView: View {
                             .font(.system(size: 12, weight: .medium))
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .help("Уменьшить масштаб")
-                    
+                    .help(^String.Titles.videoZoomOutHelp)
+
                     Text(String(format: "%.1fx", timelineScale))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 4)
-                    
+
                     Button {
                         timelineScale += 0.5
                     } label: {
@@ -137,7 +137,7 @@ struct ViewerTimelineView: View {
                             .font(.system(size: 12, weight: .medium))
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .help("Увеличить масштаб")
+                    .help(^String.Titles.videoZoomInHelp)
                 }
             }
             .padding(.horizontal, 12)

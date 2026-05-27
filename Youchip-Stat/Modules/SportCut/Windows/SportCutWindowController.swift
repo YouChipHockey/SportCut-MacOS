@@ -35,7 +35,7 @@ class SportCutWindowController: NSWindowController {
         let hostingController = NSHostingController(rootView: view)
         let window = SportCutWindow(contentViewController: hostingController)
         
-        window.title = "Просмотр: \(session.name)"
+        window.title = String.Titles.sportCutWindowTitlePrefix.format(session.name)
         window.tabbingMode = .disallowed
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
         

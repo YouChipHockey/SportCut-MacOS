@@ -26,12 +26,12 @@ struct SportCutTableView: View {
 
         var label: String {
             switch self {
-            case .startTimeAsc: return "Время ↑"
-            case .startTimeDesc: return "Время ↓"
-            case .durationAsc: return "Длительность ↑"
-            case .durationDesc: return "Длительность ↓"
-            case .tagNameAsc: return "Тег А→Я"
-            case .projectAsc: return "Проект А→Я"
+            case .startTimeAsc: return ^String.Titles.sportCutSortTimeAsc
+            case .startTimeDesc: return ^String.Titles.sportCutSortTimeDesc
+            case .durationAsc: return ^String.Titles.sportCutSortDurationAsc
+            case .durationDesc: return ^String.Titles.sportCutSortDurationDesc
+            case .tagNameAsc: return ^String.Titles.sportCutSortTagNameAsc
+            case .projectAsc: return ^String.Titles.sportCutSortProjectAsc
             }
         }
     }

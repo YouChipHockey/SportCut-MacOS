@@ -340,9 +340,9 @@ enum SportCutExportType: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .clips: return "Клипы"
-        case .film: return "Фильм"
-        case .filmPerPlaylist: return "Фильм для каждого плейлиста"
+        case .clips: return ^String.Titles.sportCutExportTypeClips
+        case .film: return ^String.Titles.sportCutExportTypeFilm
+        case .filmPerPlaylist: return ^String.Titles.sportCutExportTypeFilmPerPlaylist
         }
     }
 }

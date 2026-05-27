@@ -256,12 +256,12 @@ struct FullControlView: View {
 
     private var sportCutBulkSelectionBar: some View {
         HStack(spacing: 10) {
-            Text("Выбрано тегов: \(timelineData.stampsSelectedForSportCut.count)")
+            Text(String.Titles.viewingSelectedTags.format(timelineData.stampsSelectedForSportCut.count))
                 .font(.system(size: 11, weight: .semibold))
-            Text("Суммарная длина: \(formatTotalSelectedTagsDuration())")
+            Text(String.Titles.viewingTotalDuration.format(formatTotalSelectedTagsDuration()))
                 .font(.system(size: 11, weight: .regular))
                 .foregroundColor(.secondary)
-            Button("Новая сессия просмотра") {
+            Button(^String.Titles.viewingNewSession) {
                 WindowsManager.shared.openSportCutFromSelectedStamps()
             }
             .buttonStyle(.borderedProminent)
@@ -275,13 +275,13 @@ struct FullControlView: View {
                         }
                     }
                 } label: {
-                    Text("В существующую сессию")
+                    Text(^String.Titles.viewingToExistingSession)
                         .font(.system(size: 11))
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
             }
-            Button("Снять выделение") {
+            Button(^String.Titles.viewingDeselectAll) {
                 timelineData.clearSportCutExportSelection()
             }
             .buttonStyle(.plain)
@@ -525,10 +525,10 @@ struct FullControlView: View {
         .coordinateSpace(name: "timelineSpace")
         .contextMenu {
             if !timelineData.stampsSelectedForSportCut.isEmpty {
-                Button("Открыть в режиме просмотра") {
+                Button(^String.Titles.viewingOpenInMode) {
                     WindowsManager.shared.openSportCutFromSelectedStamps(forceNewSession: false)
                 }
-                Button("Добавить выбранные в плейлист SportCut") {
+                Button(^String.Titles.viewingAddSelectedToPlaylist) {
                     WindowsManager.shared.appendMarkupSelectionToOpenSportCutPlaylist()
                 }
             }
@@ -992,7 +992,7 @@ struct FullControlView: View {
                     .foregroundColor(!videoManager.isReviewMode ? .red : .secondary)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Лайв режим — разметка в реальном времени")
+                .help(^String.Titles.viewingLiveModeHelp)
                 
                 Button(action: {
                     if !videoManager.isReviewMode {
@@ -1003,13 +1003,13 @@ struct FullControlView: View {
                     HStack(spacing: 3) {
                         Image(systemName: "gobackward")
                             .font(.system(size: 9, weight: .semibold))
-                        Text("Пересмотр")
+                        Text(^String.Titles.viewingReviewLabel)
                             .font(.system(size: 10, weight: .semibold))
                     }
                     .foregroundColor(videoManager.isReviewMode ? .orange : .secondary)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Пересмотр — анализ записи с возможностью разметки")
+                .help(^String.Titles.viewingReviewHelp)
             }
         }
     }
@@ -1327,20 +1327,20 @@ struct FullControlView: View {
             Spacer(minLength: 8)
 
             HStack(spacing: 6) {
-                if CameraLogger.shared.hasLogs {
-                    timelineToolsIconButton(systemImage: "doc.text", helpText: "Экспорт логов камеры") {
-                        exportCameraLogs()
-                    }
-                    timelineToolsIconButton(systemImage: "trash", helpText: "Очистить логи камеры") {
-                        CameraLogger.shared.clearLogs()
-                    }
-                }
+//                if CameraLogger.shared.hasLogs {
+//                    timelineToolsIconButton(systemImage: "doc.text", helpText: "Экспорт логов камеры") {
+//                        exportCameraLogs()
+//                    }
+//                    timelineToolsIconButton(systemImage: "trash", helpText: "Очистить логи камеры") {
+//                        CameraLogger.shared.clearLogs()
+//                    }
+//                }
 
                 timelineToolsIconButton(systemImage: "map", helpText: ^String.Titles.map) {
                     WindowsManager.shared.showFieldMapVisualizationPicker()
                 }
                 Menu {
-                    Button("Новая сессия просмотра") {
+                    Button(^String.Titles.viewingNewSession) {
                         WindowsManager.shared.showSportCutNewSessionFromMarkup()
                     }
                     let existing = sportCutSessionManager.sessions
@@ -1372,34 +1372,34 @@ struct FullControlView: View {
     
     private var timelineFilterMenuButton: some View {
         Menu {
-            Button("Сброс (как было)") {
+            Button(^String.Titles.viewingSortReset) {
                 applyTimelineSort(mode: .original)
             }
-            
+
             Divider()
-            
-            Button("По алфавиту (А → Я)") {
+
+            Button(^String.Titles.viewingSortAlphaAsc) {
                 applyTimelineSort(mode: .nameAsc)
             }
-            Button("По алфавиту (Я → А)") {
+            Button(^String.Titles.viewingSortAlphaDesc) {
                 applyTimelineSort(mode: .nameDesc)
             }
-            
+
             Divider()
-            
-            Button("По количеству тегов (больше → меньше)") {
+
+            Button(^String.Titles.viewingSortTagCountDesc) {
                 applyTimelineSort(mode: .tagCountDesc)
             }
-            Button("По количеству тегов (меньше → больше)") {
+            Button(^String.Titles.viewingSortTagCountAsc) {
                 applyTimelineSort(mode: .tagCountAsc)
             }
-            
+
             Divider()
-            
-            Button("По времени последнего тега (раньше → позже)") {
+
+            Button(^String.Titles.viewingSortLastTagChronological) {
                 applyTimelineSort(mode: .lastTagChronological)
             }
-            Button("По времени последнего тега (позже → раньше)") {
+            Button(^String.Titles.viewingSortLastTagReverse) {
                 applyTimelineSort(mode: .lastTagChronologicalReverse)
             }
         } label: {
@@ -1411,7 +1411,7 @@ struct FullControlView: View {
                 .cornerRadius(6)
         }
         .buttonStyle(.plain)
-        .help("Фильтры и сортировка таймлайнов")
+        .help(^String.Titles.viewingTimelineFiltersHelp)
     }
     
     private func exportCameraLogs() {

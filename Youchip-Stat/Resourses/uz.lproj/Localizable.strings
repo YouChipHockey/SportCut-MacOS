@@ -917,6 +917,142 @@
 "SportCutSessionPrefix" = "Sessiya %@";
 "SportCutAddCount" = "Qo'shish (%d)";
 
+// SportCut Viewing Mode
+"SportCutWindowTitlePrefix" = "Ko'rish: %@";
+"SportCutExportTypeClips" = "Kliplar";
+"SportCutExportTypeFilm" = "Film";
+"SportCutExportTypeFilmPerPlaylist" = "Har bir pleylist uchun film";
+"SportCutSortTimeAsc" = "Vaqt ↑";
+"SportCutSortTimeDesc" = "Vaqt ↓";
+"SportCutSortDurationAsc" = "Davomiylik ↑";
+"SportCutSortDurationDesc" = "Davomiylik ↓";
+"SportCutSortTagNameAsc" = "Teg A→Z";
+"SportCutSortProjectAsc" = "Loyiha A→Z";
+"SportCutPaneMarkup" = "Belgilash";
+"SportCutPaneTable" = "Jadval";
+"SportCutSortOriginal" = "Loyihadagidek";
+"SportCutSortTimelinesAsc" = "Vaqt chiziqlari A→Z";
+"SportCutSortTimelinesDesc" = "Vaqt chiziqlari Z→A";
+"SportCutTagsPlaylistPrefix" = "Teglar (%@)";
+
+// Viewing Mode UI
+"ViewingSelectedTags" = "Tanlangan teglar: %d";
+"ViewingTotalDuration" = "Umumiy davomiylik: %@";
+"ViewingNewSession" = "Yangi ko'rish sessiyasi";
+"ViewingToExistingSession" = "Mavjud sessiyaga";
+"ViewingDeselectAll" = "Tanlovni bekor qilish";
+"ViewingOpenInMode" = "Ko'rish rejimida ochish";
+"ViewingAddSelectedToPlaylist" = "Tanlanganlarni SportCut pleylistiga qo'shish";
+"ViewingLiveModeHelp" = "Jonli rejim — real vaqtda belgilash";
+"ViewingReviewLabel" = "Qayta ko'rish";
+"ViewingReviewHelp" = "Qayta ko'rish — yozuvni belgilash bilan tahlil qilish";
+"ViewingSortReset" = "Tiklash (asl holatda)";
+"ViewingSortAlphaAsc" = "Alifbo bo'yicha (A → Z)";
+"ViewingSortAlphaDesc" = "Alifbo bo'yicha (Z → A)";
+"ViewingSortTagCountDesc" = "Teglar soni bo'yicha (ko'p → kam)";
+"ViewingSortTagCountAsc" = "Teglar soni bo'yicha (kam → ko'p)";
+"ViewingSortLastTagChronological" = "Oxirgi teg vaqti bo'yicha (oldin → keyin)";
+"ViewingSortLastTagReverse" = "Oxirgi teg vaqti bo'yicha (keyin → oldin)";
+"ViewingTimelineFiltersHelp" = "Vaqt chiziqlari filtrlari va saralash";
+"ViewingViewMoment" = "Momentni ko'rish";
+"ViewingAddComment" = "Izoh qo'shish";
+"ViewingEditComment" = "Izohni tahrirlash";
+"ViewingDeleteComment" = "Izohni o'chirish";
+
+// MomentViewer
+"MomentDurationLabel" = "Davomiylik: %7.2f s";
+"MomentScaleLabel" = "Masshtab";
+"MomentScaleAccessibility" = "Vaqt chizig'i masshtabi";
+"MomentEventsPrefix" = "Voqealar: %@";
+"MomentLabelsPrefix" = "Yorliqlar: %@";
+"MomentWindowTitlePrefix" = "Moment: %@";
+
+// ReviewVideo
+"ReviewLoadingRecording" = "Yozuv yuklanmoqda...";
+"ReviewBadgeUpdated" = "Qayta ko'rish · yangilangan";
+"ReviewEditorButton" = "Muharrir";
+"ReviewEditorHelp" = "Joriy qayta ko'rish kadrida chizish muharririni ochish";
+"ReviewPlayPauseHelp" = "Ijro / Pauza (Probel)";
+"ReviewWindowTitle" = "Qayta ko'rish";
+
+// StampComment
+"StampCommentTitle" = "Izoh";
+
+// Analytics
+"AnalyticsTagCount" = "Teglar soni: %d";
+
+// VideoPlayer
+"VideoHistoryToggle" = "Tarix";
+"VideoHistoryHelp" = "Videodagi harakatlar tarixini ko'rsatish yoki yashirish";
+"VideoBroadcastPauseHelp" = "Translyatsiyani to'xtatish";
+"VideoBroadcastResumeHelp" = "Translyatsiyani davom ettirish";
+"VideoBroadcastStopHelp" = "Translyatsiyani tugatish va oddiy belgilash rejimiga o'tish";
+"VideoCloseScreenshotHelp" = "Skrinshotni yopish va ijroni davom ettirish";
+"VideoTelestrationHelp" = "Telestratsiya uchun skrinshot olish";
+"VideoOpenEditorHelp" = "Muharririni ochish";
+"VideoZoomOutHelp" = "Kichraytirish";
+"VideoZoomInHelp" = "Kattalashtirish";
+"VideoZoomResetHelp" = "Masshtabni tiklash";
+
+// MomentMiniTimeline
+"MomentScrollLeftHelp" = "Chapga aylantirish";
+"MomentScrollRightHelp" = "O'ngga aylantirish";
+
+// ViewerTimeline
+"ViewerAddAllTagsHelp" = "Barcha ko'rsatilgan teglarni organayzerga qo'shish";
+"ViewerSwitchModeHelp" = "Ko'rsatish rejimini almashtirish";
+"ViewerFilterStampsHelp" = "Vaqt belgilarini filtrlash";
+"ViewerClearFiltersHelp" = "Filtrlarni tozalash";
+
+// CurvedArrow
+"CurvedArrowHeightLabel" = "Parabola markazi balandligi";
+
+// TagFreeLayoutEditor
+"FreeLayoutTitle" = "Teglarning erkin tartibi";
+"FreeLayoutCanvasSettings" = "Tuval sozlamalari";
+"FreeLayoutSelectElement" = "Sozlash uchun\nelementni tanlang";
+"FreeLayoutShowGrid" = "To'rni ko'rsatish";
+"FreeLayoutSnapToGrid" = "To'rga bog'lash";
+"FreeLayoutSectionShape" = "Shakl";
+"FreeLayoutSectionFill" = "To'ldirish";
+"FreeLayoutOpacity" = "Shaffoflik";
+"FreeLayoutTransparent" = "Shaffof";
+"FreeLayoutOpaque" = "Shaffof emas";
+"FreeLayoutSectionStroke" = "Chiziq";
+"FreeLayoutColor" = "Rang";
+"FreeLayoutThickness" = "Qalinlik";
+"FreeLayoutStrokeSolid" = "Tutash";
+"FreeLayoutStrokeDashed" = "Nuqtali";
+"FreeLayoutSectionText" = "Matn";
+"FreeLayoutShowLabel" = "Yozuvni ko'rsatish";
+"FreeLayoutFontSize" = "O'lcham";
+"FreeLayoutSectionGeometry" = "Geometriya";
+"FreeLayoutCornerRadius" = "Burchak radiusi";
+"FreeLayoutLockAspect" = "Nisbatlarni qulflash";
+"FreeLayoutSectionShadow" = "Soya";
+"FreeLayoutShadowEnabled" = "Yoqilgan";
+"FreeLayoutShadowIntensity" = "Intensivlik";
+"FreeLayoutSectionOrder" = "Tartib";
+"FreeLayoutSectionAlignment" = "Tekislash";
+"FreeLayoutCenterHorizontal" = "Markazga ↔";
+"FreeLayoutCenterVertical" = "Markazga ↕";
+
+// Main Tabs
+"MainTabMarkup" = "Belgilash";
+"MainTabViewing" = "Ko'rish";
+
+// Tools Menu
+"ToolsExportMarkup" = "Belgilashni eksport qilish";
+"ToolsExportMarkupJsonFull" = "JSON (to'liq)";
+"ToolsExportMarkupJsonSimple" = "JSON (oddiy)";
+"ToolsExportCuts" = "Kesishlarni eksport qilish";
+"ToolsReport" = "Hisobot";
+"ToolsReportSimple" = "Oddiy";
+"ToolsReportAdvanced" = "Kengaytirilgan";
+
+// Version Alert
+"VersionOutdatedMessage" = "Sizning versiyangiz eskirgan, eng so'nggi versiyaga yangilang";
+
 // Free Tag Mode
 "FreeTagModeGrouped" = "Guruhlarga bo'lib";
 "FreeTagModeFree" = "Erkin tartib";

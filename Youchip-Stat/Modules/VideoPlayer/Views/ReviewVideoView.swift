@@ -27,7 +27,7 @@ struct ReviewVideoView: View {
                         ProgressView()
                             .scaleEffect(1.5)
                             .tint(.white)
-                        Text("Загрузка записи...")
+                        Text(^String.Titles.reviewLoadingRecording)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white.opacity(0.7))
                     }
@@ -74,7 +74,7 @@ struct ReviewVideoView: View {
                             Circle()
                                 .fill(Color.orange)
                                 .frame(width: 8, height: 8)
-                            Text("Пересмотр · обновлено")
+                            Text(^String.Titles.reviewBadgeUpdated)
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(.white.opacity(0.8))
                         }
@@ -102,7 +102,7 @@ struct ReviewVideoView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "pencil.and.scribble")
                         .font(.system(size: 13, weight: .medium))
-                    Text("Редактор")
+                    Text(^String.Titles.reviewEditorButton)
                         .font(.system(size: 12, weight: .medium))
                 }
                 .foregroundColor(.primary)
@@ -114,7 +114,7 @@ struct ReviewVideoView: View {
             .buttonStyle(PlainButtonStyle())
             .disabled(videoManager.reviewPlayer == nil)
             .opacity(videoManager.reviewPlayer == nil ? 0.4 : 1)
-            .help("Открыть редактор рисования на текущем кадре пересмотра")
+            .help(^String.Titles.reviewEditorHelp)
             
             Spacer()
             
@@ -132,7 +132,7 @@ struct ReviewVideoView: View {
             .buttonStyle(PlainButtonStyle())
             .disabled(videoManager.reviewPlayer == nil)
             .opacity(videoManager.reviewPlayer == nil ? 0.4 : 1)
-            .help("Воспроизведение / Пауза (Пробел)")
+            .help(^String.Titles.reviewPlayPauseHelp)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

@@ -917,6 +917,142 @@
 "SportCutSessionPrefix" = "会话 %@";
 "SportCutAddCount" = "添加 (%d)";
 
+// SportCut Viewing Mode
+"SportCutWindowTitlePrefix" = "查看：%@";
+"SportCutExportTypeClips" = "片段";
+"SportCutExportTypeFilm" = "影片";
+"SportCutExportTypeFilmPerPlaylist" = "每个播放列表一部影片";
+"SportCutSortTimeAsc" = "时间 ↑";
+"SportCutSortTimeDesc" = "时间 ↓";
+"SportCutSortDurationAsc" = "时长 ↑";
+"SportCutSortDurationDesc" = "时长 ↓";
+"SportCutSortTagNameAsc" = "标签 A→Z";
+"SportCutSortProjectAsc" = "项目 A→Z";
+"SportCutPaneMarkup" = "标注";
+"SportCutPaneTable" = "表格";
+"SportCutSortOriginal" = "按项目顺序";
+"SportCutSortTimelinesAsc" = "时间线 A→Z";
+"SportCutSortTimelinesDesc" = "时间线 Z→A";
+"SportCutTagsPlaylistPrefix" = "标签 (%@)";
+
+// Viewing Mode UI
+"ViewingSelectedTags" = "已选标签：%d";
+"ViewingTotalDuration" = "总时长：%@";
+"ViewingNewSession" = "新建查看会话";
+"ViewingToExistingSession" = "添加到现有会话";
+"ViewingDeselectAll" = "取消全选";
+"ViewingOpenInMode" = "在查看模式中打开";
+"ViewingAddSelectedToPlaylist" = "将选中项添加到 SportCut 播放列表";
+"ViewingLiveModeHelp" = "直播模式 - 实时标注";
+"ViewingReviewLabel" = "回顾";
+"ViewingReviewHelp" = "回顾 - 带标注的录像分析";
+"ViewingSortReset" = "重置（原始顺序）";
+"ViewingSortAlphaAsc" = "按字母排序（A → Z）";
+"ViewingSortAlphaDesc" = "按字母排序（Z → A）";
+"ViewingSortTagCountDesc" = "按标签数量（多 → 少）";
+"ViewingSortTagCountAsc" = "按标签数量（少 → 多）";
+"ViewingSortLastTagChronological" = "按最后标签时间（早 → 晚）";
+"ViewingSortLastTagReverse" = "按最后标签时间（晚 → 早）";
+"ViewingTimelineFiltersHelp" = "时间线筛选和排序";
+"ViewingViewMoment" = "查看时刻";
+"ViewingAddComment" = "添加评论";
+"ViewingEditComment" = "编辑评论";
+"ViewingDeleteComment" = "删除评论";
+
+// MomentViewer
+"MomentDurationLabel" = "时长：%7.2f 秒";
+"MomentScaleLabel" = "缩放";
+"MomentScaleAccessibility" = "时间线缩放";
+"MomentEventsPrefix" = "事件：%@";
+"MomentLabelsPrefix" = "标注：%@";
+"MomentWindowTitlePrefix" = "时刻：%@";
+
+// ReviewVideo
+"ReviewLoadingRecording" = "加载录像...";
+"ReviewBadgeUpdated" = "回顾 · 已更新";
+"ReviewEditorButton" = "编辑器";
+"ReviewEditorHelp" = "在当前回顾帧上打开绘图编辑器";
+"ReviewPlayPauseHelp" = "播放 / 暂停（空格）";
+"ReviewWindowTitle" = "回顾";
+
+// StampComment
+"StampCommentTitle" = "评论";
+
+// Analytics
+"AnalyticsTagCount" = "标签数量：%d";
+
+// VideoPlayer
+"VideoHistoryToggle" = "历史";
+"VideoHistoryHelp" = "显示或隐藏视频操作历史";
+"VideoBroadcastPauseHelp" = "暂停直播";
+"VideoBroadcastResumeHelp" = "继续直播";
+"VideoBroadcastStopHelp" = "停止直播并切换到普通标注模式";
+"VideoCloseScreenshotHelp" = "关闭截图并继续播放";
+"VideoTelestrationHelp" = "为战术标注截图";
+"VideoOpenEditorHelp" = "打开编辑器";
+"VideoZoomOutHelp" = "缩小";
+"VideoZoomInHelp" = "放大";
+"VideoZoomResetHelp" = "重置缩放";
+
+// MomentMiniTimeline
+"MomentScrollLeftHelp" = "向左滚动";
+"MomentScrollRightHelp" = "向右滚动";
+
+// ViewerTimeline
+"ViewerAddAllTagsHelp" = "将所有显示的标签添加到管理器";
+"ViewerSwitchModeHelp" = "切换显示模式";
+"ViewerFilterStampsHelp" = "筛选时间戳";
+"ViewerClearFiltersHelp" = "清除筛选";
+
+// CurvedArrow
+"CurvedArrowHeightLabel" = "抛物线中心高度";
+
+// TagFreeLayoutEditor
+"FreeLayoutTitle" = "标签自由布局";
+"FreeLayoutCanvasSettings" = "画布设置";
+"FreeLayoutSelectElement" = "选择一个元素\n进行配置";
+"FreeLayoutShowGrid" = "显示网格";
+"FreeLayoutSnapToGrid" = "对齐到网格";
+"FreeLayoutSectionShape" = "形状";
+"FreeLayoutSectionFill" = "填充";
+"FreeLayoutOpacity" = "透明度";
+"FreeLayoutTransparent" = "透明";
+"FreeLayoutOpaque" = "不透明";
+"FreeLayoutSectionStroke" = "描边";
+"FreeLayoutColor" = "颜色";
+"FreeLayoutThickness" = "粗细";
+"FreeLayoutStrokeSolid" = "实线";
+"FreeLayoutStrokeDashed" = "虚线";
+"FreeLayoutSectionText" = "文字";
+"FreeLayoutShowLabel" = "显示标签";
+"FreeLayoutFontSize" = "大小";
+"FreeLayoutSectionGeometry" = "几何";
+"FreeLayoutCornerRadius" = "圆角";
+"FreeLayoutLockAspect" = "锁定比例";
+"FreeLayoutSectionShadow" = "阴影";
+"FreeLayoutShadowEnabled" = "启用";
+"FreeLayoutShadowIntensity" = "强度";
+"FreeLayoutSectionOrder" = "顺序";
+"FreeLayoutSectionAlignment" = "对齐";
+"FreeLayoutCenterHorizontal" = "水平居中 ↔";
+"FreeLayoutCenterVertical" = "垂直居中 ↕";
+
+// Main Tabs
+"MainTabMarkup" = "标注";
+"MainTabViewing" = "查看";
+
+// Tools Menu
+"ToolsExportMarkup" = "导出标注";
+"ToolsExportMarkupJsonFull" = "JSON（完整）";
+"ToolsExportMarkupJsonSimple" = "JSON（简单）";
+"ToolsExportCuts" = "导出剪辑";
+"ToolsReport" = "报告";
+"ToolsReportSimple" = "简单";
+"ToolsReportAdvanced" = "高级";
+
+// Version Alert
+"VersionOutdatedMessage" = "您的版本已过期，请更新到最新版本";
+
 // Free Tag Mode
 "FreeTagModeGrouped" = "按组显示";
 "FreeTagModeFree" = "自由布局";

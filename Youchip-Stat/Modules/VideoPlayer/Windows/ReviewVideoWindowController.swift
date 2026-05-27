@@ -12,7 +12,7 @@ class ReviewVideoWindowController: NSWindowController, NSWindowDelegate {
         let view = ReviewVideoView()
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Пересмотр"
+        window.title = ^String.Titles.reviewWindowTitle
         window.tabbingMode = .disallowed
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         super.init(window: window)

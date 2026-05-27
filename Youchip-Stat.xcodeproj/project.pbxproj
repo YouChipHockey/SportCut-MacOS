@@ -148,6 +148,7 @@
 		DD408D202E6DF1AC00E615E5 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		DD408D212E6DF1C900E615E5 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		DD408D222E6DF1E000E615E5 /* uz */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = uz; path = uz.lproj/Localizable.strings; sourceTree = "<group>"; };
+		DD408D232E6DF1F000E615E5 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		DD5CF9BA2E046313009CD51A /* UserDefaults+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserDefaults+Convenience.swift"; sourceTree = "<group>"; };
 		DD5CF9BC2E0463E8009CD51A /* CGPoint+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CGPoint+Convenience.swift"; sourceTree = "<group>"; };
 		DD5CF9C42E046581009CD51A /* NSColor+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSColor+Convenience.swift"; sourceTree = "<group>"; };
@@ -455,6 +456,7 @@
 				fr,
 				es,
 				"zh-Hans",
+				"zh-Hant",
 				uz,
 				en,
 			);
@@ -649,6 +651,7 @@
 				DD408D1F2E6DF19900E615E5 /* fr */,
 				DD408D202E6DF1AC00E615E5 /* es */,
 				DD408D212E6DF1C900E615E5 /* zh-Hans */,
+				DD408D232E6DF1F000E615E5 /* zh-Hant */,
 				DD408D222E6DF1E000E615E5 /* uz */,
 				DDC54DF42F33969B00193CAC /* en */,
 			);

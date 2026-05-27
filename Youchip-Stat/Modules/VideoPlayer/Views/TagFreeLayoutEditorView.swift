@@ -94,7 +94,7 @@ struct TagFreeLayoutEditorView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Свободное отображение тегов")
+                Text(^String.Titles.freeLayoutTitle)
                     .font(.headline)
                 Text(collectionName)
                     .font(.subheadline)
@@ -103,18 +103,18 @@ struct TagFreeLayoutEditorView: View {
             
             Spacer()
             
-            Button("Отмена") {
+            Button(^String.Titles.cancelButtonTitle) {
                 presentationMode.wrappedValue.dismiss()
             }
             .buttonStyle(.borderless)
-            
-            Button("Сбросить") {
+
+            Button(^String.Titles.sportCutReset) {
                 layout = TagFreeLayoutStorage.makeDefaultLayout(for: tags)
                 selectedItemId = nil
             }
             .buttonStyle(.bordered)
             
-            Button("Сохранить") {
+            Button(^String.Titles.saveButtonTitle) {
                 TagFreeLayoutStorage.saveLayout(layout, collectionId: collectionId)
                 presentationMode.wrappedValue.dismiss()
             }
@@ -337,16 +337,16 @@ struct TagFreeLayoutEditorView: View {
     
     private var canvasSettings: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Настройки холста")
+            Text(^String.Titles.freeLayoutCanvasSettings)
                 .font(.headline)
                 .padding(.top, 4)
             
             Divider()
             
-            Toggle("Показать сетку", isOn: $showGrid)
-            Toggle("Привязка к сетке", isOn: $snapToGrid)
-            
-            Text("Выберите элемент\nдля настройки")
+            Toggle(^String.Titles.freeLayoutShowGrid, isOn: $showGrid)
+            Toggle(^String.Titles.freeLayoutSnapToGrid, isOn: $snapToGrid)
+
+            Text(^String.Titles.freeLayoutSelectElement)
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.top, 8)
@@ -375,16 +375,16 @@ struct TagFreeLayoutEditorView: View {
             Divider()
             
             // --- Shape Picker ---
-            sectionHeader("Форма")
+            sectionHeader(^String.Titles.freeLayoutSectionShape)
             shapePickerGrid(binding: binding)
             
             Divider()
             
             // --- Fill ---
-            sectionHeader("Заливка")
+            sectionHeader(^String.Titles.freeLayoutSectionFill)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Прозрачность")
+                    Text(^String.Titles.freeLayoutOpacity)
                         .font(.caption)
                     Spacer()
                     Text("\(Int(binding.fillOpacity.wrappedValue * 100))%")
@@ -392,9 +392,9 @@ struct TagFreeLayoutEditorView: View {
                 }
                 Slider(value: binding.fillOpacity, in: 0...1, step: 0.05)
                 HStack(spacing: 4) {
-                    Button("Прозрачный") { binding.fillOpacity.wrappedValue = 0 }
+                    Button(^String.Titles.freeLayoutTransparent) { binding.fillOpacity.wrappedValue = 0 }
                         .font(.caption2).buttonStyle(.bordered)
-                    Button("Непрозрачный") { binding.fillOpacity.wrappedValue = 1 }
+                    Button(^String.Titles.freeLayoutOpaque) { binding.fillOpacity.wrappedValue = 1 }
                         .font(.caption2).buttonStyle(.bordered)
                 }
             }
@@ -402,10 +402,10 @@ struct TagFreeLayoutEditorView: View {
             Divider()
             
             // --- Stroke ---
-            sectionHeader("Обводка")
+            sectionHeader(^String.Titles.freeLayoutSectionStroke)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Цвет").font(.caption)
+                    Text(^String.Titles.freeLayoutColor).font(.caption)
                     Spacer()
                     ColorPicker("", selection: Binding(
                         get: {
@@ -418,27 +418,27 @@ struct TagFreeLayoutEditorView: View {
                     .frame(width: 40, height: 24)
                 }
                 HStack {
-                    Text("Толщина").font(.caption)
+                    Text(^String.Titles.freeLayoutThickness).font(.caption)
                     Spacer()
                     Text("\(Int(binding.strokeWidth.wrappedValue))pt").font(.caption).foregroundColor(.secondary)
                     Stepper("", value: binding.strokeWidth, in: 0...10, step: 1).labelsHidden()
                 }
                 HStack(spacing: 4) {
-                    strokeStyleButton(label: "Сплошная", dashed: false, binding: binding.strokeDashed)
-                    strokeStyleButton(label: "Пунктир", dashed: true, binding: binding.strokeDashed)
+                    strokeStyleButton(label: ^String.Titles.freeLayoutStrokeSolid, dashed: false, binding: binding.strokeDashed)
+                    strokeStyleButton(label: ^String.Titles.freeLayoutStrokeDashed, dashed: true, binding: binding.strokeDashed)
                 }
             }
             
             Divider()
             
             // --- Text ---
-            sectionHeader("Текст")
+            sectionHeader(^String.Titles.freeLayoutSectionText)
             VStack(alignment: .leading, spacing: 6) {
-                Toggle("Показывать подпись", isOn: binding.showLabel)
+                Toggle(^String.Titles.freeLayoutShowLabel, isOn: binding.showLabel)
                 
                 if binding.showLabel.wrappedValue {
                     HStack {
-                        Text("Цвет").font(.caption)
+                        Text(^String.Titles.freeLayoutColor).font(.caption)
                         Spacer()
                         ColorPicker("", selection: Binding(
                             get: {
@@ -451,7 +451,7 @@ struct TagFreeLayoutEditorView: View {
                         .frame(width: 40, height: 24)
                     }
                     HStack {
-                        Text("Размер").font(.caption)
+                        Text(^String.Titles.freeLayoutFontSize).font(.caption)
                         Spacer()
                         Text("\(Int(binding.fontSize.wrappedValue))pt").font(.caption).foregroundColor(.secondary)
                         Stepper("", value: binding.fontSize, in: 8...32, step: 1).labelsHidden()
@@ -467,18 +467,18 @@ struct TagFreeLayoutEditorView: View {
             Divider()
             
             // --- Geometry ---
-            sectionHeader("Геометрия")
+            sectionHeader(^String.Titles.freeLayoutSectionGeometry)
             VStack(alignment: .leading, spacing: 6) {
                 if binding.shape.wrappedValue == .square {
                     HStack {
-                        Text("Скругление").font(.caption)
+                        Text(^String.Titles.freeLayoutCornerRadius).font(.caption)
                         Spacer()
                         Text("\(Int(binding.cornerRadius.wrappedValue))").font(.caption).foregroundColor(.secondary)
                     }
                     Slider(value: binding.cornerRadius, in: 0...40, step: 1)
                 }
                 
-                Toggle("Фиксировать пропорции", isOn: binding.aspectRatioLocked)
+                Toggle(^String.Titles.freeLayoutLockAspect, isOn: binding.aspectRatioLocked)
                     .font(.caption)
                 
                 HStack(spacing: 4) {
@@ -504,12 +504,12 @@ struct TagFreeLayoutEditorView: View {
             Divider()
             
             // --- Shadow ---
-            sectionHeader("Тень")
+            sectionHeader(^String.Titles.freeLayoutSectionShadow)
             VStack(alignment: .leading, spacing: 6) {
-                Toggle("Включена", isOn: binding.shadowEnabled)
+                Toggle(^String.Titles.freeLayoutShadowEnabled, isOn: binding.shadowEnabled)
                 if binding.shadowEnabled.wrappedValue {
                     HStack {
-                        Text("Интенсивность").font(.caption)
+                        Text(^String.Titles.freeLayoutShadowIntensity).font(.caption)
                         Spacer()
                         Text("\(Int(binding.shadowIntensity.wrappedValue * 100))%").font(.caption).foregroundColor(.secondary)
                     }
@@ -520,7 +520,7 @@ struct TagFreeLayoutEditorView: View {
             Divider()
             
             // --- Z-Order ---
-            sectionHeader("Порядок")
+            sectionHeader(^String.Titles.freeLayoutSectionOrder)
             HStack(spacing: 4) {
                 Button(action: { sendToBack(id: binding.id) }) {
                     Image(systemName: "square.3.layers.3d.bottom.filled")
@@ -543,13 +543,13 @@ struct TagFreeLayoutEditorView: View {
             Divider()
             
             // --- Alignment ---
-            sectionHeader("Выравнивание")
+            sectionHeader(^String.Titles.freeLayoutSectionAlignment)
             HStack(spacing: 4) {
-                Button("По центру ↔") {
+                Button(^String.Titles.freeLayoutCenterHorizontal) {
                     updateItem(id: binding.id) { $0.center.x = layout.canvasWidth / 2 }
                 }
                 .font(.caption2).buttonStyle(.bordered)
-                Button("По центру ↕") {
+                Button(^String.Titles.freeLayoutCenterVertical) {
                     updateItem(id: binding.id) { $0.center.y = layout.canvasHeight / 2 }
                 }
                 .font(.caption2).buttonStyle(.bordered)
@@ -558,10 +558,10 @@ struct TagFreeLayoutEditorView: View {
             Divider()
             
             // --- Canvas settings (always visible at bottom) ---
-            sectionHeader("Холст")
-            Toggle("Показать сетку", isOn: $showGrid)
+            sectionHeader(^String.Titles.freeLayoutCanvasSettings)
+            Toggle(^String.Titles.freeLayoutShowGrid, isOn: $showGrid)
                 .font(.caption)
-            Toggle("Привязка к сетке", isOn: $snapToGrid)
+            Toggle(^String.Titles.freeLayoutSnapToGrid, isOn: $snapToGrid)
                 .font(.caption)
             
             Spacer(minLength: 20)
