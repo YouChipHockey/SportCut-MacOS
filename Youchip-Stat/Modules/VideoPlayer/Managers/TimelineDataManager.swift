@@ -158,12 +158,22 @@ class TimelineDataManager: ObservableObject {
         }
     }
     
-    func addStampToSelectedLine(tagRefs: [StampTagRef], primaryId: String?, name: String, timeStartSeconds: Double, timeFinishSeconds: Double, color: String, labels: [FullLabelWithGroup], position: CGPoint? = nil) {
+    func addStampToSelectedLine(
+        tagRefs: [StampTagRef],
+        primaryId: String?,
+        name: String,
+        timeStartSeconds: Double,
+        timeFinishSeconds: Double,
+        color: String,
+        labels: [FullLabelWithGroup],
+        position: CGPoint? = nil,
+        timeEvents: [String]? = nil
+    ) {
+        let selectedEvents = timeEvents ?? Array(TagLibraryManager.shared.selectedTimeEvents)
+
         if MarkupMode.current == .standard {
             guard let lineID = selectedLineID,
                   let idx = lines.firstIndex(where: { $0.id == lineID }) else { return }
-            
-            let selectedEvents = Array(TagLibraryManager.shared.selectedTimeEvents)
             
             let stamp = TimelineStamp(
                 tagRefs: tagRefs,
@@ -184,8 +194,6 @@ class TimelineDataManager: ObservableObject {
                 let lineID = findOrCreateTimelineForTag(tag: tag)
                 
                 if let idx = lines.firstIndex(where: { $0.id == lineID }) {
-                    let selectedEvents = Array(TagLibraryManager.shared.selectedTimeEvents)
-                    
                     let stamp = TimelineStamp(
                         tagRefs: tagRefs,
                         primaryID: primaryId,

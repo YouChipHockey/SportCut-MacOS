@@ -2,99 +2,286 @@
 //  FreeTagsCanvasView.swift
 //  Youchip-Stat
 //
-//  Отображение тегов по свободной раскладке коллекции.
+//  Отображение тегов и лейблов по свободной раскладке коллекции.
+//  Поддерживает режим подсветки связок клавиш.
 //
 
 import SwiftUI
 
 struct FreeTagsCanvasView: View {
-    
+
     let tags: [Tag]
+    let labels: [Label]
+    let timeEvents: [TimeEvent]
     let onTagTap: (Tag) -> Void
+    let onLabelTap: ((Label) -> Void)?
+    let onTimeEventTap: ((TimeEvent) -> Void)?
     let activeIntervalTags: [TagLibraryView.ActiveIntervalTag]
     let hoveredTagID: String?
     let tagCounts: [String: Int]
-    
+    @ObservedObject var runtime: KeyBindingRuntimeManager
+    var userScale: CGFloat = 1.0
+
     @State private var layout: TagFreeLayout?
-    
+    @State private var fitScale: CGFloat = 1.0
+
     private var currentCollectionId: String? {
         if case .user(let name) = TagLibraryManager.shared.currentCollectionType {
             return CollectionsBookmarksManager.shared.loadCollections().first(where: { $0.name == name })?.id
         }
         return nil
     }
-    
+
     var body: some View {
         GeometryReader { geometry in
-            let width = geometry.size.width
+            let viewportWidth = max(geometry.size.width, 1)
+            let availableHeight = max(geometry.size.height, 1)
             let effectiveLayout = layout ?? TagFreeLayoutStorage.makeDefaultLayout(for: tags)
-            let fitScale = width / max(effectiveLayout.canvasWidth, 1)
-            let scale = min(1.0, max(fitScale, 0.1))
+            let layoutKey = makeLayoutKey(for: effectiveLayout)
+            let scale = fitScale * userScale
+            let canvasWidth = effectiveLayout.canvasWidth * scale
             let canvasHeight = effectiveLayout.canvasHeight * scale
-            
-            ScrollView(.vertical) {
-                ZStack {
-                    Color.clear
-                    
-                    ForEach(effectiveLayout.items) { item in
-                        if let tag = tags.first(where: { $0.id == item.tagId }) {
-                            let viewSize = CGSize(width: item.size.width * scale, height: item.size.height * scale)
-                            let viewCenter = CGPoint(x: item.center.x * scale, y: item.center.y * scale)
-                            
-                            FreeTagRuntimeItemView(
-                                tag: tag,
-                                item: item,
-                                isActive: activeIntervalTags.contains(where: { $0.tag.id == tag.id }),
-                                isHovered: hoveredTagID == tag.id,
-                                tagCount: tagCounts[tag.id] ?? 0,
-                                onTap: { onTagTap(tag) }
-                            )
-                            .frame(width: viewSize.width, height: viewSize.height)
-                            .position(viewCenter)
+
+            ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .top, spacing: 0) {
+                        ZStack(alignment: .topLeading) {
+                            Color.clear
+                                .frame(width: canvasWidth, height: canvasHeight)
+
+                            ForEach(effectiveLayout.items) { item in
+                                if isVisible(item: item) {
+                                    let viewWidth = item.size.width * scale
+                                    let viewHeight = item.size.height * scale
+
+                                    runtimeItemView(item: item, scale: scale)
+                                        .frame(width: viewWidth, height: viewHeight)
+                                        .offset(
+                                            x: item.center.x * scale - viewWidth / 2,
+                                            y: item.center.y * scale - viewHeight / 2
+                                        )
+                                }
+                            }
                         }
+                        .frame(width: canvasWidth, height: canvasHeight, alignment: .topLeading)
+
+                        Spacer(minLength: 0)
                     }
+                    .frame(minWidth: viewportWidth, alignment: .leading)
+
+                    Spacer(minLength: 0)
                 }
-                .frame(width: width, height: canvasHeight)
+                .frame(minHeight: availableHeight, alignment: .top)
             }
+            .frame(width: viewportWidth, height: availableHeight)
             .onAppear {
                 loadLayoutIfNeeded()
+                syncFitScale(
+                    layoutKey: layoutKey,
+                    viewportWidth: viewportWidth,
+                    availableHeight: availableHeight,
+                    layout: effectiveLayout
+                )
+            }
+            .onChange(of: layoutKey) { newKey in
+                syncFitScale(
+                    layoutKey: newKey,
+                    viewportWidth: viewportWidth,
+                    availableHeight: availableHeight,
+                    layout: effectiveLayout
+                )
+            }
+            .onChange(of: geometry.size.width) { newWidth in
+                captureInitialFitScaleIfNeeded(
+                    layoutKey: layoutKey,
+                    viewportWidth: max(newWidth, 1),
+                    availableHeight: max(geometry.size.height, 1),
+                    layout: effectiveLayout
+                )
+            }
+            .onChange(of: geometry.size.height) { newHeight in
+                captureInitialFitScaleIfNeeded(
+                    layoutKey: layoutKey,
+                    viewportWidth: max(geometry.size.width, 1),
+                    availableHeight: max(newHeight, 1),
+                    layout: effectiveLayout
+                )
             }
         }
-        .frame(minHeight: 300)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
+    private func currentProjectId() -> String {
+        TimelineDataManager.shared.currentVideoId
+            ?? WindowsManager.shared.currentVideoId
+            ?? ""
+    }
+
+    private func makeLayoutKey(for layout: TagFreeLayout) -> String {
+        TagLibraryFreeLayoutFitStore.shared.makeLayoutKey(
+            projectId: currentProjectId(),
+            collectionId: currentCollectionId ?? "none",
+            layout: layout
+        )
+    }
+
+    private func syncFitScale(
+        layoutKey: String,
+        viewportWidth: CGFloat,
+        availableHeight: CGFloat,
+        layout: TagFreeLayout
+    ) {
+        let store = TagLibraryFreeLayoutFitStore.shared
+        store.resetForProject(currentProjectId())
+
+        if let cached = store.fitScale(for: layoutKey) {
+            fitScale = cached
+            return
+        }
+
+        captureInitialFitScaleIfNeeded(
+            layoutKey: layoutKey,
+            viewportWidth: viewportWidth,
+            availableHeight: availableHeight,
+            layout: layout
+        )
+    }
+
+    /// Сохраняет fit только если ещё нет в кэше (открытие проекта / смена коллекции).
+    private func captureInitialFitScaleIfNeeded(
+        layoutKey: String,
+        viewportWidth: CGFloat,
+        availableHeight: CGFloat,
+        layout: TagFreeLayout
+    ) {
+        let store = TagLibraryFreeLayoutFitStore.shared
+        guard store.fitScale(for: layoutKey) == nil else {
+            fitScale = store.fitScale(for: layoutKey) ?? fitScale
+            return
+        }
+        guard viewportWidth > 1, availableHeight > 1 else { return }
+
+        let computed = min(
+            viewportWidth / max(layout.canvasWidth, 1),
+            availableHeight / max(layout.canvasHeight, 1)
+        )
+        store.storeFitScale(computed, for: layoutKey)
+        fitScale = computed
+    }
+
+    // MARK: - Visibility check
+
+    private func isVisible(item: TagFreeLayoutItem) -> Bool {
+        // Runtime override wins over item.isVisible
+        let key = item.id
+        if let override = runtime.runtimeVisibility[key] { return override }
+        return item.isVisible
+    }
+
+    // MARK: - Item view dispatch
+
+    @ViewBuilder
+    private func runtimeItemView(item: TagFreeLayoutItem, scale: CGFloat) -> some View {
+        let buttonKey = item.id
+        let isHighlighted = runtime.highlightModeActive && runtime.highlightedButtonIds.contains(buttonKey)
+        let isDisabled = runtime.highlightModeActive && !runtime.highlightedButtonIds.contains(buttonKey)
+
+        switch item.kind {
+        case .tag:
+            if let tag = tags.first(where: { $0.id == item.elementId }) {
+                FreeTagRuntimeItemView(
+                    tag: tag,
+                    item: item,
+                    isActive: activeIntervalTags.contains(where: { $0.tag.id == tag.id }),
+                    isHovered: hoveredTagID == tag.id,
+                    isHighlighted: isHighlighted,
+                    tagCount: tagCounts[tag.id] ?? 0,
+                    onTap: {
+                        runtime.applyRevertVisibilityIfNeeded(for: buttonKey)
+                        onTagTap(tag)
+                    }
+                )
+                .opacity(isDisabled ? 0.25 : 1.0)
+                .allowsHitTesting(!isDisabled)
+            }
+
+        case .label:
+            if let label = labels.first(where: { $0.id == item.elementId }) {
+                FreeLabelRuntimeItemView(
+                    label: label,
+                    item: item,
+                    isHighlighted: isHighlighted,
+                    isSelected: runtime.pendingLabelIds.contains(label.id),
+                    onTap: {
+                        runtime.applyRevertVisibilityIfNeeded(for: buttonKey)
+                        onLabelTap?(label)
+                    }
+                )
+                .opacity(isDisabled ? 0.25 : 1.0)
+                .allowsHitTesting(!isDisabled)
+            }
+
+        case .timeEvent:
+            if let event = timeEvents.first(where: { $0.id == item.elementId }) {
+                FreeTimeEventRuntimeItemView(
+                    event: event,
+                    item: item,
+                    isHighlighted: isHighlighted,
+                    isSelected: runtime.pendingTimeEventIds.contains(event.id),
+                    onTap: {
+                        runtime.applyRevertVisibilityIfNeeded(for: buttonKey)
+                        onTimeEventTap?(event)
+                    }
+                )
+                .opacity(isDisabled ? 0.25 : 1.0)
+                .allowsHitTesting(!isDisabled)
+            }
+        }
+    }
+
+    // MARK: - Load layout
+
     private func loadLayoutIfNeeded() {
         guard let collectionId = currentCollectionId else { return }
-        if let stored = TagFreeLayoutStorage.loadLayoutIfExists(collectionId: collectionId, tags: tags) {
+        if let stored = TagFreeLayoutStorage.loadLayoutIfExists(
+            collectionId: collectionId, tags: tags, labels: labels, timeEvents: timeEvents
+        ) {
             layout = stored
+            runtime.configure(layout: stored)
         } else {
-            layout = TagFreeLayoutStorage.makeDefaultLayout(for: tags)
+            let def = TagFreeLayoutStorage.makeDefaultLayout(for: tags)
+            layout = def
+            runtime.configure(layout: def)
         }
     }
 }
+
+// MARK: - Tag runtime item
 
 private struct FreeTagRuntimeItemView: View {
     let tag: Tag
     let item: TagFreeLayoutItem
     let isActive: Bool
     let isHovered: Bool
+    let isHighlighted: Bool
     let tagCount: Int
     let onTap: () -> Void
-    
+
     var body: some View {
         let baseColor = Color(hex: tag.color).opacity(item.fillOpacity)
         let foreground: Color = {
             if let hex = item.textColor { return Color(hex: hex) }
-            return Color(hex: tag.color).isDark ? Color.white : Color.black
+            return Color(hex: tag.color).isDark ? .white : .black
         }()
         let strokeCol: Color = {
+            if isHighlighted { return Color.yellow }
             if isActive { return Color.accentColor }
             if isHovered { return Color.accentColor.opacity(0.6) }
             if let hex = item.strokeColor { return Color(hex: hex) }
             return Color.black.opacity(0.25)
         }()
         let strokeStyle = StrokeStyle(
-            lineWidth: isActive ? 2 : item.strokeWidth,
+            lineWidth: isActive || isHighlighted ? 2.5 : item.strokeWidth,
             dash: item.strokeDashed ? [4, 3] : []
         )
         let swiftWeight: Font.Weight = {
@@ -105,7 +292,7 @@ private struct FreeTagRuntimeItemView: View {
             case .bold: return .bold
             }
         }()
-        
+
         ZStack {
             TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
                 .fill(baseColor)
@@ -113,7 +300,7 @@ private struct FreeTagRuntimeItemView: View {
                     TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
                         .stroke(strokeCol, style: strokeStyle)
                 )
-            
+
             if item.showLabel {
                 VStack(spacing: 2) {
                     Text(tag.name)
@@ -122,38 +309,31 @@ private struct FreeTagRuntimeItemView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.6)
-                    
+
                     HStack(spacing: 4) {
                         if tagCount > 0 {
                             Text("\(tagCount)")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(foreground)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
+                                .padding(.horizontal, 4).padding(.vertical, 1)
                                 .background(Capsule().fill(Color.black.opacity(0.25)))
                         }
-                        
                         if tag.isInterval == true {
                             Image(systemName: "timer")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(foreground.opacity(0.9))
                         }
-                        
                         if tag.mapEnabled == true {
                             Image(systemName: "map")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(foreground.opacity(0.9))
                         }
-                        
                         if let hotkey = tag.hotkey, !hotkey.isEmpty {
                             HStack(spacing: 3) {
-                                Image(systemName: "keyboard")
-                                    .font(.system(size: 9, weight: .medium))
-                                Text(hotkey)
-                                    .font(.system(size: 9, weight: .medium))
+                                Image(systemName: "keyboard").font(.system(size: 9, weight: .medium))
+                                Text(hotkey).font(.system(size: 9, weight: .medium))
                             }
-                            .padding(.horizontal, 3)
-                            .padding(.vertical, 1)
+                            .padding(.horizontal, 3).padding(.vertical, 1)
                             .background(Capsule().fill(Color.black.opacity(0.25)))
                             .foregroundColor(foreground)
                         }
@@ -163,15 +343,122 @@ private struct FreeTagRuntimeItemView: View {
             }
         }
         .shadow(
-            color: item.shadowEnabled ? Color.black.opacity(item.shadowIntensity * 0.3) : Color.clear,
-            radius: item.shadowEnabled ? (isHovered || isActive ? 6 : 3) : 0,
-            x: 0,
-            y: item.shadowEnabled ? 2 : 0
+            color: item.shadowEnabled ? Color.black.opacity(item.shadowIntensity * 0.3) : .clear,
+            radius: item.shadowEnabled ? (isHovered || isActive || isHighlighted ? 6 : 3) : 0,
+            x: 0, y: item.shadowEnabled ? 2 : 0
         )
         .rotationEffect(.degrees(item.rotation))
         .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
+        .onTapGesture { onTap() }
+    }
+}
+
+// MARK: - Label runtime item
+
+private struct FreeLabelRuntimeItemView: View {
+    let label: Label
+    let item: TagFreeLayoutItem
+    let isHighlighted: Bool
+    var isSelected: Bool = false
+    let onTap: () -> Void
+
+    var body: some View {
+        let strokeCol: Color = {
+            if isHighlighted { return .yellow }
+            if isSelected { return .accentColor }
+            return item.strokeColor.map { Color(hex: $0) } ?? Color.secondary.opacity(0.3)
+        }()
+        let strokeStyle = StrokeStyle(
+            lineWidth: isHighlighted ? 2.5 : item.strokeWidth,
+            dash: item.strokeDashed ? [4, 3] : []
+        )
+        let textCol: Color = item.textColor.map { Color(hex: $0) } ?? .primary
+
+        ZStack {
+            TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                .fill(Color(NSColor.controlBackgroundColor).opacity(item.fillOpacity))
+                .overlay(
+                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                        .stroke(strokeCol, style: strokeStyle)
+                )
+
+            if item.showLabel {
+                HStack(spacing: 4) {
+                    Image(systemName: "textformat")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(textCol.opacity(0.6))
+                    Text(label.name)
+                        .font(.system(size: item.fontSize))
+                        .foregroundColor(textCol)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .minimumScaleFactor(0.6)
+                }
+                .padding(4)
+            }
         }
+        .shadow(
+            color: item.shadowEnabled ? Color.black.opacity(item.shadowIntensity * 0.2) : .clear,
+            radius: item.shadowEnabled ? (isHighlighted ? 6 : 3) : 0,
+            x: 0, y: item.shadowEnabled ? 1 : 0
+        )
+        .rotationEffect(.degrees(item.rotation))
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
+    }
+}
+
+// MARK: - Time event runtime item
+
+private struct FreeTimeEventRuntimeItemView: View {
+    let event: TimeEvent
+    let item: TagFreeLayoutItem
+    let isHighlighted: Bool
+    var isSelected: Bool = false
+    let onTap: () -> Void
+
+    var body: some View {
+        let strokeCol: Color = {
+            if isHighlighted { return .yellow }
+            if isSelected { return .accentColor }
+            return item.strokeColor.map { Color(hex: $0) } ?? Color.secondary.opacity(0.3)
+        }()
+        let strokeStyle = StrokeStyle(
+            lineWidth: isHighlighted || isSelected ? 2.5 : item.strokeWidth,
+            dash: item.strokeDashed ? [4, 3] : []
+        )
+        let textCol: Color = item.textColor.map { Color(hex: $0) } ?? .primary
+
+        ZStack {
+            TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                .fill(Color.orange.opacity(item.fillOpacity * 0.15))
+                .overlay(
+                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                        .stroke(strokeCol, style: strokeStyle)
+                )
+
+            if item.showLabel {
+                HStack(spacing: 4) {
+                    Image(systemName: isSelected ? "clock.fill" : "clock")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(isSelected ? .accentColor : textCol.opacity(0.7))
+                    Text(event.name)
+                        .font(.system(size: item.fontSize, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(textCol)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .minimumScaleFactor(0.6)
+                }
+                .padding(4)
+            }
+        }
+        .shadow(
+            color: item.shadowEnabled ? Color.black.opacity(item.shadowIntensity * 0.2) : .clear,
+            radius: item.shadowEnabled ? (isHighlighted || isSelected ? 6 : 3) : 0,
+            x: 0, y: item.shadowEnabled ? 1 : 0
+        )
+        .rotationEffect(.degrees(item.rotation))
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
     }
 }

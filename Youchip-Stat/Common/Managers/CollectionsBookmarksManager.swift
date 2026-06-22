@@ -12,6 +12,21 @@ import AppKit
 struct CollectionInfo: Codable, Equatable {
     let id: String
     let name: String
+    var tagLibraryDisplayMode: String?
+
+    var displayMode: CollectionTagLibraryDisplayMode {
+        CollectionTagLibraryDisplayMode(rawValue: tagLibraryDisplayMode ?? CollectionTagLibraryDisplayMode.grouped.rawValue) ?? .grouped
+    }
+
+    init(
+        id: String,
+        name: String,
+        tagLibraryDisplayMode: CollectionTagLibraryDisplayMode = .grouped
+    ) {
+        self.id = id
+        self.name = name
+        self.tagLibraryDisplayMode = tagLibraryDisplayMode.rawValue
+    }
 }
 
 class CollectionsBookmarksManager {
@@ -57,19 +72,30 @@ class CollectionsBookmarksManager {
     private var collectionsCache: [CollectionInfo] = []
     private let cacheLock = NSLock()
     
-    func saveCollection(id: String, name: String) {
+    func saveCollection(
+        id: String,
+        name: String,
+        tagLibraryDisplayMode: CollectionTagLibraryDisplayMode? = nil
+    ) {
         cacheLock.lock()
         if collectionsCache.isEmpty {
             collectionsCache = loadCollectionsFromFile()
         }
-        
+
         if let index = collectionsCache.firstIndex(where: { $0.id == id }) {
-            collectionsCache[index] = CollectionInfo(id: id, name: name)
+            let mode = tagLibraryDisplayMode ?? collectionsCache[index].displayMode
+            collectionsCache[index] = CollectionInfo(id: id, name: name, tagLibraryDisplayMode: mode)
         } else {
-            collectionsCache.append(CollectionInfo(id: id, name: name))
+            collectionsCache.append(
+                CollectionInfo(
+                    id: id,
+                    name: name,
+                    tagLibraryDisplayMode: tagLibraryDisplayMode ?? .grouped
+                )
+            )
         }
         cacheLock.unlock()
-        
+
         scheduleSave()
     }
     
@@ -296,7 +322,13 @@ class CollectionsBookmarksManager {
             for collection in finalCollections {
                 if let existing = existingById[collection.id] {
                     // Keep existing name if it was changed
-                    updatedCollections.append(CollectionInfo(id: collection.id, name: existing.name))
+                    updatedCollections.append(
+                        CollectionInfo(
+                            id: collection.id,
+                            name: existing.name,
+                            tagLibraryDisplayMode: existing.displayMode
+                        )
+                    )
                 } else {
                     // Use id as name for new collections
                     updatedCollections.append(CollectionInfo(id: collection.id, name: collection.id))
@@ -459,11 +491,99 @@ class CollectionsBookmarksManager {
         var collections = loadCollections()
         if let index = collections.firstIndex(where: { $0.id == oldId }) {
             let oldInfo = collections[index]
-            collections[index] = CollectionInfo(id: newId, name: oldInfo.name)
+            collections[index] = CollectionInfo(id: newId, name: oldInfo.name, tagLibraryDisplayMode: oldInfo.displayMode)
             saveCollections(collections)
         }
     }
     
     // Note: ensureUniqueNames() was removed - after initial deduplication,
     // duplicate names are allowed and will get suffixes added by ensureUniqueCollectionName()
+
+    // MARK: - Collection menu operations
+
+    func collectionBookmark(for id: String) -> CollectionBookmark? {
+        guard let info = loadCollections().first(where: { $0.id == id }) else { return nil }
+        return loadCollectionBookmark(from: info)
+    }
+
+    func renameCollection(id: String, newName: String) -> Bool {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        cacheLock.lock()
+        if collectionsCache.isEmpty {
+            collectionsCache = loadCollectionsFromFile()
+        }
+        guard let index = collectionsCache.firstIndex(where: { $0.id == id }) else {
+            cacheLock.unlock()
+            return false
+        }
+
+        let manager = CustomCollectionManager()
+        let uniqueName = manager.ensureUniqueCollectionName(trimmed, collectionID: id)
+        let mode = collectionsCache[index].displayMode
+        collectionsCache[index] = CollectionInfo(id: id, name: uniqueName, tagLibraryDisplayMode: mode)
+        cacheLock.unlock()
+
+        scheduleSave()
+        CollectionsBackupManager.shared.syncFromUserDefaults()
+        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+        return true
+    }
+
+    @discardableResult
+    func duplicateCollection(id: String) -> CollectionInfo? {
+        guard let info = loadCollections().first(where: { $0.id == id }),
+              let data = InMemoryStorageManager.shared.loadCollection(id: id) else {
+            return nil
+        }
+
+        let newId = UUID().uuidString
+        let manager = CustomCollectionManager()
+        let copySuffix = NSLocalizedString("CollectionsCopySuffix", comment: "")
+        let baseName = "\(info.name) \(copySuffix)"
+        let newName = manager.ensureUniqueCollectionName(baseName, collectionID: newId)
+
+        let sourceFolder = collectionsDirectory.appendingPathComponent(id, isDirectory: true)
+        let destFolder = collectionsDirectory.appendingPathComponent(newId, isDirectory: true)
+        if fileManager.fileExists(atPath: sourceFolder.path) {
+            try? fileManager.copyItem(at: sourceFolder, to: destFolder)
+        }
+
+        let newData = CollectionData(
+            id: newId,
+            tagGroups: data.tagGroups,
+            tags: data.tags,
+            labelGroups: data.labelGroups,
+            labels: data.labels,
+            timeEvents: data.timeEvents,
+            playField: data.playField
+        )
+        InMemoryStorageManager.shared.saveCollection(newData)
+        saveCollection(id: newId, name: newName, tagLibraryDisplayMode: info.displayMode)
+        CollectionsBackupManager.shared.syncFromUserDefaults()
+        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+
+        return CollectionInfo(id: newId, name: newName, tagLibraryDisplayMode: info.displayMode)
+    }
+
+    func deleteCollectionCompletely(id: String) {
+        if let info = loadCollections().first(where: { $0.id == id }),
+           UserDefaults.standard.string(forKey: UserDefaults.Keys.lastSelectedCollection) == info.name {
+            UserDefaults.standard.removeObject(forKey: UserDefaults.Keys.lastSelectedCollection)
+        }
+
+        InMemoryStorageManager.shared.deleteCollection(id: id)
+        removeCollection(id: id)
+        CollectionsBackupManager.shared.removeCollection(id: id)
+
+        let folder = collectionsDirectory.appendingPathComponent(id, isDirectory: true)
+        if fileManager.fileExists(atPath: folder.path) {
+            try? fileManager.removeItem(at: folder)
+        }
+
+        saveToFileImmediate()
+        InMemoryStorageManager.shared.saveToDiskImmediate()
+        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+    }
 }

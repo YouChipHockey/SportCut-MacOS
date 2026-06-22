@@ -18,6 +18,7 @@ struct TagLibraryView: View {
     @ObservedObject var hotkeyManager = HotKeyManager.shared
     @ObservedObject var videoManager = VideoPlayerManager.shared
     @ObservedObject var timelineData = TimelineDataManager.shared
+    @ObservedObject var keyBindingRuntime = KeyBindingRuntimeManager.shared
     @State private var activeCollection: TagCollection = .standard
     @State private var markupMode = MarkupMode.current
     @State private var showLabelSheet = false
@@ -32,8 +33,6 @@ struct TagLibraryView: View {
     @State private var defaultLabelGroups: [LabelGroupData] = []
     @State private var defaultLabels: [Label] = []
     @State private var defaultTimeEvents: [TimeEvent] = []
-    @State private var showDeleteAlert = false
-    @State private var collectionToDelete: CollectionBookmark? = nil
     @State private var showCollectionsList = false
     @State private var currentTagForMap: Tag? = nil
     @State private var currentSelectedLabels: [String] = []
@@ -58,7 +57,6 @@ struct TagLibraryView: View {
     @State private var isEditorModeActive = false
     @State private var isLoadingCollections = false
     
-    @State private var isCollectionsPanelCollapsed = false
     @State private var isTimeEventsCollapsed = false
     @State private var isTagsPanelCollapsed = false
     
@@ -68,7 +66,10 @@ struct TagLibraryView: View {
     }
     
     @State private var tagDisplayMode: TagDisplayMode = .grouped
-    @State private var showFreeModeMissingAlert = false
+    @State private var tagLibraryScale: Double = 1.0
+    @State private var isScalePopoverPresented = false
+
+    private static let tagLibraryScaleRange = 0.75...1.5
     
     @EnvironmentObject private var notificationSubscriptions: ProjectNotificationSubscriptions
     
@@ -115,36 +116,22 @@ struct TagLibraryView: View {
         }
         hotkeyManager.registerHotkeys(from: tagLibrary.tags, for: .standard)
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
-        loadDisplayModePreference()
+        applyCollectionDisplayMode()
+        loadScalePreference()
     }
     
     var body: some View {
         VStack(spacing: 0) {
             modernHeaderView
             
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    if !tagLibrary.timeEvents.isEmpty {
-                        timeEventsSection
-                            .id("timeEvents-\(tagLibrary.timeEvents.count)")
-                    }
-                    
-                    if tagDisplayMode == .grouped {
-                        if !tagLibrary.tagGroups.isEmpty {
-                            tagGroupsSection
-                                .id("tagGroups-\(tagLibrary.tagGroups.count)")
-                        }
-                    } else {
-                        freeTagsSection
-                    }
-                    
-                    if tagLibrary.timeEvents.isEmpty && tagLibrary.tagGroups.isEmpty {
-                        emptyStateView
-                    }
+            Group {
+                if tagDisplayMode == .free {
+                    freeModeBody
+                } else {
+                    groupedModeBody
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(.controlBackgroundColor))
             
             if !showUserCollectionsMenu, showCollectionsList {
@@ -163,9 +150,6 @@ struct TagLibraryView: View {
         }
         .onAppear(perform: onAppearSetup)
         .onDisappear(perform: onDisappearCleanup)
-        .alert(isPresented: $showDeleteAlert) {
-            deleteCollectionAlert
-        }
         .onReceive(timelineData.$lines.throttle(for: .milliseconds(300), scheduler: DispatchQueue.main, latest: true)) { _ in
             self.updateTagCounts()
         }
@@ -173,23 +157,56 @@ struct TagLibraryView: View {
             self.updateTagCounts()
         }
     }
+
+    private var groupedModeBody: some View {
+        ScrollView {
+            LazyVStack(spacing: 8) {
+                if !tagLibrary.timeEvents.isEmpty {
+                    timeEventsSection
+                        .id("timeEvents-\(tagLibrary.timeEvents.count)")
+                }
+
+                if !tagLibrary.tagGroups.isEmpty {
+                    tagGroupsSection
+                        .id("tagGroups-\(tagLibrary.tagGroups.count)")
+                }
+
+                if tagLibrary.timeEvents.isEmpty && tagLibrary.tagGroups.isEmpty {
+                    emptyStateView
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var freeModeBody: some View {
+        VStack(spacing: 8) {
+            if !tagLibrary.tags.isEmpty {
+                freeTagsSection
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                emptyStateView
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
     
     private var modernHeaderView: some View {
         VStack(spacing: 0) {
-            HStack {
-                collectionTitleView
+            HStack(spacing: 12) {
+                collectionsPickerMenu
 
-                if isUserCollectionActive {
-                    tagDisplayModePicker
+                if isUserCollectionActive, lastSelectedCollectionName != nil {
+                    editCollectionButton
                 }
 
+                tagLibraryScaleControl
+
                 Spacer()
-                
-                Text(^String.Titles.groups)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .frame(minWidth: 88, alignment: .leading)
-                
+
                 if isLoadingCollections {
                     HStack(spacing: 8) {
                         ProgressView()
@@ -199,42 +216,181 @@ struct TagLibraryView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isCollectionsPanelCollapsed.toggle()
-                    }
-                }) {
-                    Image(systemName: isCollectionsPanelCollapsed ? "chevron.down" : "chevron.up")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.borderless)
-                .help(^String.Titles.collections)
-                
-                Button(action: {
-                    WindowsManager.shared.openCustomCollectionsWindow()
-                }) {
-                    HStack {
-                        Image(systemName: "plus.circle")
-                        Text(^String.Titles.createCollection)
-                    }
-                }
-                .buttonStyle(.borderless)
-                .help(^String.Titles.createCollection)
-                .disabled(!activeIntervalTags.isEmpty || isLoadingCollections)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(Color(.windowBackgroundColor))
-            
-            if !isCollectionsPanelCollapsed {
-                collectionsScrollView
-            }
-            
+
             Divider()
                 .background(Color(.separatorColor))
         }
+    }
+
+    private var selectedCollectionTitle: String {
+        if isUserCollectionActive, let name = lastSelectedCollectionName {
+            return name
+        }
+        if let standardName = tagLibrary.selectedStandardCollectionName {
+            return standardName
+        }
+        return ^String.Titles.tagGroups
+    }
+
+    private var collectionsPickerMenu: some View {
+        Menu {
+            if !tagLibrary.standardCollections.isEmpty {
+                Section(^String.Titles.standardCollections) {
+                    ForEach(tagLibrary.standardCollections, id: \.name) { collection in
+                        Button(action: {
+                            selectStandardCollection(collection)
+                        }) {
+                            HStack {
+                                Text(collection.name)
+                                Spacer()
+                                if tagLibrary.selectedStandardCollectionName == collection.name && !isUserCollectionActive {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        .disabled(!activeIntervalTags.isEmpty || isLoadingCollections)
+                    }
+                }
+            }
+
+            if !userCollections.isEmpty {
+                Section(^String.Titles.customCollections) {
+                    ForEach(userCollections, id: \.name) { collection in
+                        Button(action: {
+                            selectUserCollection(collection)
+                        }) {
+                            HStack {
+                                Text(collection.name)
+                                Spacer()
+                                if isUserCollectionActive && lastSelectedCollectionName == collection.name {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        .disabled(!activeIntervalTags.isEmpty || isLoadingCollections)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "folder.fill")
+                    .foregroundColor(.accentColor)
+                    .font(.system(size: 13))
+                Text(selectedCollectionTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(.separatorColor), lineWidth: 1)
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize(horizontal: true, vertical: false)
+        .disabled(isLoadingCollections)
+    }
+
+    private var editCollectionButton: some View {
+        Button(action: {
+            guard let name = lastSelectedCollectionName,
+                  let collection = userCollections.first(where: { $0.name == name }) else { return }
+            let bookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == name })
+                ?? collection
+            WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: bookmark)
+        }) {
+            Image(systemName: "pencil.circle")
+                .foregroundColor(.blue)
+        }
+        .buttonStyle(.borderless)
+        .help(^String.Titles.editCollection)
+    }
+
+    private var tagLibraryScaleControl: some View {
+        Button {
+            isScalePopoverPresented.toggle()
+        } label: {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16))
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(.borderless)
+        .help(^String.Titles.momentScaleLabel)
+        .popover(isPresented: $isScalePopoverPresented, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(^String.Titles.momentScaleLabel)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Slider(
+                    value: Binding(
+                        get: { tagLibraryScale },
+                        set: { newValue in
+                            tagLibraryScale = newValue
+                            saveScalePreference()
+                        }
+                    ),
+                    in: Self.tagLibraryScaleRange
+                )
+                .frame(width: 180)
+            }
+            .padding(12)
+        }
+    }
+
+    private var scaleStorageKey: String {
+        let name = isUserCollectionActive
+            ? (lastSelectedCollectionName ?? "custom")
+            : (tagLibrary.selectedStandardCollectionName ?? "standard")
+        return "TagLibraryScale_\(name)"
+    }
+
+    private func loadScalePreference() {
+        let stored = UserDefaults.standard.double(forKey: scaleStorageKey)
+        if stored == 0 {
+            tagLibraryScale = 1.0
+        } else {
+            tagLibraryScale = min(max(stored, Self.tagLibraryScaleRange.lowerBound), Self.tagLibraryScaleRange.upperBound)
+        }
+    }
+
+    private func saveScalePreference() {
+        UserDefaults.standard.set(tagLibraryScale, forKey: scaleStorageKey)
+    }
+
+    private func selectStandardCollection(_ collection: StandardCollection) {
+        guard activeIntervalTags.isEmpty, !isLoadingCollections else { return }
+        isUserCollectionActive = false
+        lastSelectedCollectionName = collection.name
+        cachedPlayField = nil
+        tagLibrary.applyStandardCollection(named: collection.name)
+        tagDisplayMode = .grouped
+        loadScalePreference()
+        DispatchQueue.main.async {
+            self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
+        }
+    }
+
+    private func selectUserCollection(_ collection: CollectionBookmark) {
+        guard activeIntervalTags.isEmpty, !isLoadingCollections else { return }
+        lastSelectedCollectionName = collection.name
+        isUserCollectionActive = true
+        loadUserCollection(collection)
+        applyCollectionDisplayMode()
+        loadScalePreference()
     }
     
     
@@ -252,367 +408,11 @@ struct TagLibraryView: View {
         .padding(.vertical, 40)
     }
     
-    private var collectionTitleView: some View {
-        HStack {
-            Text(isUserCollectionActive ?
-                 "\(^String.Titles.customCollection) \(lastSelectedCollectionName ?? "")" :
-                    ^String.Titles.tagGroups)
-            .font(.headline)
-            .minimumScaleFactor(0.5)
-            .lineLimit(1)
-            
-            if isUserCollectionActive && lastSelectedCollectionName != nil {
-                collectionActionButtons
-            }
-        }
-    }
-    
-    private var tagDisplayModePicker: some View {
-        HStack(spacing: 4) {
-            Button(action: {
-                tagDisplayMode = .grouped
-                saveDisplayModePreference()
-            }) {
-                Image(systemName: "list.bullet")
-                    .font(.system(size: 11))
-                    .foregroundColor(tagDisplayMode == .grouped ? .accentColor : .secondary)
-                    .frame(width: 24, height: 24)
-                    .background(tagDisplayMode == .grouped ? Color.accentColor.opacity(0.15) : Color.clear)
-                    .cornerRadius(4)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help(^String.Titles.freeTagModeGrouped)
-            
-            Button(action: {
-                if isFreeLayoutConfigured {
-                    tagDisplayMode = .free
-                    saveDisplayModePreference()
-                } else {
-                    showFreeModeMissingAlert = true
-                }
-            }) {
-                Image(systemName: "rectangle.3.offgrid")
-                    .font(.system(size: 11))
-                    .foregroundColor(tagDisplayMode == .free ? .accentColor : .secondary)
-                    .frame(width: 24, height: 24)
-                    .background(tagDisplayMode == .free ? Color.accentColor.opacity(0.15) : Color.clear)
-                    .cornerRadius(4)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help(^String.Titles.freeTagModeFree)
-        }
-        .alert(isPresented: $showFreeModeMissingAlert) {
-            Alert(
-                title: Text(^String.Titles.freeTagModeNotConfiguredTitle),
-                message: Text(^String.Titles.freeTagModeNotConfiguredMessage),
-                dismissButton: .default(Text(^String.Titles.alertsOkTitle))
-            )
-        }
-    }
-
-    private var collectionActionButtons: some View {
-        HStack(spacing: 8) {
-            Button(action: {
-                guard let name = lastSelectedCollectionName,
-                      let collection = userCollections.first(where: { $0.name == name }) else { return }
-                let bookmark = UserDefaults.standard.getCollectionBookmarks().first(where: { $0.name == name })
-                    ?? collection
-                WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: bookmark)
-            }) {
-                Image(systemName: "pencil.circle")
-                    .foregroundColor(.blue)
-            }
-            .buttonStyle(.borderless)
-            .help(^String.Titles.editCollection)
-            
-            Button(action: {
-                guard let name = lastSelectedCollectionName,
-                      let collection = userCollections.first(where: { $0.name == name }) else { return }
-                collectionToDelete = collection
-                showDeleteAlert = true
-            }) {
-                Image(systemName: "trash.circle")
-                    .foregroundColor(.red)
-            }
-            
-            .help(^String.Titles.deleteCollection)
-        }
-    }
-    
-    private var collectionsScrollView: some View {
-        VStack(spacing: 4) {
-            if !tagLibrary.standardCollections.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(^String.Titles.standardCollections)
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
-                    
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(tagLibrary.standardCollections, id: \.name) { collection in
-                                standardCollectionChip(
-                                    collection: collection,
-                                    isSelected: tagLibrary.selectedStandardCollectionName == collection.name && !isUserCollectionActive
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                    }
-                }
-            }
-            
-            if !userCollections.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(^String.Titles.customCollections)
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
-                    
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(userCollections, id: \.name) { collection in
-                                customCollectionChip(collection: collection)
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .background(Color(.controlBackgroundColor))
-    }
-    
-    private func standardCollectionChip(collection: StandardCollection, isSelected: Bool) -> some View {
-        Button(action: {
-            guard activeIntervalTags.isEmpty else { return }
-            guard !isLoadingCollections else { return }
-            isUserCollectionActive = false
-            lastSelectedCollectionName = collection.name
-            cachedPlayField = nil
-            tagLibrary.applyStandardCollection(named: collection.name)
-            tagDisplayMode = .grouped
-            DispatchQueue.main.async {
-                self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-            }
-        }) {
-            HStack(spacing: 6) {
-                Text(collection.name)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? .white : .primary)
-                
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.accentColor : Color(.controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.accentColor : Color(.separatorColor), lineWidth: 1)
-            )
-            .opacity(isLoadingCollections ? 0.5 : 1.0)
-        }
-        .buttonStyle(.plain)
-        .disabled(!activeIntervalTags.isEmpty || isLoadingCollections)
-    }
-    
-    private func customCollectionChip(collection: CollectionBookmark) -> some View {
-        let isSelected = isUserCollectionActive && lastSelectedCollectionName == collection.name
-        
-        return Button(action: {
-            guard activeIntervalTags.isEmpty else { return }
-            guard !isLoadingCollections else { return }
-            lastSelectedCollectionName = collection.name
-            isUserCollectionActive = true
-            loadUserCollection(collection)
-            loadDisplayModePreference()
-        }) {
-            HStack(spacing: 6) {
-                Text(collection.name)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? .white : .primary)
-                
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.accentColor : Color(.controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.accentColor : Color(.separatorColor), lineWidth: 1)
-            )
-            .opacity(isLoadingCollections ? 0.5 : 1.0)
-        }
-        .buttonStyle(.plain)
-        .disabled(!activeIntervalTags.isEmpty || isLoadingCollections)
-        .contextMenu {
-            Button(^String.Titles.editButtonTitle) {
-                WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: collection)
-            }
-            
-            Button(^String.Titles.delete) {
-                collectionToDelete = collection
-                showDeleteAlert = true
-            }
-        }
-    }
-    
-    private var collectionsMenuButton: some View {
-        Menu {
-            createCollectionButton
-            Divider()
-            standardCollectionsSection
-            userCollectionsSection
-        } label: {
-            HStack {
-                Image(systemName: "folder.badge.plus")
-                Text(^String.Titles.collections)
-            }
-        }
-        .buttonStyle(.borderless)
-        .help(^String.Titles.manageCustomTagCollections)
-        .disabled(!activeIntervalTags.isEmpty)
-    }
-    
-    @ViewBuilder
-    private var standardCollectionsSection: some View {
-        if !tagLibrary.standardCollections.isEmpty {
-            Text(^String.Titles.standardCollections)
-            ForEach(tagLibrary.standardCollections, id: \.name) { collection in
-                Button(action: {
-                    isUserCollectionActive = false
-                    lastSelectedCollectionName = collection.name
-                    tagLibrary.applyStandardCollection(named: collection.name)
-                    DispatchQueue.main.async {
-                        self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-                    }
-                }) {
-                    HStack {
-                        Text(collection.name)
-                        Spacer()
-                        if tagLibrary.selectedStandardCollectionName == collection.name && !isUserCollectionActive {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-                .disabled(!activeIntervalTags.isEmpty)
-            }
-            Divider()
-        }
-    }
-    
-    private var createCollectionButton: some View {
-        Button(action: {
-            WindowsManager.shared.openCustomCollectionsWindow()
-        }) {
-            HStack {
-                Image(systemName: "plus")
-                Text(^String.Titles.createCollection)
-            }
-        }
-    }
-    
-    private var standardCollectionButton: some View {
-        Button(action: {
-            isUserCollectionActive = false
-            cachedPlayField = nil // Clear cached playField when switching to standard collection
-            if let collectionName =
-                tagLibrary.selectedStandardCollectionName
-                ??
-                tagLibrary.standardCollections.first?.name
-            {
-                tagLibrary.applyStandardCollection(named: collectionName)
-                lastSelectedCollectionName = collectionName
-            }
-            DispatchQueue.main.async {
-                self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
-            }
-        }) {
-            HStack {
-                Text(^String.Titles.standardCollection)
-                Spacer()
-                if !isUserCollectionActive {
-                    Image(systemName: "checkmark")
-                }
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private var userCollectionsSection: some View {
-        if !userCollections.isEmpty {
-            Divider()
-            Text(^String.Titles.customCollections)
-            
-            ForEach(userCollections, id: \.name) { collection in
-                userCollectionRow(for: collection)
-            }
-        }
-    }
-    
-    private func userCollectionRow(for collection: CollectionBookmark) -> some View {
-        HStack {
-            Button(action: {
-                lastSelectedCollectionName = collection.name
-                isUserCollectionActive = true
-                loadUserCollection(collection)
-            }) {
-                HStack {
-                    Text(collection.name)
-                    Spacer()
-                    if isUserCollectionActive && lastSelectedCollectionName == collection.name {
-                        Image(systemName: "checkmark")
-                    }
-                }
-            }
-            .disabled(!activeIntervalTags.isEmpty)
-            
-            Menu {
-                Button(action: {
-                    WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: collection)
-                }) {
-                    HStack {
-                        Image(systemName: "pencil")
-                        Text(^String.Titles.editButtonTitle)
-                    }
-                }
-                
-                Button(action: {
-                    collectionToDelete = collection
-                    showDeleteAlert = true
-                }) {
-                    HStack {
-                        Image(systemName: "trash")
-                        Text(^String.Titles.delete)
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .frame(width:20)
-            }
-            .buttonStyle(.borderless)
-        }
-    }
-    
     private var legacyHeaderView: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                collectionTitleView
+                Text(selectedCollectionTitle)
+                    .font(.headline)
                 Spacer()
                 Button(action: {
                     showCollectionsList.toggle()
@@ -738,16 +538,6 @@ struct TagLibraryView: View {
             }
             .buttonStyle(.borderless)
             .help(^String.Titles.editCollection)
-            
-            Button(action: {
-                collectionToDelete = collection
-                showDeleteAlert = true
-            }) {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
-            }
-            .buttonStyle(.borderless)
-            .help(^String.Titles.deleteCollection)
         }
     }
     
@@ -842,48 +632,20 @@ struct TagLibraryView: View {
     
     @ViewBuilder
     private var freeTagsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Image(systemName: "rectangle.3.offgrid")
-                    .foregroundColor(.accentColor)
-                    .font(.system(size: 14, weight: .medium))
-                
-                Text(^String.Titles.freeTagModeDisplay)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                
-                Spacer()
-                
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isTagsPanelCollapsed.toggle()
-                    }
-                }) {
-                    Image(systemName: isTagsPanelCollapsed ? "chevron.down" : "chevron.up")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.borderless)
-            }
-            
-            if !isTagsPanelCollapsed {
-                FreeTagsCanvasView(
-                    tags: tagLibrary.tags,
-                    onTagTap: handleTagButtonTap,
-                    activeIntervalTags: activeIntervalTags,
-                    hoveredTagID: hoveredTagID,
-                    tagCounts: tagCounts
-                )
-            }
-        }
-        .padding(6)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.windowBackgroundColor))
-                .shadow(color: Color.black.opacity(0.03), radius: 1, x: 0, y: 1)
+        FreeTagsCanvasView(
+            tags: tagLibrary.tags,
+            labels: tagLibrary.allLabels,
+            timeEvents: tagLibrary.timeEvents,
+            onTagTap: { tag in handleCanvasButtonTap(kind: .tag, elementId: tag.id) },
+            onLabelTap: { label in handleCanvasButtonTap(kind: .label, elementId: label.id) },
+            onTimeEventTap: { event in handleCanvasButtonTap(kind: .timeEvent, elementId: event.id) },
+            activeIntervalTags: activeIntervalTags,
+            hoveredTagID: hoveredTagID,
+            tagCounts: tagCounts,
+            runtime: keyBindingRuntime,
+            userScale: CGFloat(tagLibraryScale)
         )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private func tagGroupView(for group: TagGroup) -> some View {
@@ -927,7 +689,15 @@ struct TagLibraryView: View {
             .buttonStyle(.plain)
             
             if expandedGroups.contains(group.id) {
-                FlexibleTagGrid(tags: group.tags, tagLibrary: tagLibrary, activeIntervalTags: activeIntervalTags, hoveredTagID: hoveredTagID, tagCounts: $tagCounts, onTagTap: handleTagButtonTap, onTagHover: { hovering, tagID in
+                FlexibleTagGrid(
+                    tags: group.tags,
+                    tagLibrary: tagLibrary,
+                    activeIntervalTags: activeIntervalTags,
+                    hoveredTagID: hoveredTagID,
+                    tagCounts: $tagCounts,
+                    scaleFactor: CGFloat(tagLibraryScale),
+                    onTagTap: handleTagButtonTap,
+                    onTagHover: { hovering, tagID in
                     withAnimation(.easeInOut(duration: 0.2)) {
                         if hovering {
                             hoveredTagID = tagID
@@ -951,41 +721,68 @@ struct TagLibraryView: View {
     }
     
     
-    private func addTagToTimeline(tag: Tag, selectedLabels: [FullLabelWithGroup], instantAnchorTime: Double? = nil) {
-        if tag.mapEnabled == true {
-            // Use cached playField if available, otherwise load
-            if let collectionName = tagLibrary.currentCollectionType.name {
-                if let cached = cachedPlayField, cached.name == collectionName,
-                   let imageBookmark = cached.playField.imageBookmark {
-                    showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels, instantAnchorTime: instantAnchorTime)
-                    return
-                } else {
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        let collectionManager = CustomCollectionManager()
-                        if collectionManager.loadCollectionFromBookmarks(named: collectionName),
-                           let playField = collectionManager.playField,
-                           let imageBookmark = playField.imageBookmark {
-                            DispatchQueue.main.async {
-                                self.cachedPlayField = (name: collectionName, playField: playField)
-                                self.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels, instantAnchorTime: instantAnchorTime)
-                            }
-                        } else {
-                            DispatchQueue.main.async {
-                                self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil, instantAnchorTime: instantAnchorTime)
-                            }
+    private func addTagToTimeline(tag: Tag, selectedLabels: [FullLabelWithGroup], instantAnchorTime: Double? = nil,
+                                   overrideTimeBefore: Double? = nil, overrideTimeAfter: Double? = nil,
+                                   useFieldMap: Bool = true,
+                                   onComplete: (() -> Void)? = nil) {
+        if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
+            if let cached = cachedPlayField, cached.name == collectionName,
+               let imageBookmark = cached.playField.imageBookmark {
+                showFieldMapSelection(
+                    tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
+                    instantAnchorTime: instantAnchorTime,
+                    overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter,
+                    onComplete: onComplete
+                )
+                return
+            } else {
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let collectionManager = CustomCollectionManager()
+                    if collectionManager.loadCollectionFromBookmarks(named: collectionName),
+                       let playField = collectionManager.playField,
+                       let imageBookmark = playField.imageBookmark {
+                        DispatchQueue.main.async {
+                            self.cachedPlayField = (name: collectionName, playField: playField)
+                            self.showFieldMapSelection(
+                                tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
+                                instantAnchorTime: instantAnchorTime,
+                                overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter,
+                                onComplete: onComplete
+                            )
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil,
+                                                       instantAnchorTime: instantAnchorTime,
+                                                       overrideTimeBefore: overrideTimeBefore,
+                                                       overrideTimeAfter: overrideTimeAfter)
+                            onComplete?()
                         }
                     }
-                    return
                 }
+                return
             }
         }
-        
-        proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil, instantAnchorTime: instantAnchorTime)
+
+        proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil,
+                               instantAnchorTime: instantAnchorTime,
+                               overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter)
+        onComplete?()
     }
     
-    private func showFieldMapSelection(tag: Tag, imageBookmark: Data, selectedLabels: [FullLabelWithGroup], instantAnchorTime: Double? = nil) {
+    private func showFieldMapSelection(
+        tag: Tag, imageBookmark: Data, selectedLabels: [FullLabelWithGroup],
+        instantAnchorTime: Double? = nil,
+        overrideTimeBefore: Double? = nil, overrideTimeAfter: Double? = nil,
+        onComplete: (() -> Void)? = nil
+    ) {
         WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
-            proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: coordinates, instantAnchorTime: instantAnchorTime)
+            proceedWithTagAddition(
+                tag: tag, selectedLabels: selectedLabels, coordinates: coordinates,
+                instantAnchorTime: instantAnchorTime,
+                overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter
+            )
+            onComplete?()
             if videoManager.playbackSpeed > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     videoManager.player?.play()
@@ -993,17 +790,27 @@ struct TagLibraryView: View {
             }
         }
     }
+
+    /// Имя пользовательской коллекции для загрузки карты поля.
+    private func resolvedCollectionName() -> String? {
+        if let name = tagLibrary.currentCollectionType.name { return name }
+        if isUserCollectionActive, let name = lastSelectedCollectionName { return name }
+        return UserDefaults.standard.string(forKey: UserDefaults.Keys.lastSelectedCollection)
+    }
     
-    private func proceedWithTagAddition(tag: Tag, selectedLabels: [FullLabelWithGroup], coordinates: CGPoint?, instantAnchorTime: Double? = nil) {
+    private func proceedWithTagAddition(tag: Tag, selectedLabels: [FullLabelWithGroup], coordinates: CGPoint?,
+                                        instantAnchorTime: Double? = nil,
+                                        overrideTimeBefore: Double? = nil, overrideTimeAfter: Double? = nil) {
         let anchorTime = instantAnchorTime ?? videoManager.currentTime
         let videoDuration = max(1.0, videoManager.timelineDuration)
-        let startTime = max(0, anchorTime - tag.defaultTimeBefore)
-        let finishTime = min(videoDuration, startTime + tag.defaultTimeBefore + tag.defaultTimeAfter)
+        let timeBefore = overrideTimeBefore ?? tag.defaultTimeBefore
+        let timeAfter = overrideTimeAfter ?? tag.defaultTimeAfter
+        let startTime = max(0, anchorTime - timeBefore)
+        let finishTime = min(videoDuration, startTime + timeBefore + timeAfter)
         
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {
-            // Use cached playField if available
-            if let collectionName = tagLibrary.currentCollectionType.name,
+            if let collectionName = resolvedCollectionName(),
                let cached = cachedPlayField, cached.name == collectionName {
                 let playField = cached.playField
                 let fieldWidth = CGFloat(playField.width)
@@ -1026,7 +833,8 @@ struct TagLibraryView: View {
             timeFinishSeconds: finishTime,
             color: tag.color,
             labels: selectedLabels,
-            position: fieldPosition
+            position: fieldPosition,
+            timeEvents: effectiveTimeEventsForStamp()
         )
         
         VideoMarkupActivityBanner.shared.notifyInstantTagAdded(tagName: tag.name, tagColorHex: tag.color)
@@ -1245,19 +1053,6 @@ struct TagLibraryView: View {
         }
     }
     
-    private var deleteCollectionAlert: Alert {
-        Alert(
-            title: Text(^String.Titles.tagLibraryDeleteTitle),
-            message: Text("\(^String.Titles.confirmDeleteCollection) \"\(collectionToDelete?.name ?? "")\"?"),
-            primaryButton: .destructive(Text(^String.Titles.delete)) {
-                if let collection = collectionToDelete {
-                    deleteCollection(collection)
-                }
-            },
-            secondaryButton: .cancel(Text(^String.Titles.collectionsButtonCancel))
-        )
-    }
-    
     private func onAppearSetup() {
         setupNotificationSubscriptions()
         loadUserCollections()
@@ -1295,7 +1090,13 @@ struct TagLibraryView: View {
                         )
                     }
                     let changedName = notification.userInfo?[Notification.Key.collectionName] as? String
-                    if changedName != nil {
+                    if let changedName {
+                        if isUserCollectionActive,
+                           let updatedCollection = userCollections.first(where: { $0.name == changedName }) {
+                            lastSelectedCollectionName = changedName
+                            tagLibrary.invalidateCollectionCache(for: changedName)
+                            loadUserCollection(updatedCollection)
+                        }
                         return
                     }
                     if isUserCollectionActive, let currentName = lastSelectedCollectionName,
@@ -1405,6 +1206,7 @@ struct TagLibraryView: View {
             tagLibrary.labels = cachedData.labels
             tagLibrary.timeEvents = cachedData.timeEvents
             tagLibrary.selectedTimeEvents.removeAll()
+            keyBindingRuntime.reset()
             tagLibrary.currentCollectionType = .user(name: collection.name)
             HotKeyManager.shared.clearHotkeys()
             HotKeyManager.shared.registerHotkeys(from: cachedData.tags, for: .user(name: collection.name))
@@ -1415,6 +1217,7 @@ struct TagLibraryView: View {
             updateTagCounts()
             expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
             tagLibrary.objectWillChange.send()
+            applyCollectionDisplayMode()
         } else {
             // Load asynchronously if not cached
             DispatchQueue.global(qos: .userInitiated).async {
@@ -1427,6 +1230,7 @@ struct TagLibraryView: View {
                         self.tagLibrary.labels = collectionManager.labels
                         self.tagLibrary.timeEvents = collectionManager.timeEvents
                         self.tagLibrary.selectedTimeEvents.removeAll()
+                        self.keyBindingRuntime.reset()
                         self.tagLibrary.currentCollectionType = .user(name: collection.name)
                         HotKeyManager.shared.clearHotkeys()
                         HotKeyManager.shared.registerHotkeys(from: collectionManager.tags, for: .user(name: collection.name))
@@ -1440,6 +1244,7 @@ struct TagLibraryView: View {
                         self.updateTagCounts()
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
                         self.tagLibrary.objectWillChange.send()
+                        self.applyCollectionDisplayMode()
                     }
                 } else {
                     DispatchQueue.main.async {
@@ -1449,6 +1254,7 @@ struct TagLibraryView: View {
                         self.tagLibrary.labels = []
                         self.tagLibrary.timeEvents = []
                         self.tagLibrary.selectedTimeEvents.removeAll()
+                        self.keyBindingRuntime.reset()
                         self.tagLibrary.currentCollectionType = .standard
                         HotKeyManager.shared.clearHotkeys()
                         self.cachedPlayField = nil
@@ -1469,24 +1275,6 @@ struct TagLibraryView: View {
                 }
             }
         }
-    }
-    
-    private func deleteCollection(_ collection: CollectionBookmark) {
-        InMemoryStorageManager.shared.deleteCollection(id: collection.id)
-        
-        CollectionsBookmarksManager.shared.removeCollection(id: collection.id)
-        
-        tagLibrary.invalidateCollectionCache(for: collection.name)
-        
-        if isUserCollectionActive && lastSelectedCollectionName == collection.name {
-            isUserCollectionActive = false
-            lastSelectedCollectionName = nil
-            restoreDefaultData()
-        }
-        
-        loadUserCollections()
-        tagLibrary.refreshGlobalPools()
-        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
     }
     
     private func handleTagButtonTap(tag: Tag) {
@@ -1545,10 +1333,8 @@ struct TagLibraryView: View {
         }
     }
     
-    private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup]) {
-        if tag.mapEnabled == true {
-            // Use cached playField if available, otherwise load
-            if let collectionName = tagLibrary.currentCollectionType.name {
+    private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup], useFieldMap: Bool = true) {
+        if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
                 if let cached = cachedPlayField, cached.name == collectionName,
                    let imageBookmark = cached.playField.imageBookmark {
                     showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
@@ -1571,7 +1357,6 @@ struct TagLibraryView: View {
                     }
                     return
                 }
-            }
         }
         proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
     }
@@ -1591,8 +1376,7 @@ struct TagLibraryView: View {
         
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates {
-            // Use cached playField if available
-            if let collectionName = tagLibrary.currentCollectionType.name,
+            if let collectionName = resolvedCollectionName(),
                let cached = cachedPlayField, cached.name == collectionName {
                 let playField = cached.playField
                 let fieldWidth = CGFloat(playField.width)
@@ -1613,7 +1397,8 @@ struct TagLibraryView: View {
             timeFinishSeconds: timeFinishSeconds,
             color: tag.color,
             labels: selectedLabels,
-            position: fieldPosition
+            position: fieldPosition,
+            timeEvents: effectiveTimeEventsForStamp()
         )
         
         VideoMarkupActivityBanner.shared.completeIntervalRecording(tagName: tag.name, tagColorHex: tag.color)
@@ -1658,26 +1443,20 @@ struct TagLibraryView: View {
         return tagCounts[tagId] ?? 0
     }
 
-    private func loadDisplayModePreference() {
-        if let raw = UserDefaults.standard.string(forKey: displayModeKey),
-           let mode = TagDisplayMode(rawValue: raw) {
-            if mode == .free && !isFreeLayoutConfigured {
-                tagDisplayMode = .grouped
-            } else {
-                tagDisplayMode = mode
-            }
-        } else {
+    private func applyCollectionDisplayMode() {
+        guard isUserCollectionActive,
+              let name = lastSelectedCollectionName,
+              let info = CollectionsBookmarksManager.shared.loadCollections().first(where: { $0.name == name }) else {
             tagDisplayMode = .grouped
+            return
         }
-    }
 
-    private func saveDisplayModePreference() {
-        UserDefaults.standard.set(tagDisplayMode.rawValue, forKey: displayModeKey)
-    }
-
-    private var displayModeKey: String {
-        let suffix = lastSelectedCollectionName ?? "__standard__"
-        return "TagLibraryDisplayMode_\(suffix)"
+        switch info.displayMode {
+        case .grouped:
+            tagDisplayMode = .grouped
+        case .free:
+            tagDisplayMode = isFreeLayoutConfigured ? .free : .grouped
+        }
     }
 
     private var isFreeLayoutConfigured: Bool {
@@ -1685,7 +1464,185 @@ struct TagLibraryView: View {
               let info = CollectionsBookmarksManager.shared.loadCollections().first(where: { $0.name == name }) else {
             return false
         }
-        return TagFreeLayoutStorage.loadLayoutIfExists(collectionId: info.id, tags: tagLibrary.tags) != nil
+        return TagFreeLayoutStorage.loadLayoutIfExists(
+            collectionId: info.id, tags: tagLibrary.tags, labels: tagLibrary.allLabels, timeEvents: tagLibrary.timeEvents
+        ) != nil
+    }
+
+    // MARK: - Key Binding canvas tap handler
+
+    private func handleCanvasButtonTap(kind: CanvasButtonKind, elementId: String) {
+        guard !isEditorModeActive else { return }
+
+        wireRuntimeCallbacks()
+
+        if kind == .label {
+            videoManager.player?.pause()
+            if !keyBindingRuntime.highlightModeActive {
+                keyBindingRuntime.togglePendingLabel(id: elementId)
+            } else {
+                let buttonKey = "\(CanvasButtonKind.label.rawValue):\(elementId)"
+                guard keyBindingRuntime.highlightedButtonIds.contains(buttonKey) else { return }
+            }
+            _ = keyBindingRuntime.handleButtonTap(kind: kind, elementId: elementId)
+            return
+        }
+
+        if kind == .timeEvent {
+            videoManager.player?.pause()
+            if !keyBindingRuntime.highlightModeActive {
+                keyBindingRuntime.togglePendingTimeEvent(id: elementId)
+            } else {
+                let buttonKey = "\(CanvasButtonKind.timeEvent.rawValue):\(elementId)"
+                guard keyBindingRuntime.highlightedButtonIds.contains(buttonKey) else { return }
+            }
+            _ = keyBindingRuntime.handleButtonTap(kind: kind, elementId: elementId)
+            return
+        }
+
+        guard kind == .tag, let tag = tagLibrary.allTags.first(where: { $0.id == elementId }) else { return }
+
+        videoManager.player?.pause()
+
+        if keyBindingRuntime.highlightModeActive {
+            let buttonKey = "\(CanvasButtonKind.tag.rawValue):\(elementId)"
+            guard keyBindingRuntime.highlightedButtonIds.contains(buttonKey) else { return }
+            _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
+            return
+        }
+
+        if tag.isInterval ?? false {
+            handleIntervalTagTapInFreeMode(tag)
+            _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
+            return
+        }
+
+        _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
+        let selectedLabels = buildFullLabels(from: keyBindingRuntime.pendingLabelIds)
+        addTagToTimeline(tag: tag, selectedLabels: selectedLabels, useFieldMap: false)
+    }
+
+    private func handleIntervalTagTapInFreeMode(_ tag: Tag) {
+        if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
+            let activeTag = activeIntervalTags[index]
+            let videoDuration = max(1.0, videoManager.timelineDuration)
+            let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
+            let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
+            let timeStart = min(start, end)
+            let timeFinish = max(start, end)
+            activeIntervalTags.remove(at: index)
+            addTagToTimelineInterval(
+                tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish,
+                selectedLabels: buildFullLabels(from: keyBindingRuntime.pendingLabelIds), useFieldMap: false
+            )
+        } else {
+            guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else { return }
+            activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
+            VideoMarkupActivityBanner.shared.startIntervalRecording(tagName: tag.name)
+        }
+    }
+
+    private func wireRuntimeCallbacks() {
+        guard keyBindingRuntime.onAddTag == nil else { return }
+        keyBindingRuntime.onAddTag = { [self] tagId, overrideBefore, overrideAfter, labelIds, onAdded in
+            guard let tag = tagLibrary.allTags.first(where: { $0.id == tagId }) else {
+                onAdded?()
+                return
+            }
+            let fullLabels = buildFullLabels(from: labelIds)
+            if tag.isInterval ?? false {
+                activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
+                VideoMarkupActivityBanner.shared.startIntervalRecording(tagName: tag.name)
+                onAdded?()
+            } else {
+                addTagToTimeline(
+                    tag: tag, selectedLabels: fullLabels,
+                    overrideTimeBefore: overrideBefore, overrideTimeAfter: overrideAfter,
+                    useFieldMap: false,
+                    onComplete: onAdded
+                )
+            }
+        }
+        keyBindingRuntime.onStartIntervalTag = { [self] tagId in
+            guard let tag = tagLibrary.allTags.first(where: { $0.id == tagId }),
+                  !activeIntervalTags.contains(where: { $0.tag.id == tagId }) else { return }
+            activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
+            VideoMarkupActivityBanner.shared.startIntervalRecording(tagName: tag.name)
+        }
+        keyBindingRuntime.onStopIntervalTag = { [self] tagId in
+            guard let idx = activeIntervalTags.firstIndex(where: { $0.tag.id == tagId }) else { return }
+            let activeTag = activeIntervalTags[idx]
+            let tag = activeTag.tag
+            let videoDuration = max(1.0, videoManager.timelineDuration)
+            let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
+            let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
+            activeIntervalTags.remove(at: idx)
+            addTagToTimelineInterval(tag: tag, timeStartSeconds: min(start, end), timeFinishSeconds: max(start, end), selectedLabels: buildFullLabels(from: keyBindingRuntime.pendingLabelIds), useFieldMap: false)
+        }
+        keyBindingRuntime.isIntervalTagActive = { [self] tagId in
+            activeIntervalTags.contains(where: { $0.tag.id == tagId })
+        }
+        keyBindingRuntime.onAttachLabelsToAnchor = { [self] anchorTagId, labelIds, onDone in
+            attachLabelsToAnchorStamp(anchorTagId: anchorTagId, labelIds: labelIds)
+            onDone?()
+        }
+        keyBindingRuntime.onAttachTimeEventsToAnchor = { [self] anchorTagId, timeEventIds, onDone in
+            attachTimeEventsToAnchorStamp(anchorTagId: anchorTagId, timeEventIds: timeEventIds)
+            onDone?()
+        }
+    }
+
+    private func effectiveTimeEventsForStamp() -> [String] {
+        if tagDisplayMode == .free {
+            return Array(keyBindingRuntime.pendingTimeEventIds)
+        }
+        return Array(tagLibrary.selectedTimeEvents)
+    }
+
+    /// Добавляет выбранные лейблы к последнему штампу якорного тега (подсветка тег → лейблы).
+    private func attachLabelsToAnchorStamp(anchorTagId: String, labelIds: [String]) {
+        guard !labelIds.isEmpty,
+              let lineID = timelineData.selectedLineID,
+              let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
+              let stamp = timelineData.lines[lineIndex].stamps.last(where: { $0.idTags.contains(anchorTagId) })
+        else { return }
+
+        let newLabels = buildFullLabels(from: labelIds)
+        var merged = stamp.labels
+        for label in newLabels where !merged.contains(where: { $0.id == label.id }) {
+            merged.append(label)
+        }
+        timelineData.updateStampLabels(lineID: lineID, stampID: stamp.id, newLabels: merged)
+    }
+
+    /// Добавляет выбранные общие события к последнему штампу якорного тега (подсветка тег → события).
+    private func attachTimeEventsToAnchorStamp(anchorTagId: String, timeEventIds: [String]) {
+        guard !timeEventIds.isEmpty,
+              let lineID = timelineData.selectedLineID,
+              let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
+              let stamp = timelineData.lines[lineIndex].stamps.last(where: { $0.idTags.contains(anchorTagId) })
+        else { return }
+
+        var merged = stamp.timeEvents
+        for eventId in timeEventIds where !merged.contains(eventId) {
+            merged.append(eventId)
+        }
+        timelineData.updateStampTimeEvents(lineID: lineID, stampID: stamp.id, newEvents: merged)
+    }
+
+    private func buildFullLabels(from labelIds: [String]) -> [FullLabelWithGroup] {
+        labelIds.compactMap { lid in
+            guard let label = tagLibrary.allLabels.first(where: { $0.id == lid }),
+                  let group = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(lid) }) else {
+                return nil
+            }
+            return FullLabelWithGroup(
+                id: label.id,
+                name: label.name,
+                description: label.description,
+                lableGroupId: group.id
+            )
+        }
     }
 }
 
@@ -1694,6 +1651,7 @@ struct TagButtonView: View, Equatable {
     let isActive: Bool
     let isHovered: Bool
     let tagCount: Int
+    let scaleFactor: CGFloat
     let onTap: () -> Void
     let onHover: (Bool) -> Void
     
@@ -1701,18 +1659,26 @@ struct TagButtonView: View, Equatable {
         return lhs.tag.id == rhs.tag.id &&
                lhs.isActive == rhs.isActive &&
                lhs.isHovered == rhs.isHovered &&
-               lhs.tagCount == rhs.tagCount
+               lhs.tagCount == rhs.tagCount &&
+               lhs.scaleFactor == rhs.scaleFactor
     }
     
     var body: some View {
         let hasHotkey = tag.hotkey != nil && !tag.hotkey!.isEmpty
         let isInterval = tag.isInterval ?? false
+        let titleFontSize = 14 * scaleFactor
+        let countFontSize = 12 * scaleFactor
+        let iconFontSize = 12 * scaleFactor
+        let smallIconFontSize = 10 * scaleFactor
+        let titleRowHeight = 22 * scaleFactor
+        let horizontalPadding = 8 * scaleFactor
+        let verticalPadding = 4 * scaleFactor
         
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1 * scaleFactor) {
+                HStack(alignment: .center, spacing: 8 * scaleFactor) {
                     Text(tag.name)
-                        .font(.system(size: 14, weight: isActive ? .bold : .medium))
+                        .font(.system(size: titleFontSize, weight: isActive ? .bold : .medium))
                         .foregroundColor(isActive ? .white : Color(hex: tag.color).isDark ? .white : .black)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -1722,7 +1688,7 @@ struct TagButtonView: View, Equatable {
                     
                     if tagCount > 0 {
                         Text("\(tagCount)")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: countFontSize, weight: .semibold))
                             .foregroundColor(isActive ? .white : Color(hex: tag.color).isDark ? .white : .black)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -1732,31 +1698,31 @@ struct TagButtonView: View, Equatable {
                             )
                     }
                 }
-            .frame(height: 22)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .frame(height: titleRowHeight)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
                 
                 HStack {
                     Spacer()
-                    HStack(spacing: 4) {
+                    HStack(spacing: 4 * scaleFactor) {
                         if isInterval {
                             Image(systemName: "timer")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: iconFontSize, weight: .medium))
                                 .foregroundColor(isActive ? .white : Color(hex: tag.color).isDark ? .white : .black)
                         }
                         
                         if tag.mapEnabled == true {
                             Image(systemName: "map")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: iconFontSize, weight: .medium))
                                 .foregroundColor(isActive ? .white : Color(hex: tag.color).isDark ? .white : .black)
                         }
                         
                         if hasHotkey {
-                            HStack(spacing: 2) {
+                            HStack(spacing: 2 * scaleFactor) {
                                 Image(systemName: "keyboard")
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.system(size: smallIconFontSize, weight: .medium))
                                 Text(tag.hotkey!)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.system(size: smallIconFontSize, weight: .medium))
                                     .minimumScaleFactor(0.8)
                             }
                             .padding(.horizontal, 3)
@@ -1769,31 +1735,31 @@ struct TagButtonView: View, Equatable {
                         
                         if isActive {
                             Image(systemName: "play.circle.fill")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: iconFontSize, weight: .medium))
                                 .foregroundColor(.white)
                         }
                     }
-                    .padding(.trailing, 4)
+                    .padding(.trailing, 4 * scaleFactor)
                 }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
+                .padding(.horizontal, horizontalPadding)
+                .padding(.bottom, verticalPadding)
                 
                 if isActive && isInterval {
-                    HStack(spacing: 2) {
+                    HStack(spacing: 2 * scaleFactor) {
                         ForEach(0..<6) { _ in
                             Rectangle()
-                                .frame(width: 2, height: 4)
+                                .frame(width: 2 * scaleFactor, height: 4 * scaleFactor)
                                 .opacity(0.6)
                         }
                     }
                     .foregroundColor(.white.opacity(0.7))
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 4)
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.bottom, verticalPadding)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 10 * scaleFactor)
                     .fill(
                         isActive ? 
                         LinearGradient(
@@ -1834,6 +1800,7 @@ struct FlexibleTagGrid: View {
     let activeIntervalTags: [TagLibraryView.ActiveIntervalTag]
     let hoveredTagID: String?
     @Binding var tagCounts: [String: Int]
+    var scaleFactor: CGFloat = 1.0
     let onTagTap: (Tag) -> Void
     let onTagHover: (Bool, String) -> Void
     
@@ -1852,6 +1819,7 @@ struct FlexibleTagGrid: View {
                                     isActive: activeIntervalTags.contains(where: { $0.tag.id == tag.id }),
                                     isHovered: hoveredTagID == tag.id,
                                     tagCount: tagCounts[tag.id] ?? 0,
+                                    scaleFactor: scaleFactor,
                                     onTap: { onTagTap(tag) },
                                     onHover: { hovering in
                                         onTagHover(hovering, tag.id)
@@ -1877,6 +1845,9 @@ struct FlexibleTagGrid: View {
                 calculateTagRows()
             }
             .onChange(of: tagCounts) { _ in
+                calculateTagRows()
+            }
+            .onChange(of: scaleFactor) { _ in
                 calculateTagRows()
             }
         }
@@ -1918,29 +1889,29 @@ struct FlexibleTagGrid: View {
     }
     
     private func calculateButtonWidth(for tag: Tag) -> CGFloat {
-        let textFont = NSFont.systemFont(ofSize: 14, weight: .medium)
+        let textFont = NSFont.systemFont(ofSize: 14 * scaleFactor, weight: .medium)
         let textAttributes = [NSAttributedString.Key.font: textFont]
         let textWidth = tag.name.size(withAttributes: textAttributes).width
         
         var totalWidth = textWidth
         
-        totalWidth += 16
+        totalWidth += 16 * scaleFactor
         
         if let tagCount = tagCounts[tag.id], tagCount > 0 {
             let countText = "\(tagCount)"
-            let countFont = NSFont.systemFont(ofSize: 12, weight: .semibold)
+            let countFont = NSFont.systemFont(ofSize: 12 * scaleFactor, weight: .semibold)
             let countAttributes = [NSAttributedString.Key.font: countFont]
             let countWidth = countText.size(withAttributes: countAttributes).width
-            totalWidth += countWidth + 12
+            totalWidth += countWidth + 12 * scaleFactor
         }
         
-        totalWidth += 8
+        totalWidth += 8 * scaleFactor
         
         return totalWidth
     }
     
     private func calculateTagButtonHeight(for tag: Tag) -> CGFloat {
-        var height: CGFloat = 22
+        var height: CGFloat = 22 * scaleFactor
         
         let hasIndicators = (tag.isInterval == true) || 
                            (tag.mapEnabled == true) || 
@@ -1948,21 +1919,21 @@ struct FlexibleTagGrid: View {
                            activeIntervalTags.contains(where: { $0.tag.id == tag.id })
         
         if hasIndicators {
-            height += 16
+            height += 16 * scaleFactor
         }
         
         if activeIntervalTags.contains(where: { $0.tag.id == tag.id }) && (tag.isInterval == true) {
-            height += 8
+            height += 8 * scaleFactor
         }
         
-        height += 8
+        height += 8 * scaleFactor
         
         return height
     }
     
     private func calculateTotalHeight() -> CGFloat {
         let maxHeightInGroup = calculateMaxHeightInGroup()
-        let spacing: CGFloat = 8
+        let spacing: CGFloat = 8 * scaleFactor
         let totalHeight = CGFloat(tagRows.count) * (maxHeightInGroup + spacing)
         
         return totalHeight
@@ -1997,7 +1968,7 @@ struct FlexibleTagGrid: View {
     }
     
     private func calculateTextWidth(for text: String) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        let font = NSFont.systemFont(ofSize: 14 * scaleFactor, weight: .medium)
         let attributes = [NSAttributedString.Key.font: font]
         let size = text.size(withAttributes: attributes)
         return size.width

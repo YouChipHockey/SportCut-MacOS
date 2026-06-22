@@ -117,6 +117,11 @@ struct CreateCustomCollectionsView: View {
     init() {
         _collectionManager = StateObject(wrappedValue: CustomCollectionManager())
     }
+
+    init(initialDisplayMode: CollectionTagLibraryDisplayMode) {
+        _collectionManager = StateObject(wrappedValue: CustomCollectionManager(initialDisplayMode: initialDisplayMode))
+    }
+
     init(existingCollection: CollectionBookmark) {
         _collectionManager = StateObject(wrappedValue: CustomCollectionManager(withBookmark: existingCollection))
     }
@@ -237,7 +242,9 @@ struct CreateCustomCollectionsView: View {
             TagFreeLayoutEditorView(
                 collectionId: collectionManager.collectionID,
                 collectionName: collectionManager.collectionName,
-                tags: collectionManager.tags
+                tags: collectionManager.tags,
+                labels: collectionManager.labels,
+                timeEvents: collectionManager.timeEvents
             )
         }
     }
@@ -347,8 +354,8 @@ struct CreateCustomCollectionsView: View {
             .buttonStyle(PlainButtonStyle())
             
             Spacer()
-            
-            if viewMode == .tagGroups {
+
+            if viewMode == .tagGroups, collectionManager.tagLibraryDisplayMode == .free {
                 Button(action: {
                     showTagLayoutEditor = true
                 }) {

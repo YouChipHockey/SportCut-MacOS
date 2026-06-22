@@ -153,7 +153,7 @@ const handlers = {
         process.exit(1);
       }
     }
-    console.log('[OK] Command validated');
+    process.stdout.write(JSON.stringify({status:'ok'})+String.fromCharCode(10));
   },
 
   'post-edit': () => {
@@ -262,7 +262,7 @@ const handlers = {
     }
   } else if (command) {
     // Unknown command - pass through without error
-    console.log(`[OK] Hook: ${command}`);
+    console.log(JSON.stringify({status:"ok",hook:command}));
   } else {
     console.log('Usage: hook-handler.cjs <route|pre-bash|post-edit|session-restore|session-end|pre-task|post-task|stats>');
   }

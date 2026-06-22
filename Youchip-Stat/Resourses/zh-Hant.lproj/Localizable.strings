@@ -1037,6 +1037,49 @@
 "FreeLayoutCenterHorizontal" = "水平置中 ↔";
 "FreeLayoutCenterVertical" = "垂直置中 ↕";
 
+// Key Bindings Editor
+"KeyBindingsEditorModeLayout" = "版面配置";
+"KeyBindingsEditorModeBindings" = "按鍵綁定";
+"KeyBindingsPaletteTitle" = "元素面板";
+"KeyBindingsSelectArrowHint" = "點選按鈕間的箭頭以編輯綁定";
+"KeyBindingsNoLabels" = "此集合中沒有標籤";
+"KeyBindingsAddLabelHint" = "將標籤拖到畫布:";
+"KeyBindingsOnCanvas" = "已在畫布";
+"KeyBindingsAdd" = "新增";
+"KeyBindingsCopy" = "複製";
+"KeyBindingsCopyAll" = "複製所有綁定";
+"KeyBindingsPaste" = "貼上";
+"KeyBindingsDuplicate" = "複製";
+"KeyBindingsDelete" = "刪除";
+"KeyBindingsType" = "綁定類型";
+"KeyBindingsDelay" = "延遲";
+"KeyBindingsDelaySec" = "秒數:";
+"KeyBindingsOverrideTime" = "覆蓋剪輯時間";
+"KeyBindingsTimeBefore" = "之前";
+"KeyBindingsTimeAfter" = "之後";
+"KeyBindingsTimeDefault" = "預設";
+"KeyBindingsHighlightOptions" = "高亮選項";
+"KeyBindingsShowTarget" = "高亮時顯示按鈕";
+"KeyBindingsRevertAfterPress" = "按後恢復";
+"KeyBindingsHighlightHotkey" = "快捷鍵:";
+"KeyBindingsPressKey" = "按下一個鍵…";
+"KeyBindingsRemoveFromCanvas" = "從畫布移除";
+"KeyBindingsVisibilitySection" = "可見性";
+"KeyBindingsItemVisible" = "預設可見";
+"KeyBindingsTapSourceHint" = "步驟 1：點選畫布上的來源按鈕";
+"KeyBindingsTapTargetHint" = "步驟 2：點選畫布上的目標按鈕";
+"KeyBindingsCanvasSummary" = "畫布上";
+"KeyBindingsCanvasTagsCount" = "標籤：%d";
+"KeyBindingsCanvasLabelsCount" = "標註：%d";
+"KeyBindingsNoTagsOnCanvas" = "畫布上沒有標籤 — 請切換到版面配置模式或重設";
+"KeyBindingTypeHighlight" = "高亮";
+"KeyBindingTypeActivation" = "啟用";
+"KeyBindingTypeDeactivation" = "停用";
+"KeyBindingTypeIntervalInversion" = "區間反轉";
+"KeyBindingTypeVisibility" = "顯示";
+"KeyBindingTypeInvisibility" = "隱藏";
+"KeyBindingTypeVisibilityInversion" = "可見性反轉";
+
 // Main Tabs
 "MainTabMarkup" = "標註";
 "MainTabViewing" = "檢視";

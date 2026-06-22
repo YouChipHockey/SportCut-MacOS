@@ -271,6 +271,20 @@ struct ColorOption {
     let hex: String
 }
 
+enum CollectionTagLibraryDisplayMode: String, Codable, CaseIterable, Equatable {
+    case grouped
+    case free
+
+    var localizedTitle: String {
+        switch self {
+        case .grouped:
+            ^String.Titles.freeTagModeGrouped
+        case .free:
+            ^String.Titles.freeTagModeFree
+        }
+    }
+}
+
 struct CollectionBookmark: Codable, Hashable, Equatable {
     let id: String
     let name: String

@@ -1037,6 +1037,49 @@
 "FreeLayoutCenterHorizontal" = "Markazga ↔";
 "FreeLayoutCenterVertical" = "Markazga ↕";
 
+// Key Bindings Editor
+"KeyBindingsEditorModeLayout" = "Joylashtirish";
+"KeyBindingsEditorModeBindings" = "Bog'lamalar";
+"KeyBindingsPaletteTitle" = "Elementlar palitasi";
+"KeyBindingsSelectArrowHint" = "Bog'lamalarni tahrirlash uchun o'qni bosing";
+"KeyBindingsNoLabels" = "Kolleksiyada yorliqlar yo'q";
+"KeyBindingsAddLabelHint" = "Yorliqlarni tuvalga sudrang:";
+"KeyBindingsOnCanvas" = "Tuvalda";
+"KeyBindingsAdd" = "Qo'shish";
+"KeyBindingsCopy" = "Nusxa olish";
+"KeyBindingsCopyAll" = "Barcha bog'lamalarni nusxa olish";
+"KeyBindingsPaste" = "Qo'yish";
+"KeyBindingsDuplicate" = "Takrorlash";
+"KeyBindingsDelete" = "O'chirish";
+"KeyBindingsType" = "Bog'lama turi";
+"KeyBindingsDelay" = "Kechikish";
+"KeyBindingsDelaySec" = "Soniyalar:";
+"KeyBindingsOverrideTime" = "Klip vaqtini bekor qilish";
+"KeyBindingsTimeBefore" = "Oldin";
+"KeyBindingsTimeAfter" = "Keyin";
+"KeyBindingsTimeDefault" = "standart";
+"KeyBindingsHighlightOptions" = "Ajratib ko'rsatish parametrlari";
+"KeyBindingsShowTarget" = "Ajratishda tugmani ko'rsatish";
+"KeyBindingsRevertAfterPress" = "Bosgandan keyin qaytarish";
+"KeyBindingsHighlightHotkey" = "Tezkor tugma:";
+"KeyBindingsPressKey" = "Tugmani bosing…";
+"KeyBindingsRemoveFromCanvas" = "Tuvaldan olib tashlash";
+"KeyBindingsVisibilitySection" = "Ko'rinish";
+"KeyBindingsItemVisible" = "Standart ko'rinadigan";
+"KeyBindingsTapSourceHint" = "1-qadam: tuvalda manba tugmasini bosing";
+"KeyBindingsTapTargetHint" = "2-qadam: tuvalda maqsad tugmasini bosing";
+"KeyBindingsCanvasSummary" = "Tuvalda";
+"KeyBindingsCanvasTagsCount" = "Teglar: %d";
+"KeyBindingsCanvasLabelsCount" = "Yorliqlar: %d";
+"KeyBindingsNoTagsOnCanvas" = "Tuvalda teglar yo'q — Joylashtirish rejimiga o'ting yoki tiklang";
+"KeyBindingTypeHighlight" = "Ajratib ko'rsatish";
+"KeyBindingTypeActivation" = "Faollashtirish";
+"KeyBindingTypeDeactivation" = "O'chirish";
+"KeyBindingTypeIntervalInversion" = "Interval inversiyasi";
+"KeyBindingTypeVisibility" = "Ko'rsatish";
+"KeyBindingTypeInvisibility" = "Yashirish";
+"KeyBindingTypeVisibilityInversion" = "Ko'rinish inversiyasi";
+
 // Main Tabs
 "MainTabMarkup" = "Belgilash";
 "MainTabViewing" = "Ko'rish";

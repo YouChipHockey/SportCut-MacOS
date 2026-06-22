@@ -344,6 +344,17 @@ extension String {
         case delete
         case manageCollections
         case createNewCollection
+        case collectionsMenuTitle
+        case collectionsMenuSubtitle
+        case collectionsMenuButton
+        case collectionsMenuEmpty
+        case collectionTypePickerTitle
+        case collectionTypePickerHint
+        case collectionTypeStandard
+        case collectionTypeKeyBindings
+        case collectionTypeStandardDescription
+        case collectionTypeKeyBindingsDescription
+        case collectionsDeleteConfirmFormat
         case confirmDeleteCollection
         case collapse
         case moreColors
@@ -1095,6 +1106,53 @@ extension String {
         case freeLayoutSectionAlignment
         case freeLayoutCenterHorizontal
         case freeLayoutCenterVertical
+
+        // Key Bindings Editor
+        case keyBindingsEditorModeLayout
+        case keyBindingsEditorModeBindings
+        case keyBindingsPaletteTitle
+        case keyBindingsSelectArrowHint
+        case keyBindingsNoLabels
+        case keyBindingsAddLabelHint
+        case keyBindingsOnCanvas
+        case keyBindingsAdd
+        case keyBindingsCopy
+        case keyBindingsCopyAll
+        case keyBindingsPaste
+        case keyBindingsDuplicate
+        case keyBindingsDelete
+        case keyBindingsType
+        case keyBindingsDelay
+        case keyBindingsDelaySec
+        case keyBindingsOverrideTime
+        case keyBindingsTimeBefore
+        case keyBindingsTimeAfter
+        case keyBindingsTimeDefault
+        case keyBindingsHighlightOptions
+        case keyBindingsShowTarget
+        case keyBindingsRevertAfterPress
+        case keyBindingsHighlightHotkey
+        case keyBindingsPressKey
+        case keyBindingsRemoveFromCanvas
+        case keyBindingsVisibilitySection
+        case keyBindingsItemVisible
+        case keyBindingsTapSourceHint
+        case keyBindingsTapTargetHint
+        case keyBindingsCanvasSummary
+        case keyBindingsCanvasTagsCount
+        case keyBindingsCanvasLabelsCount
+        case keyBindingsCanvasTimeEventsCount
+        case keyBindingsNoTimeEvents
+        case keyBindingsAddTimeEventHint
+        case keyBindingsNoTagsOnCanvas
+        // Key Binding Types
+        case keyBindingTypeHighlight
+        case keyBindingTypeActivation
+        case keyBindingTypeDeactivation
+        case keyBindingTypeIntervalInversion
+        case keyBindingTypeVisibility
+        case keyBindingTypeInvisibility
+        case keyBindingTypeVisibilityInversion
 
         // Main Tabs
         case mainTabMarkup

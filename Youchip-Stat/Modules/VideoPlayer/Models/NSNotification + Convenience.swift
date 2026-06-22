@@ -55,6 +55,12 @@ extension NSNotification.Name {
     static let toolsExportCutsByEvents = NSNotification.Name("toolsExportCutsByEvents")
     static let toolsReportSimple = NSNotification.Name("toolsReportSimple")
     static let toolsReportAdvanced = NSNotification.Name("toolsReportAdvanced")
+
+    // MARK: - Key Bindings Runtime
+    /// Сброс режима подсветки по клавише Esc (object = nil).
+    static let keyBindingEscPressed = NSNotification.Name("keyBindingEscPressed")
+    /// Нажатие горячей клавиши подсветки (object = highlightHotkey String).
+    static let keyBindingHighlightHotkey = NSNotification.Name("keyBindingHighlightHotkey")
 }
 
 /// Payload для открытия редактора из таймлайна (ПКМ по иконке рисунка → Редактировать).

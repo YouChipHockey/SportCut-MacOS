@@ -1037,6 +1037,49 @@
 "FreeLayoutCenterHorizontal" = "Centrer ↔";
 "FreeLayoutCenterVertical" = "Centrer ↕";
 
+// Key Bindings Editor
+"KeyBindingsEditorModeLayout" = "Disposition";
+"KeyBindingsEditorModeBindings" = "Liaisons";
+"KeyBindingsPaletteTitle" = "Palette d'éléments";
+"KeyBindingsSelectArrowHint" = "Cliquez sur une flèche pour modifier ses liaisons";
+"KeyBindingsNoLabels" = "Aucune étiquette dans cette collection";
+"KeyBindingsAddLabelHint" = "Faites glisser des étiquettes sur la zone:";
+"KeyBindingsOnCanvas" = "Sur la zone";
+"KeyBindingsAdd" = "Ajouter";
+"KeyBindingsCopy" = "Copier";
+"KeyBindingsCopyAll" = "Copier toutes les liaisons";
+"KeyBindingsPaste" = "Coller";
+"KeyBindingsDuplicate" = "Dupliquer";
+"KeyBindingsDelete" = "Supprimer";
+"KeyBindingsType" = "Type de liaison";
+"KeyBindingsDelay" = "Délai";
+"KeyBindingsDelaySec" = "Secondes:";
+"KeyBindingsOverrideTime" = "Remplacer le temps du clip";
+"KeyBindingsTimeBefore" = "Avant";
+"KeyBindingsTimeAfter" = "Après";
+"KeyBindingsTimeDefault" = "par défaut";
+"KeyBindingsHighlightOptions" = "Options de surbrillance";
+"KeyBindingsShowTarget" = "Afficher le bouton en surbrillance";
+"KeyBindingsRevertAfterPress" = "Revenir après appui";
+"KeyBindingsHighlightHotkey" = "Raccourci:";
+"KeyBindingsPressKey" = "Appuyez sur une touche…";
+"KeyBindingsRemoveFromCanvas" = "Retirer de la zone";
+"KeyBindingsVisibilitySection" = "Visibilité";
+"KeyBindingsItemVisible" = "Visible par défaut";
+"KeyBindingsTapSourceHint" = "Étape 1 : appuyez sur un bouton source sur la zone";
+"KeyBindingsTapTargetHint" = "Étape 2 : appuyez sur un bouton cible sur la zone";
+"KeyBindingsCanvasSummary" = "Sur la zone";
+"KeyBindingsCanvasTagsCount" = "Tags : %d";
+"KeyBindingsCanvasLabelsCount" = "Labels : %d";
+"KeyBindingsNoTagsOnCanvas" = "Aucun tag sur la zone — passez en Disposition ou réinitialisez";
+"KeyBindingTypeHighlight" = "Surbrillance";
+"KeyBindingTypeActivation" = "Activation";
+"KeyBindingTypeDeactivation" = "Désactivation";
+"KeyBindingTypeIntervalInversion" = "Inversion d'intervalle";
+"KeyBindingTypeVisibility" = "Afficher";
+"KeyBindingTypeInvisibility" = "Masquer";
+"KeyBindingTypeVisibilityInversion" = "Inversion de visibilité";
+
 // Main Tabs
 "MainTabMarkup" = "Balisage";
 "MainTabViewing" = "Visionnage";

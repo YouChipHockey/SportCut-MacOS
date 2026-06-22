@@ -2,13 +2,15 @@
 //  TagFreeLayout.swift
 //  Youchip-Stat
 //
-//  Свободная раскладка тегов для пользовательских коллекций.
+//  Свободная раскладка тегов и лейблов для пользовательских коллекций.
 //
 
 import Foundation
 import CoreGraphics
 
-/// Форма, в которой может отображаться тег в свободной раскладке.
+// MARK: - Shape / Font
+
+/// Форма, в которой может отображаться кнопка в свободной раскладке.
 enum TagFreeLayoutShape: String, Codable, CaseIterable {
     case square
     case circle
@@ -19,33 +21,49 @@ enum TagFreeLayoutShape: String, Codable, CaseIterable {
     case capsule
 }
 
-/// Жирность шрифта для подписи тега.
+/// Жирность шрифта для подписи кнопки.
 enum TagFreeLayoutFontWeight: String, Codable, CaseIterable {
     case regular
     case medium
     case bold
 }
 
-/// Положение и внешний вид одного тега в свободной раскладке.
+// MARK: - Item
+
+/// Положение и внешний вид одного элемента (тега или лейбла) в свободной раскладке.
 struct TagFreeLayoutItem: Codable, Identifiable {
-    var id: String { tagId }
-    
-    let tagId: String
-    
+
+    // MARK: Identity
+
+    /// Идентификатор тега или лейбла. Хранится в JSON под ключом "elementId";
+    /// для обратной совместимости читается также из "tagId".
+    var elementId: String
+
+    /// Тип элемента (.tag или .label). Старые элементы без поля считаются тегами.
+    var kind: CanvasButtonKind
+
+    /// Изначальная видимость кнопки. Runtime может её оверрайдить.
+    var isVisible: Bool
+
+    /// Составной идентификатор для использования в наборах: "kind:elementId".
+    var id: String { "\(kind.rawValue):\(elementId)" }
+
+    // MARK: Layout
+
     /// Центр фигуры в координатах «виртуального холста».
     var center: CGPoint
-    
+
     /// Размер фигуры в координатах «виртуального холста».
     var size: CGSize
-    
+
     /// Поворот в градусах относительно центра.
     var rotation: Double
-    
+
     /// Тип фигуры.
     var shape: TagFreeLayoutShape
-    
-    // MARK: - Visual customization
-    
+
+    // MARK: Visual customization
+
     var fillOpacity: Double
     var strokeColor: String?
     var strokeWidth: CGFloat
@@ -58,9 +76,13 @@ struct TagFreeLayoutItem: Codable, Identifiable {
     var shadowEnabled: Bool
     var shadowIntensity: Double
     var aspectRatioLocked: Bool
-    
+
+    // MARK: Init
+
     init(
-        tagId: String,
+        elementId: String,
+        kind: CanvasButtonKind = .tag,
+        isVisible: Bool = true,
         center: CGPoint,
         size: CGSize,
         rotation: Double,
@@ -78,7 +100,9 @@ struct TagFreeLayoutItem: Codable, Identifiable {
         shadowIntensity: Double = 0.5,
         aspectRatioLocked: Bool = false
     ) {
-        self.tagId = tagId
+        self.elementId = elementId
+        self.kind = kind
+        self.isVisible = isVisible
         self.center = center
         self.size = size
         self.rotation = rotation
@@ -96,10 +120,28 @@ struct TagFreeLayoutItem: Codable, Identifiable {
         self.shadowIntensity = shadowIntensity
         self.aspectRatioLocked = aspectRatioLocked
     }
-    
+
+    // MARK: Codable (backward compatible)
+
+    enum CodingKeys: String, CodingKey {
+        case elementId, tagId   // tagId is the legacy key
+        case kind, isVisible
+        case center, size, rotation, shape
+        case fillOpacity, strokeColor, strokeWidth, strokeDashed
+        case textColor, fontSize, fontWeight, showLabel
+        case cornerRadius, shadowEnabled, shadowIntensity, aspectRatioLocked
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        tagId = try c.decode(String.self, forKey: .tagId)
+        // Backward compat: prefer elementId, fall back to tagId
+        if let eid = try c.decodeIfPresent(String.self, forKey: .elementId) {
+            elementId = eid
+        } else {
+            elementId = try c.decode(String.self, forKey: .tagId)
+        }
+        kind = try c.decodeIfPresent(CanvasButtonKind.self, forKey: .kind) ?? .tag
+        isVisible = try c.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
         center = try c.decode(CGPoint.self, forKey: .center)
         size = try c.decode(CGSize.self, forKey: .size)
         rotation = try c.decode(Double.self, forKey: .rotation)
@@ -117,11 +159,53 @@ struct TagFreeLayoutItem: Codable, Identifiable {
         shadowIntensity = try c.decodeIfPresent(Double.self, forKey: .shadowIntensity) ?? 0.5
         aspectRatioLocked = try c.decodeIfPresent(Bool.self, forKey: .aspectRatioLocked) ?? false
     }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(elementId, forKey: .elementId)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(isVisible, forKey: .isVisible)
+        try c.encode(center, forKey: .center)
+        try c.encode(size, forKey: .size)
+        try c.encode(rotation, forKey: .rotation)
+        try c.encode(shape, forKey: .shape)
+        try c.encode(fillOpacity, forKey: .fillOpacity)
+        try c.encodeIfPresent(strokeColor, forKey: .strokeColor)
+        try c.encode(strokeWidth, forKey: .strokeWidth)
+        try c.encode(strokeDashed, forKey: .strokeDashed)
+        try c.encodeIfPresent(textColor, forKey: .textColor)
+        try c.encode(fontSize, forKey: .fontSize)
+        try c.encode(fontWeight, forKey: .fontWeight)
+        try c.encode(showLabel, forKey: .showLabel)
+        try c.encode(cornerRadius, forKey: .cornerRadius)
+        try c.encode(shadowEnabled, forKey: .shadowEnabled)
+        try c.encode(shadowIntensity, forKey: .shadowIntensity)
+        try c.encode(aspectRatioLocked, forKey: .aspectRatioLocked)
+    }
 }
+
+// MARK: - Layout
 
 /// Описание свободной раскладки для всей коллекции.
 struct TagFreeLayout: Codable {
     var canvasWidth: CGFloat
     var canvasHeight: CGFloat
     var items: [TagFreeLayoutItem]
+    /// Связки клавиш. Отсутствует в старых файлах — декодируется как [].
+    var bindings: [KeyBinding]
+
+    init(canvasWidth: CGFloat, canvasHeight: CGFloat, items: [TagFreeLayoutItem], bindings: [KeyBinding] = []) {
+        self.canvasWidth = canvasWidth
+        self.canvasHeight = canvasHeight
+        self.items = items
+        self.bindings = bindings
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        canvasWidth = try c.decode(CGFloat.self, forKey: .canvasWidth)
+        canvasHeight = try c.decode(CGFloat.self, forKey: .canvasHeight)
+        items = try c.decode([TagFreeLayoutItem].self, forKey: .items)
+        bindings = try c.decodeIfPresent([KeyBinding].self, forKey: .bindings) ?? []
+    }
 }

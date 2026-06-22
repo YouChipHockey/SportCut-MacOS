@@ -21,10 +21,15 @@ class CustomCollectionManager: ObservableObject {
     @Published var collectionName: String = ^String.Titles.myCollection
     @Published var collectionID: String = UUID().uuidString
     @Published var isEditingExisting: Bool = false
+    @Published var tagLibraryDisplayMode: CollectionTagLibraryDisplayMode = .grouped
     @Published var allCollections: [StandardCollection] = []
     var originalName: String = ""
     
     init() {}
+
+    init(initialDisplayMode: CollectionTagLibraryDisplayMode) {
+        self.tagLibraryDisplayMode = initialDisplayMode
+    }
     
     init(withBookmark bookmark: CollectionBookmark) {
         self.isEditingExisting = true
@@ -305,7 +310,11 @@ class CustomCollectionManager: ObservableObject {
         
         InMemoryStorageManager.shared.saveCollection(collection)
         
-        CollectionsBookmarksManager.shared.saveCollection(id: collectionID, name: collectionName)
+        CollectionsBookmarksManager.shared.saveCollection(
+            id: collectionID,
+            name: collectionName,
+            tagLibraryDisplayMode: tagLibraryDisplayMode
+        )
         
         originalName = collectionName
         if !isEditingExisting {
@@ -369,6 +378,7 @@ class CustomCollectionManager: ObservableObject {
         if Thread.isMainThread {
             self.collectionID = collection.id
             self.collectionName = collectionName
+            self.tagLibraryDisplayMode = collectionInfo.displayMode
             self.tagGroups = collection.tagGroups
             self.tags = collection.tags
             self.labelGroups = collection.labelGroups
@@ -379,6 +389,7 @@ class CustomCollectionManager: ObservableObject {
             DispatchQueue.main.sync {
                 self.collectionID = collection.id
                 self.collectionName = collectionName
+                self.tagLibraryDisplayMode = collectionInfo.displayMode
                 self.tagGroups = collection.tagGroups
                 self.tags = collection.tags
                 self.labelGroups = collection.labelGroups

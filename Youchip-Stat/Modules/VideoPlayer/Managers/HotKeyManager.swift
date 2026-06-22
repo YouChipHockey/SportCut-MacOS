@@ -247,6 +247,22 @@ class HotKeyManager: ObservableObject {
                 }
                 return nil
             }
+            // Esc — сброс режима подсветки связок клавиш
+            if event.keyCode == 53 /* Escape */,
+               KeyBindingRuntimeManager.shared.highlightModeActive {
+                KeyBindingRuntimeManager.shared.resetHighlight()
+                return nil
+            }
+
+            // Горячие клавиши подсветки связок
+            if KeyBindingRuntimeManager.shared.highlightModeActive,
+               !FocusStateManager.shared.isAnyTextFieldFocused {
+                let hotkeyStr = self.hotkeyStringFromEvent(event)
+                if KeyBindingRuntimeManager.shared.handleHighlightHotkey(hotkeyStr) {
+                    return nil
+                }
+            }
+
             guard self.isEnabled,
                   (!self.blockedSheetActive || self.isLabelHotkeyMode),
                   !self.isEditorModeActive,

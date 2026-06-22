@@ -1037,6 +1037,49 @@
 "FreeLayoutCenterHorizontal" = "Centrar ↔";
 "FreeLayoutCenterVertical" = "Centrar ↕";
 
+// Key Bindings Editor
+"KeyBindingsEditorModeLayout" = "Disposición";
+"KeyBindingsEditorModeBindings" = "Vínculos";
+"KeyBindingsPaletteTitle" = "Paleta de elementos";
+"KeyBindingsSelectArrowHint" = "Toca una flecha para editar sus vínculos";
+"KeyBindingsNoLabels" = "No hay etiquetas en esta colección";
+"KeyBindingsAddLabelHint" = "Arrastra etiquetas al lienzo:";
+"KeyBindingsOnCanvas" = "En lienzo";
+"KeyBindingsAdd" = "Agregar";
+"KeyBindingsCopy" = "Copiar";
+"KeyBindingsCopyAll" = "Copiar todos los vínculos";
+"KeyBindingsPaste" = "Pegar";
+"KeyBindingsDuplicate" = "Duplicar";
+"KeyBindingsDelete" = "Eliminar";
+"KeyBindingsType" = "Tipo de vínculo";
+"KeyBindingsDelay" = "Retraso";
+"KeyBindingsDelaySec" = "Segundos:";
+"KeyBindingsOverrideTime" = "Anular tiempo del clip";
+"KeyBindingsTimeBefore" = "Antes";
+"KeyBindingsTimeAfter" = "Después";
+"KeyBindingsTimeDefault" = "predeterminado";
+"KeyBindingsHighlightOptions" = "Opciones de resaltado";
+"KeyBindingsShowTarget" = "Mostrar botón al resaltar";
+"KeyBindingsRevertAfterPress" = "Revertir tras pulsación";
+"KeyBindingsHighlightHotkey" = "Tecla rápida:";
+"KeyBindingsPressKey" = "Presione una tecla…";
+"KeyBindingsRemoveFromCanvas" = "Quitar del lienzo";
+"KeyBindingsVisibilitySection" = "Visibilidad";
+"KeyBindingsItemVisible" = "Visible por defecto";
+"KeyBindingsTapSourceHint" = "Paso 1: toque un botón origen en el lienzo";
+"KeyBindingsTapTargetHint" = "Paso 2: toque un botón destino en el lienzo";
+"KeyBindingsCanvasSummary" = "En el lienzo";
+"KeyBindingsCanvasTagsCount" = "Etiquetas de tag: %d";
+"KeyBindingsCanvasLabelsCount" = "Labels: %d";
+"KeyBindingsNoTagsOnCanvas" = "No hay tags en el lienzo — cambie a Disposición o restablezca";
+"KeyBindingTypeHighlight" = "Resaltar";
+"KeyBindingTypeActivation" = "Activación";
+"KeyBindingTypeDeactivation" = "Desactivación";
+"KeyBindingTypeIntervalInversion" = "Inversión de intervalo";
+"KeyBindingTypeVisibility" = "Mostrar";
+"KeyBindingTypeInvisibility" = "Ocultar";
+"KeyBindingTypeVisibilityInversion" = "Inversión de visibilidad";
+
 // Main Tabs
 "MainTabMarkup" = "Marcado";
 "MainTabViewing" = "Visualización";

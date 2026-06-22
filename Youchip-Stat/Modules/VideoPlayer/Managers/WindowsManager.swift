@@ -10,7 +10,7 @@ import AppKit
 import AVKit
 import Foundation
 
-class WindowsManager: NSObject {
+class WindowsManager: NSObject, NSWindowDelegate {
     
     var currentVideoId = ""
     static let shared = WindowsManager()
@@ -65,6 +65,7 @@ class WindowsManager: NSObject {
     private var appendingFile: FilesFile? = nil
     
     private var collectionWindowDelegate: CollectionWindowDelegate?
+    private var collectionsMenuWindow: NSWindow?
     
     override init() {
         super.init()
@@ -217,6 +218,7 @@ class WindowsManager: NSObject {
     
     func openLiveVideo(videoId: String, fileName: String) {
         currentVideoId = videoId
+        TagLibraryFreeLayoutFitStore.shared.resetForProject(videoId)
         isLiveSession = true
         liveVideoId = videoId
         liveFileName = fileName
@@ -260,6 +262,7 @@ class WindowsManager: NSObject {
         let existingTimelines = VideoFilesManager.shared.loadTimelines(for: existingId)
         
         currentVideoId = existingId
+        TagLibraryFreeLayoutFitStore.shared.resetForProject(existingId)
         isLiveSession = true
         liveVideoId = existingId
         liveFileName = file.name
@@ -302,6 +305,7 @@ class WindowsManager: NSObject {
     /// Opens a new live session (fresh project) with an optional pre-existing video seeding the review player.
     func openLiveVideoWithPreload(videoId: String, fileName: String, preloadedVideoURL: URL?) {
         currentVideoId = videoId
+        TagLibraryFreeLayoutFitStore.shared.resetForProject(videoId)
         isLiveSession = true
         liveVideoId = videoId
         liveFileName = fileName
@@ -653,7 +657,28 @@ class WindowsManager: NSObject {
         MarkupMode.current = mode
     }
     
-    func openCustomCollectionsWindow(withExistingCollection existingCollection: CollectionBookmark? = nil) {
+    func openCollectionsMenuWindow() {
+        if let window = collectionsMenuWindow, window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let hostingController = NSHostingController(rootView: CollectionsMenuView())
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = ^String.Titles.collectionsMenuTitle
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.setContentSize(NSSize(width: 800, height: 560))
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        collectionsMenuWindow = window
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    func openCustomCollectionsWindow(
+        withExistingCollection existingCollection: CollectionBookmark? = nil,
+        initialDisplayMode: CollectionTagLibraryDisplayMode = .grouped
+    ) {
         VideoPlayerManager.shared.player?.pause()
         
         let view: AnyView
@@ -661,7 +686,7 @@ class WindowsManager: NSObject {
         if let existingCollection = existingCollection {
             view = AnyView(CreateCustomCollectionsView(existingCollection: existingCollection))
         } else {
-            view = AnyView(CreateCustomCollectionsView())
+            view = AnyView(CreateCustomCollectionsView(initialDisplayMode: initialDisplayMode))
         }
         
         let hostingController = NSHostingController(rootView: view)
@@ -716,7 +741,8 @@ class WindowsManager: NSObject {
     
     func openVideo(id: String) {
         currentVideoId = id
-        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == id }) else { 
+        TagLibraryFreeLayoutFitStore.shared.resetForProject(id)
+        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == id }) else {
             return
         }
         guard let file = filesFile.url, isClosing else { 
@@ -1314,6 +1340,13 @@ class WindowsManager: NSObject {
     
     func unregisterMomentViewer(_ controller: NSWindowController) {
         momentViewerControllers.removeAll { $0 === controller }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        if window === collectionsMenuWindow {
+            collectionsMenuWindow = nil
+        }
     }
 
 }
