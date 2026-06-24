@@ -1141,6 +1141,7 @@
 "KeyBindingTypeVisibility" = "Показать";
 "KeyBindingTypeInvisibility" = "Скрыть";
 "KeyBindingTypeVisibilityInversion" = "Инверсия видимости";
+"KeyBindingTypeExclusive" = "Эксклюзивная";
 
 // Main Tabs
 "MainTabMarkup" = "Разметка";

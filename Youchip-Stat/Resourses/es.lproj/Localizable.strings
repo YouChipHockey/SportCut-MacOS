@@ -1092,6 +1092,7 @@
 "KeyBindingTypeVisibility" = "Mostrar";
 "KeyBindingTypeInvisibility" = "Ocultar";
 "KeyBindingTypeVisibilityInversion" = "Inversión de visibilidad";
+"KeyBindingTypeExclusive" = "Exclusiva";
 
 // Main Tabs
 "MainTabMarkup" = "Marcado";

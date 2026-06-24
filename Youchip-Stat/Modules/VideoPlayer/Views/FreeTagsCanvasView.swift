@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct FreeTagsCanvasView: View {
 
@@ -14,7 +15,7 @@ struct FreeTagsCanvasView: View {
     let labels: [Label]
     let timeEvents: [TimeEvent]
     let onTagTap: (Tag) -> Void
-    let onLabelTap: ((Label) -> Void)?
+    let onLabelTap: ((Label, Bool) -> Void)?
     let onTimeEventTap: ((TimeEvent) -> Void)?
     let activeIntervalTags: [TagLibraryView.ActiveIntervalTag]
     let hoveredTagID: String?
@@ -48,18 +49,22 @@ struct FreeTagsCanvasView: View {
                         ZStack(alignment: .topLeading) {
                             Color.clear
                                 .frame(width: canvasWidth, height: canvasHeight)
+                                .allowsHitTesting(false)
 
                             ForEach(effectiveLayout.items) { item in
                                 if isVisible(item: item) {
                                     let viewWidth = item.size.width * scale
                                     let viewHeight = item.size.height * scale
+                                    let isHighlighted = runtime.highlightModeActive
+                                        && runtime.highlightedButtonIds.contains(item.id)
 
-                                    runtimeItemView(item: item, scale: scale)
+                                    runtimeItemView(item: item, scale: scale, isHighlighted: isHighlighted)
                                         .frame(width: viewWidth, height: viewHeight)
                                         .offset(
                                             x: item.center.x * scale - viewWidth / 2,
                                             y: item.center.y * scale - viewHeight / 2
                                         )
+                                        .zIndex(canvasZIndex(for: item, isHighlighted: isHighlighted))
                                 }
                             }
                         }
@@ -82,6 +87,9 @@ struct FreeTagsCanvasView: View {
                     availableHeight: availableHeight,
                     layout: effectiveLayout
                 )
+            }
+            .onChange(of: currentCollectionId) { _ in
+                loadLayoutIfNeeded()
             }
             .onChange(of: layoutKey) { newKey in
                 syncFitScale(
@@ -180,11 +188,18 @@ struct FreeTagsCanvasView: View {
 
     // MARK: - Item view dispatch
 
+    private func canvasZIndex(for item: TagFreeLayoutItem, isHighlighted: Bool) -> Double {
+        if isHighlighted { return 100 }
+        switch item.kind {
+        case .label: return 30
+        case .timeEvent: return 20
+        case .tag: return 10
+        }
+    }
+
     @ViewBuilder
-    private func runtimeItemView(item: TagFreeLayoutItem, scale: CGFloat) -> some View {
+    private func runtimeItemView(item: TagFreeLayoutItem, scale: CGFloat, isHighlighted: Bool) -> some View {
         let buttonKey = item.id
-        let isHighlighted = runtime.highlightModeActive && runtime.highlightedButtonIds.contains(buttonKey)
-        let isDisabled = runtime.highlightModeActive && !runtime.highlightedButtonIds.contains(buttonKey)
 
         switch item.kind {
         case .tag:
@@ -201,8 +216,6 @@ struct FreeTagsCanvasView: View {
                         onTagTap(tag)
                     }
                 )
-                .opacity(isDisabled ? 0.25 : 1.0)
-                .allowsHitTesting(!isDisabled)
             }
 
         case .label:
@@ -211,14 +224,13 @@ struct FreeTagsCanvasView: View {
                     label: label,
                     item: item,
                     isHighlighted: isHighlighted,
-                    isSelected: runtime.pendingLabelIds.contains(label.id),
+                    isSelected: runtime.isLabelActivated(label.id),
                     onTap: {
                         runtime.applyRevertVisibilityIfNeeded(for: buttonKey)
-                        onLabelTap?(label)
+                        let commandPressed = NSEvent.modifierFlags.contains(.command)
+                        onLabelTap?(label, commandPressed)
                     }
                 )
-                .opacity(isDisabled ? 0.25 : 1.0)
-                .allowsHitTesting(!isDisabled)
             }
 
         case .timeEvent:
@@ -233,8 +245,6 @@ struct FreeTagsCanvasView: View {
                         onTimeEventTap?(event)
                     }
                 )
-                .opacity(isDisabled ? 0.25 : 1.0)
-                .allowsHitTesting(!isDisabled)
             }
         }
     }
@@ -374,37 +384,39 @@ private struct FreeLabelRuntimeItemView: View {
         )
         let textCol: Color = item.textColor.map { Color(hex: $0) } ?? .primary
 
-        ZStack {
-            TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
-                .fill(Color(NSColor.controlBackgroundColor).opacity(item.fillOpacity))
-                .overlay(
-                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
-                        .stroke(strokeCol, style: strokeStyle)
-                )
+        Button(action: onTap) {
+            ZStack {
+                TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                    .fill(Color(NSColor.controlBackgroundColor).opacity(item.fillOpacity))
+                    .overlay(
+                        TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                            .stroke(strokeCol, style: strokeStyle)
+                    )
 
-            if item.showLabel {
-                HStack(spacing: 4) {
-                    Image(systemName: "textformat")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(textCol.opacity(0.6))
-                    Text(label.name)
-                        .font(.system(size: item.fontSize))
-                        .foregroundColor(textCol)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                        .minimumScaleFactor(0.6)
+                if item.showLabel {
+                    HStack(spacing: 4) {
+                        Image(systemName: "textformat")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(textCol.opacity(0.6))
+                        Text(label.name)
+                            .font(.system(size: item.fontSize))
+                            .foregroundColor(textCol)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                            .minimumScaleFactor(0.6)
+                    }
+                    .padding(4)
                 }
-                .padding(4)
             }
+            .shadow(
+                color: item.shadowEnabled ? Color.black.opacity(item.shadowIntensity * 0.2) : .clear,
+                radius: item.shadowEnabled ? (isHighlighted ? 6 : 3) : 0,
+                x: 0, y: item.shadowEnabled ? 1 : 0
+            )
+            .rotationEffect(.degrees(item.rotation))
         }
-        .shadow(
-            color: item.shadowEnabled ? Color.black.opacity(item.shadowIntensity * 0.2) : .clear,
-            radius: item.shadowEnabled ? (isHighlighted ? 6 : 3) : 0,
-            x: 0, y: item.shadowEnabled ? 1 : 0
-        )
-        .rotationEffect(.degrees(item.rotation))
+        .buttonStyle(.plain)
         .contentShape(Rectangle())
-        .onTapGesture { onTap() }
     }
 }
 

@@ -77,6 +77,7 @@ struct TagLibraryView: View {
         let id: String
         let tag: Tag
         var startTime: Double
+        var pendingLabelIds: [String] = []
     }
     
     func loadUserCollections() {
@@ -637,7 +638,9 @@ struct TagLibraryView: View {
             labels: tagLibrary.allLabels,
             timeEvents: tagLibrary.timeEvents,
             onTagTap: { tag in handleCanvasButtonTap(kind: .tag, elementId: tag.id) },
-            onLabelTap: { label in handleCanvasButtonTap(kind: .label, elementId: label.id) },
+            onLabelTap: { label, commandPressed in
+                handleCanvasLabelTap(label: label, commandPressed: commandPressed)
+            },
             onTimeEventTap: { event in handleCanvasButtonTap(kind: .timeEvent, elementId: event.id) },
             activeIntervalTags: activeIntervalTags,
             hoveredTagID: hoveredTagID,
@@ -1448,15 +1451,42 @@ struct TagLibraryView: View {
               let name = lastSelectedCollectionName,
               let info = CollectionsBookmarksManager.shared.loadCollections().first(where: { $0.name == name }) else {
             tagDisplayMode = .grouped
+            keyBindingRuntime.reset()
             return
         }
 
         switch info.displayMode {
         case .grouped:
             tagDisplayMode = .grouped
+            keyBindingRuntime.reset()
         case .free:
             tagDisplayMode = isFreeLayoutConfigured ? .free : .grouped
+            if tagDisplayMode == .grouped {
+                keyBindingRuntime.reset()
+            } else {
+                reloadKeyBindingRuntimeLayout()
+            }
         }
+    }
+
+    private func reloadKeyBindingRuntimeLayout() {
+        guard case .user(let name) = tagLibrary.currentCollectionType,
+              let info = CollectionsBookmarksManager.shared.loadCollections().first(where: { $0.name == name }) else {
+            return
+        }
+        if let stored = TagFreeLayoutStorage.loadLayoutIfExists(
+            collectionId: info.id,
+            tags: tagLibrary.tags,
+            labels: tagLibrary.allLabels,
+            timeEvents: tagLibrary.timeEvents
+        ) {
+            keyBindingRuntime.configure(layout: stored)
+        }
+    }
+
+    /// Свободная раскладка коллекции «Связки клавиш» (не групповой режим тегов).
+    private var isKeyBindingsCanvasMode: Bool {
+        tagDisplayMode == .free
     }
 
     private var isFreeLayoutConfigured: Bool {
@@ -1471,32 +1501,60 @@ struct TagLibraryView: View {
 
     // MARK: - Key Binding canvas tap handler
 
+    private func handleCanvasLabelTap(label: Label, commandPressed: Bool) {
+        guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
+
+        wireRuntimeCallbacks()
+
+        let labelId = label.id
+
+        if commandPressed {
+            if keyBindingRuntime.isLabelActivated(labelId) {
+                keyBindingRuntime.deactivateLabel(id: labelId)
+            } else {
+                keyBindingRuntime.activateLabel(id: labelId)
+                _ = keyBindingRuntime.handleButtonTap(kind: .label, elementId: labelId)
+            }
+            return
+        }
+
+        if keyBindingRuntime.isLabelActivated(labelId) {
+            keyBindingRuntime.deactivateLabel(id: labelId)
+            return
+        }
+
+        _ = keyBindingRuntime.handleButtonTap(kind: .label, elementId: labelId)
+
+        if keyBindingRuntime.didCompleteHighlightPair { return }
+
+        // Ждём нажатия связанного тега (лейбл уже подсветил партнёра).
+        if keyBindingRuntime.highlightModeActive
+            && keyBindingRuntime.highlightOriginIsLabel()
+            && !keyBindingRuntime.highlightedButtonIds.isEmpty {
+            return
+        }
+
+        if !keyBindingRuntime.labelOutgoingActivatesTag(labelId: labelId)
+            && !keyBindingRuntime.isWaitingForTagLabelPartner() {
+            attachLabelToLastTimelineStamp(labelId: labelId)
+        }
+    }
+
     private func handleCanvasButtonTap(kind: CanvasButtonKind, elementId: String) {
-        guard !isEditorModeActive else { return }
+        guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
 
         wireRuntimeCallbacks()
 
         if kind == .label {
-            videoManager.player?.pause()
-            if !keyBindingRuntime.highlightModeActive {
-                keyBindingRuntime.togglePendingLabel(id: elementId)
-            } else {
-                let buttonKey = "\(CanvasButtonKind.label.rawValue):\(elementId)"
-                guard keyBindingRuntime.highlightedButtonIds.contains(buttonKey) else { return }
-            }
-            _ = keyBindingRuntime.handleButtonTap(kind: kind, elementId: elementId)
             return
         }
 
         if kind == .timeEvent {
             videoManager.player?.pause()
+            _ = keyBindingRuntime.handleButtonTap(kind: kind, elementId: elementId)
             if !keyBindingRuntime.highlightModeActive {
                 keyBindingRuntime.togglePendingTimeEvent(id: elementId)
-            } else {
-                let buttonKey = "\(CanvasButtonKind.timeEvent.rawValue):\(elementId)"
-                guard keyBindingRuntime.highlightedButtonIds.contains(buttonKey) else { return }
             }
-            _ = keyBindingRuntime.handleButtonTap(kind: kind, elementId: elementId)
             return
         }
 
@@ -1507,20 +1565,11 @@ struct TagLibraryView: View {
             videoManager.player?.pause()
         }
 
-        if keyBindingRuntime.highlightModeActive {
-            let buttonKey = "\(CanvasButtonKind.tag.rawValue):\(elementId)"
-            guard keyBindingRuntime.highlightedButtonIds.contains(buttonKey) else { return }
-            if isIntervalTag, activeIntervalTags.contains(where: { $0.tag.id == elementId }) {
-                handleIntervalTagTapInFreeMode(tag)
-                return
-            }
-            _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
-            return
-        }
-
         if isIntervalTag {
             let isStopping = activeIntervalTags.contains(where: { $0.tag.id == tag.id })
-            if !isStopping {
+            if isStopping {
+                keyBindingRuntime.applyExclusiveOnTagDeactivation(tagId: elementId)
+            } else {
                 _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
             }
             handleIntervalTagTapInFreeMode(tag)
@@ -1528,31 +1577,79 @@ struct TagLibraryView: View {
         }
 
         _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
-        let selectedLabels = buildFullLabels(from: keyBindingRuntime.pendingLabelIds)
+
+        if keyBindingRuntime.didCompleteHighlightPair { return }
+        if keyBindingRuntime.highlightModeActive && keyBindingRuntime.highlightOriginIsLabel() { return }
+        if keyBindingRuntime.isWaitingForTagLabelPartner() { return }
+
+        let selectedLabels = buildFullLabels(from: keyBindingRuntime.takeActivatedLabels())
         addTagToTimeline(tag: tag, selectedLabels: selectedLabels, useFieldMap: false)
     }
 
-    private func handleIntervalTagTapInFreeMode(_ tag: Tag) {
-        if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
-            let activeTag = activeIntervalTags[index]
-            let videoDuration = max(1.0, videoManager.timelineDuration)
-            let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
-            let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
-            let timeStart = min(start, end)
-            let timeFinish = max(start, end)
-            activeIntervalTags.remove(at: index)
-            addTagToTimelineInterval(
-                tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish,
-                selectedLabels: buildFullLabels(from: keyBindingRuntime.pendingLabelIds), useFieldMap: false
+    private func startIntervalRecording(tag: Tag, labelIds: [String]) {
+        guard isKeyBindingsCanvasMode else { return }
+        guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else { return }
+        keyBindingRuntime.clearActivatedLabels()
+        activeIntervalTags.append(
+            ActiveIntervalTag(
+                id: UUID().uuidString,
+                tag: tag,
+                startTime: videoManager.currentTime,
+                pendingLabelIds: labelIds
             )
+        )
+        VideoMarkupActivityBanner.shared.startIntervalRecording(tagName: tag.name)
+    }
+
+    private func finishIntervalRecording(at index: Int) {
+        guard isKeyBindingsCanvasMode else { return }
+        let activeTag = activeIntervalTags[index]
+        let tag = activeTag.tag
+        let videoDuration = max(1.0, videoManager.timelineDuration)
+        let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
+        let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
+        let timeStart = min(start, end)
+        let timeFinish = max(start, end)
+        let labelIds = activeTag.pendingLabelIds + keyBindingRuntime.takeActivatedLabels()
+        activeIntervalTags.remove(at: index)
+        addTagToTimelineInterval(
+            tag: tag,
+            timeStartSeconds: timeStart,
+            timeFinishSeconds: timeFinish,
+            selectedLabels: buildFullLabels(from: labelIds),
+            useFieldMap: false
+        )
+    }
+
+    private func handleIntervalTagTapInFreeMode(_ tag: Tag, triggeringLabelId: String? = nil) {
+        guard isKeyBindingsCanvasMode else { return }
+        if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
+            finishIntervalRecording(at: index)
         } else {
-            guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else { return }
-            activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
-            VideoMarkupActivityBanner.shared.startIntervalRecording(tagName: tag.name)
+            let labelIds = keyBindingRuntime.takeActivatedLabels(triggeringLabelId: triggeringLabelId)
+            startIntervalRecording(tag: tag, labelIds: labelIds)
         }
     }
 
+    private func attachLabelToLastTimelineStamp(labelId: String) {
+        guard isKeyBindingsCanvasMode else { return }
+        guard let lineID = timelineData.selectedLineID,
+              let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
+              let stamp = timelineData.lines[lineIndex].stamps.last
+        else { return }
+
+        let newLabels = buildFullLabels(from: [labelId])
+        guard !newLabels.isEmpty else { return }
+
+        var merged = stamp.labels
+        for label in newLabels where !merged.contains(where: { $0.id == label.id }) {
+            merged.append(label)
+        }
+        timelineData.updateStampLabels(lineID: lineID, stampID: stamp.id, newLabels: merged)
+    }
+
     private func wireRuntimeCallbacks() {
+        guard isKeyBindingsCanvasMode else { return }
         guard keyBindingRuntime.onAddTag == nil else { return }
         keyBindingRuntime.onAddTag = { [self] tagId, overrideBefore, overrideAfter, labelIds, onAdded in
             guard let tag = tagLibrary.allTags.first(where: { $0.id == tagId }) else {
@@ -1561,33 +1658,30 @@ struct TagLibraryView: View {
             }
             let fullLabels = buildFullLabels(from: labelIds)
             if tag.isInterval ?? false {
-                activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
-                VideoMarkupActivityBanner.shared.startIntervalRecording(tagName: tag.name)
+                startIntervalRecording(tag: tag, labelIds: labelIds)
                 onAdded?()
             } else {
                 addTagToTimeline(
                     tag: tag, selectedLabels: fullLabels,
                     overrideTimeBefore: overrideBefore, overrideTimeAfter: overrideAfter,
                     useFieldMap: false,
-                    onComplete: onAdded
+                    onComplete: {
+                        keyBindingRuntime.clearActivatedLabels()
+                        onAdded?()
+                    }
                 )
             }
         }
         keyBindingRuntime.onStartIntervalTag = { [self] tagId in
             guard let tag = tagLibrary.allTags.first(where: { $0.id == tagId }),
+                  tag.isInterval ?? false,
                   !activeIntervalTags.contains(where: { $0.tag.id == tagId }) else { return }
-            activeIntervalTags.append(ActiveIntervalTag(id: UUID().uuidString, tag: tag, startTime: videoManager.currentTime))
-            VideoMarkupActivityBanner.shared.startIntervalRecording(tagName: tag.name)
+            let labelIds = keyBindingRuntime.takeActivatedLabels()
+            startIntervalRecording(tag: tag, labelIds: labelIds)
         }
         keyBindingRuntime.onStopIntervalTag = { [self] tagId in
             guard let idx = activeIntervalTags.firstIndex(where: { $0.tag.id == tagId }) else { return }
-            let activeTag = activeIntervalTags[idx]
-            let tag = activeTag.tag
-            let videoDuration = max(1.0, videoManager.timelineDuration)
-            let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
-            let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
-            activeIntervalTags.remove(at: idx)
-            addTagToTimelineInterval(tag: tag, timeStartSeconds: min(start, end), timeFinishSeconds: max(start, end), selectedLabels: buildFullLabels(from: keyBindingRuntime.pendingLabelIds), useFieldMap: false)
+            finishIntervalRecording(at: idx)
         }
         keyBindingRuntime.isIntervalTagActive = { [self] tagId in
             activeIntervalTags.contains(where: { $0.tag.id == tagId })
@@ -1613,11 +1707,16 @@ struct TagLibraryView: View {
     private func attachLabelsToAnchorStamp(anchorTagId: String, labelIds: [String]) {
         guard !labelIds.isEmpty,
               let lineID = timelineData.selectedLineID,
-              let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
-              let stamp = timelineData.lines[lineIndex].stamps.last(where: { $0.idTags.contains(anchorTagId) })
+              let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID })
         else { return }
 
         let newLabels = buildFullLabels(from: labelIds)
+        guard !newLabels.isEmpty else { return }
+
+        let stamp = timelineData.lines[lineIndex].stamps.last(where: { $0.idTags.contains(anchorTagId) })
+            ?? timelineData.lines[lineIndex].stamps.last
+        guard let stamp else { return }
+
         var merged = stamp.labels
         for label in newLabels where !merged.contains(where: { $0.id == label.id }) {
             merged.append(label)
@@ -1642,10 +1741,14 @@ struct TagLibraryView: View {
 
     private func buildFullLabels(from labelIds: [String]) -> [FullLabelWithGroup] {
         labelIds.compactMap { lid in
-            guard let label = tagLibrary.allLabels.first(where: { $0.id == lid }),
-                  let group = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(lid) }) else {
-                return nil
-            }
+            let label = tagLibrary.labels.first(where: { $0.id == lid })
+                ?? tagLibrary.allLabels.first(where: { $0.id == lid })
+            guard let label else { return nil }
+
+            let group = tagLibrary.labelGroups.first(where: { $0.lables.contains(lid) })
+                ?? tagLibrary.allLabelGroups.first(where: { $0.lables.contains(lid) })
+            guard let group else { return nil }
+
             return FullLabelWithGroup(
                 id: label.id,
                 name: label.name,

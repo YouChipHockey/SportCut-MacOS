@@ -20,7 +20,7 @@ enum CanvasButtonKind: String, Codable, CaseIterable {
 
 /// Тип действия связки клавиш.
 enum KeyBindingType: String, Codable, CaseIterable {
-    /// Подсвечивает суб-кнопки; только они доступны для нажатия пока активна подсветка.
+    /// Подсвечивает связанные кнопки; остальные остаются кликабельными до Esc или завершения пары.
     case highlight
     /// Активирует суб-кнопку (обычный тег — добавляет штамп; интервальный — зажимает).
     case activation
@@ -34,6 +34,8 @@ enum KeyBindingType: String, Codable, CaseIterable {
     case invisibility
     /// Инверсия видимости: видима — невидима, невидима — видима.
     case visibilityInversion
+    /// Эксклюзивная связка: тег↔тег — противоположное состояние; тег↔лейбл — только эти пары + подсветка партнёра.
+    case exclusive
 }
 
 // MARK: - KeyBinding
@@ -128,6 +130,7 @@ extension KeyBindingType {
         case .visibility:         return "keyBindingTypeVisibility"
         case .invisibility:       return "keyBindingTypeInvisibility"
         case .visibilityInversion: return "keyBindingTypeVisibilityInversion"
+        case .exclusive:          return "keyBindingTypeExclusive"
         }
     }
 }

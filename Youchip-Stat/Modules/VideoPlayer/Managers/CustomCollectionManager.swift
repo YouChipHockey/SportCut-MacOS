@@ -24,6 +24,14 @@ class CustomCollectionManager: ObservableObject {
     @Published var tagLibraryDisplayMode: CollectionTagLibraryDisplayMode = .grouped
     @Published var allCollections: [StandardCollection] = []
     var originalName: String = ""
+
+    var isKeyBindingsMode: Bool {
+        tagLibraryDisplayMode == .free
+    }
+
+    private var allLabelGroupIDs: [String] {
+        labelGroups.map(\.id)
+    }
     
     init() {}
 
@@ -212,13 +220,44 @@ class CustomCollectionManager: ObservableObject {
                 tags: updatedTags
             )
         }
+
+        if isKeyBindingsMode, let index = tags.firstIndex(where: { $0.id == id }) {
+            tags[index].lablesGroup = allLabelGroupIDs
+        }
         
         return newTag
+    }
+
+    /// В режиме связок клавиш каждый тег связан со всеми группами лейблов.
+    func syncKeyBindingsLabelGroupLinks() {
+        guard isKeyBindingsMode else { return }
+        let allIDs = allLabelGroupIDs
+        var changed = false
+        for index in tags.indices {
+            if Set(tags[index].lablesGroup) != Set(allIDs) {
+                tags[index].lablesGroup = allIDs
+                changed = true
+            }
+        }
+        if changed {
+            objectWillChange.send()
+        }
+    }
+
+    private func attachLabelGroupToAllTags(_ groupID: String) {
+        guard isKeyBindingsMode else { return }
+        for index in tags.indices where !tags[index].lablesGroup.contains(groupID) {
+            tags[index].lablesGroup.append(groupID)
+        }
     }
     
     func createLabelGroup(name: String) -> LabelGroupData {
         let newGroup = LabelGroupData(id: UUID().uuidString, name: name, lables: [])
         labelGroups.append(newGroup)
+        attachLabelGroupToAllTags(newGroup.id)
+        if isKeyBindingsMode {
+            objectWillChange.send()
+        }
         return newGroup
     }
     
@@ -291,6 +330,7 @@ class CustomCollectionManager: ObservableObject {
     
     func saveCollectionToFiles() -> Bool {
         collectionName = collectionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        syncKeyBindingsLabelGroupLinks()
                 
         if collectionName == originalName || collectionName.isEmpty {
             collectionName = originalName.isEmpty ? collectionID : originalName
@@ -399,6 +439,7 @@ class CustomCollectionManager: ObservableObject {
             }
         }
         
+        syncKeyBindingsLabelGroupLinks()
         print("✅ CustomCollectionManager: Successfully loaded collection '\(collectionName)'")
         return true
     }
@@ -684,6 +725,7 @@ class CustomCollectionManager: ObservableObject {
         
         if let index = tags.firstIndex(where: { $0.id == id }) {
             let originalTag = tags[index]
+            let resolvedLabelGroupIDs = isKeyBindingsMode ? allLabelGroupIDs : labelGroupIDs
             
             if !changedTags.contains(where: { $0.id == id}) {
                 changedTags.append((id, name))
@@ -698,7 +740,7 @@ class CustomCollectionManager: ObservableObject {
                 defaultTimeBefore: defaultTimeBefore,
                 defaultTimeAfter: defaultTimeAfter,
                 collection: originalTag.collection,
-                lablesGroup: labelGroupIDs,
+                lablesGroup: resolvedLabelGroupIDs,
                 hotkey: hotkey,
                 labelHotkeys: labelHotkeys,
                 mapEnabled: mapEnabled,

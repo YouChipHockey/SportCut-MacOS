@@ -1092,6 +1092,7 @@
 "KeyBindingTypeVisibility" = "Ko'rsatish";
 "KeyBindingTypeInvisibility" = "Yashirish";
 "KeyBindingTypeVisibilityInversion" = "Ko'rinish inversiyasi";
+"KeyBindingTypeExclusive" = "Eksklyuziv";
 
 // Main Tabs
 "MainTabMarkup" = "Belgilash";

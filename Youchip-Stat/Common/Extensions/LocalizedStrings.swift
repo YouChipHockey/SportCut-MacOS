@@ -1166,6 +1166,7 @@ extension String {
         case keyBindingTypeVisibility
         case keyBindingTypeInvisibility
         case keyBindingTypeVisibilityInversion
+        case keyBindingTypeExclusive
 
         // Main Tabs
         case mainTabMarkup

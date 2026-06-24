@@ -47,8 +47,10 @@ final class KeyBindingRuntimeManager: ObservableObject {
     // MARK: - Internal state
 
     private(set) var anchorTagId: String?
-    @Published private(set) var pendingLabelIds: [String] = []
+    private(set) var highlightOriginButtonKey: String?
+    @Published private(set) var activatedLabelIds: [String] = []
     @Published private(set) var pendingTimeEventIds: Set<String> = []
+    private(set) var didCompleteHighlightPair: Bool = false
     private var bindings: [KeyBinding] = []
     private var items: [TagFreeLayoutItem] = []
     private(set) var highlightHotkeys: [String: String] = [:]
@@ -68,19 +70,67 @@ final class KeyBindingRuntimeManager: ObservableObject {
     // MARK: - Pending selections
 
     func togglePendingTimeEvent(id: String) {
-        if pendingTimeEventIds.contains(id) {
-            pendingTimeEventIds.remove(id)
+        var updated = pendingTimeEventIds
+        if updated.contains(id) {
+            updated.remove(id)
         } else {
-            pendingTimeEventIds.insert(id)
+            updated.insert(id)
+        }
+        pendingTimeEventIds = updated
+    }
+
+    // MARK: - Activated labels (Cmd+click or binding activation)
+
+    func activateLabel(id: String) {
+        if !activatedLabelIds.contains(id) {
+            activatedLabelIds.append(id)
         }
     }
 
-    func togglePendingLabel(id: String) {
-        if let index = pendingLabelIds.firstIndex(of: id) {
-            pendingLabelIds.remove(at: index)
-        } else {
-            pendingLabelIds.append(id)
+    func deactivateLabel(id: String) {
+        activatedLabelIds.removeAll { $0 == id }
+    }
+
+    func isLabelActivated(_ id: String) -> Bool {
+        activatedLabelIds.contains(id)
+    }
+
+    func labelsForTagAddition(triggeringLabelId: String? = nil) -> [String] {
+        var result = activatedLabelIds
+        if let lid = triggeringLabelId, !result.contains(lid) {
+            result.append(lid)
         }
+        return result
+    }
+
+    func takeActivatedLabels(triggeringLabelId: String? = nil) -> [String] {
+        let result = labelsForTagAddition(triggeringLabelId: triggeringLabelId)
+        activatedLabelIds = []
+        return result
+    }
+
+    func clearActivatedLabels() {
+        activatedLabelIds = []
+    }
+
+    func labelOutgoingActivatesTag(labelId: String) -> Bool {
+        let buttonKey = "\(CanvasButtonKind.label.rawValue):\(labelId)"
+        return filteredOutgoingBindings(from: buttonKey, sourceKind: .label, sourceId: labelId).contains {
+            $0.type == .activation && $0.targetKind == .tag
+        }
+    }
+
+    func highlightOriginIsLabel() -> Bool {
+        highlightOriginButtonKey?.hasPrefix("\(CanvasButtonKind.label.rawValue):") ?? false
+    }
+
+    func highlightOriginIsTag() -> Bool {
+        highlightOriginButtonKey?.hasPrefix("\(CanvasButtonKind.tag.rawValue):") ?? false
+    }
+
+    /// Тег подсветил партнёра (лейбл) — ждём второе нажатие, тег на таймлайн пока не добавляем.
+    func isWaitingForTagLabelPartner() -> Bool {
+        highlightModeActive && highlightOriginIsTag()
     }
 
     func clearPendingTimeEvents() {
@@ -99,14 +149,28 @@ final class KeyBindingRuntimeManager: ObservableObject {
         cancelPendingWork()
         highlightModeActive = false
         highlightedButtonIds = []
+        highlightOriginButtonKey = nil
         anchorTagId = nil
-        pendingLabelIds = []
+        activatedLabelIds = []
         pendingTimeEventIds = []
         highlightHotkeys = [:]
+        didCompleteHighlightPair = false
     }
 
     func resetRuntimeVisibility() {
         runtimeVisibility = [:]
+    }
+
+    // MARK: - Exclusive on interval stop (вызывается до завершения записи)
+
+    func applyExclusiveOnTagDeactivation(tagId: String) {
+        let buttonKey = "\(CanvasButtonKind.tag.rawValue):\(tagId)"
+        let outgoing = filteredOutgoingBindings(from: buttonKey, sourceKind: .tag, sourceId: tagId)
+        for binding in outgoing where binding.type == .exclusive {
+            if binding.sourceKind == .tag, binding.targetKind == .tag {
+                handleExclusiveTagTag(binding: binding, sourceActivating: false)
+            }
+        }
     }
 
     // MARK: - Button tap entry point
@@ -114,100 +178,77 @@ final class KeyBindingRuntimeManager: ObservableObject {
     @discardableResult
     func handleButtonTap(kind: CanvasButtonKind, elementId: String) -> Bool {
         let buttonKey = "\(kind.rawValue):\(elementId)"
+        let triggeringLabelId = kind == .label ? elementId : nil
+        didCompleteHighlightPair = false
 
-        if highlightModeActive && !highlightedButtonIds.contains(buttonKey) {
-            return false
-        }
-
-        // Повторное нажатие интервального тега завершает запись — исходящие связки не выполняем.
         if kind == .tag, isIntervalTagActive?(elementId) == true {
             return true
         }
 
-        let isHighlightedSubPress = highlightModeActive && highlightedButtonIds.contains(buttonKey)
-        let outgoing = bindings.filter { $0.sourceButtonKey == buttonKey }
-
-        if kind == .label, isHighlightedSubPress, anchorTagId != nil {
-            if !pendingLabelIds.contains(elementId) {
-                pendingLabelIds.append(elementId)
-            }
+        if tryCompleteHighlightPair(partnerKind: kind, partnerId: elementId) {
+            didCompleteHighlightPair = true
+            return true
         }
 
-        if kind == .timeEvent, isHighlightedSubPress, anchorTagId != nil {
-            pendingTimeEventIds.insert(elementId)
-        }
+        let sourceTagActivating: Bool? = kind == .tag ? true : nil
 
         var visited = Set<String>()
-        applyOutgoingBindings(from: buttonKey, visited: &visited)
+        applyOutgoingBindings(
+            from: buttonKey,
+            sourceKind: kind,
+            sourceId: elementId,
+            sourceTagActivating: sourceTagActivating,
+            triggeringLabelId: triggeringLabelId,
+            visited: &visited
+        )
 
-        if isHighlightedSubPress {
-            finishHighlightedSubPress(
-                kind: kind,
-                elementId: elementId,
-                buttonKey: buttonKey,
-                outgoing: outgoing
+        if !highlightModeActive {
+            applyIncomingTagLabelExclusiveBindings(
+                clickedKind: kind,
+                clickedId: elementId,
+                clickedButtonKey: buttonKey
             )
         }
 
         return true
     }
 
-    /// Завершить нажатие подсвеченной суб-кнопки: активировать её или привязать лейблы к якорному тегу.
-    private func finishHighlightedSubPress(
-        kind: CanvasButtonKind,
-        elementId: String,
-        buttonKey: String,
-        outgoing: [KeyBinding]
-    ) {
-        let hasActivationAction = outgoing.contains { $0.type == .activation }
+    @discardableResult
+    private func tryCompleteHighlightPair(partnerKind: CanvasButtonKind, partnerId: String) -> Bool {
+        let partnerKey = "\(partnerKind.rawValue):\(partnerId)"
+        guard highlightModeActive,
+              highlightedButtonIds.contains(partnerKey),
+              let originKey = highlightOriginButtonKey else { return false }
+
+        let originParts = originKey.split(separator: ":", maxSplits: 1)
+        guard originParts.count == 2,
+              let originKind = CanvasButtonKind(rawValue: String(originParts[0])) else { return false }
+        let originId = String(originParts[1])
 
         let finish: () -> Void = { [weak self] in
             guard let self else { return }
-            self.applyRevertVisibilityIfNeeded(for: buttonKey)
+            self.applyRevertVisibilityIfNeeded(for: partnerKey)
             self.clearHighlight()
         }
 
-        switch kind {
-        case .label:
-            guard !hasActivationAction, let anchorTagId else {
-                if hasActivationAction {
-                    scheduleHighlightClearAfterBindings()
-                } else {
-                    finish()
-                }
-                return
-            }
-            let labelIds = pendingLabelIds
-            pendingLabelIds = []
-            onAttachLabelsToAnchor?(anchorTagId, labelIds, finish)
+        switch (originKind, partnerKind) {
+        case (.label, .tag):
+            let labels = takeActivatedLabels(triggeringLabelId: originId)
+            onAddTag?(partnerId, nil, nil, labels, finish)
 
-        case .timeEvent:
-            guard !hasActivationAction, let anchorTagId else {
-                if hasActivationAction {
-                    scheduleHighlightClearAfterBindings()
-                } else {
-                    finish()
-                }
-                return
+        case (.tag, .label):
+            var labelIds = takeActivatedLabels()
+            if !labelIds.contains(partnerId) {
+                labelIds.append(partnerId)
             }
-            let eventIds = Array(pendingTimeEventIds)
-            onAttachTimeEventsToAnchor?(anchorTagId, eventIds, finish)
+            onAddTag?(originId, nil, nil, labelIds, finish)
 
-        case .tag:
-            let labels = pendingLabelIds
-            pendingLabelIds = []
-
-            // Если исходящая activation уже добавила этот же тег — не дублируем.
-            let selfActivatedByBinding = outgoing.contains {
-                $0.type == .activation && $0.targetKind == .tag && $0.targetId == elementId
-            }
-
-            if selfActivatedByBinding {
-                scheduleHighlightClearAfterBindings()
-            } else {
-                onAddTag?(elementId, nil, nil, labels, finish)
-            }
+        default:
+            clearHighlight()
+            return false
         }
+
+        return true
     }
 
     private func scheduleHighlightClearAfterBindings() {
@@ -219,11 +260,17 @@ final class KeyBindingRuntimeManager: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: item)
     }
 
-    /// Применить исходящие связки после того, как тег-источник уже добавлен (например, после выбора на карте).
     func applyOutgoingBindingsAfterSourceAdded(kind: CanvasButtonKind, elementId: String) {
         let buttonKey = "\(kind.rawValue):\(elementId)"
         var visited = Set<String>()
-        applyOutgoingBindings(from: buttonKey, visited: &visited)
+        applyOutgoingBindings(
+            from: buttonKey,
+            sourceKind: kind,
+            sourceId: elementId,
+            sourceTagActivating: kind == .tag ? true : nil,
+            triggeringLabelId: nil,
+            visited: &visited
+        )
     }
 
     // MARK: - Esc
@@ -233,44 +280,115 @@ final class KeyBindingRuntimeManager: ObservableObject {
         highlightModeActive = false
         highlightedButtonIds = []
         highlightHotkeys = [:]
+        highlightOriginButtonKey = nil
         anchorTagId = nil
-        pendingLabelIds = []
+        activatedLabelIds = []
         pendingTimeEventIds = []
+        didCompleteHighlightPair = false
     }
 
     // MARK: - Outgoing bindings (with cascade)
 
-    /// Применить все исходящие связки от кнопки. При активации тега-цели каскадно
-    /// отрабатывают и его исходящие связки (1→2→3).
-    private func applyOutgoingBindings(from sourceButtonKey: String, visited: inout Set<String>) {
+    private func applyOutgoingBindings(
+        from sourceButtonKey: String,
+        sourceKind: CanvasButtonKind,
+        sourceId: String,
+        sourceTagActivating: Bool?,
+        triggeringLabelId: String?,
+        visited: inout Set<String>
+    ) {
         guard visited.insert(sourceButtonKey).inserted else { return }
 
-        let outgoing = bindings.filter { $0.sourceButtonKey == sourceButtonKey }
+        let outgoing = filteredOutgoingBindings(from: sourceButtonKey, sourceKind: sourceKind, sourceId: sourceId)
         for binding in outgoing {
-            scheduleBinding(binding, visited: visited)
+            scheduleBinding(
+                binding,
+                sourceTagActivating: sourceTagActivating,
+                triggeringLabelId: triggeringLabelId,
+                visited: visited
+            )
         }
     }
 
-    private func scheduleBinding(_ binding: KeyBinding, visited: Set<String>) {
+    private func filteredOutgoingBindings(
+        from sourceButtonKey: String,
+        sourceKind: CanvasButtonKind,
+        sourceId: String
+    ) -> [KeyBinding] {
+        bindings.filter { binding in
+            guard binding.sourceButtonKey == sourceButtonKey else { return false }
+            return shouldApplyBinding(binding, from: sourceKind, sourceId: sourceId)
+        }
+    }
+
+    private func shouldApplyBinding(
+        _ binding: KeyBinding,
+        from sourceKind: CanvasButtonKind,
+        sourceId: String
+    ) -> Bool {
+        if sourceKind == .label, labelHasExclusiveBindings(labelId: sourceId) {
+            return binding.type == .exclusive
+        }
+        if binding.targetKind == .label, labelHasExclusiveBindings(labelId: binding.targetId) {
+            return binding.type == .exclusive
+        }
+        if binding.sourceKind == .label, labelHasExclusiveBindings(labelId: binding.sourceId) {
+            return binding.type == .exclusive
+        }
+        return true
+    }
+
+    private func labelHasExclusiveBindings(labelId: String) -> Bool {
+        bindings.contains { binding in
+            binding.type == .exclusive && (
+                (binding.sourceKind == .label && binding.sourceId == labelId) ||
+                (binding.targetKind == .label && binding.targetId == labelId)
+            )
+        }
+    }
+
+    private func scheduleBinding(
+        _ binding: KeyBinding,
+        sourceTagActivating: Bool?,
+        triggeringLabelId: String?,
+        visited: Set<String>
+    ) {
         let delay = binding.delaySeconds ?? 0
         if delay <= 0 {
             var mutableVisited = visited
-            applyBinding(binding, visited: &mutableVisited)
+            applyBinding(
+                binding,
+                sourceTagActivating: sourceTagActivating,
+                triggeringLabelId: triggeringLabelId,
+                visited: &mutableVisited
+            )
             return
         }
         let capturedVisited = visited
+        let capturedTrigger = triggeringLabelId
+        let capturedActivating = sourceTagActivating
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             var mutableVisited = capturedVisited
             DispatchQueue.main.async {
-                self.applyBinding(binding, visited: &mutableVisited)
+                self.applyBinding(
+                    binding,
+                    sourceTagActivating: capturedActivating,
+                    triggeringLabelId: capturedTrigger,
+                    visited: &mutableVisited
+                )
             }
         }
         pendingWork.append(work)
         DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: work)
     }
 
-    private func applyBinding(_ binding: KeyBinding, visited: inout Set<String>) {
+    private func applyBinding(
+        _ binding: KeyBinding,
+        sourceTagActivating: Bool?,
+        triggeringLabelId: String?,
+        visited: inout Set<String>
+    ) {
         let targetKey = binding.targetButtonKey
         switch binding.type {
 
@@ -278,7 +396,7 @@ final class KeyBindingRuntimeManager: ObservableObject {
             activateHighlight(binding: binding)
 
         case .activation:
-            handleActivation(binding: binding, visited: &visited)
+            handleActivation(binding: binding, triggeringLabelId: triggeringLabelId, visited: &visited)
 
         case .deactivation:
             if binding.targetKind == .tag {
@@ -292,7 +410,14 @@ final class KeyBindingRuntimeManager: ObservableObject {
                     onStopIntervalTag?(binding.targetId)
                 } else {
                     onStartIntervalTag?(binding.targetId)
-                    applyOutgoingBindings(from: targetKey, visited: &visited)
+                    applyOutgoingBindings(
+                        from: targetKey,
+                        sourceKind: .tag,
+                        sourceId: binding.targetId,
+                        sourceTagActivating: true,
+                        triggeringLabelId: nil,
+                        visited: &visited
+                    )
                 }
             }
 
@@ -311,15 +436,45 @@ final class KeyBindingRuntimeManager: ObservableObject {
         case .visibilityInversion:
             let current = runtimeVisibility[targetKey] ?? (items.first(where: { $0.id == targetKey })?.isVisible ?? true)
             runtimeVisibility[targetKey] = !current
+
+        case .exclusive:
+            if binding.sourceKind == .tag, binding.targetKind == .tag {
+                handleExclusiveTagTag(binding: binding, sourceActivating: sourceTagActivating ?? true)
+            } else if isTagLabelPair(binding) {
+                activateExclusiveHighlight(binding: binding)
+            }
+        }
+    }
+
+    private func isTagLabelPair(_ binding: KeyBinding) -> Bool {
+        (binding.sourceKind == .tag && binding.targetKind == .label) ||
+        (binding.sourceKind == .label && binding.targetKind == .tag)
+    }
+
+    private func handleExclusiveTagTag(binding: KeyBinding, sourceActivating: Bool) {
+        guard binding.sourceKind == .tag, binding.targetKind == .tag else { return }
+        if sourceActivating {
+            if isIntervalTagActive?(binding.targetId) == true {
+                onStopIntervalTag?(binding.targetId)
+            }
+        } else {
+            if isIntervalTagActive?(binding.targetId) != true {
+                onStartIntervalTag?(binding.targetId)
+            }
         }
     }
 
     private func activateHighlight(binding: KeyBinding) {
+        highlightOriginButtonKey = binding.sourceButtonKey
         if binding.sourceKind == .tag {
             anchorTagId = binding.sourceId
+        } else if binding.targetKind == .tag {
+            anchorTagId = binding.targetId
         }
 
-        highlightedButtonIds.insert(binding.targetButtonKey)
+        var highlighted = highlightedButtonIds
+        highlighted.insert(binding.targetButtonKey)
+        highlightedButtonIds = highlighted
         highlightModeActive = true
 
         if let show = binding.showTargetOnHighlight {
@@ -335,25 +490,84 @@ final class KeyBindingRuntimeManager: ObservableObject {
         }
     }
 
-    private func handleActivation(binding: KeyBinding, visited: inout Set<String>) {
+    private func activateExclusiveHighlight(binding: KeyBinding) {
+        highlightOriginButtonKey = binding.sourceButtonKey
+        if binding.sourceKind == .tag {
+            anchorTagId = binding.sourceId
+        } else if binding.targetKind == .tag {
+            anchorTagId = binding.targetId
+        }
+
+        var highlighted = highlightedButtonIds
+        highlighted.insert(binding.targetButtonKey)
+        highlightedButtonIds = highlighted
+        highlightModeActive = true
+    }
+
+    /// Эксклюзивная связка тег↔лейбл срабатывает и при нажатии цели (например, лейбл при связке тег→лейбл).
+    private func applyIncomingTagLabelExclusiveBindings(
+        clickedKind: CanvasButtonKind,
+        clickedId: String,
+        clickedButtonKey: String
+    ) {
+        for binding in bindings where (binding.type == .exclusive || binding.type == .highlight) && isTagLabelPair(binding) {
+            let isIncomingTarget = binding.targetKind == clickedKind && binding.targetId == clickedId
+            let isIncomingSource = binding.sourceKind == clickedKind && binding.sourceId == clickedId
+            guard isIncomingTarget || isIncomingSource else { continue }
+            guard shouldApplyBinding(binding, from: clickedKind, sourceId: clickedId) else { continue }
+
+            let partnerKey: String
+            if binding.targetButtonKey == clickedButtonKey {
+                partnerKey = binding.sourceButtonKey
+            } else {
+                partnerKey = binding.targetButtonKey
+            }
+
+            highlightOriginButtonKey = clickedButtonKey
+            if binding.sourceKind == .tag {
+                anchorTagId = binding.sourceId
+            } else if binding.targetKind == .tag {
+                anchorTagId = binding.targetId
+            }
+
+            var highlighted = highlightedButtonIds
+            highlighted.insert(partnerKey)
+            highlightedButtonIds = highlighted
+            highlightModeActive = true
+            break
+        }
+    }
+
+    private func handleActivation(
+        binding: KeyBinding,
+        triggeringLabelId: String?,
+        visited: inout Set<String>
+    ) {
         let targetId = binding.targetId
         let targetKey = binding.targetButtonKey
 
         if binding.targetKind == .tag {
-            let labels = pendingLabelIds
-            pendingLabelIds = []
+            let labels = labelsForTagAddition(triggeringLabelId: triggeringLabelId)
             let capturedVisited = visited
+            let capturedTrigger = triggeringLabelId
             onAddTag?(targetId, binding.overrideTimeBefore, binding.overrideTimeAfter, labels) { [weak self] in
                 guard let self else { return }
                 var mutableVisited = capturedVisited
-                self.applyOutgoingBindings(from: targetKey, visited: &mutableVisited)
+                self.applyOutgoingBindings(
+                    from: targetKey,
+                    sourceKind: .tag,
+                    sourceId: targetId,
+                    sourceTagActivating: true,
+                    triggeringLabelId: capturedTrigger,
+                    visited: &mutableVisited
+                )
             }
         } else if binding.targetKind == .label {
-            if !pendingLabelIds.contains(targetId) {
-                pendingLabelIds.append(targetId)
-            }
+            activateLabel(id: targetId)
         } else if binding.targetKind == .timeEvent {
-            pendingTimeEventIds.insert(targetId)
+            var pending = pendingTimeEventIds
+            pending.insert(targetId)
+            pendingTimeEventIds = pending
         }
     }
 
@@ -361,6 +575,7 @@ final class KeyBindingRuntimeManager: ObservableObject {
         highlightModeActive = false
         highlightedButtonIds = []
         highlightHotkeys = [:]
+        highlightOriginButtonKey = nil
         anchorTagId = nil
     }
 

@@ -1092,6 +1092,7 @@
 "KeyBindingTypeVisibility" = "显示";
 "KeyBindingTypeInvisibility" = "隐藏";
 "KeyBindingTypeVisibilityInversion" = "可见性反转";
+"KeyBindingTypeExclusive" = "独占";
 
 // Main Tabs
 "MainTabMarkup" = "标注";

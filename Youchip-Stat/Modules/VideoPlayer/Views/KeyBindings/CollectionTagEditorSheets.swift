@@ -200,7 +200,9 @@ struct TagEditSheetView: View {
                     mapToggle
                     intervalToggle
                     hotkeySection
-                    labelGroupsSection
+                    if !collectionManager.isKeyBindingsMode {
+                        labelGroupsSection
+                    }
                 }
                 .padding(24)
             }
@@ -350,6 +352,9 @@ struct TagEditSheetView: View {
             showHotkeyConflict = true
             return
         }
+        let labelGroupIDs = collectionManager.isKeyBindingsMode
+            ? collectionManager.labelGroups.map(\.id)
+            : formData.selectedLabelGroups
         let success = collectionManager.updateTag(
             id: tag.id,
             primaryID: tag.primaryID,
@@ -358,7 +363,7 @@ struct TagEditSheetView: View {
             color: formData.hexColor,
             defaultTimeBefore: formData.defaultTimeBefore,
             defaultTimeAfter: formData.defaultTimeAfter,
-            labelGroupIDs: formData.selectedLabelGroups,
+            labelGroupIDs: labelGroupIDs,
             hotkey: formData.hotkey,
             labelHotkeys: formData.labelHotkeys,
             isInterval: formData.isInterval,
