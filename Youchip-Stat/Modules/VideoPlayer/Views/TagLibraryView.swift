@@ -1127,10 +1127,10 @@ struct TagLibraryView: View {
                             let timeFinish = max(start, end)
                             selectedTag = tag
                             showLabelSheet = false
-                            videoManager.player?.pause()
                             let labelGroupIdsSet = Set(tag.lablesGroup)
                             let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                             if hasLabels {
+                                videoManager.player?.pause()
                                 pendingIntervalClosureRange = (timeStart, timeFinish)
                                 showLabelSheet = true
                             } else {
@@ -1294,11 +1294,11 @@ struct TagLibraryView: View {
                 showLabelSheet = false
                 
                 DispatchQueue.main.async {
-                    videoManager.player?.pause()
                     // Optimize label check using Set for O(1) lookup
                 let labelGroupIdsSet = Set(tag.lablesGroup)
                 let hasLabels = tagLibrary.allLabelGroups.contains { labelGroupIdsSet.contains($0.id) }
                     if hasLabels {
+                        videoManager.player?.pause()
                         pendingIntervalClosureRange = (timeStart, timeFinish)
                         showLabelSheet = true
                     } else {
@@ -1502,18 +1502,28 @@ struct TagLibraryView: View {
 
         guard kind == .tag, let tag = tagLibrary.allTags.first(where: { $0.id == elementId }) else { return }
 
-        videoManager.player?.pause()
+        let isIntervalTag = tag.isInterval ?? false
+        if !isIntervalTag {
+            videoManager.player?.pause()
+        }
 
         if keyBindingRuntime.highlightModeActive {
             let buttonKey = "\(CanvasButtonKind.tag.rawValue):\(elementId)"
             guard keyBindingRuntime.highlightedButtonIds.contains(buttonKey) else { return }
+            if isIntervalTag, activeIntervalTags.contains(where: { $0.tag.id == elementId }) {
+                handleIntervalTagTapInFreeMode(tag)
+                return
+            }
             _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
             return
         }
 
-        if tag.isInterval ?? false {
+        if isIntervalTag {
+            let isStopping = activeIntervalTags.contains(where: { $0.tag.id == tag.id })
+            if !isStopping {
+                _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
+            }
             handleIntervalTagTapInFreeMode(tag)
-            _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
             return
         }
 

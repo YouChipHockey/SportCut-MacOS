@@ -119,6 +119,11 @@ final class KeyBindingRuntimeManager: ObservableObject {
             return false
         }
 
+        // Повторное нажатие интервального тега завершает запись — исходящие связки не выполняем.
+        if kind == .tag, isIntervalTagActive?(elementId) == true {
+            return true
+        }
+
         let isHighlightedSubPress = highlightModeActive && highlightedButtonIds.contains(buttonKey)
         let outgoing = bindings.filter { $0.sourceButtonKey == buttonKey }
 
@@ -154,9 +159,7 @@ final class KeyBindingRuntimeManager: ObservableObject {
         buttonKey: String,
         outgoing: [KeyBinding]
     ) {
-        let hasTagAction = outgoing.contains {
-            $0.type == .activation || $0.type == .deactivation || $0.type == .intervalInversion
-        }
+        let hasActivationAction = outgoing.contains { $0.type == .activation }
 
         let finish: () -> Void = { [weak self] in
             guard let self else { return }
@@ -166,8 +169,8 @@ final class KeyBindingRuntimeManager: ObservableObject {
 
         switch kind {
         case .label:
-            guard !hasTagAction, let anchorTagId else {
-                if hasTagAction {
+            guard !hasActivationAction, let anchorTagId else {
+                if hasActivationAction {
                     scheduleHighlightClearAfterBindings()
                 } else {
                     finish()
@@ -179,8 +182,8 @@ final class KeyBindingRuntimeManager: ObservableObject {
             onAttachLabelsToAnchor?(anchorTagId, labelIds, finish)
 
         case .timeEvent:
-            guard !hasTagAction, let anchorTagId else {
-                if hasTagAction {
+            guard !hasActivationAction, let anchorTagId else {
+                if hasActivationAction {
                     scheduleHighlightClearAfterBindings()
                 } else {
                     finish()
@@ -280,7 +283,6 @@ final class KeyBindingRuntimeManager: ObservableObject {
         case .deactivation:
             if binding.targetKind == .tag {
                 onStopIntervalTag?(binding.targetId)
-                applyOutgoingBindings(from: targetKey, visited: &visited)
             }
 
         case .intervalInversion:
@@ -290,8 +292,8 @@ final class KeyBindingRuntimeManager: ObservableObject {
                     onStopIntervalTag?(binding.targetId)
                 } else {
                     onStartIntervalTag?(binding.targetId)
+                    applyOutgoingBindings(from: targetKey, visited: &visited)
                 }
-                applyOutgoingBindings(from: targetKey, visited: &visited)
             }
 
         case .visibility:
