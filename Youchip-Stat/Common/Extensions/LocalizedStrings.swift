@@ -1145,6 +1145,19 @@ extension String {
         case keyBindingsNoTimeEvents
         case keyBindingsAddTimeEventHint
         case keyBindingsNoTagsOnCanvas
+        case keyBindingsCreateGroup
+        case keyBindingsAddTag
+        case keyBindingsAddLabel
+        case keyBindingsHideNavigation
+        case keyBindingsShowNavigation
+        case keyBindingsDeleteTagTitle
+        case keyBindingsDeleteTagMessage
+        case keyBindingsDeleteLabelTitle
+        case keyBindingsDeleteLabelMessage
+        case keyBindingsDeleteEventTitle
+        case keyBindingsDeleteEventMessage
+        case keyBindingsMapTabHint
+        case keyBindingsNoTagGroups
         // Key Binding Types
         case keyBindingTypeHighlight
         case keyBindingTypeActivation

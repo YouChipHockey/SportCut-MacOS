@@ -684,7 +684,15 @@ class WindowsManager: NSObject, NSWindowDelegate {
         let view: AnyView
         
         if let existingCollection = existingCollection {
-            view = AnyView(CreateCustomCollectionsView(existingCollection: existingCollection))
+            let mode = CollectionsBookmarksManager.shared.loadCollections()
+                .first(where: { $0.id == existingCollection.id })?.displayMode ?? .grouped
+            if mode == .free {
+                view = AnyView(KeyBindingsCollectionEditorView(existingCollection: existingCollection))
+            } else {
+                view = AnyView(CreateCustomCollectionsView(existingCollection: existingCollection))
+            }
+        } else if initialDisplayMode == .free {
+            view = AnyView(KeyBindingsCollectionEditorView(initialDisplayMode: .free))
         } else {
             view = AnyView(CreateCustomCollectionsView(initialDisplayMode: initialDisplayMode))
         }

@@ -137,4 +137,46 @@ struct TagFreeLayoutStorage {
             bindings: filteredBindings
         )
     }
+
+    // MARK: - Canvas item helpers
+
+    static func addLabelToLayout(_ layout: inout TagFreeLayout, label: Label) {
+        guard !layout.items.contains(where: { $0.elementId == label.id && $0.kind == .label }) else { return }
+        let maxY = layout.items.map { $0.center.y + $0.size.height / 2 }.max() ?? 100
+        let newItem = TagFreeLayoutItem(
+            elementId: label.id,
+            kind: .label,
+            center: CGPoint(x: layout.canvasWidth / 2, y: maxY + 80),
+            size: CGSize(width: 160, height: 55),
+            rotation: 0,
+            shape: .capsule,
+            fillOpacity: 0.85,
+            strokeWidth: 1.0,
+            fontSize: 12,
+            fontWeight: .medium,
+            showLabel: true,
+            cornerRadius: 8
+        )
+        layout.items.append(newItem)
+    }
+
+    static func addTimeEventToLayout(_ layout: inout TagFreeLayout, event: TimeEvent) {
+        guard !layout.items.contains(where: { $0.elementId == event.id && $0.kind == .timeEvent }) else { return }
+        let maxY = layout.items.map { $0.center.y + $0.size.height / 2 }.max() ?? 100
+        let newItem = TagFreeLayoutItem(
+            elementId: event.id,
+            kind: .timeEvent,
+            center: CGPoint(x: layout.canvasWidth / 2, y: maxY + 80),
+            size: CGSize(width: 160, height: 55),
+            rotation: 0,
+            shape: .capsule,
+            fillOpacity: 0.85,
+            strokeWidth: 1.0,
+            fontSize: 12,
+            fontWeight: .medium,
+            showLabel: true,
+            cornerRadius: 8
+        )
+        layout.items.append(newItem)
+    }
 }

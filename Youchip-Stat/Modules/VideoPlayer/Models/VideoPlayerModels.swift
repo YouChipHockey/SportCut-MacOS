@@ -11,7 +11,7 @@ import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
 
-struct Tag: Identifiable, Codable {
+struct Tag: Identifiable, Codable, Equatable {
     var id: String
     let primaryID: String?
     var name: String

@@ -10,28 +10,44 @@ import SwiftUI
 
 // MARK: - Editor mode
 
-private enum EditorMode: String, CaseIterable {
+enum TagFreeLayoutEditorMode: String, CaseIterable {
     case layout
     case bindings
 }
 
-// MARK: - Main view
+enum TagFreeLayoutEditorPane {
+    case canvas
+    case settings
+    case full
+}
 
-struct TagFreeLayoutEditorView: View {
+final class TagFreeLayoutEditorSession: ObservableObject {
+    @Published var editorMode: TagFreeLayoutEditorMode = .layout
+    @Published var selectedItemId: String? = nil
+    @Published var bindingSourceId: String? = nil
+    @Published var selectedGroupKey: KeyBindingGroupKey? = nil
+    @Published var showGrid: Bool = false
+    @Published var snapToGrid: Bool = false
 
-    let collectionId: String
-    let collectionName: String
+    func resetSelection() {
+        selectedItemId = nil
+        bindingSourceId = nil
+        selectedGroupKey = nil
+    }
+}
+
+// MARK: - Embeddable editor content
+
+struct TagFreeLayoutEditorContent: View {
+
+    @ObservedObject var session: TagFreeLayoutEditorSession
+    @Binding var layout: TagFreeLayout
+
     let tags: [Tag]
     let labels: [Label]
     let timeEvents: [TimeEvent]
-
-    @Environment(\.presentationMode) private var presentationMode
-
-    @State private var layout: TagFreeLayout
-    @State private var editorMode: EditorMode = .layout
-
-    // Layout-mode selection
-    @State private var selectedItemId: String? = nil
+    var pane: TagFreeLayoutEditorPane = .full
+    var showsModePicker: Bool = true
 
     // Layout-mode drag / resize / rotate
     @State private var draggingItemId: String? = nil
@@ -41,43 +57,47 @@ struct TagFreeLayoutEditorView: View {
     @State private var resizeStartSize: CGSize = .zero
     @State private var rotateStartAngle: Double = 0
 
-    // Bindings-mode
-    @State private var bindingSourceId: String? = nil       // "kind:elementId"
-    @State private var selectedGroupKey: KeyBindingGroupKey? = nil
-
-    // Canvas settings
-    @State private var showGrid: Bool = false
-    @State private var snapToGrid: Bool = false
     private let gridStep: CGFloat = 50
-
-    // MARK: Init
-
-    init(collectionId: String, collectionName: String, tags: [Tag], labels: [Label] = [], timeEvents: [TimeEvent] = []) {
-        self.collectionId = collectionId
-        self.collectionName = collectionName
-        self.tags = tags
-        self.labels = labels
-        self.timeEvents = timeEvents
-
-        let stored = TagFreeLayoutStorage.loadLayoutIfExists(
-            collectionId: collectionId, tags: tags, labels: labels, timeEvents: timeEvents
-        )
-        _layout = State(initialValue: stored ?? TagFreeLayoutStorage.makeDefaultLayout(for: tags))
-    }
 
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerView
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color(NSColor.windowBackgroundColor))
+        Group {
+            switch pane {
+            case .canvas:
+                VStack(spacing: 0) {
+                    if showsModePicker {
+                        modePickerBar
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color(NSColor.windowBackgroundColor))
+                        Divider()
+                    }
+                    canvasArea
+                }
+            case .settings:
+                rightPanel
+            case .full:
+                VStack(spacing: 0) {
+                    if showsModePicker {
+                        modePickerBar
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color(NSColor.windowBackgroundColor))
+                        Divider()
+                    }
+                    HStack(spacing: 0) {
+                        canvasArea
+                        Divider()
+                        rightPanel
+                    }
+                }
+            }
+        }
+    }
 
-            Divider()
-
-            HStack(spacing: 0) {
-                GeometryReader { geo in
+    private var canvasArea: some View {
+        GeometryReader { geo in
                     let availableWidth = max(geo.size.width - 32, 300)
                     let fitScale = availableWidth / max(layout.canvasWidth, 1)
                     let scale = min(1.0, max(fitScale, 0.1))
@@ -93,24 +113,24 @@ struct TagFreeLayoutEditorView: View {
                                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                 )
 
-                            if showGrid {
+                            if session.showGrid {
                                 gridOverlay(scale: scale)
                                     .frame(width: canvasPixelWidth, height: canvasPixelHeight)
                             }
 
                             canvasView(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
 
-                            if editorMode == .bindings {
+                            if session.editorMode == .bindings {
                                 KeyBindingArrowOverlay(
                                     layout: layout,
                                     scale: scale,
                                     canvasPixelWidth: canvasPixelWidth,
                                     canvasPixelHeight: canvasPixelHeight,
-                                    selectedGroupKey: selectedGroupKey,
+                                    selectedGroupKey: session.selectedGroupKey,
                                     onSelectGroup: { key in
-                                        selectedGroupKey = key
-                                        selectedItemId = nil
-                                        bindingSourceId = nil
+                                        session.selectedGroupKey = key
+                                        session.selectedItemId = nil
+                                        session.bindingSourceId = nil
                                     }
                                 )
                                 .frame(width: canvasPixelWidth, height: canvasPixelHeight)
@@ -125,66 +145,28 @@ struct TagFreeLayoutEditorView: View {
                         .frame(minWidth: availableWidth, minHeight: canvasPixelHeight + 32, alignment: .center)
                     }
                     .background(Color(NSColor.windowBackgroundColor))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .layoutPriority(1)
-
-                Divider()
-
-                rightPanel
-            }
-            .frame(maxHeight: .infinity)
         }
-        .frame(minWidth: 960, minHeight: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .layoutPriority(1)
     }
 
-    // MARK: - Header
+    // MARK: - Mode picker
 
-    private var headerView: some View {
+    private var modePickerBar: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(^String.Titles.freeLayoutTitle).font(.headline)
-                Text(collectionName).font(.subheadline).foregroundColor(.secondary)
-            }
-
-            Spacer()
-
-            // Mode picker
-            Picker("", selection: $editorMode) {
-                SwiftUI.Label(^String.Titles.keyBindingsEditorModeLayout, systemImage: "move.3d").tag(EditorMode.layout)
-                SwiftUI.Label(^String.Titles.keyBindingsEditorModeBindings, systemImage: "arrow.triangle.branch").tag(EditorMode.bindings)
+            Picker("", selection: $session.editorMode) {
+                SwiftUI.Label(^String.Titles.keyBindingsEditorModeLayout, systemImage: "move.3d").tag(TagFreeLayoutEditorMode.layout)
+                SwiftUI.Label(^String.Titles.keyBindingsEditorModeBindings, systemImage: "arrow.triangle.branch").tag(TagFreeLayoutEditorMode.bindings)
             }
             .pickerStyle(.segmented)
             .frame(width: 280)
-            .onChange(of: editorMode) { mode in
-                selectedItemId = nil
-                bindingSourceId = nil
-                selectedGroupKey = nil
+            .onChange(of: session.editorMode) { mode in
+                session.resetSelection()
                 if mode == .bindings {
                     layout = TagFreeLayoutStorage.normalizeLayout(layout, tags: tags, labels: labels, timeEvents: timeEvents)
                 }
             }
-
             Spacer()
-
-            Button(^String.Titles.cancelButtonTitle) {
-                presentationMode.wrappedValue.dismiss()
-            }
-            .buttonStyle(.borderless)
-
-            Button(^String.Titles.sportCutReset) {
-                layout = TagFreeLayoutStorage.makeDefaultLayout(for: tags)
-                selectedItemId = nil
-                bindingSourceId = nil
-                selectedGroupKey = nil
-            }
-            .buttonStyle(.bordered)
-
-            Button(^String.Titles.saveButtonTitle) {
-                TagFreeLayoutStorage.saveLayout(layout, collectionId: collectionId)
-                presentationMode.wrappedValue.dismiss()
-            }
-            .buttonStyle(.borderedProminent)
         }
     }
 
@@ -215,11 +197,11 @@ struct TagFreeLayoutEditorView: View {
                 .frame(width: canvasPixelWidth, height: canvasPixelHeight)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if editorMode == .layout {
-                        selectedItemId = nil
+                    if session.editorMode == .layout {
+                        session.selectedItemId = nil
                     } else {
-                        bindingSourceId = nil
-                        selectedGroupKey = nil
+                        session.bindingSourceId = nil
+                        session.selectedGroupKey = nil
                     }
                 }
 
@@ -236,17 +218,17 @@ struct TagFreeLayoutEditorView: View {
 
     private var bindingsModeBanner: some View {
         HStack(spacing: 8) {
-            Image(systemName: bindingSourceId != nil ? "1.circle.fill" : "1.circle")
-                .foregroundColor(bindingSourceId != nil ? .orange : .secondary)
-            Text(bindingSourceId != nil
+            Image(systemName: session.bindingSourceId != nil ? "1.circle.fill" : "1.circle")
+                .foregroundColor(session.bindingSourceId != nil ? .orange : .secondary)
+            Text(session.bindingSourceId != nil
                  ? ^String.Titles.keyBindingsTapTargetHint
                  : ^String.Titles.keyBindingsTapSourceHint)
                 .font(.caption)
                 .foregroundColor(.primary)
             Spacer()
-            if bindingSourceId != nil {
+            if session.bindingSourceId != nil {
                 Button(^String.Titles.cancelButtonTitle) {
-                    bindingSourceId = nil
+                    session.bindingSourceId = nil
                 }
                 .buttonStyle(.borderless)
                 .font(.caption)
@@ -267,7 +249,7 @@ struct TagFreeLayoutEditorView: View {
     @ViewBuilder
     private func itemView(item: TagFreeLayoutItem, scale: CGFloat) -> some View {
         let itemKey = item.id
-        let isSelected = selectedItemId == itemKey
+        let isSelected = session.selectedItemId == itemKey
 
         // Determine display name
         let displayName: String = {
@@ -305,7 +287,7 @@ struct TagFreeLayoutEditorView: View {
         }()
 
         // In bindings mode: highlight source/selected state
-        let isBindingSource = editorMode == .bindings && bindingSourceId == itemKey
+        let isBindingSource = session.editorMode == .bindings && session.bindingSourceId == itemKey
         let strokeOverride: Color = isBindingSource ? .orange : (isSelected ? .accentColor : strokeCol)
 
         ZStack {
@@ -374,7 +356,7 @@ struct TagFreeLayoutEditorView: View {
         .gesture(
             DragGesture(minimumDistance: 1, coordinateSpace: .named("canvas"))
                 .onChanged { value in
-                    guard editorMode == .layout, isSelected else { return }
+                    guard session.editorMode == .layout, isSelected else { return }
                     if draggingItemId == nil {
                         draggingItemId = item.id
                         dragStartCenter = item.center
@@ -382,7 +364,7 @@ struct TagFreeLayoutEditorView: View {
                     guard draggingItemId == item.id else { return }
                     var newX = dragStartCenter.x + value.translation.width / scale
                     var newY = dragStartCenter.y + value.translation.height / scale
-                    if snapToGrid {
+                    if session.snapToGrid {
                         newX = (newX / gridStep).rounded() * gridStep
                         newY = (newY / gridStep).rounded() * gridStep
                     }
@@ -398,13 +380,13 @@ struct TagFreeLayoutEditorView: View {
         )
         // Resize/rotate handles only in layout mode
         .overlay(
-            editorMode == .layout && isSelected
+            session.editorMode == .layout && isSelected
             ? AnyView(resizeHandle(item: item, scale: scale)
                         .offset(x: viewSize.width / 2 - 10, y: viewSize.height / 2 - 10))
             : AnyView(EmptyView())
         )
         .overlay(
-            editorMode == .layout && isSelected
+            session.editorMode == .layout && isSelected
             ? AnyView(rotationHandle(item: item, scale: scale)
                         .offset(x: viewSize.width / 2 - 10, y: -viewSize.height / 2 + 10))
             : AnyView(EmptyView())
@@ -415,14 +397,14 @@ struct TagFreeLayoutEditorView: View {
     // MARK: - Item tap
 
     private func handleItemTap(item: TagFreeLayoutItem) {
-        if editorMode == .layout {
-            selectedItemId = selectedItemId == item.id ? nil : item.id
+        if session.editorMode == .layout {
+            session.selectedItemId = session.selectedItemId == item.id ? nil : item.id
             return
         }
         // Bindings mode
-        if let sourceKey = bindingSourceId {
+        if let sourceKey = session.bindingSourceId {
             guard sourceKey != item.id else {
-                bindingSourceId = nil
+                session.bindingSourceId = nil
                 return
             }
             // Create binding source→target
@@ -438,12 +420,12 @@ struct TagFreeLayoutEditorView: View {
             )
             layout.bindings.append(newBinding)
             let key = newBinding.groupKey
-            selectedGroupKey = key
-            bindingSourceId = nil
+            session.selectedGroupKey = key
+            session.bindingSourceId = nil
         } else {
             // Select as source
-            bindingSourceId = item.id
-            selectedGroupKey = nil
+            session.bindingSourceId = item.id
+            session.selectedGroupKey = nil
         }
     }
 
@@ -451,7 +433,7 @@ struct TagFreeLayoutEditorView: View {
 
     @ViewBuilder
     private func itemContextMenu(item: TagFreeLayoutItem) -> some View {
-        if editorMode == .bindings {
+        if session.editorMode == .bindings {
             let outgoing = layout.bindings.filter { $0.sourceButtonKey == item.id }
             if !outgoing.isEmpty {
                 Button(^String.Titles.keyBindingsCopyAll) {
@@ -479,7 +461,7 @@ struct TagFreeLayoutEditorView: View {
         layout.items.removeAll { $0.id == item.id }
         // Remove bindings involving this item
         layout.bindings.removeAll { $0.sourceButtonKey == item.id || $0.targetButtonKey == item.id }
-        if selectedItemId == item.id { selectedItemId = nil }
+        if session.selectedItemId == item.id { session.selectedItemId = nil }
     }
 
     // MARK: - Handles
@@ -533,16 +515,16 @@ struct TagFreeLayoutEditorView: View {
 
     @ViewBuilder
     private var rightPanel: some View {
-        if editorMode == .bindings {
+        if session.editorMode == .bindings {
             KeyBindingSettingsPanel(
                 layout: $layout,
                 tags: tags,
                 labels: labels,
                 timeEvents: timeEvents,
-                selectedGroupKey: selectedGroupKey,
+                selectedGroupKey: session.selectedGroupKey,
                 onAddLabel: addLabelToCanvas,
                 onAddTimeEvent: addTimeEventToCanvas,
-                onDeselect: { selectedGroupKey = nil; bindingSourceId = nil }
+                onDeselect: { session.selectedGroupKey = nil; session.bindingSourceId = nil }
             )
         } else {
             layoutModeSettingsPanel
@@ -554,7 +536,7 @@ struct TagFreeLayoutEditorView: View {
     private var layoutModeSettingsPanel: some View {
         ScrollView {
             VStack(spacing: 0) {
-                if let itemId = selectedItemId,
+                if let itemId = session.selectedItemId,
                    let index = layout.items.firstIndex(where: { $0.id == itemId }) {
                     selectedItemSettings(index: index)
                 } else {
@@ -574,8 +556,8 @@ struct TagFreeLayoutEditorView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(^String.Titles.freeLayoutCanvasSettings).font(.headline).padding(.top, 4)
             Divider()
-            Toggle(^String.Titles.freeLayoutShowGrid, isOn: $showGrid)
-            Toggle(^String.Titles.freeLayoutSnapToGrid, isOn: $snapToGrid)
+            Toggle(^String.Titles.freeLayoutShowGrid, isOn: $session.showGrid)
+            Toggle(^String.Titles.freeLayoutSnapToGrid, isOn: $session.snapToGrid)
             Text(^String.Titles.freeLayoutSelectElement)
                 .font(.caption).foregroundColor(.secondary).padding(.top, 8)
         }
@@ -600,7 +582,7 @@ struct TagFreeLayoutEditorView: View {
                     .foregroundColor(.secondary).frame(width: 14)
                 Text(displayName).font(.headline).lineLimit(1)
                 Spacer()
-                Button(action: { selectedItemId = nil }) {
+                Button(action: { session.selectedItemId = nil }) {
                     Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                 }.buttonStyle(.plain)
             }
@@ -787,8 +769,8 @@ struct TagFreeLayoutEditorView: View {
             }
 
             sectionHeader(^String.Titles.freeLayoutCanvasSettings)
-            Toggle(^String.Titles.freeLayoutShowGrid, isOn: $showGrid).font(.caption)
-            Toggle(^String.Titles.freeLayoutSnapToGrid, isOn: $snapToGrid).font(.caption)
+            Toggle(^String.Titles.freeLayoutShowGrid, isOn: $session.showGrid).font(.caption)
+            Toggle(^String.Titles.freeLayoutSnapToGrid, isOn: $session.snapToGrid).font(.caption)
 
             Spacer(minLength: 20)
         }
@@ -796,45 +778,12 @@ struct TagFreeLayoutEditorView: View {
 
     // MARK: - Add label to canvas
 
-    private func addLabelToCanvas(_ label: Label) {
-        guard !layout.items.contains(where: { $0.elementId == label.id && $0.kind == .label }) else { return }
-        // Position below existing items
-        let maxY = layout.items.map { $0.center.y + $0.size.height / 2 }.max() ?? 100
-        let newItem = TagFreeLayoutItem(
-            elementId: label.id,
-            kind: .label,
-            center: CGPoint(x: layout.canvasWidth / 2, y: maxY + 80),
-            size: CGSize(width: 160, height: 55),
-            rotation: 0,
-            shape: .capsule,
-            fillOpacity: 0.85,
-            strokeWidth: 1.0,
-            fontSize: 12,
-            fontWeight: .medium,
-            showLabel: true,
-            cornerRadius: 8
-        )
-        layout.items.append(newItem)
+    func addLabelToCanvas(_ label: Label) {
+        TagFreeLayoutStorage.addLabelToLayout(&layout, label: label)
     }
 
-    private func addTimeEventToCanvas(_ event: TimeEvent) {
-        guard !layout.items.contains(where: { $0.elementId == event.id && $0.kind == .timeEvent }) else { return }
-        let maxY = layout.items.map { $0.center.y + $0.size.height / 2 }.max() ?? 100
-        let newItem = TagFreeLayoutItem(
-            elementId: event.id,
-            kind: .timeEvent,
-            center: CGPoint(x: layout.canvasWidth / 2, y: maxY + 80),
-            size: CGSize(width: 160, height: 55),
-            rotation: 0,
-            shape: .capsule,
-            fillOpacity: 0.85,
-            strokeWidth: 1.0,
-            fontSize: 12,
-            fontWeight: .medium,
-            showLabel: true,
-            cornerRadius: 8
-        )
-        layout.items.append(newItem)
+    func addTimeEventToCanvas(_ event: TimeEvent) {
+        TagFreeLayoutStorage.addTimeEventToLayout(&layout, event: event)
     }
 
     private func itemIcon(for kind: CanvasButtonKind) -> String {
@@ -924,6 +873,76 @@ struct TagFreeLayoutEditorView: View {
         if let idx = layout.items.firstIndex(where: { $0.id == id }), idx > 0 {
             layout.items.swapAt(idx, idx - 1)
         }
+    }
+}
+
+// MARK: - Legacy sheet wrapper
+
+struct TagFreeLayoutEditorView: View {
+
+    let collectionId: String
+    let collectionName: String
+    let tags: [Tag]
+    let labels: [Label]
+    let timeEvents: [TimeEvent]
+
+    @Environment(\.presentationMode) private var presentationMode
+    @StateObject private var session = TagFreeLayoutEditorSession()
+    @State private var layout: TagFreeLayout
+
+    init(collectionId: String, collectionName: String, tags: [Tag], labels: [Label] = [], timeEvents: [TimeEvent] = []) {
+        self.collectionId = collectionId
+        self.collectionName = collectionName
+        self.tags = tags
+        self.labels = labels
+        self.timeEvents = timeEvents
+
+        let stored = TagFreeLayoutStorage.loadLayoutIfExists(
+            collectionId: collectionId, tags: tags, labels: labels, timeEvents: timeEvents
+        )
+        _layout = State(initialValue: stored ?? TagFreeLayoutStorage.makeDefaultLayout(for: tags))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(^String.Titles.freeLayoutTitle).font(.headline)
+                    Text(collectionName).font(.subheadline).foregroundColor(.secondary)
+                }
+                Spacer()
+                Button(^String.Titles.cancelButtonTitle) {
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .buttonStyle(.borderless)
+                Button(^String.Titles.sportCutReset) {
+                    layout = TagFreeLayoutStorage.makeDefaultLayout(for: tags)
+                    session.resetSelection()
+                }
+                .buttonStyle(.bordered)
+                Button(^String.Titles.saveButtonTitle) {
+                    TagFreeLayoutStorage.saveLayout(layout, collectionId: collectionId)
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.windowBackgroundColor))
+
+            Divider()
+
+            TagFreeLayoutEditorContent(
+                session: session,
+                layout: $layout,
+                tags: tags,
+                labels: labels,
+                timeEvents: timeEvents,
+                pane: .full,
+                showsModePicker: true
+            )
+        }
+        .frame(minWidth: 960, minHeight: 600)
     }
 }
 

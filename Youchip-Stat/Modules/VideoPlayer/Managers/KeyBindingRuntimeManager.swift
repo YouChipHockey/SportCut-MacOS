@@ -121,9 +121,6 @@ final class KeyBindingRuntimeManager: ObservableObject {
 
         let isHighlightedSubPress = highlightModeActive && highlightedButtonIds.contains(buttonKey)
         let outgoing = bindings.filter { $0.sourceButtonKey == buttonKey }
-        let hasTagAction = outgoing.contains {
-            $0.type == .activation || $0.type == .deactivation || $0.type == .intervalInversion
-        }
 
         if kind == .label, isHighlightedSubPress, anchorTagId != nil {
             if !pendingLabelIds.contains(elementId) {
@@ -143,7 +140,7 @@ final class KeyBindingRuntimeManager: ObservableObject {
                 kind: kind,
                 elementId: elementId,
                 buttonKey: buttonKey,
-                hasTagAction: hasTagAction
+                outgoing: outgoing
             )
         }
 
@@ -155,8 +152,12 @@ final class KeyBindingRuntimeManager: ObservableObject {
         kind: CanvasButtonKind,
         elementId: String,
         buttonKey: String,
-        hasTagAction: Bool
+        outgoing: [KeyBinding]
     ) {
+        let hasTagAction = outgoing.contains {
+            $0.type == .activation || $0.type == .deactivation || $0.type == .intervalInversion
+        }
+
         let finish: () -> Void = { [weak self] in
             guard let self else { return }
             self.applyRevertVisibilityIfNeeded(for: buttonKey)
@@ -190,13 +191,19 @@ final class KeyBindingRuntimeManager: ObservableObject {
             onAttachTimeEventsToAnchor?(anchorTagId, eventIds, finish)
 
         case .tag:
-            guard !hasTagAction else {
-                scheduleHighlightClearAfterBindings()
-                return
-            }
             let labels = pendingLabelIds
             pendingLabelIds = []
-            onAddTag?(elementId, nil, nil, labels, finish)
+
+            // Если исходящая activation уже добавила этот же тег — не дублируем.
+            let selfActivatedByBinding = outgoing.contains {
+                $0.type == .activation && $0.targetKind == .tag && $0.targetId == elementId
+            }
+
+            if selfActivatedByBinding {
+                scheduleHighlightClearAfterBindings()
+            } else {
+                onAddTag?(elementId, nil, nil, labels, finish)
+            }
         }
     }
 
