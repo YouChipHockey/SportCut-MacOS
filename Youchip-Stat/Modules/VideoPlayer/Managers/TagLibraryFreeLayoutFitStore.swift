@@ -36,6 +36,10 @@ final class TagLibraryFreeLayoutFitStore {
         collectionId: String,
         layout: TagFreeLayout
     ) -> String {
-        "\(projectId)_\(collectionId)_\(layout.canvasWidth)_\(layout.canvasHeight)"
+        // Ключ зависит от размеров контента (а не фиксированного холста), чтобы fit-масштаб
+        // пересчитывался при изменении раскладки (библиотека обрезается по контенту).
+        let rect = layout.contentRect()
+            ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight)
+        return "\(projectId)_\(collectionId)_\(Int(rect.width))_\(Int(rect.height))"
     }
 }

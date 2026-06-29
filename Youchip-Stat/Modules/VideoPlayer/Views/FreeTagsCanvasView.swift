@@ -39,9 +39,12 @@ struct FreeTagsCanvasView: View {
             let availableHeight = max(geometry.size.height, 1)
             let effectiveLayout = layout ?? TagFreeLayoutStorage.makeDefaultLayout(for: tags)
             let layoutKey = makeLayoutKey(for: effectiveLayout)
+            // Библиотека ограничена итоговыми размерами/краями контента (в отличие от бесконечного редактора).
+            let content = contentRect(of: effectiveLayout)
+            let origin = CGPoint(x: content.minX, y: content.minY)
             let scale = fitScale * userScale
-            let canvasWidth = effectiveLayout.canvasWidth * scale
-            let canvasHeight = effectiveLayout.canvasHeight * scale
+            let canvasWidth = content.width * scale
+            let canvasHeight = content.height * scale
 
             ScrollView([.horizontal, .vertical], showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -61,8 +64,8 @@ struct FreeTagsCanvasView: View {
                                     runtimeItemView(item: item, scale: scale, isHighlighted: isHighlighted)
                                         .frame(width: viewWidth, height: viewHeight)
                                         .offset(
-                                            x: item.center.x * scale - viewWidth / 2,
-                                            y: item.center.y * scale - viewHeight / 2
+                                            x: (item.center.x - origin.x) * scale - viewWidth / 2,
+                                            y: (item.center.y - origin.y) * scale - viewHeight / 2
                                         )
                                         .zIndex(canvasZIndex(for: item, isHighlighted: isHighlighted))
                                 }
@@ -125,6 +128,12 @@ struct FreeTagsCanvasView: View {
             ?? ""
     }
 
+    /// Прямоугольник контента раскладки (с небольшим отступом). Библиотека показывает только его.
+    private func contentRect(of layout: TagFreeLayout) -> CGRect {
+        layout.contentRect(padding: 24)
+            ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight)
+    }
+
     private func makeLayoutKey(for layout: TagFreeLayout) -> String {
         TagLibraryFreeLayoutFitStore.shared.makeLayoutKey(
             projectId: currentProjectId(),
@@ -169,9 +178,10 @@ struct FreeTagsCanvasView: View {
         }
         guard viewportWidth > 1, availableHeight > 1 else { return }
 
+        let content = contentRect(of: layout)
         let computed = min(
-            viewportWidth / max(layout.canvasWidth, 1),
-            availableHeight / max(layout.canvasHeight, 1)
+            viewportWidth / max(content.width, 1),
+            availableHeight / max(content.height, 1)
         )
         store.storeFitScale(computed, for: layoutKey)
         fitScale = computed

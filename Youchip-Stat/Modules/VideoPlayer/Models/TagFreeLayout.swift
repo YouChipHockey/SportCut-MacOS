@@ -209,3 +209,28 @@ struct TagFreeLayout: Codable {
         bindings = try c.decodeIfPresent([KeyBinding].self, forKey: .bindings) ?? []
     }
 }
+
+extension TagFreeLayout {
+    /// Прямоугольник, охватывающий все элементы (с учётом их размеров и поворота не учитываем),
+    /// расширенный на padding со всех сторон. nil, если элементов нет.
+    /// Холст редактора «бесконечный» (расширяется по контенту), а библиотека обрезается по этому прямоугольнику.
+    func contentRect(padding: CGFloat = 0) -> CGRect? {
+        guard !items.isEmpty else { return nil }
+        var minX = CGFloat.greatestFiniteMagnitude
+        var minY = CGFloat.greatestFiniteMagnitude
+        var maxX = -CGFloat.greatestFiniteMagnitude
+        var maxY = -CGFloat.greatestFiniteMagnitude
+        for item in items {
+            minX = min(minX, item.center.x - item.size.width / 2)
+            minY = min(minY, item.center.y - item.size.height / 2)
+            maxX = max(maxX, item.center.x + item.size.width / 2)
+            maxY = max(maxY, item.center.y + item.size.height / 2)
+        }
+        return CGRect(
+            x: minX - padding,
+            y: minY - padding,
+            width: (maxX - minX) + 2 * padding,
+            height: (maxY - minY) + 2 * padding
+        )
+    }
+}

@@ -20,9 +20,13 @@ struct SportcutCollectionExport: Codable {
     let labels: [Label]
     let timeEvents: [TimeEvent]
     let playField: PlayFieldExport?
-    
+    /// Режим коллекции: "grouped" (обычная) или "free" (со связками клавиш). nil в старых экспортах = grouped.
+    let tagLibraryDisplayMode: String?
+    /// Раскладка холста и связки клавиш — только для коллекций со связками (free). Наличие = коллекция со связками.
+    let freeLayout: TagFreeLayout?
+
     init(collectionManager: CustomCollectionManager) {
-        self.version = "1.0"
+        self.version = "1.1"
         self.collectionName = collectionManager.collectionName
         self.exportDate = Date()
         self.tagGroups = collectionManager.tagGroups
@@ -31,6 +35,17 @@ struct SportcutCollectionExport: Codable {
         self.labels = collectionManager.labels
         self.timeEvents = collectionManager.timeEvents
         self.playField = collectionManager.playField.map { PlayFieldExport(from: $0) }
+        self.tagLibraryDisplayMode = collectionManager.tagLibraryDisplayMode.rawValue
+        if collectionManager.tagLibraryDisplayMode == .free {
+            self.freeLayout = TagFreeLayoutStorage.loadLayoutIfExists(
+                collectionId: collectionManager.collectionID,
+                tags: collectionManager.tags,
+                labels: collectionManager.labels,
+                timeEvents: collectionManager.timeEvents
+            )
+        } else {
+            self.freeLayout = nil
+        }
     }
 }
 
@@ -143,12 +158,22 @@ class CollectionImportManager: ObservableObject {
             collectionManager.labelGroups = exportData.labelGroups
             collectionManager.labels = exportData.labels
             collectionManager.timeEvents = exportData.timeEvents
-            
+
             if let playFieldExport = exportData.playField,
                let playField = playFieldExport.toPlayField() {
                 collectionManager.playField = playField
             }
-            
+
+            // Авто-определение типа: коллекция со связками клавиш, если задан режим .free
+            // или присутствует раскладка/связки (freeLayout). Иначе — обычная (grouped).
+            let isFree = exportData.tagLibraryDisplayMode == CollectionTagLibraryDisplayMode.free.rawValue
+                || exportData.freeLayout != nil
+            collectionManager.tagLibraryDisplayMode = isFree ? .free : .grouped
+            if isFree {
+                // Раскладка/связки сохранятся под новым id при saveCollectionToFiles.
+                collectionManager.pendingImportedLayout = exportData.freeLayout
+            }
+
             return collectionManager
             
         } catch DecodingError.keyNotFound(let key, let context) {

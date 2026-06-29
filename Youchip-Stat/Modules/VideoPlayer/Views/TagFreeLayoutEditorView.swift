@@ -81,6 +81,12 @@ struct TagFreeLayoutEditorContent: View {
     @State private var resizeStartSize: CGSize = .zero
     @State private var rotateStartAngle: Double = 0
 
+    // Зум холста (как в Figma/Miro): пользовательский масштаб (пинч), панорама — нативным скроллом.
+    @State private var canvasZoom: CGFloat = 1.0
+    @State private var canvasZoomBase: CGFloat = 1.0
+    @State private var didInitialFit = false
+    private let canvasZoomRange: ClosedRange<CGFloat> = 0.2...3.0
+
     // Мелкий шаг сетки: теги в свободном режиме всегда выравниваются по нему,
     // чтобы в библиотеке тегов раскладка не «расползалась».
     private let gridStep: CGFloat = 10
@@ -125,11 +131,19 @@ struct TagFreeLayoutEditorContent: View {
     private var canvasArea: some View {
         GeometryReader { geo in
                     let availableWidth = max(geo.size.width - 32, 300)
-                    let fitScale = availableWidth / max(layout.canvasWidth, 1)
-                    let scale = min(1.0, max(fitScale, 0.1))
-                    let canvasPixelWidth = layout.canvasWidth * scale
-                    let canvasPixelHeight = layout.canvasHeight * scale
+                    let availableHeight = max(geo.size.height - 32, 300)
+                    // «Бесконечный» холст: виртуальная зона = охват контента + большие поля со всех сторон.
+                    // Масштаб НЕ авто-подгоняется — это пользовательский зум (пинч); панорама — нативным скроллом.
+                    // При вытаскивании элементов за край зона расширяется (как доска в Miro/Figma).
+                    let content = layout.contentRect()
+                        ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight)
+                    let virtual = content.insetBy(dx: -infiniteMargin, dy: -infiniteMargin)
+                    let origin = CGPoint(x: virtual.minX, y: virtual.minY)
+                    let scale = canvasZoom
+                    let canvasPixelWidth = virtual.width * scale
+                    let canvasPixelHeight = virtual.height * scale
 
+                    ScrollViewReader { proxy in
                     ScrollView([.horizontal, .vertical], showsIndicators: true) {
                         ZStack(alignment: .topLeading) {
                             RoundedRectangle(cornerRadius: 12)
@@ -139,6 +153,13 @@ struct TagFreeLayoutEditorContent: View {
                                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                 )
 
+                            // Невидимый маркер в центре холста — к нему центрируем скролл при зуме,
+                            // чтобы приближение шло в центр, а не в верхний левый угол.
+                            Color.clear
+                                .frame(width: 1, height: 1)
+                                .position(x: canvasPixelWidth / 2, y: canvasPixelHeight / 2)
+                                .id("canvasCenter")
+
                             if session.showGrid {
                                 gridOverlay(scale: scale)
                                     .frame(width: canvasPixelWidth, height: canvasPixelHeight)
@@ -146,17 +167,17 @@ struct TagFreeLayoutEditorContent: View {
 
                             // Стрелки и бейджи «под кнопками» — рисуются ДО кнопок.
                             if session.editorMode == .bindings, session.arrowVisibility == .below {
-                                arrowLinesOverlay(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
-                                arrowBadgesOverlay(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                                arrowLinesOverlay(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                                arrowBadgesOverlay(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
                             }
 
-                            canvasView(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                            canvasView(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
 
                             if session.editorMode == .bindings {
                                 // Стрелки и бейджи «над кнопками» — рисуются ПОСЛЕ кнопок.
                                 if session.arrowVisibility == .above {
-                                    arrowLinesOverlay(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
-                                    arrowBadgesOverlay(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                                    arrowLinesOverlay(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                                    arrowBadgesOverlay(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
                                 }
 
                                 bindingsModeBanner
@@ -166,30 +187,58 @@ struct TagFreeLayoutEditorContent: View {
                         }
                         .frame(width: canvasPixelWidth, height: canvasPixelHeight)
                         .padding(16)
-                        .frame(minWidth: availableWidth, minHeight: canvasPixelHeight + 32, alignment: .center)
+                        .frame(minWidth: availableWidth, minHeight: max(canvasPixelHeight + 32, availableHeight), alignment: .center)
                     }
                     .background(Color(NSColor.windowBackgroundColor))
+                    // Пинч-зум (трекпад). Панорама — нативным двухпальцевым скроллом ScrollView.
+                    .simultaneousGesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                let z = canvasZoomBase * value
+                                canvasZoom = min(canvasZoomRange.upperBound, max(canvasZoomRange.lowerBound, z))
+                            }
+                            .onEnded { _ in canvasZoomBase = canvasZoom }
+                    )
+                    .onChange(of: canvasZoom) { _ in
+                        // При зуме держим центр холста в центре вьюпорта (приближение «в центр»).
+                        proxy.scrollTo("canvasCenter", anchor: .center)
+                    }
+                    .onAppear {
+                        // Один раз вписываем КОНТЕНТ в видимую область (но не увеличиваем больше 100%).
+                        guard !didInitialFit else { return }
+                        didInitialFit = true
+                        let fit = min(availableWidth / max(content.width, 1), availableHeight / max(content.height, 1))
+                        canvasZoom = min(1.0, max(canvasZoomRange.lowerBound, fit))
+                        canvasZoomBase = canvasZoom
+                    }
+                    } // ScrollViewReader
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)
     }
 
+    /// Поля «бесконечного» холста редактора со всех сторон (в координатах раскладки).
+    /// При вытаскивании элементов за этот запас зона расширяется по контенту.
+    private let infiniteMargin: CGFloat = 600
+
     // MARK: - Arrow overlays
 
-    private func arrowLinesOverlay(scale: CGFloat, canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
+    private func arrowLinesOverlay(scale: CGFloat, origin: CGPoint, canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
         KeyBindingArrowLinesOverlay(
             layout: layout,
             scale: scale,
+            origin: origin,
             canvasPixelWidth: canvasPixelWidth,
             canvasPixelHeight: canvasPixelHeight,
             selectedGroupKey: session.selectedGroupKey
         )
     }
 
-    private func arrowBadgesOverlay(scale: CGFloat, canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
+    private func arrowBadgesOverlay(scale: CGFloat, origin: CGPoint, canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
         KeyBindingArrowBadgesOverlay(
             layout: layout,
             scale: scale,
+            origin: origin,
             canvasPixelWidth: canvasPixelWidth,
             canvasPixelHeight: canvasPixelHeight,
             selectedGroupKey: session.selectedGroupKey,
@@ -263,7 +312,7 @@ struct TagFreeLayoutEditorContent: View {
 
     // MARK: - Canvas
 
-    private func canvasView(scale: CGFloat, canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
+    private func canvasView(scale: CGFloat, origin: CGPoint, canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             Color.clear
                 .frame(width: canvasPixelWidth, height: canvasPixelHeight)
@@ -279,7 +328,7 @@ struct TagFreeLayoutEditorContent: View {
 
             ForEach(layout.items) { item in
                 itemView(item: item, scale: scale)
-                    .position(x: item.center.x * scale, y: item.center.y * scale)
+                    .position(x: (item.center.x - origin.x) * scale, y: (item.center.y - origin.y) * scale)
             }
         }
         .frame(width: canvasPixelWidth, height: canvasPixelHeight, alignment: .topLeading)
@@ -346,10 +395,11 @@ struct TagFreeLayoutEditorContent: View {
         }()
 
         let viewSize = CGSize(width: item.size.width * scale, height: item.size.height * scale)
+        let cr = item.cornerRadius * scale
         let strokeCol = item.strokeColor.map { Color(hex: $0) } ?? Color.black.opacity(0.3)
         let strokeStyle = StrokeStyle(
-            lineWidth: isSelected ? 2 : item.strokeWidth,
-            dash: (isSelected ? true : item.strokeDashed) ? [4, 3] : []
+            lineWidth: (isSelected ? 2 : item.strokeWidth) * scale,
+            dash: (isSelected ? true : item.strokeDashed) ? [4 * scale, 3 * scale] : []
         )
         let textCol = item.textColor.map { Color(hex: $0) } ?? Color.white
         let swiftWeight: Font.Weight = {
@@ -363,15 +413,15 @@ struct TagFreeLayoutEditorContent: View {
         let strokeOverride: Color = isBindingSource ? .orange : (isSelected ? .accentColor : strokeCol)
 
         ZStack {
-            TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+            TagFreeShapeView(shape: item.shape, cornerRadius: cr)
                 .fill(fillColor)
                 .overlay(
                     Group {
                         if item.showLabel {
                             Text(displayName)
-                                .font(.system(size: item.fontSize, weight: swiftWeight))
+                                .font(.system(size: item.fontSize * scale, weight: swiftWeight))
                                 .foregroundColor(textCol)
-                                .padding(4)
+                                .padding(4 * scale)
                                 .multilineTextAlignment(.center)
                                 .minimumScaleFactor(0.5)
                         }
@@ -379,7 +429,7 @@ struct TagFreeLayoutEditorContent: View {
                 )
                 .frame(width: viewSize.width, height: viewSize.height)
                 .overlay(
-                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                    TagFreeShapeView(shape: item.shape, cornerRadius: cr)
                         .stroke(strokeOverride, style: strokeStyle)
                 )
 
@@ -389,9 +439,9 @@ struct TagFreeLayoutEditorContent: View {
                     HStack {
                         Spacer()
                         Image(systemName: item.kind == .label ? "textformat" : "clock")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 8 * scale, weight: .bold))
                             .foregroundColor(textCol.opacity(0.7))
-                            .padding(3)
+                            .padding(3 * scale)
                     }
                     Spacer()
                 }
@@ -404,9 +454,9 @@ struct TagFreeLayoutEditorContent: View {
                     Spacer()
                     HStack {
                         Image(systemName: "eye.slash")
-                            .font(.system(size: 8))
+                            .font(.system(size: 8 * scale))
                             .foregroundColor(.white.opacity(0.8))
-                            .padding(3)
+                            .padding(3 * scale)
                         Spacer()
                     }
                 }
@@ -439,12 +489,9 @@ struct TagFreeLayoutEditorContent: View {
                     // Привязка к сетке всегда включена — позиции тегов кратны gridStep.
                     newX = (newX / gridStep).rounded() * gridStep
                     newY = (newY / gridStep).rounded() * gridStep
-                    let halfW = item.size.width / 2, halfH = item.size.height / 2
+                    // Холст бесконечный — без ограничения границами (можно вытаскивать в любую сторону).
                     updateItem(id: item.id) { m in
-                        m.center = CGPoint(
-                            x: min(max(halfW, newX), layout.canvasWidth - halfW),
-                            y: min(max(halfH, newY), layout.canvasHeight - halfH)
-                        )
+                        m.center = CGPoint(x: newX, y: newY)
                     }
                 }
                 .onEnded { _ in draggingItemId = nil }

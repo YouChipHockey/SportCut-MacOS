@@ -24,6 +24,9 @@ class CustomCollectionManager: ObservableObject {
     @Published var tagLibraryDisplayMode: CollectionTagLibraryDisplayMode = .grouped
     @Published var allCollections: [StandardCollection] = []
     var originalName: String = ""
+    /// Раскладка/связки импортированной коллекции со связками клавиш — сохраняется после записи коллекции
+    /// (когда уже известен финальный collectionID).
+    var pendingImportedLayout: TagFreeLayout?
 
     var isKeyBindingsMode: Bool {
         tagLibraryDisplayMode == .free
@@ -355,7 +358,13 @@ class CustomCollectionManager: ObservableObject {
             name: collectionName,
             tagLibraryDisplayMode: tagLibraryDisplayMode
         )
-        
+
+        // Импортированная коллекция со связками клавиш: сохраняем её раскладку/связки под новым id.
+        if let layout = pendingImportedLayout {
+            TagFreeLayoutStorage.saveLayout(layout, collectionId: collectionID)
+            pendingImportedLayout = nil
+        }
+
         originalName = collectionName
         if !isEditingExisting {
             isEditingExisting = true

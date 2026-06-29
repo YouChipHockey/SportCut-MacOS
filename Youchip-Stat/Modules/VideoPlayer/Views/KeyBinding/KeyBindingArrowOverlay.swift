@@ -32,6 +32,8 @@ struct KeyBindingArrowLinesOverlay: View {
 
     let layout: TagFreeLayout
     let scale: CGFloat
+    /// Смещение начала координат холста (для «бесконечного» редактора). По умолчанию — без смещения.
+    var origin: CGPoint = .zero
     let canvasPixelWidth: CGFloat
     let canvasPixelHeight: CGFloat
     let selectedGroupKey: KeyBindingGroupKey?
@@ -64,8 +66,8 @@ struct KeyBindingArrowLinesOverlay: View {
         guard let src = KeyBindingArrowGeometry.center(in: layout, for: key.sourceId, kind: key.sourceKind),
               let dst = KeyBindingArrowGeometry.center(in: layout, for: key.targetId, kind: key.targetKind) else { return }
 
-        let s = CGPoint(x: src.x * scale, y: src.y * scale)
-        let d = CGPoint(x: dst.x * scale, y: dst.y * scale)
+        let s = CGPoint(x: (src.x - origin.x) * scale, y: (src.y - origin.y) * scale)
+        let d = CGPoint(x: (dst.x - origin.x) * scale, y: (dst.y - origin.y) * scale)
 
         let color: Color = isSelected ? .accentColor : Color.primary.opacity(0.4)
         let lineWidth: CGFloat = isSelected ? 2 : 1.5
@@ -129,6 +131,8 @@ struct KeyBindingArrowBadgesOverlay: View {
 
     let layout: TagFreeLayout
     let scale: CGFloat
+    /// Смещение начала координат холста (для «бесконечного» редактора). По умолчанию — без смещения.
+    var origin: CGPoint = .zero
     let canvasPixelWidth: CGFloat
     let canvasPixelHeight: CGFloat
     let selectedGroupKey: KeyBindingGroupKey?
@@ -142,8 +146,8 @@ struct KeyBindingArrowBadgesOverlay: View {
                    let srcCenter = KeyBindingArrowGeometry.center(in: layout, for: key.sourceId, kind: key.sourceKind),
                    let dstCenter = KeyBindingArrowGeometry.center(in: layout, for: key.targetId, kind: key.targetKind) {
                     let mid = CGPoint(
-                        x: (srcCenter.x + dstCenter.x) / 2 * scale,
-                        y: (srcCenter.y + dstCenter.y) / 2 * scale
+                        x: ((srcCenter.x + dstCenter.x) / 2 - origin.x) * scale,
+                        y: ((srcCenter.y + dstCenter.y) / 2 - origin.y) * scale
                     )
                     ArrowBadgeButton(
                         count: group.count,
