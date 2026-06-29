@@ -1064,6 +1064,7 @@
 "KeyBindingsHighlightHotkey" = "Tecla rápida:";
 "KeyBindingsPressKey" = "Presione una tecla…";
 "KeyBindingsRemoveFromCanvas" = "Quitar del lienzo";
+"KeyBindingsReturnToCanvas" = "Devolver a la marcación";
 "KeyBindingsVisibilitySection" = "Visibilidad";
 "KeyBindingsItemVisible" = "Visible por defecto";
 "KeyBindingsTapSourceHint" = "Paso 1: toque un botón origen en el lienzo";
@@ -1085,6 +1086,10 @@
 "KeyBindingsDeleteEventMessage" = "El evento se eliminará de la colección.";
 "KeyBindingsMapTabHint" = "El editor del mapa de campo está abierto en el área central.";
 "KeyBindingsNoTagGroups" = "Cree un grupo de tags para empezar.";
+"KeyBindingsArrowsVisibilityTitle" = "Flechas de enlaces";
+"KeyBindingsArrowsHidden" = "Ocultar todas";
+"KeyBindingsArrowsAbove" = "Sobre los botones";
+"KeyBindingsArrowsBelow" = "Bajo los botones";
 "KeyBindingTypeHighlight" = "Resaltar";
 "KeyBindingTypeActivation" = "Activación";
 "KeyBindingTypeDeactivation" = "Desactivación";

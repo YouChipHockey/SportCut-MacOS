@@ -140,6 +140,21 @@ struct TagFreeLayoutStorage {
 
     // MARK: - Canvas item helpers
 
+    /// Вернуть тег на холст (если его убрали с поля, но он есть в коллекции).
+    static func addTagToLayout(_ layout: inout TagFreeLayout, tag: Tag) {
+        guard !layout.items.contains(where: { $0.elementId == tag.id && $0.kind == .tag }) else { return }
+        let maxY = layout.items.map { $0.center.y + $0.size.height / 2 }.max() ?? 100
+        let newItem = TagFreeLayoutItem(
+            elementId: tag.id,
+            kind: .tag,
+            center: CGPoint(x: layout.canvasWidth / 2, y: maxY + 80),
+            size: CGSize(width: 180, height: 70),
+            rotation: 0,
+            shape: .square
+        )
+        layout.items.append(newItem)
+    }
+
     static func addLabelToLayout(_ layout: inout TagFreeLayout, label: Label) {
         guard !layout.items.contains(where: { $0.elementId == label.id && $0.kind == .label }) else { return }
         let maxY = layout.items.map { $0.center.y + $0.size.height / 2 }.max() ?? 100

@@ -15,6 +15,29 @@ enum TagFreeLayoutEditorMode: String, CaseIterable {
     case bindings
 }
 
+/// Глобальная видимость стрелок-связок на холсте редактора.
+enum KeyBindingArrowVisibility: String, CaseIterable {
+    case hidden   // скрыть все
+    case above    // показать все над кнопками
+    case below    // показать все под кнопками
+
+    var titleKey: String.Titles {
+        switch self {
+        case .hidden: return .keyBindingsArrowsHidden
+        case .above:  return .keyBindingsArrowsAbove
+        case .below:  return .keyBindingsArrowsBelow
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .hidden: return "eye.slash"
+        case .above:  return "chevron.up.square"
+        case .below:  return "chevron.down.square"
+        }
+    }
+}
+
 enum TagFreeLayoutEditorPane {
     case canvas
     case settings
@@ -27,7 +50,8 @@ final class TagFreeLayoutEditorSession: ObservableObject {
     @Published var bindingSourceId: String? = nil
     @Published var selectedGroupKey: KeyBindingGroupKey? = nil
     @Published var showGrid: Bool = false
-    @Published var snapToGrid: Bool = false
+    /// Глобальный режим показа стрелок-связок (скрыть / над кнопками / под кнопками).
+    @Published var arrowVisibility: KeyBindingArrowVisibility = .above
 
     func resetSelection() {
         selectedItemId = nil
@@ -57,7 +81,9 @@ struct TagFreeLayoutEditorContent: View {
     @State private var resizeStartSize: CGSize = .zero
     @State private var rotateStartAngle: Double = 0
 
-    private let gridStep: CGFloat = 50
+    // Мелкий шаг сетки: теги в свободном режиме всегда выравниваются по нему,
+    // чтобы в библиотеке тегов раскладка не «расползалась».
+    private let gridStep: CGFloat = 10
 
     // MARK: - Body
 
@@ -118,22 +144,20 @@ struct TagFreeLayoutEditorContent: View {
                                     .frame(width: canvasPixelWidth, height: canvasPixelHeight)
                             }
 
+                            // Стрелки и бейджи «под кнопками» — рисуются ДО кнопок.
+                            if session.editorMode == .bindings, session.arrowVisibility == .below {
+                                arrowLinesOverlay(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                                arrowBadgesOverlay(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                            }
+
                             canvasView(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
 
                             if session.editorMode == .bindings {
-                                KeyBindingArrowOverlay(
-                                    layout: layout,
-                                    scale: scale,
-                                    canvasPixelWidth: canvasPixelWidth,
-                                    canvasPixelHeight: canvasPixelHeight,
-                                    selectedGroupKey: session.selectedGroupKey,
-                                    onSelectGroup: { key in
-                                        session.selectedGroupKey = key
-                                        session.selectedItemId = nil
-                                        session.bindingSourceId = nil
-                                    }
-                                )
-                                .frame(width: canvasPixelWidth, height: canvasPixelHeight)
+                                // Стрелки и бейджи «над кнопками» — рисуются ПОСЛЕ кнопок.
+                                if session.arrowVisibility == .above {
+                                    arrowLinesOverlay(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                                    arrowBadgesOverlay(scale: scale, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                                }
 
                                 bindingsModeBanner
                                     .frame(width: canvasPixelWidth, alignment: .top)
@@ -148,6 +172,33 @@ struct TagFreeLayoutEditorContent: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)
+    }
+
+    // MARK: - Arrow overlays
+
+    private func arrowLinesOverlay(scale: CGFloat, canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
+        KeyBindingArrowLinesOverlay(
+            layout: layout,
+            scale: scale,
+            canvasPixelWidth: canvasPixelWidth,
+            canvasPixelHeight: canvasPixelHeight,
+            selectedGroupKey: session.selectedGroupKey
+        )
+    }
+
+    private func arrowBadgesOverlay(scale: CGFloat, canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
+        KeyBindingArrowBadgesOverlay(
+            layout: layout,
+            scale: scale,
+            canvasPixelWidth: canvasPixelWidth,
+            canvasPixelHeight: canvasPixelHeight,
+            selectedGroupKey: session.selectedGroupKey,
+            onSelectGroup: { key in
+                session.selectedGroupKey = key
+                session.selectedItemId = nil
+                session.bindingSourceId = nil
+            }
+        )
     }
 
     // MARK: - Mode picker
@@ -167,7 +218,28 @@ struct TagFreeLayoutEditorContent: View {
                 }
             }
             Spacer()
+            if session.editorMode == .bindings {
+                arrowVisibilityControl
+            }
         }
+    }
+
+    /// Глобальный переключатель видимости всех стрелок-связок: скрыть / над кнопками / под кнопками.
+    private var arrowVisibilityControl: some View {
+        Menu {
+            Picker("", selection: $session.arrowVisibility) {
+                ForEach(KeyBindingArrowVisibility.allCases, id: \.self) { mode in
+                    SwiftUI.Label(^mode.titleKey, systemImage: mode.iconName).tag(mode)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            SwiftUI.Label(^session.arrowVisibility.titleKey, systemImage: session.arrowVisibility.iconName)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(^String.Titles.keyBindingsArrowsVisibilityTitle)
     }
 
     // MARK: - Grid overlay
@@ -364,10 +436,9 @@ struct TagFreeLayoutEditorContent: View {
                     guard draggingItemId == item.id else { return }
                     var newX = dragStartCenter.x + value.translation.width / scale
                     var newY = dragStartCenter.y + value.translation.height / scale
-                    if session.snapToGrid {
-                        newX = (newX / gridStep).rounded() * gridStep
-                        newY = (newY / gridStep).rounded() * gridStep
-                    }
+                    // Привязка к сетке всегда включена — позиции тегов кратны gridStep.
+                    newX = (newX / gridStep).rounded() * gridStep
+                    newY = (newY / gridStep).rounded() * gridStep
                     let halfW = item.size.width / 2, halfH = item.size.height / 2
                     updateItem(id: item.id) { m in
                         m.center = CGPoint(
@@ -557,7 +628,6 @@ struct TagFreeLayoutEditorContent: View {
             Text(^String.Titles.freeLayoutCanvasSettings).font(.headline).padding(.top, 4)
             Divider()
             Toggle(^String.Titles.freeLayoutShowGrid, isOn: $session.showGrid)
-            Toggle(^String.Titles.freeLayoutSnapToGrid, isOn: $session.snapToGrid)
             Text(^String.Titles.freeLayoutSelectElement)
                 .font(.caption).foregroundColor(.secondary).padding(.top, 8)
         }
@@ -770,7 +840,6 @@ struct TagFreeLayoutEditorContent: View {
 
             sectionHeader(^String.Titles.freeLayoutCanvasSettings)
             Toggle(^String.Titles.freeLayoutShowGrid, isOn: $session.showGrid).font(.caption)
-            Toggle(^String.Titles.freeLayoutSnapToGrid, isOn: $session.snapToGrid).font(.caption)
 
             Spacer(minLength: 20)
         }

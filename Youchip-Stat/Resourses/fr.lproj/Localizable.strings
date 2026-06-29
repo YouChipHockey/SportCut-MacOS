@@ -1064,6 +1064,7 @@
 "KeyBindingsHighlightHotkey" = "Raccourci:";
 "KeyBindingsPressKey" = "Appuyez sur une touche…";
 "KeyBindingsRemoveFromCanvas" = "Retirer de la zone";
+"KeyBindingsReturnToCanvas" = "Remettre dans le marquage";
 "KeyBindingsVisibilitySection" = "Visibilité";
 "KeyBindingsItemVisible" = "Visible par défaut";
 "KeyBindingsTapSourceHint" = "Étape 1 : appuyez sur un bouton source sur la zone";
@@ -1085,6 +1086,10 @@
 "KeyBindingsDeleteEventMessage" = "L'événement sera supprimé de la collection.";
 "KeyBindingsMapTabHint" = "L'éditeur de carte de terrain est ouvert dans la zone centrale.";
 "KeyBindingsNoTagGroups" = "Créez un groupe de tags pour commencer.";
+"KeyBindingsArrowsVisibilityTitle" = "Flèches de liaisons";
+"KeyBindingsArrowsHidden" = "Tout masquer";
+"KeyBindingsArrowsAbove" = "Au-dessus des boutons";
+"KeyBindingsArrowsBelow" = "Sous les boutons";
 "KeyBindingTypeHighlight" = "Surbrillance";
 "KeyBindingTypeActivation" = "Activation";
 "KeyBindingTypeDeactivation" = "Désactivation";

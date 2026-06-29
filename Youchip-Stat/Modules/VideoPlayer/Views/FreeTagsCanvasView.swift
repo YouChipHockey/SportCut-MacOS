@@ -207,6 +207,7 @@ struct FreeTagsCanvasView: View {
                 FreeTagRuntimeItemView(
                     tag: tag,
                     item: item,
+                    scale: scale,
                     isActive: activeIntervalTags.contains(where: { $0.tag.id == tag.id }),
                     isHovered: hoveredTagID == tag.id,
                     isHighlighted: isHighlighted,
@@ -223,6 +224,7 @@ struct FreeTagsCanvasView: View {
                 FreeLabelRuntimeItemView(
                     label: label,
                     item: item,
+                    scale: scale,
                     isHighlighted: isHighlighted,
                     isSelected: runtime.isLabelActivated(label.id),
                     onTap: {
@@ -238,6 +240,7 @@ struct FreeTagsCanvasView: View {
                 FreeTimeEventRuntimeItemView(
                     event: event,
                     item: item,
+                    scale: scale,
                     isHighlighted: isHighlighted,
                     isSelected: runtime.pendingTimeEventIds.contains(event.id),
                     onTap: {
@@ -271,6 +274,7 @@ struct FreeTagsCanvasView: View {
 private struct FreeTagRuntimeItemView: View {
     let tag: Tag
     let item: TagFreeLayoutItem
+    var scale: CGFloat = 1.0
     let isActive: Bool
     let isHovered: Bool
     let isHighlighted: Bool
@@ -278,6 +282,7 @@ private struct FreeTagRuntimeItemView: View {
     let onTap: () -> Void
 
     var body: some View {
+        let s = max(scale, 0.01)
         let baseColor = Color(hex: tag.color).opacity(item.fillOpacity)
         let foreground: Color = {
             if let hex = item.textColor { return Color(hex: hex) }
@@ -291,8 +296,8 @@ private struct FreeTagRuntimeItemView: View {
             return Color.black.opacity(0.25)
         }()
         let strokeStyle = StrokeStyle(
-            lineWidth: isActive || isHighlighted ? 2.5 : item.strokeWidth,
-            dash: item.strokeDashed ? [4, 3] : []
+            lineWidth: (isActive || isHighlighted ? 2.5 : item.strokeWidth) * s,
+            dash: item.strokeDashed ? [4 * s, 3 * s] : []
         )
         let swiftWeight: Font.Weight = {
             if isActive { return .semibold }
@@ -304,52 +309,52 @@ private struct FreeTagRuntimeItemView: View {
         }()
 
         ZStack {
-            TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+            TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s)
                 .fill(baseColor)
                 .overlay(
-                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s)
                         .stroke(strokeCol, style: strokeStyle)
                 )
 
             if item.showLabel {
-                VStack(spacing: 2) {
+                VStack(spacing: 2 * s) {
                     Text(tag.name)
-                        .font(.system(size: item.fontSize, weight: swiftWeight))
+                        .font(.system(size: item.fontSize * s, weight: swiftWeight))
                         .foregroundColor(foreground)
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.6)
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: 4 * s) {
                         if tagCount > 0 {
                             Text("\(tagCount)")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(size: 10 * s, weight: .semibold))
                                 .foregroundColor(foreground)
-                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .padding(.horizontal, 4 * s).padding(.vertical, 1 * s)
                                 .background(Capsule().fill(Color.black.opacity(0.25)))
                         }
                         if tag.isInterval == true {
                             Image(systemName: "timer")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 10 * s, weight: .medium))
                                 .foregroundColor(foreground.opacity(0.9))
                         }
                         if tag.mapEnabled == true {
                             Image(systemName: "map")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 10 * s, weight: .medium))
                                 .foregroundColor(foreground.opacity(0.9))
                         }
                         if let hotkey = tag.hotkey, !hotkey.isEmpty {
-                            HStack(spacing: 3) {
-                                Image(systemName: "keyboard").font(.system(size: 9, weight: .medium))
-                                Text(hotkey).font(.system(size: 9, weight: .medium))
+                            HStack(spacing: 3 * s) {
+                                Image(systemName: "keyboard").font(.system(size: 9 * s, weight: .medium))
+                                Text(hotkey).font(.system(size: 9 * s, weight: .medium))
                             }
-                            .padding(.horizontal, 3).padding(.vertical, 1)
+                            .padding(.horizontal, 3 * s).padding(.vertical, 1 * s)
                             .background(Capsule().fill(Color.black.opacity(0.25)))
                             .foregroundColor(foreground)
                         }
                     }
                 }
-                .padding(4)
+                .padding(4 * s)
             }
         }
         .shadow(
@@ -368,44 +373,46 @@ private struct FreeTagRuntimeItemView: View {
 private struct FreeLabelRuntimeItemView: View {
     let label: Label
     let item: TagFreeLayoutItem
+    var scale: CGFloat = 1.0
     let isHighlighted: Bool
     var isSelected: Bool = false
     let onTap: () -> Void
 
     var body: some View {
+        let s = max(scale, 0.01)
         let strokeCol: Color = {
             if isHighlighted { return .yellow }
             if isSelected { return .accentColor }
             return item.strokeColor.map { Color(hex: $0) } ?? Color.secondary.opacity(0.3)
         }()
         let strokeStyle = StrokeStyle(
-            lineWidth: isHighlighted ? 2.5 : item.strokeWidth,
-            dash: item.strokeDashed ? [4, 3] : []
+            lineWidth: (isHighlighted ? 2.5 : item.strokeWidth) * s,
+            dash: item.strokeDashed ? [4 * s, 3 * s] : []
         )
         let textCol: Color = item.textColor.map { Color(hex: $0) } ?? .primary
 
         Button(action: onTap) {
             ZStack {
-                TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s)
                     .fill(Color(NSColor.controlBackgroundColor).opacity(item.fillOpacity))
                     .overlay(
-                        TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                        TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s)
                             .stroke(strokeCol, style: strokeStyle)
                     )
 
                 if item.showLabel {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 4 * s) {
                         Image(systemName: "textformat")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.system(size: 9 * s, weight: .medium))
                             .foregroundColor(textCol.opacity(0.6))
                         Text(label.name)
-                            .font(.system(size: item.fontSize))
+                            .font(.system(size: item.fontSize * s))
                             .foregroundColor(textCol)
                             .lineLimit(2)
                             .multilineTextAlignment(.center)
                             .minimumScaleFactor(0.6)
                     }
-                    .padding(4)
+                    .padding(4 * s)
                 }
             }
             .shadow(
@@ -425,43 +432,45 @@ private struct FreeLabelRuntimeItemView: View {
 private struct FreeTimeEventRuntimeItemView: View {
     let event: TimeEvent
     let item: TagFreeLayoutItem
+    var scale: CGFloat = 1.0
     let isHighlighted: Bool
     var isSelected: Bool = false
     let onTap: () -> Void
 
     var body: some View {
+        let s = max(scale, 0.01)
         let strokeCol: Color = {
             if isHighlighted { return .yellow }
             if isSelected { return .accentColor }
             return item.strokeColor.map { Color(hex: $0) } ?? Color.secondary.opacity(0.3)
         }()
         let strokeStyle = StrokeStyle(
-            lineWidth: isHighlighted || isSelected ? 2.5 : item.strokeWidth,
-            dash: item.strokeDashed ? [4, 3] : []
+            lineWidth: (isHighlighted || isSelected ? 2.5 : item.strokeWidth) * s,
+            dash: item.strokeDashed ? [4 * s, 3 * s] : []
         )
         let textCol: Color = item.textColor.map { Color(hex: $0) } ?? .primary
 
         ZStack {
-            TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+            TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s)
                 .fill(Color.orange.opacity(item.fillOpacity * 0.15))
                 .overlay(
-                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius)
+                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s)
                         .stroke(strokeCol, style: strokeStyle)
                 )
 
             if item.showLabel {
-                HStack(spacing: 4) {
+                HStack(spacing: 4 * s) {
                     Image(systemName: isSelected ? "clock.fill" : "clock")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 9 * s, weight: .medium))
                         .foregroundColor(isSelected ? .accentColor : textCol.opacity(0.7))
                     Text(event.name)
-                        .font(.system(size: item.fontSize, weight: isSelected ? .semibold : .regular))
+                        .font(.system(size: item.fontSize * s, weight: isSelected ? .semibold : .regular))
                         .foregroundColor(textCol)
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.6)
                 }
-                .padding(4)
+                .padding(4 * s)
             }
         }
         .shadow(

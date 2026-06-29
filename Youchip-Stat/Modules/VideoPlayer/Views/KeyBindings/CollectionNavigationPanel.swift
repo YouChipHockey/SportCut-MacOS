@@ -361,6 +361,20 @@ struct CollectionNavigationPanel: View {
                 .fill(Color(NSColor.windowBackgroundColor))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.2)))
         )
+        .contextMenu {
+            if !isOnCanvas(elementId: tag.id, kind: .tag) {
+                Button {
+                    TagFreeLayoutStorage.addTagToLayout(&layout, tag: tag)
+                } label: {
+                    SwiftUI.Label(^String.Titles.keyBindingsReturnToCanvas, systemImage: "plus.rectangle.on.rectangle")
+                }
+            }
+        }
+    }
+
+    /// Элемент сейчас размещён на холсте раскладки.
+    private func isOnCanvas(elementId: String, kind: CanvasButtonKind) -> Bool {
+        layout.items.contains { $0.elementId == elementId && $0.kind == kind }
     }
 
     private func hotkeyField(for tag: Tag) -> some View {
@@ -511,6 +525,15 @@ struct CollectionNavigationPanel: View {
                 .fill(Color(NSColor.windowBackgroundColor))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.2)))
         )
+        .contextMenu {
+            if !isOnCanvas(elementId: label.id, kind: .label) {
+                Button {
+                    TagFreeLayoutStorage.addLabelToLayout(&layout, label: label)
+                } label: {
+                    SwiftUI.Label(^String.Titles.keyBindingsReturnToCanvas, systemImage: "plus.rectangle.on.rectangle")
+                }
+            }
+        }
     }
 
     private func addInlineLabel(to groupID: String) {
@@ -574,6 +597,15 @@ struct CollectionNavigationPanel: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color(NSColor.windowBackgroundColor))
         )
+        .contextMenu {
+            if !isOnCanvas(elementId: event.id, kind: .timeEvent) {
+                Button {
+                    TagFreeLayoutStorage.addTimeEventToLayout(&layout, event: event)
+                } label: {
+                    SwiftUI.Label(^String.Titles.keyBindingsReturnToCanvas, systemImage: "plus.rectangle.on.rectangle")
+                }
+            }
+        }
     }
 
     private func timeEventEditor(_ event: TimeEvent) -> some View {

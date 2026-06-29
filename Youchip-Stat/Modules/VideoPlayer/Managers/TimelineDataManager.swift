@@ -18,6 +18,9 @@ class TimelineDataManager: ObservableObject {
     @Published var lines: [TimelineLine] = []
     @Published var selectedLineID: UUID? = nil
     @Published var selectedStampID: UUID? = nil
+    /// Последний добавленный на таймлайн штамп (id) — независимо от линии/режима разметки.
+    /// Используется для привязки лейблов простым ЛКМ к «последнему по времени добавления» тегу.
+    private(set) var lastAddedStampID: UUID? = nil
     /// Stamps toggled with ⌘-click for «open in SportCut» bulk action.
     @Published var stampsSelectedForSportCut: Set<UUID> = []
     @Published var unlinkedScreenshotPopups: [UnlinkedScreenshotPopup] = []
@@ -188,11 +191,12 @@ class TimelineDataManager: ObservableObject {
                 isActiveForMapView: position != nil
             )
             lines[idx].stamps.append(stamp)
-            
+            lastAddedStampID = stamp.id
+
         } else {
             if let tag = TagLibraryManager.shared.findTagById(tagRefs.first?.id ?? "") {
                 let lineID = findOrCreateTimelineForTag(tag: tag)
-                
+
                 if let idx = lines.firstIndex(where: { $0.id == lineID }) {
                     let stamp = TimelineStamp(
                         tagRefs: tagRefs,
@@ -207,6 +211,7 @@ class TimelineDataManager: ObservableObject {
                         isActiveForMapView: position != nil
                     )
                     lines[idx].stamps.append(stamp)
+                    lastAddedStampID = stamp.id
                 }
             }
         }

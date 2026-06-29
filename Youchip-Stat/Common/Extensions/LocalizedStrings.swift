@@ -1134,6 +1134,7 @@ extension String {
         case keyBindingsHighlightHotkey
         case keyBindingsPressKey
         case keyBindingsRemoveFromCanvas
+        case keyBindingsReturnToCanvas
         case keyBindingsVisibilitySection
         case keyBindingsItemVisible
         case keyBindingsTapSourceHint
@@ -1158,6 +1159,10 @@ extension String {
         case keyBindingsDeleteEventMessage
         case keyBindingsMapTabHint
         case keyBindingsNoTagGroups
+        case keyBindingsArrowsVisibilityTitle
+        case keyBindingsArrowsHidden
+        case keyBindingsArrowsAbove
+        case keyBindingsArrowsBelow
         // Key Binding Types
         case keyBindingTypeHighlight
         case keyBindingTypeActivation

@@ -1064,6 +1064,7 @@
 "KeyBindingsHighlightHotkey" = "Tezkor tugma:";
 "KeyBindingsPressKey" = "Tugmani bosing…";
 "KeyBindingsRemoveFromCanvas" = "Tuvaldan olib tashlash";
+"KeyBindingsReturnToCanvas" = "Belgilashga qaytarish";
 "KeyBindingsVisibilitySection" = "Ko'rinish";
 "KeyBindingsItemVisible" = "Standart ko'rinadigan";
 "KeyBindingsTapSourceHint" = "1-qadam: tuvalda manba tugmasini bosing";
@@ -1085,6 +1086,10 @@
 "KeyBindingsDeleteEventMessage" = "Voqea kolleksiyadan o'chiriladi.";
 "KeyBindingsMapTabHint" = "Maydon xaritasi muharriri markaziy maydonda ochilgan.";
 "KeyBindingsNoTagGroups" = "Boshlash uchun teg guruhi yarating.";
+"KeyBindingsArrowsVisibilityTitle" = "Bog'lash strelkalari";
+"KeyBindingsArrowsHidden" = "Hammasini yashirish";
+"KeyBindingsArrowsAbove" = "Tugmalar ustida";
+"KeyBindingsArrowsBelow" = "Tugmalar ostida";
 "KeyBindingTypeHighlight" = "Ajratib ko'rsatish";
 "KeyBindingTypeActivation" = "Faollashtirish";
 "KeyBindingTypeDeactivation" = "O'chirish";

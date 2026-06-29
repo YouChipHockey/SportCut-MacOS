@@ -48,7 +48,10 @@ class WindowsManager: NSObject, NSWindowDelegate {
     var viewerMirrorVideoWindow: MirroredVideoWindowController?
     var sportCutMirrorVideoWindow: MirroredVideoWindowController?
 
-    private var fieldMapWindow: NSWindowController?
+    private(set) var fieldMapWindow: NSWindowController?
+    /// Блокировали ли основные окна при открытии текущей карты поля.
+    /// В режиме связок клавиш карта открывается без блокировки.
+    private(set) var fieldMapLockedMainWindows = false
 
     private var editorWindowControllers: [NSWindowController] = []
     private var momentViewerControllers: [NSWindowController] = []
@@ -827,12 +830,16 @@ class WindowsManager: NSObject, NSWindowDelegate {
         tagLibraryWindow?.showWindow(nil)
     }
     
-    func showFieldMapSelection(tag: Tag, imageBookmark: Data, onSave: @escaping (CGPoint) -> Void) {
+    func showFieldMapSelection(tag: Tag, imageBookmark: Data, lockWindows: Bool = true, onSave: @escaping (CGPoint) -> Void) {
         let controller = FieldMapSelectionWindowController(tag: tag, imageBookmark: imageBookmark, onSave: onSave)
         fieldMapWindow = controller
-        
-        lockMainWindows(true)
-        
+        // Запоминаем, блокировали ли мы окна при открытии карты, чтобы при закрытии
+        // снять блокировку только если она была установлена (режим связок клавиш её не ставит).
+        fieldMapLockedMainWindows = lockWindows
+        if lockWindows {
+            lockMainWindows(true)
+        }
+
         controller.showWindow(nil)
         controller.window?.center()
     }
@@ -843,7 +850,10 @@ class WindowsManager: NSObject, NSWindowDelegate {
     }
     
     func fieldMapWindowDidClose() {
-        lockMainWindows(false)
+        if fieldMapLockedMainWindows {
+            lockMainWindows(false)
+        }
+        fieldMapLockedMainWindows = false
         fieldMapWindow = nil
     }
     
@@ -1444,6 +1454,8 @@ class ActiveWindowManager {
         let windowsManager = WindowsManager.shared
         return activeWindow.windowController === windowsManager.videoWindow ||
                activeWindow.windowController === windowsManager.controlWindow ||
-               activeWindow.windowController === windowsManager.tagLibraryWindow
+               activeWindow.windowController === windowsManager.tagLibraryWindow ||
+               // Карта поля в неблокирующем режиме (коллекции со связками клавиш) — хоткеи разметки работают.
+               (activeWindow.windowController === windowsManager.fieldMapWindow && !windowsManager.fieldMapLockedMainWindows)
     }
 }

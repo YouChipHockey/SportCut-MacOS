@@ -1110,6 +1110,7 @@
 "KeyBindingsHighlightHotkey" = "Горячая клавиша:";
 "KeyBindingsPressKey" = "Нажмите клавишу…";
 "KeyBindingsRemoveFromCanvas" = "Убрать с холста";
+"KeyBindingsReturnToCanvas" = "Вернуть в разметку";
 "KeyBindingsVisibilitySection" = "Видимость";
 "KeyBindingsItemVisible" = "Видима по умолчанию";
 "KeyBindingsTapSourceHint" = "Шаг 1: нажмите кнопку-источник на холсте";
@@ -1134,6 +1135,10 @@
 "KeyBindingsDeleteEventMessage" = "Общее событие будет удалено из коллекции.";
 "KeyBindingsMapTabHint" = "Редактор карты поля открыт в центральной области.";
 "KeyBindingsNoTagGroups" = "Создайте группу тегов, чтобы начать.";
+"KeyBindingsArrowsVisibilityTitle" = "Стрелки связок";
+"KeyBindingsArrowsHidden" = "Скрыть все";
+"KeyBindingsArrowsAbove" = "Над кнопками";
+"KeyBindingsArrowsBelow" = "Под кнопками";
 "KeyBindingTypeHighlight" = "Подсветка";
 "KeyBindingTypeActivation" = "Активация";
 "KeyBindingTypeDeactivation" = "Деактивация";

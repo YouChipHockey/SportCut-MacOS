@@ -1102,6 +1102,7 @@
 "KeyBindingsHighlightHotkey" = "Hotkey:";
 "KeyBindingsPressKey" = "Press a key…";
 "KeyBindingsRemoveFromCanvas" = "Remove from canvas";
+"KeyBindingsReturnToCanvas" = "Return to markup";
 "KeyBindingsVisibilitySection" = "Visibility";
 "KeyBindingsItemVisible" = "Visible by default";
 "KeyBindingsTapSourceHint" = "Step 1: tap a source button on the canvas";
@@ -1126,6 +1127,10 @@
 "KeyBindingsDeleteEventMessage" = "The time event will be removed from the collection.";
 "KeyBindingsMapTabHint" = "The field map editor is open in the center area.";
 "KeyBindingsNoTagGroups" = "Create a tag group to get started.";
+"KeyBindingsArrowsVisibilityTitle" = "Binding arrows";
+"KeyBindingsArrowsHidden" = "Hide all";
+"KeyBindingsArrowsAbove" = "Above buttons";
+"KeyBindingsArrowsBelow" = "Below buttons";
 "KeyBindingTypeHighlight" = "Highlight";
 "KeyBindingTypeActivation" = "Activation";
 "KeyBindingTypeDeactivation" = "Deactivation";

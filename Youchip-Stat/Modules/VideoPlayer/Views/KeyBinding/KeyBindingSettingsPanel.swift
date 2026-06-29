@@ -24,7 +24,6 @@ struct KeyBindingSettingsPanel: View {
     var onAddTimeEvent: (TimeEvent) -> Void
     var onDeselect: () -> Void
 
-    @State private var expandedBindingId: String? = nil
     @State private var isCapturingHotkeyForBindingId: String? = nil
     @State private var showPasteAlert = false
 
@@ -38,13 +37,9 @@ struct KeyBindingSettingsPanel: View {
             VStack(alignment: .leading, spacing: 12) {
                 canvasSummarySection
 
-                Divider()
-
-                sectionHeader(^String.Titles.keyBindingsPaletteTitle)
-                labelsPalette
-
                 if !timeEvents.isEmpty {
                     Divider()
+                    sectionHeader(^String.Titles.keyBindingsPaletteTitle)
                     timeEventsPalette
                 }
 
@@ -96,48 +91,6 @@ struct KeyBindingSettingsPanel: View {
                 Text(^String.Titles.keyBindingsNoTagsOnCanvas)
                     .font(.caption)
                     .foregroundColor(.orange)
-            }
-        }
-    }
-
-    // MARK: - No selection (removed — palette always visible)
-
-    // MARK: - Labels palette
-
-    private var labelsPalette: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if labels.isEmpty {
-                Text(^String.Titles.keyBindingsNoLabels)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } else {
-                Text(^String.Titles.keyBindingsAddLabelHint)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                ForEach(labels) { label in
-                    let alreadyOnCanvas = layout.items.contains { $0.elementId == label.id && $0.kind == .label }
-                    HStack {
-                        Image(systemName: "textformat")
-                            .foregroundColor(.secondary)
-                            .frame(width: 14)
-                        Text(label.name)
-                            .font(.caption)
-                            .lineLimit(1)
-                        Spacer()
-                        if alreadyOnCanvas {
-                            Text(^String.Titles.keyBindingsOnCanvas)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        } else {
-                            Button(action: { onAddLabel(label) }) {
-                                Image(systemName: "plus.circle")
-                                    .foregroundColor(.accentColor)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 3)
-                }
             }
         }
     }
@@ -236,36 +189,27 @@ struct KeyBindingSettingsPanel: View {
     // MARK: - Single binding accordion
 
     private func bindingAccordion(binding: KeyBinding) -> some View {
-        let isExpanded = expandedBindingId == binding.id
-        return VStack(alignment: .leading, spacing: 0) {
-            // Header row
-            Button(action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    expandedBindingId = isExpanded ? nil : binding.id
-                }
-            }) {
-                HStack {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+        // Настройки связки всегда раскрыты и не сворачиваются.
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Text(localizedTypeName(binding.type))
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                Spacer()
+                if let delay = binding.delaySeconds, delay > 0 {
+                    Text("+\(Int(delay))s")
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    Text(localizedTypeName(binding.type))
-                        .font(.caption)
-                    Spacer()
-                    if let delay = binding.delaySeconds, delay > 0 {
-                        Text("+\(Int(delay))s")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
                 }
-                .padding(.vertical, 6)
             }
-            .buttonStyle(.plain)
+            .padding(.vertical, 6)
 
-            if isExpanded {
-                bindingDetails(binding: binding)
-                    .padding(.leading, 12)
-                    .padding(.bottom, 8)
-            }
+            bindingDetails(binding: binding)
+                .padding(.leading, 12)
+                .padding(.bottom, 8)
         }
     }
 
@@ -457,12 +401,10 @@ struct KeyBindingSettingsPanel: View {
             type: .highlight
         )
         layout.bindings.append(nb)
-        expandedBindingId = nb.id
     }
 
     private func deleteBinding(_ binding: KeyBinding) {
         layout.bindings.removeAll { $0.id == binding.id }
-        if expandedBindingId == binding.id { expandedBindingId = nil }
     }
 
     private func duplicateBinding(_ binding: KeyBinding) {

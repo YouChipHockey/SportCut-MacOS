@@ -727,6 +727,7 @@ struct TagLibraryView: View {
     private func addTagToTimeline(tag: Tag, selectedLabels: [FullLabelWithGroup], instantAnchorTime: Double? = nil,
                                    overrideTimeBefore: Double? = nil, overrideTimeAfter: Double? = nil,
                                    useFieldMap: Bool = true,
+                                   lockWindowsDuringFieldMap: Bool = true,
                                    onComplete: (() -> Void)? = nil) {
         if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
             if let cached = cachedPlayField, cached.name == collectionName,
@@ -735,6 +736,7 @@ struct TagLibraryView: View {
                     tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
                     instantAnchorTime: instantAnchorTime,
                     overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter,
+                    lockWindows: lockWindowsDuringFieldMap,
                     onComplete: onComplete
                 )
                 return
@@ -750,6 +752,7 @@ struct TagLibraryView: View {
                                 tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
                                 instantAnchorTime: instantAnchorTime,
                                 overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter,
+                                lockWindows: lockWindowsDuringFieldMap,
                                 onComplete: onComplete
                             )
                         }
@@ -777,16 +780,19 @@ struct TagLibraryView: View {
         tag: Tag, imageBookmark: Data, selectedLabels: [FullLabelWithGroup],
         instantAnchorTime: Double? = nil,
         overrideTimeBefore: Double? = nil, overrideTimeAfter: Double? = nil,
+        lockWindows: Bool = true,
         onComplete: (() -> Void)? = nil
     ) {
-        WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
+        WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, lockWindows: lockWindows) { [self] coordinates in
             proceedWithTagAddition(
                 tag: tag, selectedLabels: selectedLabels, coordinates: coordinates,
                 instantAnchorTime: instantAnchorTime,
                 overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter
             )
             onComplete?()
-            if videoManager.playbackSpeed > 0 {
+            // Когда окна не блокировались (режим связок клавиш), видео не паузилось —
+            // ничего не возобновляем, чтобы не дёргать воспроизведение.
+            if lockWindows, videoManager.playbackSpeed > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     videoManager.player?.play()
                 }
@@ -1120,6 +1126,12 @@ struct TagLibraryView: View {
                 .receive(on: DispatchQueue.main)
                 .sink { [self] notification in
                     guard let tag = notification.object as? Tag else { return }
+                    // В коллекциях со связками клавиш хоткей должен работать как ЛКМ по тегу:
+                    // без окна лейблов — всё через канвас-обработчик.
+                    if isKeyBindingsCanvasMode {
+                        handleCanvasButtonTap(kind: .tag, elementId: tag.id)
+                        return
+                    }
                     if tag.isInterval ?? false {
                         if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                             let activeTag = activeIntervalTags[index]
@@ -1336,11 +1348,11 @@ struct TagLibraryView: View {
         }
     }
     
-    private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup], useFieldMap: Bool = true) {
+    private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup], useFieldMap: Bool = true, lockWindowsDuringFieldMap: Bool = true) {
         if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
                 if let cached = cachedPlayField, cached.name == collectionName,
                    let imageBookmark = cached.playField.imageBookmark {
-                    showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
+                    showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels, lockWindows: lockWindowsDuringFieldMap)
                     return
                 } else {
                     DispatchQueue.global(qos: .userInitiated).async {
@@ -1350,7 +1362,7 @@ struct TagLibraryView: View {
                            let imageBookmark = playField.imageBookmark {
                             DispatchQueue.main.async {
                                 self.cachedPlayField = (name: collectionName, playField: playField)
-                                self.showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels)
+                                self.showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels, lockWindows: lockWindowsDuringFieldMap)
                             }
                         } else {
                             DispatchQueue.main.async {
@@ -1363,11 +1375,12 @@ struct TagLibraryView: View {
         }
         proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
     }
-    
-    private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup]) {
-        WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark) { [self] coordinates in
+
+    private func showFieldMapSelectionInterval(tag: Tag, imageBookmark: Data, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup], lockWindows: Bool = true) {
+        WindowsManager.shared.showFieldMapSelection(tag: tag, imageBookmark: imageBookmark, lockWindows: lockWindows) { [self] coordinates in
             proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: coordinates, selectedLabels: selectedLabels)
-            if videoManager.playbackSpeed > 0 {
+            // Если окна не блокировались (режим связок), видео не паузилось — не дёргаем play.
+            if lockWindows, videoManager.playbackSpeed > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     videoManager.player?.play()
                 }
@@ -1523,21 +1536,8 @@ struct TagLibraryView: View {
             return
         }
 
-        _ = keyBindingRuntime.handleButtonTap(kind: .label, elementId: labelId)
-
-        if keyBindingRuntime.didCompleteHighlightPair { return }
-
-        // Ждём нажатия связанного тега (лейбл уже подсветил партнёра).
-        if keyBindingRuntime.highlightModeActive
-            && keyBindingRuntime.highlightOriginIsLabel()
-            && !keyBindingRuntime.highlightedButtonIds.isEmpty {
-            return
-        }
-
-        if !keyBindingRuntime.labelOutgoingActivatesTag(labelId: labelId)
-            && !keyBindingRuntime.isWaitingForTagLabelPartner() {
-            attachLabelToLastTimelineStamp(labelId: labelId)
-        }
+        // Вся логика простого ЛКМ по лейблу (цепочки подсветки, привязка к якорю/крайнему) — в runtime.
+        keyBindingRuntime.handleLabelTap(labelId: labelId)
     }
 
     private func handleCanvasButtonTap(kind: CanvasButtonKind, elementId: String) {
@@ -1561,10 +1561,9 @@ struct TagLibraryView: View {
         guard kind == .tag, let tag = tagLibrary.allTags.first(where: { $0.id == elementId }) else { return }
 
         let isIntervalTag = tag.isInterval ?? false
-        if !isIntervalTag {
-            videoManager.player?.pause()
-        }
+        let isMapTag = tag.mapEnabled == true
 
+        // Интервальный тег: запускаем/останавливаем запись (видео не паузим).
         if isIntervalTag {
             let isStopping = activeIntervalTags.contains(where: { $0.tag.id == tag.id })
             if isStopping {
@@ -1576,14 +1575,28 @@ struct TagLibraryView: View {
             return
         }
 
+        // Сначала применяем связки (подсветка и т.п.), потом решаем про паузу.
         _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
 
         if keyBindingRuntime.didCompleteHighlightPair { return }
-        if keyBindingRuntime.highlightModeActive && keyBindingRuntime.highlightOriginIsLabel() { return }
-        if keyBindingRuntime.isWaitingForTagLabelPartner() { return }
+
+        // Обычное добавление тега. Тег добавляется на таймлайн сразу (в т.ч. если он подсветил лейбл —
+        // лейблы прикрепятся к нему позже как к якорю). Паузу ставим только если нажатие НЕ активировало
+        // подсветку (партнёр подсвечен — видео не паузим) и тег без карты.
+        if !isMapTag && !keyBindingRuntime.highlightModeActive {
+            videoManager.player?.pause()
+        }
 
         let selectedLabels = buildFullLabels(from: keyBindingRuntime.takeActivatedLabels())
-        addTagToTimeline(tag: tag, selectedLabels: selectedLabels, useFieldMap: false)
+        // Для тега с картой запоминаем момент нажатия и открываем карту,
+        // не блокируя библиотеку тегов; метка добавится на таймлайн на это время.
+        addTagToTimeline(
+            tag: tag,
+            selectedLabels: selectedLabels,
+            instantAnchorTime: isMapTag ? videoManager.currentTime : nil,
+            useFieldMap: isMapTag,
+            lockWindowsDuringFieldMap: false
+        )
     }
 
     private func startIntervalRecording(tag: Tag, labelIds: [String]) {
@@ -1612,12 +1625,16 @@ struct TagLibraryView: View {
         let timeFinish = max(start, end)
         let labelIds = activeTag.pendingLabelIds + keyBindingRuntime.takeActivatedLabels()
         activeIntervalTags.remove(at: index)
+        // Для тега с картой по завершении интервала открываем карту (видео не паузим,
+        // библиотеку не блокируем); метка добавится на интервал [start, finish] с координатой.
+        let isMapTag = tag.mapEnabled == true
         addTagToTimelineInterval(
             tag: tag,
             timeStartSeconds: timeStart,
             timeFinishSeconds: timeFinish,
             selectedLabels: buildFullLabels(from: labelIds),
-            useFieldMap: false
+            useFieldMap: isMapTag,
+            lockWindowsDuringFieldMap: false
         )
     }
 
@@ -1631,21 +1648,75 @@ struct TagLibraryView: View {
         }
     }
 
-    private func attachLabelToLastTimelineStamp(labelId: String) {
-        guard isKeyBindingsCanvasMode else { return }
-        guard let lineID = timelineData.selectedLineID,
-              let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
-              let stamp = timelineData.lines[lineIndex].stamps.last
-        else { return }
+    /// Простой ЛКМ по лейблу без связки → к последнему по времени добавления тегу (любая линия/режим).
+    private func attachLabelsToLastTimelineStamp(labelIds: [String]) {
+        guard isKeyBindingsCanvasMode, !labelIds.isEmpty else { return }
+        // Если есть активная интервальная запись — лейблы копятся в неё (штампа ещё нет).
+        if let idx = activeIntervalTags.indices.last {
+            appendPendingLabels(labelIds, toIntervalAt: idx)
+            return
+        }
+        guard let stampID = timelineData.lastAddedStampID,
+              let (lineID, stamp) = locateStamp(stampID: stampID) else { return }
+        mergeLabels(labelIds, intoLineID: lineID, stamp: stamp)
+    }
 
-        let newLabels = buildFullLabels(from: [labelId])
+    /// Находит линию и штамп по id штампа в любой линии.
+    private func locateStamp(stampID: UUID) -> (lineID: UUID, stamp: TimelineStamp)? {
+        for line in timelineData.lines {
+            if let stamp = line.stamps.first(where: { $0.id == stampID }) {
+                return (line.id, stamp)
+            }
+        }
+        return nil
+    }
+
+    /// Находит последний штамп, содержащий указанный тег (per-tag линия в tagBased или поиск по всем линиям).
+    private func locateLastStamp(containingTag tagId: String) -> (lineID: UUID, stamp: TimelineStamp)? {
+        if let line = timelineData.lines.first(where: { $0.tagIdForMode == tagId }),
+           let stamp = line.stamps.last {
+            return (line.id, stamp)
+        }
+        for line in timelineData.lines.reversed() {
+            if let stamp = line.stamps.last(where: { $0.idTags.contains(tagId) }) {
+                return (line.id, stamp)
+            }
+        }
+        return nil
+    }
+
+    /// Дописывает лейблы в штамп без дублей.
+    private func mergeLabels(_ newLabelIds: [String], intoLineID lineID: UUID, stamp: TimelineStamp) {
+        let newLabels = buildFullLabels(from: newLabelIds)
         guard !newLabels.isEmpty else { return }
-
         var merged = stamp.labels
         for label in newLabels where !merged.contains(where: { $0.id == label.id }) {
             merged.append(label)
         }
         timelineData.updateStampLabels(lineID: lineID, stampID: stamp.id, newLabels: merged)
+    }
+
+    /// Эксклюзивный лейбл: привязываем к крайнему тегу ТОЛЬКО если он входит в разрешённые (эксклюзивные партнёры).
+    private func attachLabelsToLastStampIfTagMatches(labelIds: [String], allowedTagIds: Set<String>) {
+        guard isKeyBindingsCanvasMode, !labelIds.isEmpty else { return }
+        // Крайний = активная интервальная запись, если она есть.
+        if let idx = activeIntervalTags.indices.last {
+            if allowedTagIds.contains(activeIntervalTags[idx].tag.id) {
+                appendPendingLabels(labelIds, toIntervalAt: idx)
+            }
+            return
+        }
+        guard let stampID = timelineData.lastAddedStampID,
+              let (lineID, stamp) = locateStamp(stampID: stampID),
+              stamp.idTags.contains(where: { allowedTagIds.contains($0) }) else { return }
+        mergeLabels(labelIds, intoLineID: lineID, stamp: stamp)
+    }
+
+    /// Копит лейблы в активную интервальную запись (штампа ещё нет).
+    private func appendPendingLabels(_ labelIds: [String], toIntervalAt idx: Int) {
+        var pending = activeIntervalTags[idx].pendingLabelIds
+        for lid in labelIds where !pending.contains(lid) { pending.append(lid) }
+        activeIntervalTags[idx].pendingLabelIds = pending
     }
 
     private func wireRuntimeCallbacks() {
@@ -1661,10 +1732,13 @@ struct TagLibraryView: View {
                 startIntervalRecording(tag: tag, labelIds: labelIds)
                 onAdded?()
             } else {
+                let isMapTag = tag.mapEnabled == true
                 addTagToTimeline(
                     tag: tag, selectedLabels: fullLabels,
+                    instantAnchorTime: isMapTag ? videoManager.currentTime : nil,
                     overrideTimeBefore: overrideBefore, overrideTimeAfter: overrideAfter,
-                    useFieldMap: false,
+                    useFieldMap: isMapTag,
+                    lockWindowsDuringFieldMap: false,
                     onComplete: {
                         keyBindingRuntime.clearActivatedLabels()
                         onAdded?()
@@ -1694,6 +1768,14 @@ struct TagLibraryView: View {
             attachTimeEventsToAnchorStamp(anchorTagId: anchorTagId, timeEventIds: timeEventIds)
             onDone?()
         }
+        keyBindingRuntime.onAttachLabelsToLastStamp = { [self] labelIds, onDone in
+            attachLabelsToLastTimelineStamp(labelIds: labelIds)
+            onDone?()
+        }
+        keyBindingRuntime.onAttachLabelsIfTagMatches = { [self] labelIds, allowedTagIds, onDone in
+            attachLabelsToLastStampIfTagMatches(labelIds: labelIds, allowedTagIds: allowedTagIds)
+            onDone?()
+        }
     }
 
     private func effectiveTimeEventsForStamp() -> [String] {
@@ -1703,33 +1785,24 @@ struct TagLibraryView: View {
         return Array(tagLibrary.selectedTimeEvents)
     }
 
-    /// Добавляет выбранные лейблы к последнему штампу якорного тега (подсветка тег → лейблы).
+    /// Добавляет выбранные лейблы к якорному тегу (подсветка тег → лейблы). Независимо от режима/линии.
     private func attachLabelsToAnchorStamp(anchorTagId: String, labelIds: [String]) {
-        guard !labelIds.isEmpty,
-              let lineID = timelineData.selectedLineID,
-              let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID })
-        else { return }
+        guard !labelIds.isEmpty else { return }
 
-        let newLabels = buildFullLabels(from: labelIds)
-        guard !newLabels.isEmpty else { return }
-
-        let stamp = timelineData.lines[lineIndex].stamps.last(where: { $0.idTags.contains(anchorTagId) })
-            ?? timelineData.lines[lineIndex].stamps.last
-        guard let stamp else { return }
-
-        var merged = stamp.labels
-        for label in newLabels where !merged.contains(where: { $0.id == label.id }) {
-            merged.append(label)
+        // Якорный тег ещё записывается как интервал — копим лейблы в его pendingLabelIds.
+        if let idx = activeIntervalTags.firstIndex(where: { $0.tag.id == anchorTagId }) {
+            appendPendingLabels(labelIds, toIntervalAt: idx)
+            return
         }
-        timelineData.updateStampLabels(lineID: lineID, stampID: stamp.id, newLabels: merged)
+
+        guard let (lineID, stamp) = locateLastStamp(containingTag: anchorTagId) else { return }
+        mergeLabels(labelIds, intoLineID: lineID, stamp: stamp)
     }
 
     /// Добавляет выбранные общие события к последнему штампу якорного тега (подсветка тег → события).
     private func attachTimeEventsToAnchorStamp(anchorTagId: String, timeEventIds: [String]) {
         guard !timeEventIds.isEmpty,
-              let lineID = timelineData.selectedLineID,
-              let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
-              let stamp = timelineData.lines[lineIndex].stamps.last(where: { $0.idTags.contains(anchorTagId) })
+              let (lineID, stamp) = locateLastStamp(containingTag: anchorTagId)
         else { return }
 
         var merged = stamp.timeEvents

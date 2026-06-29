@@ -26,6 +26,15 @@ typealias AttachLabelsToAnchorCallback = (
     _ labelIds: [String],
     _ onDone: (() -> Void)?
 ) -> Void
+typealias AttachLabelsToLastStampCallback = (
+    _ labelIds: [String],
+    _ onDone: (() -> Void)?
+) -> Void
+typealias AttachLabelsIfTagMatchesCallback = (
+    _ labelIds: [String],
+    _ allowedTagIds: Set<String>,
+    _ onDone: (() -> Void)?
+) -> Void
 typealias AttachTimeEventsToAnchorCallback = (
     _ anchorTagId: String,
     _ timeEventIds: [String],
@@ -51,6 +60,8 @@ final class KeyBindingRuntimeManager: ObservableObject {
     @Published private(set) var activatedLabelIds: [String] = []
     @Published private(set) var pendingTimeEventIds: Set<String> = []
     private(set) var didCompleteHighlightPair: Bool = false
+    /// Во время обработки нажатия цепочка связок добавила/запустила тег (с забандленными лейблами).
+    private var didActivateTagInChain: Bool = false
     private var bindings: [KeyBinding] = []
     private var items: [TagFreeLayoutItem] = []
     private(set) var highlightHotkeys: [String: String] = [:]
@@ -63,6 +74,8 @@ final class KeyBindingRuntimeManager: ObservableObject {
     var onStopIntervalTag: StopIntervalTagCallback?
     var isIntervalTagActive: IsIntervalActiveCallback?
     var onAttachLabelsToAnchor: AttachLabelsToAnchorCallback?
+    var onAttachLabelsToLastStamp: AttachLabelsToLastStampCallback?
+    var onAttachLabelsIfTagMatches: AttachLabelsIfTagMatchesCallback?
     var onAttachTimeEventsToAnchor: AttachTimeEventsToAnchorCallback?
 
     private init() {}
@@ -113,24 +126,8 @@ final class KeyBindingRuntimeManager: ObservableObject {
         activatedLabelIds = []
     }
 
-    func labelOutgoingActivatesTag(labelId: String) -> Bool {
-        let buttonKey = "\(CanvasButtonKind.label.rawValue):\(labelId)"
-        return filteredOutgoingBindings(from: buttonKey, sourceKind: .label, sourceId: labelId).contains {
-            $0.type == .activation && $0.targetKind == .tag
-        }
-    }
-
     func highlightOriginIsLabel() -> Bool {
         highlightOriginButtonKey?.hasPrefix("\(CanvasButtonKind.label.rawValue):") ?? false
-    }
-
-    func highlightOriginIsTag() -> Bool {
-        highlightOriginButtonKey?.hasPrefix("\(CanvasButtonKind.tag.rawValue):") ?? false
-    }
-
-    /// Тег подсветил партнёра (лейбл) — ждём второе нажатие, тег на таймлайн пока не добавляем.
-    func isWaitingForTagLabelPartner() -> Bool {
-        highlightModeActive && highlightOriginIsTag()
     }
 
     func clearPendingTimeEvents() {
@@ -165,12 +162,15 @@ final class KeyBindingRuntimeManager: ObservableObject {
 
     func applyExclusiveOnTagDeactivation(tagId: String) {
         let buttonKey = "\(CanvasButtonKind.tag.rawValue):\(tagId)"
+        // Прямое направление: тег — источник связки.
         let outgoing = filteredOutgoingBindings(from: buttonKey, sourceKind: .tag, sourceId: tagId)
         for binding in outgoing where binding.type == .exclusive {
             if binding.sourceKind == .tag, binding.targetKind == .tag {
                 handleExclusiveTagTag(binding: binding, sourceActivating: false)
             }
         }
+        // Обратное направление: тег — цель связки (двунаправленность эксклюзива).
+        applyIncomingExclusiveTagTagBindings(tagId: tagId, activating: false)
     }
 
     // MARK: - Button tap entry point
@@ -190,6 +190,10 @@ final class KeyBindingRuntimeManager: ObservableObject {
             return true
         }
 
+        if highlightModeActive, !highlightedButtonIds.contains(buttonKey) {
+            clearHighlight()
+        }
+
         let sourceTagActivating: Bool? = kind == .tag ? true : nil
 
         var visited = Set<String>()
@@ -202,15 +206,41 @@ final class KeyBindingRuntimeManager: ObservableObject {
             visited: &visited
         )
 
-        if !highlightModeActive {
-            applyIncomingTagLabelExclusiveBindings(
-                clickedKind: kind,
-                clickedId: elementId,
-                clickedButtonKey: buttonKey
-            )
+        // Эксклюзивная связка тег↔тег двунаправленная: применяем её и для входящего направления
+        // (когда нажатый тег — цель связки). Прямое направление уже отработало выше.
+        if kind == .tag {
+            applyIncomingExclusiveTagTagBindings(tagId: elementId, activating: true)
+            // Эксклюзив тег↔лейбл: нажатие тега подсвечивает его эксклюзивные лейблы (выбор партнёра).
+            highlightExclusiveLabelPartners(ofTag: elementId)
         }
 
         return true
+    }
+
+    /// Нажатие тега подсвечивает его эксклюзивные лейблы (эксклюзив тег↔лейбл = выбор из набора лейблов).
+    /// Якорь — этот тег (он добавляется на таймлайн сразу), нажатие подсвеченного лейбла прикрепит его к тегу.
+    private func highlightExclusiveLabelPartners(ofTag tagId: String) {
+        var highlighted = highlightedButtonIds
+        var didHighlight = false
+        for binding in bindings where binding.type == .exclusive && isTagLabelPair(binding) {
+            let labelKey: String?
+            if binding.sourceKind == .tag, binding.sourceId == tagId, binding.targetKind == .label {
+                labelKey = binding.targetButtonKey
+            } else if binding.targetKind == .tag, binding.targetId == tagId, binding.sourceKind == .label {
+                labelKey = binding.sourceButtonKey
+            } else {
+                labelKey = nil
+            }
+            if let labelKey {
+                highlighted.insert(labelKey)
+                didHighlight = true
+            }
+        }
+        guard didHighlight else { return }
+        highlightedButtonIds = highlighted
+        anchorTagId = tagId
+        highlightOriginButtonKey = "\(CanvasButtonKind.tag.rawValue):\(tagId)"
+        highlightModeActive = true
     }
 
     @discardableResult
@@ -237,11 +267,12 @@ final class KeyBindingRuntimeManager: ObservableObject {
             onAddTag?(partnerId, nil, nil, labels, finish)
 
         case (.tag, .label):
+            // Тег-источник уже на таймлайне (добавляется сразу при нажатии). Прикрепляем лейбл к нему.
             var labelIds = takeActivatedLabels()
             if !labelIds.contains(partnerId) {
                 labelIds.append(partnerId)
             }
-            onAddTag?(originId, nil, nil, labelIds, finish)
+            onAttachLabelsToAnchor?(originId, labelIds, finish)
 
         default:
             clearHighlight()
@@ -249,6 +280,97 @@ final class KeyBindingRuntimeManager: ObservableObject {
         }
 
         return true
+    }
+
+    // MARK: - Label tap (simple LMB) with highlight chains
+
+    /// Простое ЛКМ по лейблу в режиме связок.
+    /// Приоритет привязки лейбла: к тегу, с которым есть связь (якорь цепочки подсветки
+    /// или прямая связка лейбл→тег); если связи нет — к крайнему штампу на таймлайне.
+    /// Подсветка трактуется как отложенная активация: нажатие подсвеченного лейбла
+    /// прикрепляет его и запускает его собственные исходящие связки (продолжение цепочки).
+    func handleLabelTap(labelId: String) {
+        let buttonKey = "\(CanvasButtonKind.label.rawValue):\(labelId)"
+        didCompleteHighlightPair = false
+        didActivateTagInChain = false
+
+        // Случай 1: лейбл — подсвеченный партнёр активной цепочки (в т.ч. эксклюзивный лейбл,
+        // подсвеченный своим тегом) → прикрепляем к якорю и продолжаем его собственную цепочку.
+        if highlightModeActive, highlightedButtonIds.contains(buttonKey) {
+            advanceChainWithLabel(labelId: labelId, buttonKey: buttonKey)
+            return
+        }
+
+        // Эксклюзивный лейбл, нажатый отдельно (не подсвечен): привязывается ТОЛЬКО к своим
+        // эксклюзивным тегам — если крайний тег его эксклюзивный партнёр, прикрепляем; иначе ничего.
+        let exclusivePartners = exclusiveTagPartners(ofLabel: labelId)
+        if !exclusivePartners.isEmpty {
+            if highlightModeActive { clearHighlight() }
+            onAttachLabelsIfTagMatches?([labelId], exclusivePartners, nil)
+            return
+        }
+
+        if highlightModeActive {
+            clearHighlight()
+        }
+
+        // Случай 2: свежее нажатие — применяем исходящие связки лейбла (с каскадом активаций).
+        var visited = Set<String>()
+        applyOutgoingBindings(
+            from: buttonKey, sourceKind: .label, sourceId: labelId,
+            sourceTagActivating: nil, triggeringLabelId: labelId, visited: &visited
+        )
+
+        // 2a: лейбл запустил собственную подсветку → копим его и ждём партнёра.
+        if highlightModeActive, highlightOriginButtonKey == buttonKey {
+            activateLabel(id: labelId)
+            return
+        }
+
+        // 2b: цепочка активаций дошла до тега → лейблы уже забандлены в него.
+        if didActivateTagInChain {
+            clearActivatedLabels()
+            return
+        }
+
+        // 2c: тег в цепочке не появился → все накопленные лейблы (цепочка) к крайнему штампу.
+        var labels = takeActivatedLabels()
+        if !labels.contains(labelId) { labels.append(labelId) }
+        onAttachLabelsToLastStamp?(labels, nil)
+    }
+
+    /// Нажат подсвеченный лейбл. Копим его. Если тег-якорь УЖЕ на таймлайне (не висит сам в подсветке) —
+    /// прикрепляем накопленные лейблы к нему сразу. Иначе несём лейблы дальше по цепочке: они забандлятся
+    /// в тег при завершении (если цепочка ведёт к тегу) или уйдут на крайний штамп, если цепочка кончилась.
+    private func advanceChainWithLabel(labelId: String, buttonKey: String) {
+        activateLabel(id: labelId)
+
+        // Якорь «готов» (тег уже на таймлайне), если он задан и сам не висит в подсветке как цель.
+        if let anchor = anchorTagId,
+           !highlightedButtonIds.contains("\(CanvasButtonKind.tag.rawValue):\(anchor)") {
+            onAttachLabelsToAnchor?(anchor, takeActivatedLabels(), nil)
+        }
+
+        // Снимаем ВСЕ текущие подсветки (нажатие подсвеченного убирает все), но сохраняем якорь —
+        // цепочка продолжается только теми подсветками, что создаст сам нажатый лейбл ниже.
+        highlightedButtonIds = []
+        highlightHotkeys = [:]
+        highlightOriginButtonKey = buttonKey
+
+        var visited = Set<String>()
+        applyOutgoingBindings(
+            from: buttonKey, sourceKind: .label, sourceId: labelId,
+            sourceTagActivating: nil, triggeringLabelId: labelId, visited: &visited
+        )
+
+        // Новых подсветок не появилось — цепочка завершена.
+        if highlightedButtonIds.isEmpty {
+            // Лейблы не ушли в тег (ни в якорь, ни через активацию) — прикрепляем к крайнему штампу.
+            if !activatedLabelIds.isEmpty, !didActivateTagInChain {
+                onAttachLabelsToLastStamp?(takeActivatedLabels(), nil)
+            }
+            clearHighlight()
+        }
     }
 
     private func scheduleHighlightClearAfterBindings() {
@@ -326,14 +448,17 @@ final class KeyBindingRuntimeManager: ObservableObject {
         from sourceKind: CanvasButtonKind,
         sourceId: String
     ) -> Bool {
-        if sourceKind == .label, labelHasExclusiveBindings(labelId: sourceId) {
-            return binding.type == .exclusive
+        // Сами эксклюзивные связки применяются всегда.
+        guard binding.type != .exclusive else { return true }
+        // Эксклюзивный лейбл блокируется ТОЛЬКО во взаимодействии с ТЕГАМИ (не-эксклюзивная связка
+        // лейбл↔тег). Связки эксклюзивного лейбла на лейблы/события работают как обычно.
+        if binding.sourceKind == .label, binding.targetKind == .tag,
+           labelHasExclusiveBindings(labelId: binding.sourceId) {
+            return false
         }
-        if binding.targetKind == .label, labelHasExclusiveBindings(labelId: binding.targetId) {
-            return binding.type == .exclusive
-        }
-        if binding.sourceKind == .label, labelHasExclusiveBindings(labelId: binding.sourceId) {
-            return binding.type == .exclusive
+        if binding.sourceKind == .tag, binding.targetKind == .label,
+           labelHasExclusiveBindings(labelId: binding.targetId) {
+            return false
         }
         return true
     }
@@ -409,6 +534,9 @@ final class KeyBindingRuntimeManager: ObservableObject {
                 if isActive {
                     onStopIntervalTag?(binding.targetId)
                 } else {
+                    // Если интервал запущен нажатием лейбла — лейбл попадёт в запись (bundled).
+                    if let tl = triggeringLabelId { activateLabel(id: tl) }
+                    didActivateTagInChain = true
                     onStartIntervalTag?(binding.targetId)
                     applyOutgoingBindings(
                         from: targetKey,
@@ -440,9 +568,9 @@ final class KeyBindingRuntimeManager: ObservableObject {
         case .exclusive:
             if binding.sourceKind == .tag, binding.targetKind == .tag {
                 handleExclusiveTagTag(binding: binding, sourceActivating: sourceTagActivating ?? true)
-            } else if isTagLabelPair(binding) {
-                activateExclusiveHighlight(binding: binding)
             }
+            // Эксклюзив тег↔лейбл обрабатывается при простом ЛКМ по лейблу
+            // (привязка к крайнему тегу только если он — эксклюзивный партнёр), без подсветки.
         }
     }
 
@@ -453,14 +581,31 @@ final class KeyBindingRuntimeManager: ObservableObject {
 
     private func handleExclusiveTagTag(binding: KeyBinding, sourceActivating: Bool) {
         guard binding.sourceKind == .tag, binding.targetKind == .tag else { return }
-        if sourceActivating {
-            if isIntervalTagActive?(binding.targetId) == true {
-                onStopIntervalTag?(binding.targetId)
+        applyExclusiveEffect(on: binding.targetId, actorActivating: sourceActivating)
+    }
+
+    /// Эффект эксклюзивной связки тег↔тег на «другой» тег:
+    /// при активации актора — гасим другой; при деактивации — запускаем другой.
+    private func applyExclusiveEffect(on otherTagId: String, actorActivating: Bool) {
+        if actorActivating {
+            if isIntervalTagActive?(otherTagId) == true {
+                onStopIntervalTag?(otherTagId)
             }
         } else {
-            if isIntervalTagActive?(binding.targetId) != true {
-                onStartIntervalTag?(binding.targetId)
+            if isIntervalTagActive?(otherTagId) != true {
+                onStartIntervalTag?(otherTagId)
             }
+        }
+    }
+
+    /// Эксклюзивная связка тег↔тег работает в обе стороны: применяем её и когда нажатый тег —
+    /// ЦЕЛЬ связки (обратное направление). Прямое направление (тег-источник) обрабатывается в applyBinding.
+    private func applyIncomingExclusiveTagTagBindings(tagId: String, activating: Bool) {
+        let buttonKey = "\(CanvasButtonKind.tag.rawValue):\(tagId)"
+        for binding in bindings where binding.type == .exclusive
+            && binding.sourceKind == .tag && binding.targetKind == .tag
+            && binding.targetButtonKey == buttonKey {
+            applyExclusiveEffect(on: binding.sourceId, actorActivating: activating)
         }
     }
 
@@ -490,52 +635,17 @@ final class KeyBindingRuntimeManager: ObservableObject {
         }
     }
 
-    private func activateExclusiveHighlight(binding: KeyBinding) {
-        highlightOriginButtonKey = binding.sourceButtonKey
-        if binding.sourceKind == .tag {
-            anchorTagId = binding.sourceId
-        } else if binding.targetKind == .tag {
-            anchorTagId = binding.targetId
-        }
-
-        var highlighted = highlightedButtonIds
-        highlighted.insert(binding.targetButtonKey)
-        highlightedButtonIds = highlighted
-        highlightModeActive = true
-    }
-
-    /// Эксклюзивная связка тег↔лейбл срабатывает и при нажатии цели (например, лейбл при связке тег→лейбл).
-    private func applyIncomingTagLabelExclusiveBindings(
-        clickedKind: CanvasButtonKind,
-        clickedId: String,
-        clickedButtonKey: String
-    ) {
-        for binding in bindings where (binding.type == .exclusive || binding.type == .highlight) && isTagLabelPair(binding) {
-            let isIncomingTarget = binding.targetKind == clickedKind && binding.targetId == clickedId
-            let isIncomingSource = binding.sourceKind == clickedKind && binding.sourceId == clickedId
-            guard isIncomingTarget || isIncomingSource else { continue }
-            guard shouldApplyBinding(binding, from: clickedKind, sourceId: clickedId) else { continue }
-
-            let partnerKey: String
-            if binding.targetButtonKey == clickedButtonKey {
-                partnerKey = binding.sourceButtonKey
-            } else {
-                partnerKey = binding.targetButtonKey
+    /// Теги-эксклюзивные партнёры лейбла (эксклюзивные связки тег↔лейбл с участием этого лейбла).
+    func exclusiveTagPartners(ofLabel labelId: String) -> Set<String> {
+        var result = Set<String>()
+        for binding in bindings where binding.type == .exclusive && isTagLabelPair(binding) {
+            if binding.sourceKind == .label, binding.sourceId == labelId, binding.targetKind == .tag {
+                result.insert(binding.targetId)
+            } else if binding.targetKind == .label, binding.targetId == labelId, binding.sourceKind == .tag {
+                result.insert(binding.sourceId)
             }
-
-            highlightOriginButtonKey = clickedButtonKey
-            if binding.sourceKind == .tag {
-                anchorTagId = binding.sourceId
-            } else if binding.targetKind == .tag {
-                anchorTagId = binding.targetId
-            }
-
-            var highlighted = highlightedButtonIds
-            highlighted.insert(partnerKey)
-            highlightedButtonIds = highlighted
-            highlightModeActive = true
-            break
         }
+        return result
     }
 
     private func handleActivation(
@@ -546,8 +656,14 @@ final class KeyBindingRuntimeManager: ObservableObject {
         let targetId = binding.targetId
         let targetKey = binding.targetButtonKey
 
+        // Цепочка активаций: исходный лейбл тоже копится, чтобы попасть в итоговый тег.
+        if binding.sourceKind == .label {
+            activateLabel(id: binding.sourceId)
+        }
+
         if binding.targetKind == .tag {
-            let labels = labelsForTagAddition(triggeringLabelId: triggeringLabelId)
+            didActivateTagInChain = true
+            let labels = takeActivatedLabels(triggeringLabelId: triggeringLabelId)
             let capturedVisited = visited
             let capturedTrigger = triggeringLabelId
             onAddTag?(targetId, binding.overrideTimeBefore, binding.overrideTimeAfter, labels) { [weak self] in
@@ -564,6 +680,15 @@ final class KeyBindingRuntimeManager: ObservableObject {
             }
         } else if binding.targetKind == .label {
             activateLabel(id: targetId)
+            // Каскад: применяем исходящие связки активированного лейбла (цепочка активаций идёт дальше).
+            applyOutgoingBindings(
+                from: targetKey,
+                sourceKind: .label,
+                sourceId: targetId,
+                sourceTagActivating: nil,
+                triggeringLabelId: triggeringLabelId,
+                visited: &visited
+            )
         } else if binding.targetKind == .timeEvent {
             var pending = pendingTimeEventIds
             pending.insert(targetId)

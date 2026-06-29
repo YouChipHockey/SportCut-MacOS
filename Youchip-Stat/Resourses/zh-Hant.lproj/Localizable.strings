@@ -1064,6 +1064,7 @@
 "KeyBindingsHighlightHotkey" = "快捷鍵:";
 "KeyBindingsPressKey" = "按下一個鍵…";
 "KeyBindingsRemoveFromCanvas" = "從畫布移除";
+"KeyBindingsReturnToCanvas" = "返回到標註";
 "KeyBindingsVisibilitySection" = "可見性";
 "KeyBindingsItemVisible" = "預設可見";
 "KeyBindingsTapSourceHint" = "步驟 1：點選畫布上的來源按鈕";
@@ -1085,6 +1086,10 @@
 "KeyBindingsDeleteEventMessage" = "事件將從集合中移除。";
 "KeyBindingsMapTabHint" = "球場地圖編輯器已在中央區域開啟。";
 "KeyBindingsNoTagGroups" = "請先建立標籤群組。";
+"KeyBindingsArrowsVisibilityTitle" = "連線箭頭";
+"KeyBindingsArrowsHidden" = "全部隱藏";
+"KeyBindingsArrowsAbove" = "按鈕上方";
+"KeyBindingsArrowsBelow" = "按鈕下方";
 "KeyBindingTypeHighlight" = "高亮";
 "KeyBindingTypeActivation" = "啟用";
 "KeyBindingTypeDeactivation" = "停用";
