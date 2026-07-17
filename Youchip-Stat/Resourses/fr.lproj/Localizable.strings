@@ -243,6 +243,8 @@
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
 "FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
+"FullControlExportExcelFileName" = "timelines.xlsx";
+"FullControlExportExcelSaveError" = "Erreur d'enregistrement Excel : %@";
 "FullControlAiReportErrorGeneration" = "Erreur de génération du rapport IA : %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "Erreur : pas de données du serveur";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "Erreur serveur : %@";  // ^String.Titles.fullControlErrorServer
@@ -1069,6 +1071,12 @@
 "KeyBindingsItemVisible" = "Visible par défaut";
 "KeyBindingsTapSourceHint" = "Étape 1 : appuyez sur un bouton source sur la zone";
 "KeyBindingsTapTargetHint" = "Étape 2 : appuyez sur un bouton cible sur la zone";
+"KeyBindingsButtonAllBindings" = "Toutes les liaisons de ce bouton";
+"CanvasEditTabParameters" = "Paramètres";
+"CanvasEditTabAppearance" = "Apparence";
+"CanvasEditName" = "Nom";
+"KeyBindingsShowConnectionsToggle" = "Afficher les liaisons";
+"KeyBindingsShowConnectionsHint" = "Appuyez sur un bouton pour voir ses liaisons en flèches";
 "KeyBindingsCanvasSummary" = "Sur la zone";
 "KeyBindingsCanvasTagsCount" = "Tags : %d";
 "KeyBindingsCanvasLabelsCount" = "Labels : %d";

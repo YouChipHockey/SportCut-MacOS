@@ -47,6 +47,7 @@ extension NSNotification.Name {
     static let toolsExportMarkupJSONFull = NSNotification.Name("toolsExportMarkupJSONFull")
     static let toolsExportMarkupJSONSimple = NSNotification.Name("toolsExportMarkupJSONSimple")
     static let toolsExportMarkupXML = NSNotification.Name("toolsExportMarkupXML")
+    static let toolsExportMarkupExcel = NSNotification.Name("toolsExportMarkupExcel")
     static let toolsExportCutsCurrentTimeline = NSNotification.Name("toolsExportCutsCurrentTimeline")
     static let toolsExportCutsAllTimelines = NSNotification.Name("toolsExportCutsAllTimelines")
     static let toolsExportCutsDrawings = NSNotification.Name("toolsExportCutsDrawings")

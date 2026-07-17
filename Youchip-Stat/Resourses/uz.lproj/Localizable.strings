@@ -243,6 +243,8 @@
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
 "FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
+"FullControlExportExcelFileName" = "timelines.xlsx";
+"FullControlExportExcelSaveError" = "Excelni saqlashda xatolik: %@";
 "FullControlAiReportErrorGeneration" = "AI hisobot yaratish xatosi: %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "Xato: serverdan ma'lumot yo'q";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "Server xatosi: %@";  // ^String.Titles.fullControlErrorServer
@@ -1069,6 +1071,12 @@
 "KeyBindingsItemVisible" = "Standart ko'rinadigan";
 "KeyBindingsTapSourceHint" = "1-qadam: tuvalda manba tugmasini bosing";
 "KeyBindingsTapTargetHint" = "2-qadam: tuvalda maqsad tugmasini bosing";
+"KeyBindingsButtonAllBindings" = "Ushbu tugmaning barcha bogʻlanishlari";
+"CanvasEditTabParameters" = "Parametrlar";
+"CanvasEditTabAppearance" = "Koʻrinishi";
+"CanvasEditName" = "Nomi";
+"KeyBindingsShowConnectionsToggle" = "Bogʻlanishlarni koʻrsatish";
+"KeyBindingsShowConnectionsHint" = "Bogʻlanishlarni oʻqlar bilan koʻrish uchun tugmani bosing";
 "KeyBindingsCanvasSummary" = "Tuvalda";
 "KeyBindingsCanvasTagsCount" = "Teglar: %d";
 "KeyBindingsCanvasLabelsCount" = "Yorliqlar: %d";

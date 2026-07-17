@@ -22,9 +22,16 @@ struct FreeTagsCanvasView: View {
     let tagCounts: [String: Int]
     @ObservedObject var runtime: KeyBindingRuntimeManager
     var userScale: CGFloat = 1.0
+    /// Показ связок: под/над кнопками — включён, скрыто — выключен.
+    var arrowVisibility: KeyBindingArrowVisibility = .hidden
 
     @State private var layout: TagFreeLayout?
     @State private var fitScale: CGFloat = 1.0
+    /// Составной ключ кнопки ("kind:id"), для которой показываются стрелки связок.
+    @State private var selectedBindingButtonKey: String? = nil
+
+    /// Режим показа связок включён (стрелки под или над кнопками).
+    private var showBindingsMode: Bool { arrowVisibility != .hidden }
 
     private var currentCollectionId: String? {
         if case .user(let name) = TagLibraryManager.shared.currentCollectionType {
@@ -50,9 +57,18 @@ struct FreeTagsCanvasView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .top, spacing: 0) {
                         ZStack(alignment: .topLeading) {
-                            Color.clear
-                                .frame(width: canvasWidth, height: canvasHeight)
-                                .allowsHitTesting(false)
+                            // В режиме показа связок фон холста снимает выделение по нажатию.
+                            if showBindingsMode {
+                                Color.clear
+                                    .frame(width: canvasWidth, height: canvasHeight)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedBindingButtonKey = nil }
+                                    .zIndex(0)
+                            } else {
+                                Color.clear
+                                    .frame(width: canvasWidth, height: canvasHeight)
+                                    .allowsHitTesting(false)
+                            }
 
                             ForEach(effectiveLayout.items) { item in
                                 if isVisible(item: item) {
@@ -69,6 +85,21 @@ struct FreeTagsCanvasView: View {
                                         )
                                         .zIndex(canvasZIndex(for: item, isHighlighted: isHighlighted))
                                 }
+                            }
+
+                            // Стрелки связок выбранной кнопки, без хит-теста.
+                            // Под кнопками (.below) — zIndex ниже кнопок, над (.above) — выше.
+                            if showBindingsMode, let focus = selectedBindingButtonKey {
+                                KeyBindingArrowLinesOverlay(
+                                    layout: effectiveLayout,
+                                    scale: scale,
+                                    origin: origin,
+                                    canvasPixelWidth: canvasWidth,
+                                    canvasPixelHeight: canvasHeight,
+                                    selectedGroupKey: nil,
+                                    focusedSourceKey: focus
+                                )
+                                .zIndex(arrowVisibility == .below ? 1 : 500)
                             }
                         }
                         .frame(width: canvasWidth, height: canvasHeight, alignment: .topLeading)
@@ -93,6 +124,10 @@ struct FreeTagsCanvasView: View {
             }
             .onChange(of: currentCollectionId) { _ in
                 loadLayoutIfNeeded()
+                selectedBindingButtonKey = nil
+            }
+            .onChange(of: arrowVisibility) { mode in
+                if mode == .hidden { selectedBindingButtonKey = nil }
             }
             .onChange(of: layoutKey) { newKey in
                 syncFitScale(
@@ -223,6 +258,10 @@ struct FreeTagsCanvasView: View {
                     isHighlighted: isHighlighted,
                     tagCount: tagCounts[tag.id] ?? 0,
                     onTap: {
+                        if showBindingsMode {
+                            toggleBindingSelection(buttonKey)
+                            return
+                        }
                         runtime.applyRevertVisibilityIfNeeded(for: buttonKey)
                         onTagTap(tag)
                     }
@@ -238,6 +277,10 @@ struct FreeTagsCanvasView: View {
                     isHighlighted: isHighlighted,
                     isSelected: runtime.isLabelActivated(label.id),
                     onTap: {
+                        if showBindingsMode {
+                            toggleBindingSelection(buttonKey)
+                            return
+                        }
                         runtime.applyRevertVisibilityIfNeeded(for: buttonKey)
                         let commandPressed = NSEvent.modifierFlags.contains(.command)
                         onLabelTap?(label, commandPressed)
@@ -254,12 +297,21 @@ struct FreeTagsCanvasView: View {
                     isHighlighted: isHighlighted,
                     isSelected: runtime.pendingTimeEventIds.contains(event.id),
                     onTap: {
+                        if showBindingsMode {
+                            toggleBindingSelection(buttonKey)
+                            return
+                        }
                         runtime.applyRevertVisibilityIfNeeded(for: buttonKey)
                         onTimeEventTap?(event)
                     }
                 )
             }
         }
+    }
+
+    /// Переключает выбор кнопки в режиме показа связок (повторное нажатие снимает выбор).
+    private func toggleBindingSelection(_ key: String) {
+        selectedBindingButtonKey = (selectedBindingButtonKey == key) ? nil : key
     }
 
     // MARK: - Load layout

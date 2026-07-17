@@ -243,6 +243,8 @@
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
 "FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
+"FullControlExportExcelFileName" = "timelines.xlsx";
+"FullControlExportExcelSaveError" = "保存 Excel 出错：%@";
 "FullControlAiReportErrorGeneration" = "AI报告生成错误: %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "错误: 无服务器数据";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "服务器错误: %@";  // ^String.Titles.fullControlErrorServer
@@ -1069,6 +1071,12 @@
 "KeyBindingsItemVisible" = "默认可见";
 "KeyBindingsTapSourceHint" = "步骤 1：点击画布上的源按钮";
 "KeyBindingsTapTargetHint" = "步骤 2：点击画布上的目标按钮";
+"KeyBindingsButtonAllBindings" = "此按钮的所有绑定";
+"CanvasEditTabParameters" = "参数";
+"CanvasEditTabAppearance" = "外观";
+"CanvasEditName" = "名称";
+"KeyBindingsShowConnectionsToggle" = "显示绑定";
+"KeyBindingsShowConnectionsHint" = "点击按钮以箭头查看其绑定";
 "KeyBindingsCanvasSummary" = "画布上";
 "KeyBindingsCanvasTagsCount" = "标签：%d";
 "KeyBindingsCanvasLabelsCount" = "标注：%d";

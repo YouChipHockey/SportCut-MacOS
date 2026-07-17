@@ -19,52 +19,116 @@ struct KeyBindingSettingsPanel: View {
     let timeEvents: [TimeEvent]
     /// Ключ выбранной группы стрелок (source → target).
     let selectedGroupKey: KeyBindingGroupKey?
+    /// Составной ключ сфокусированной кнопки ("kind:id"). Когда задан — показываются все её связки.
+    var focusedSourceKey: String? = nil
     /// Все элементы холста (для отображения имён).
     var onAddLabel: (Label) -> Void
     var onAddTimeEvent: (TimeEvent) -> Void
     var onDeselect: () -> Void
+    /// Сообщает наружу, какие группы связок подсвечивать на холсте (раскрытые в деталке кнопки).
+    var onHighlightGroups: (Set<KeyBindingGroupKey>) -> Void = { _ in }
 
     @State private var isCapturingHotkeyForBindingId: String? = nil
     @State private var showPasteAlert = false
+    /// Развёрнутые связки в деталке кнопки. В деталке связки всё всегда развёрнуто (это состояние не используется).
+    @State private var expandedBindingIds: Set<String> = []
+    /// Снимок id всех связок для детекции только что добавленной связки.
+    @State private var previousBindingIds: Set<String> = []
 
-    private var bindingsForGroup: [KeyBinding] {
-        guard let key = selectedGroupKey else { return [] }
-        return layout.bindings.filter { $0.groupKey == key }
+    private func bindings(for key: KeyBindingGroupKey) -> [KeyBinding] {
+        layout.bindings.filter { $0.groupKey == key }
+    }
+
+    /// Группы связок, ИСХОДЯЩИХ из сфокусированной кнопки, отсортированные по имени цели.
+    private var outgoingGroupKeys: [KeyBindingGroupKey] {
+        guard let focus = focusedSourceKey else { return [] }
+        let keys = Set(layout.bindings.filter { $0.sourceButtonKey == focus }.map { $0.groupKey })
+        return keys.sorted {
+            name(for: $0.targetId, kind: $0.targetKind)
+                .localizedCaseInsensitiveCompare(name(for: $1.targetId, kind: $1.targetKind)) == .orderedAscending
+        }
+    }
+
+    /// Группы связок, ВХОДЯЩИХ в сфокусированную кнопку (source ≠ focus), отсортированные по имени источника.
+    private var incomingGroupKeys: [KeyBindingGroupKey] {
+        guard let focus = focusedSourceKey else { return [] }
+        let keys = Set(layout.bindings
+            .filter { $0.targetButtonKey == focus && $0.sourceButtonKey != focus }
+            .map { $0.groupKey })
+        return keys.sorted {
+            name(for: $0.sourceId, kind: $0.sourceKind)
+                .localizedCaseInsensitiveCompare(name(for: $1.sourceId, kind: $1.sourceKind)) == .orderedAscending
+        }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                canvasSummarySection
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    canvasSummarySection
 
-                if !timeEvents.isEmpty {
-                    Divider()
-                    sectionHeader(^String.Titles.keyBindingsPaletteTitle)
-                    timeEventsPalette
-                }
-
-                Divider()
-
-                if let key = selectedGroupKey {
-                    bindingGroupPanel(key: key)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(^String.Titles.keyBindingsTapSourceHint)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(^String.Titles.keyBindingsSelectArrowHint)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.leading)
+                    if !timeEvents.isEmpty {
+                        Divider()
+                        sectionHeader(^String.Titles.keyBindingsPaletteTitle)
+                        timeEventsPalette
                     }
-                    .padding(.top, 4)
+
+                    Divider()
+
+                    if let focus = focusedSourceKey {
+                        focusedButtonPanel(sourceKey: focus)
+                    } else if let key = selectedGroupKey {
+                        bindingGroupPanel(key: key)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(^String.Titles.keyBindingsTapSourceHint)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(^String.Titles.keyBindingsSelectArrowHint)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .padding(.top, 4)
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .onAppear { previousBindingIds = Set(layout.bindings.map { $0.id }) }
+            // Смена сфокусированной кнопки — все связки снова свёрнуты.
+            .onChange(of: focusedSourceKey) { _ in expandedBindingIds = [] }
+            // Появилась новая связка — раскрываем и пролистываем только к ней.
+            .onChange(of: layout.bindings.map { $0.id }) { ids in
+                handleBindingsChanged(ids, proxy: proxy)
+            }
+            // Раскрытые связки подсвечиваются на холсте.
+            .onChange(of: expandedBindingIds) { _ in reportHighlightedGroups() }
         }
         .frame(width: 340)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    /// Определяет только что добавленную связку, разворачивает её (свернув остальные) и пролистывает к ней.
+    private func handleBindingsChanged(_ ids: [String], proxy: ScrollViewProxy) {
+        let current = Set(ids)
+        let added = current.subtracting(previousBindingIds)
+        previousBindingIds = current
+        guard focusedSourceKey != nil, !added.isEmpty else { return }
+        // Из добавленных берём связку, относящуюся к сфокусированной кнопке.
+        guard let newId = ids.last(where: { added.contains($0) }) else { return }
+        expandedBindingIds = [newId]
+        DispatchQueue.main.async {
+            withAnimation { proxy.scrollTo(newId, anchor: .center) }
+        }
+    }
+
+    /// Передаёт наружу группы связок, соответствующие раскрытым в панели связкам.
+    private func reportHighlightedGroups() {
+        let groups = Set(expandedBindingIds.compactMap { id in
+            layout.bindings.first(where: { $0.id == id })?.groupKey
+        })
+        onHighlightGroups(groups)
     }
 
     // MARK: - Canvas summary
@@ -128,6 +192,66 @@ struct KeyBindingSettingsPanel: View {
         }
     }
 
+    // MARK: - Focused button panel (все связки одной кнопки)
+
+    private func focusedButtonPanel(sourceKey: String) -> some View {
+        let parts = sourceKey.split(separator: ":", maxSplits: 1)
+        let kind = parts.first.flatMap { CanvasButtonKind(rawValue: String($0)) } ?? .tag
+        let elementId = parts.count == 2 ? String(parts[1]) : sourceKey
+        let outgoing = outgoingGroupKeys
+        let incoming = incomingGroupKeys
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name(for: elementId, kind: kind))
+                        .font(.subheadline).fontWeight(.semibold)
+                    Text(^String.Titles.keyBindingsButtonAllBindings)
+                        .font(.caption2).foregroundColor(.secondary)
+                }
+                Spacer()
+                Button(action: onDeselect) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 4)
+
+            Divider()
+
+            if outgoing.isEmpty && incoming.isEmpty {
+                Text(^String.Titles.keyBindingsTapTargetHint)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 4)
+            } else {
+                // Исходящие связки (кнопка → цель).
+                ForEach(outgoing, id: \.self) { key in
+                    bindingGroupSection(
+                        key: key,
+                        headerName: name(for: key.targetId, kind: key.targetKind),
+                        incoming: false,
+                        collapsible: true
+                    )
+                    Divider()
+                }
+                // Входящие связки (источник → кнопка).
+                ForEach(incoming, id: \.self) { key in
+                    bindingGroupSection(
+                        key: key,
+                        headerName: name(for: key.sourceId, kind: key.sourceKind),
+                        incoming: true,
+                        collapsible: true
+                    )
+                    Divider()
+                }
+            }
+
+            Spacer(minLength: 20)
+        }
+    }
+
     // MARK: - Binding group panel
 
     private func bindingGroupPanel(key: KeyBindingGroupKey) -> some View {
@@ -152,28 +276,53 @@ struct KeyBindingSettingsPanel: View {
 
             Divider()
 
+            // Деталка связки: всегда развёрнуто, без заголовка и без сворачивания.
+            bindingGroupSection(key: key, headerName: nil, incoming: false, collapsible: false)
+
+            Spacer(minLength: 20)
+        }
+    }
+
+    // MARK: - Binding group section (связки одной пары source→target)
+
+    /// - Parameters:
+    ///   - headerName: имя «другой» кнопки пары; nil — заголовок не показывается (деталка связки).
+    ///   - incoming: связка входящая (источник → сфокусированная кнопка). Влияет только на стрелку заголовка.
+    ///   - collapsible: связки можно сворачивать/разворачивать (деталка кнопки). Иначе всегда развёрнуто.
+    private func bindingGroupSection(key: KeyBindingGroupKey, headerName: String?, incoming: Bool, collapsible: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let headerName = headerName {
+                HStack(spacing: 4) {
+                    Image(systemName: incoming ? "arrow.left" : "arrow.right")
+                        .font(.caption2).foregroundColor(.secondary)
+                    Text(headerName)
+                        .font(.caption).fontWeight(.semibold)
+                }
+            }
+
             // Binding accordions
-            ForEach(bindingsForGroup) { binding in
-                bindingAccordion(binding: binding)
+            ForEach(bindings(for: key)) { binding in
+                bindingAccordion(binding: binding, collapsible: collapsible)
+                    .id(binding.id)
                 Divider()
             }
 
             // Add / copy-paste buttons
             HStack(spacing: 8) {
-                Button(action: addBinding) {
+                Button(action: { addBinding(key: key) }) {
                     SwiftUI.Label(^String.Titles.keyBindingsAdd, systemImage: "plus")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
 
-                Button(action: copyBindings) {
+                Button(action: { copyBindings(key: key) }) {
                     SwiftUI.Label(^String.Titles.keyBindingsCopy, systemImage: "doc.on.doc")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
 
                 if KeyBindingClipboard.hasContent {
-                    Button(action: pasteBindings) {
+                    Button(action: { pasteBindings(key: key) }) {
                         SwiftUI.Label(^String.Titles.keyBindingsPaste, systemImage: "doc.on.clipboard")
                             .font(.caption)
                     }
@@ -181,17 +330,23 @@ struct KeyBindingSettingsPanel: View {
                 }
             }
             .padding(.top, 4)
-
-            Spacer(minLength: 20)
         }
     }
 
     // MARK: - Single binding accordion
 
-    private func bindingAccordion(binding: KeyBinding) -> some View {
-        // Настройки связки всегда раскрыты и не сворачиваются.
-        VStack(alignment: .leading, spacing: 0) {
+    private func bindingAccordion(binding: KeyBinding, collapsible: Bool) -> some View {
+        // В деталке связки (collapsible == false) всё всегда развёрнуто.
+        // В деталке кнопки (collapsible == true) связки можно сворачивать/разворачивать.
+        let isExpanded = !collapsible || expandedBindingIds.contains(binding.id)
+        return VStack(alignment: .leading, spacing: 0) {
             HStack {
+                if collapsible {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(width: 10)
+                }
                 Image(systemName: "arrow.triangle.branch")
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -206,10 +361,21 @@ struct KeyBindingSettingsPanel: View {
                 }
             }
             .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard collapsible else { return }
+                if expandedBindingIds.contains(binding.id) {
+                    expandedBindingIds.remove(binding.id)
+                } else {
+                    expandedBindingIds.insert(binding.id)
+                }
+            }
 
-            bindingDetails(binding: binding)
-                .padding(.leading, 12)
-                .padding(.bottom, 8)
+            if isExpanded {
+                bindingDetails(binding: binding)
+                    .padding(.leading, 12)
+                    .padding(.bottom, 8)
+            }
         }
     }
 
@@ -391,8 +557,7 @@ struct KeyBindingSettingsPanel: View {
 
     // MARK: - Actions
 
-    private func addBinding() {
-        guard let key = selectedGroupKey else { return }
+    private func addBinding(key: KeyBindingGroupKey) {
         let nb = KeyBinding(
             sourceId: key.sourceId,
             sourceKind: key.sourceKind,
@@ -412,12 +577,11 @@ struct KeyBindingSettingsPanel: View {
         layout.bindings.append(contentsOf: dupes)
     }
 
-    private func copyBindings() {
-        KeyBindingClipboard.copy(bindingsForGroup)
+    private func copyBindings(key: KeyBindingGroupKey) {
+        KeyBindingClipboard.copy(bindings(for: key))
     }
 
-    private func pasteBindings() {
-        guard let key = selectedGroupKey else { return }
+    private func pasteBindings(key: KeyBindingGroupKey) {
         if let pasted = KeyBindingClipboard.paste(newSourceId: key.sourceId, newSourceKind: key.sourceKind) {
             layout.bindings.append(contentsOf: pasted)
         }

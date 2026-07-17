@@ -3,12 +3,9 @@
 //  Youchip-Stat
 //
 //  Отрисовка стрелок связок клавиш на холсте редактора.
-//  Разделено на два слоя:
-//   - KeyBindingArrowLinesOverlay — сами стрелки (Canvas, без хит-теста);
-//   - KeyBindingArrowBadgesOverlay — кликабельные кружки-счётчики на середине стрелок.
-//  Оба слоя размещаются над или под кнопками в зависимости от глобального
-//  переключателя (над кнопками / под кнопками / скрыть всё): в режиме «под кнопками»
-//  бейджи уходят под кнопки вместе со стрелками.
+//  KeyBindingArrowLinesOverlay — сами стрелки (Canvas, без хит-теста).
+//  Слой размещается над или под кнопками в зависимости от глобального
+//  переключателя (над кнопками / под кнопками / скрыть всё).
 //
 
 import SwiftUI
@@ -37,17 +34,29 @@ struct KeyBindingArrowLinesOverlay: View {
     let canvasPixelWidth: CGFloat
     let canvasPixelHeight: CGFloat
     let selectedGroupKey: KeyBindingGroupKey?
+    /// Группы связок, подсвеченные (раскрытые в деталке кнопки справа).
+    var highlightedGroupKeys: Set<KeyBindingGroupKey> = []
+    /// Составной ключ кнопки, на которой сфокусирован пользователь ("kind:id").
+    /// Когда задан — рисуются только связки, входящие в эту кнопку или исходящие из неё.
+    var focusedSourceKey: String? = nil
 
     var body: some View {
         Canvas { ctx, size in
             let grouped = KeyBindingArrowGeometry.groupedBindings(layout)
-            for (key, group) in grouped where key != selectedGroupKey {
-                drawArrow(ctx: &ctx, key: key, count: group.count,
+            var highlighted = highlightedGroupKeys
+            if let sel = selectedGroupKey { highlighted.insert(sel) }
+
+            // Обычные связки — под подсвеченными.
+            for (key, group) in grouped where !highlighted.contains(key) {
+                guard passesFocusFilter(key) else { continue }
+                drawArrow(ctx: &ctx, key: key, type: group.first?.type,
                           scale: scale, isSelected: false,
                           isExclusive: isExclusiveGroup(group), size: size)
             }
-            if let sel = selectedGroupKey, let group = grouped[sel] {
-                drawArrow(ctx: &ctx, key: sel, count: group.count,
+            // Подсвеченные связки — поверх остальных.
+            for key in highlighted {
+                guard let group = grouped[key], passesFocusFilter(key) else { continue }
+                drawArrow(ctx: &ctx, key: key, type: group.first?.type,
                           scale: scale, isSelected: true,
                           isExclusive: isExclusiveGroup(group), size: size)
             }
@@ -56,58 +65,67 @@ struct KeyBindingArrowLinesOverlay: View {
         .frame(width: canvasPixelWidth, height: canvasPixelHeight, alignment: .topLeading)
     }
 
+    /// Связка проходит фильтр фокуса: фокуса нет, либо связка входит/исходит из сфокусированной кнопки.
+    private func passesFocusFilter(_ key: KeyBindingGroupKey) -> Bool {
+        focusedSourceKey == nil
+            || key.sourceButtonKey == focusedSourceKey
+            || key.targetButtonKey == focusedSourceKey
+    }
+
     /// Группа состоит только из эксклюзивных связок — она двунаправленная и рисуется без наконечника.
     private func isExclusiveGroup(_ group: [KeyBinding]) -> Bool {
         !group.isEmpty && group.allSatisfy { $0.type == .exclusive }
     }
 
+    /// Цвет стрелки по типу связки.
+    private func arrowColor(for type: KeyBindingType?) -> Color {
+        switch type {
+        case .activation:          return Color(red: 0.00, green: 0.45, blue: 0.16) // тёмно-зелёный
+        case .deactivation:        return .red                                       // красный
+        case .highlight:           return .white                                     // белый
+        case .exclusive:           return .orange                                    // оранжевый
+        case .intervalInversion:   return .purple                                    // фиолетовый
+        case .visibility:          return Color(red: 0.60, green: 0.85, blue: 0.30)  // салатовый
+        case .invisibility:        return Color(red: 1.00, green: 0.45, blue: 0.70)  // розовый
+        case .visibilityInversion: return .brown                                     // коричневый
+        case .none:                return .primary
+        }
+    }
+
     private func drawArrow(ctx: inout GraphicsContext, key: KeyBindingGroupKey,
-                           count: Int, scale: CGFloat, isSelected: Bool, isExclusive: Bool, size: CGSize) {
+                           type: KeyBindingType?, scale: CGFloat, isSelected: Bool, isExclusive: Bool, size: CGSize) {
         guard let src = KeyBindingArrowGeometry.center(in: layout, for: key.sourceId, kind: key.sourceKind),
               let dst = KeyBindingArrowGeometry.center(in: layout, for: key.targetId, kind: key.targetKind) else { return }
 
         let s = CGPoint(x: (src.x - origin.x) * scale, y: (src.y - origin.y) * scale)
         let d = CGPoint(x: (dst.x - origin.x) * scale, y: (dst.y - origin.y) * scale)
 
-        let color: Color = isSelected ? .accentColor : Color.primary.opacity(0.4)
-        let lineWidth: CGFloat = isSelected ? 2 : 1.5
+        // Все связки полупрозрачные (60%), выделенные — полностью непрозрачные и вдвое толще.
+        let baseLineWidth: CGFloat = 2
+        let color: Color = arrowColor(for: type).opacity(isSelected ? 1.0 : 0.6)
+        let lineWidth: CGFloat = isSelected ? baseLineWidth * 2 : baseLineWidth
 
-        // Эксклюзивная связка двунаправленная — прямая линия без наконечника.
-        if isExclusive {
-            var line = Path()
-            line.move(to: s)
-            line.addLine(to: d)
-            ctx.stroke(line, with: .color(color), lineWidth: lineWidth)
-            return
-        }
+        // Все связки — прямые линии.
+        var line = Path()
+        line.move(to: s)
+        line.addLine(to: d)
+        ctx.stroke(line, with: .color(color), lineWidth: lineWidth)
 
-        let path = arrowPath(from: s, to: d)
-        ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
+        // Эксклюзивная связка двунаправленная — без наконечника.
+        if isExclusive { return }
 
         let headPath = arrowheadPath(from: s, to: d)
         ctx.fill(headPath, with: .color(color))
     }
 
-    private func arrowPath(from s: CGPoint, to d: CGPoint) -> Path {
-        let midX = (s.x + d.x) / 2
-        let midY = (s.y + d.y) / 2
+    private func arrowheadPath(from s: CGPoint, to d: CGPoint) -> Path {
         let dx = d.x - s.x
         let dy = d.y - s.y
-        let len = max(sqrt(dx * dx + dy * dy), 1)
-        let offsetScale: CGFloat = 0.15
-        let cpX = midX - dy / len * len * offsetScale
-        let cpY = midY + dx / len * len * offsetScale
-
-        var path = Path()
-        path.move(to: s)
-        path.addQuadCurve(to: d, control: CGPoint(x: cpX, y: cpY))
-        return path
-    }
-
-    private func arrowheadPath(from s: CGPoint, to d: CGPoint) -> Path {
-        let angle = atan2(d.y - s.y, d.x - s.x)
-        let size: CGFloat = 8
-        let tip = d
+        let angle = atan2(dy, dx)
+        // Базовый размер наконечника, масштабируется вместе с зумом холста.
+        let size: CGFloat = 16 * scale
+        // Наконечник — по середине расстояния между кнопками, остриём к цели.
+        let tip = CGPoint(x: (s.x + d.x) / 2, y: (s.y + d.y) / 2)
         let left = CGPoint(
             x: tip.x - size * cos(angle - .pi / 6),
             y: tip.y - size * sin(angle - .pi / 6)
@@ -122,61 +140,5 @@ struct KeyBindingArrowLinesOverlay: View {
         path.addLine(to: right)
         path.closeSubpath()
         return path
-    }
-}
-
-// MARK: - Arrow badges (interactive)
-
-struct KeyBindingArrowBadgesOverlay: View {
-
-    let layout: TagFreeLayout
-    let scale: CGFloat
-    /// Смещение начала координат холста (для «бесконечного» редактора). По умолчанию — без смещения.
-    var origin: CGPoint = .zero
-    let canvasPixelWidth: CGFloat
-    let canvasPixelHeight: CGFloat
-    let selectedGroupKey: KeyBindingGroupKey?
-    let onSelectGroup: (KeyBindingGroupKey) -> Void
-
-    var body: some View {
-        let grouped = KeyBindingArrowGeometry.groupedBindings(layout)
-        ZStack(alignment: .topLeading) {
-            ForEach(Array(grouped.keys), id: \.self) { key in
-                if let group = grouped[key],
-                   let srcCenter = KeyBindingArrowGeometry.center(in: layout, for: key.sourceId, kind: key.sourceKind),
-                   let dstCenter = KeyBindingArrowGeometry.center(in: layout, for: key.targetId, kind: key.targetKind) {
-                    let mid = CGPoint(
-                        x: ((srcCenter.x + dstCenter.x) / 2 - origin.x) * scale,
-                        y: ((srcCenter.y + dstCenter.y) / 2 - origin.y) * scale
-                    )
-                    ArrowBadgeButton(
-                        count: group.count,
-                        isSelected: key == selectedGroupKey
-                    )
-                    .position(x: mid.x, y: mid.y)
-                    .onTapGesture { onSelectGroup(key) }
-                }
-            }
-        }
-        .frame(width: canvasPixelWidth, height: canvasPixelHeight, alignment: .topLeading)
-    }
-}
-
-// MARK: - Badge button on arrow midpoint
-
-private struct ArrowBadgeButton: View {
-    let count: Int
-    let isSelected: Bool
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
-                .overlay(Circle().stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.4), lineWidth: 1))
-                .frame(width: 22, height: 22)
-            Text("\(count)")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(isSelected ? .white : .primary)
-        }
     }
 }

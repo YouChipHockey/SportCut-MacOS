@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(grep -E \"\\\\.swift$|\\\\.xctest\")",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Read(//Users/sergejbekezin/Desktop/**)",
+      "Bash(textutil -convert txt -stdout \"Вылет_при_редактировании_коллекции_со_связками.rtf\")",
+      "Read(//tmp/**)",
+      "Bash(awk '/Heaviest stack for the main thread/{f=1} f{print}' /tmp/hang.txt)",
+      "Bash(dwarfdump --uuid SportCut.app.dSYM)"
     ]
   }
 }

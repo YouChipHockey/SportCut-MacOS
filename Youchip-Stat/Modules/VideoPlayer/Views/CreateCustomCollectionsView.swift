@@ -244,11 +244,39 @@ struct CreateCustomCollectionsView: View {
                 collectionName: collectionManager.collectionName,
                 tags: collectionManager.tags,
                 labels: collectionManager.labels,
-                timeEvents: collectionManager.timeEvents
+                timeEvents: collectionManager.timeEvents,
+                onEditElement: { kind, elementId in
+                    openElementEditor(kind: kind, elementId: elementId)
+                }
             )
         }
     }
     
+    /// Двойной клик по элементу в раскладке — закрыть редактор раскладки и открыть
+    /// редактирование самого тега/лейбла/события (как из левого списка + правой панели).
+    private func openElementEditor(kind: CanvasButtonKind, elementId: String) {
+        showTagLayoutEditor = false
+        switch kind {
+        case .tag:
+            viewMode = .tagGroups
+            selectedTagGroupID = collectionManager.tagGroups.first(where: { $0.tags.contains(elementId) })?.id
+            selectedTagID = elementId
+            selectedLabelID = nil
+            selectedTimeEventID = nil
+        case .label:
+            viewMode = .labelGroups
+            selectedLabelGroupID = collectionManager.labelGroups.first(where: { $0.lables.contains(elementId) })?.id
+            selectedLabelID = elementId
+            selectedTagID = nil
+            selectedTimeEventID = nil
+        case .timeEvent:
+            viewMode = .timeEvents
+            selectedTimeEventID = elementId
+            selectedTagID = nil
+            selectedLabelID = nil
+        }
+    }
+
     private func resolveBookmark(_ bookmark: Data) -> URL? {
         do {
             var isStale = false

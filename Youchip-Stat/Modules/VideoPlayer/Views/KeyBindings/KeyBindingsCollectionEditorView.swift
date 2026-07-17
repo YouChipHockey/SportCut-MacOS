@@ -19,6 +19,8 @@ struct KeyBindingsCollectionEditorView: View {
     @State private var navTab: CollectionNavigationTab = .tags
     @State private var showSaveSuccess = false
     @State private var isEditingCollectionName = false
+    /// Элемент, редактируемый в отдельном окне (двойной клик по кнопке в раскладке).
+    @State private var elementToEdit: PendingCanvasEdit?
 
     init() {
         let manager = CustomCollectionManager()
@@ -93,6 +95,14 @@ struct KeyBindingsCollectionEditorView: View {
         .onDisappear {
             NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
         }
+        .sheet(item: $elementToEdit) { target in
+            CanvasElementEditSheet(
+                collectionManager: collectionManager,
+                layout: $layout,
+                target: target,
+                onDismiss: { elementToEdit = nil }
+            )
+        }
     }
 
     // MARK: - Toolbar
@@ -159,9 +169,15 @@ struct KeyBindingsCollectionEditorView: View {
                 labels: collectionManager.labels,
                 timeEvents: collectionManager.timeEvents,
                 pane: .canvas,
-                showsModePicker: true
+                showsModePicker: true,
+                onEditElement: requestElementEdit
             )
         }
+    }
+
+    /// Двойной клик по элементу раскладки — открыть окно редактирования с двумя вкладками.
+    private func requestElementEdit(kind: CanvasButtonKind, elementId: String) {
+        elementToEdit = PendingCanvasEdit(kind: kind, elementId: elementId)
     }
 
     // MARK: - Actions

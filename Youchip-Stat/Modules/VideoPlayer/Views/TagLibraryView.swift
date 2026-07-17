@@ -34,6 +34,7 @@ struct TagLibraryView: View {
     @State private var defaultLabels: [Label] = []
     @State private var defaultTimeEvents: [TimeEvent] = []
     @State private var showCollectionsList = false
+    @State private var showCreateCollectionTypeSheet = false
     @State private var currentTagForMap: Tag? = nil
     @State private var currentSelectedLabels: [String] = []
     @State private var fieldMapBookmark: Data? = nil
@@ -66,10 +67,12 @@ struct TagLibraryView: View {
     }
     
     @State private var tagDisplayMode: TagDisplayMode = .grouped
+    /// Режим визуального показа связок: под/над кнопками — включён (нажатие на тег рисует стрелки), скрыто — выключен.
+    @State private var bindingsArrowVisibility: KeyBindingArrowVisibility = .hidden
     @State private var tagLibraryScale: Double = 1.0
     @State private var isScalePopoverPresented = false
 
-    private static let tagLibraryScaleRange = 0.75...1.5
+    private static let tagLibraryScaleRange = 0.75...3.0
     
     @EnvironmentObject private var notificationSubscriptions: ProjectNotificationSubscriptions
     
@@ -206,6 +209,10 @@ struct TagLibraryView: View {
 
                 tagLibraryScaleControl
 
+                if tagDisplayMode == .free {
+                    bindingsVisibilityControl
+                }
+
                 Spacer()
 
                 if isLoadingCollections {
@@ -239,6 +246,11 @@ struct TagLibraryView: View {
 
     private var collectionsPickerMenu: some View {
         Menu {
+            Button(action: { showCreateCollectionTypeSheet = true }) {
+                SwiftUI.Label(^String.Titles.createNewCollection, systemImage: "plus.circle")
+            }
+            Divider()
+
             if !tagLibrary.standardCollections.isEmpty {
                 Section(^String.Titles.standardCollections) {
                     ForEach(tagLibrary.standardCollections, id: \.name) { collection in
@@ -303,6 +315,9 @@ struct TagLibraryView: View {
         .menuStyle(.borderlessButton)
         .fixedSize(horizontal: true, vertical: false)
         .disabled(isLoadingCollections)
+        .sheet(isPresented: $showCreateCollectionTypeSheet) {
+            CreateCollectionTypeSheet(isPresented: $showCreateCollectionTypeSheet)
+        }
     }
 
     private var editCollectionButton: some View {
@@ -350,6 +365,24 @@ struct TagLibraryView: View {
             }
             .padding(12)
         }
+    }
+
+    /// Показ связок: под кнопками / над кнопками / скрыть — как в редакторе.
+    private var bindingsVisibilityControl: some View {
+        Menu {
+            Picker("", selection: $bindingsArrowVisibility) {
+                ForEach(KeyBindingArrowVisibility.allCases, id: \.self) { mode in
+                    SwiftUI.Label(^mode.titleKey, systemImage: mode.iconName).tag(mode)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            SwiftUI.Label(^bindingsArrowVisibility.titleKey, systemImage: bindingsArrowVisibility.iconName)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(^String.Titles.keyBindingsShowConnectionsHint)
     }
 
     private var scaleStorageKey: String {
@@ -646,7 +679,8 @@ struct TagLibraryView: View {
             hoveredTagID: hoveredTagID,
             tagCounts: tagCounts,
             runtime: keyBindingRuntime,
-            userScale: CGFloat(tagLibraryScale)
+            userScale: CGFloat(tagLibraryScale),
+            arrowVisibility: bindingsArrowVisibility
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -1460,6 +1494,10 @@ struct TagLibraryView: View {
     }
 
     private func applyCollectionDisplayMode() {
+        defer {
+            // Режим показа связок доступен только для коллекций связок клавиш.
+            if tagDisplayMode != .free { bindingsArrowVisibility = .hidden }
+        }
         guard isUserCollectionActive,
               let name = lastSelectedCollectionName,
               let info = CollectionsBookmarksManager.shared.loadCollections().first(where: { $0.name == name }) else {

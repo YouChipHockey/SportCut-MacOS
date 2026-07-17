@@ -243,6 +243,8 @@
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
 "FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
+"FullControlExportExcelFileName" = "timelines.xlsx";
+"FullControlExportExcelSaveError" = "儲存 Excel 發生錯誤：%@";
 "FullControlAiReportErrorGeneration" = "AI報告產生錯誤: %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "錯誤: 無伺服器資料";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "伺服器錯誤: %@";  // ^String.Titles.fullControlErrorServer
@@ -1069,6 +1071,12 @@
 "KeyBindingsItemVisible" = "預設可見";
 "KeyBindingsTapSourceHint" = "步驟 1：點選畫布上的來源按鈕";
 "KeyBindingsTapTargetHint" = "步驟 2：點選畫布上的目標按鈕";
+"KeyBindingsButtonAllBindings" = "此按鈕的所有繫結";
+"CanvasEditTabParameters" = "參數";
+"CanvasEditTabAppearance" = "外觀";
+"CanvasEditName" = "名稱";
+"KeyBindingsShowConnectionsToggle" = "顯示繫結";
+"KeyBindingsShowConnectionsHint" = "點選按鈕以箭頭檢視其繫結";
 "KeyBindingsCanvasSummary" = "畫布上";
 "KeyBindingsCanvasTagsCount" = "標籤：%d";
 "KeyBindingsCanvasLabelsCount" = "標註：%d";

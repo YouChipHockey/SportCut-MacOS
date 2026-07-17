@@ -70,6 +70,10 @@ struct Youchip_StatApp: App {
                         NotificationCenter.default.post(name: .toolsExportMarkupXML, object: nil)
                     }
                     .keyboardShortcut("i", modifiers: [.command])
+
+                    Button("Excel") {
+                        NotificationCenter.default.post(name: .toolsExportMarkupExcel, object: nil)
+                    }
                 }
 
                 Menu(^String.Titles.toolsExportCuts) {

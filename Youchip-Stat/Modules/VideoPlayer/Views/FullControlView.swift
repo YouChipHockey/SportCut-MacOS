@@ -1243,6 +1243,24 @@ struct FullControlView: View {
         }
     }
 
+    private func exportExcel() {
+        let data = MarkupExcelExporter.makeWorkbookData(
+            lines: timelineData.lines,
+            tagLibrary: TagLibraryManager.shared
+        )
+        let panel = NSSavePanel()
+        panel.allowedFileTypes = ["xlsx"]
+        panel.nameFieldStringValue = ^String.Titles.fullControlExportExcelFileName
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try data.write(to: url)
+            } catch {
+                errorMessage = String.Titles.fullControlExportExcelSaveError.format(error.localizedDescription)
+                showErrorAlert = true
+            }
+        }
+    }
+
     private var isAnyExportSheetShowing: Bool {
         showExportModeSheet || showTagSelectionSheet || showLabelSelectionSheet ||
         showEventSelectionSheet || multiTagSelectionItem != nil || multiLabelSelectionItem != nil
@@ -1740,6 +1758,10 @@ struct FullControlView: View {
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportMarkupXML)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
             exportXML()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportMarkupExcel)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            exportExcel()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsCurrentTimeline)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }

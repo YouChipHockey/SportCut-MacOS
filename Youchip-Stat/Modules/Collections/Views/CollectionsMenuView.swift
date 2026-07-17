@@ -11,7 +11,6 @@ struct CollectionsMenuView: View {
 
     @State private var collections: [CollectionInfo] = []
     @State private var showCreateTypeSheet = false
-    @State private var selectedDisplayMode: CollectionTagLibraryDisplayMode = .grouped
     @State private var collectionToDelete: CollectionInfo?
     @State private var collectionToRename: CollectionInfo?
     @State private var renameText = ""
@@ -34,7 +33,7 @@ struct CollectionsMenuView: View {
             reloadCollections()
         }
         .sheet(isPresented: $showCreateTypeSheet) {
-            createCollectionTypeSheet
+            CreateCollectionTypeSheet(isPresented: $showCreateTypeSheet)
         }
         .alert(
             ^String.Titles.deleteCollection,
@@ -211,64 +210,6 @@ struct CollectionsMenuView: View {
             .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: - Create type sheet
-
-    private var createCollectionTypeSheet: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text(^String.Titles.collectionTypePickerTitle)
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Text(^String.Titles.collectionTypePickerHint)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            Picker(^String.Titles.collectionTypePickerTitle, selection: $selectedDisplayMode) {
-                Text(^String.Titles.collectionTypeStandard).tag(CollectionTagLibraryDisplayMode.grouped)
-                Text(^String.Titles.collectionTypeKeyBindings).tag(CollectionTagLibraryDisplayMode.free)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: selectedDisplayMode == .free ? "keyboard" : "rectangle.grid.2x2")
-                        .foregroundColor(selectedDisplayMode == .free ? .orange : .blue)
-                    Text(selectedDisplayMode == .free
-                         ? ^String.Titles.collectionTypeKeyBindingsDescription
-                         : ^String.Titles.collectionTypeStandardDescription)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-            }
-            .padding(12)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
-
-            Spacer()
-
-            HStack {
-                Spacer()
-                Button(^String.Titles.cancelButtonTitle) {
-                    showCreateTypeSheet = false
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Button(^String.Titles.createNewCollection) {
-                    showCreateTypeSheet = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        WindowsManager.shared.openCustomCollectionsWindow(initialDisplayMode: selectedDisplayMode)
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding(24)
-        .frame(width: 440, height: 280)
     }
 
     // MARK: - Actions

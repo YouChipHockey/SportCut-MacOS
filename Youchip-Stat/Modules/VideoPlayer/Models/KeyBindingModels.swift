@@ -101,6 +101,11 @@ struct KeyBindingGroupKey: Hashable {
     let sourceKind: CanvasButtonKind
     let targetId: String
     let targetKind: CanvasButtonKind
+
+    /// Составной ключ кнопки-источника: "kind:id".
+    var sourceButtonKey: String { "\(sourceKind.rawValue):\(sourceId)" }
+    /// Составной ключ кнопки-цели: "kind:id".
+    var targetButtonKey: String { "\(targetKind.rawValue):\(targetId)" }
 }
 
 // MARK: - Convenience

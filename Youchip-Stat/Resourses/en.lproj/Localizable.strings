@@ -243,6 +243,8 @@
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
 "FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
+"FullControlExportExcelFileName" = "timelines.xlsx";
+"FullControlExportExcelSaveError" = "Error saving Excel: %@";
 "FullControlAiReportErrorGeneration" = "AI report generation error: %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "Error: no data from server";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "Server error: %@";  // ^String.Titles.fullControlErrorServer
@@ -1107,6 +1109,12 @@
 "KeyBindingsItemVisible" = "Visible by default";
 "KeyBindingsTapSourceHint" = "Step 1: tap a source button on the canvas";
 "KeyBindingsTapTargetHint" = "Step 2: tap a target button on the canvas";
+"KeyBindingsButtonAllBindings" = "All bindings of this button";
+"CanvasEditTabParameters" = "Parameters";
+"CanvasEditTabAppearance" = "Appearance";
+"CanvasEditName" = "Name";
+"KeyBindingsShowConnectionsToggle" = "Show bindings";
+"KeyBindingsShowConnectionsHint" = "Tap a button to see its bindings as arrows";
 "KeyBindingsCanvasSummary" = "On canvas";
 "KeyBindingsCanvasTagsCount" = "Tags: %d";
 "KeyBindingsCanvasLabelsCount" = "Labels: %d";

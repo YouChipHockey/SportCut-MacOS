@@ -242,6 +242,8 @@
 "FullControlExportSimpleJsonFileName" = "timelines_simple.json";  // ^String.Titles.fullControlExportSimpleJsonFileName
 "FullControlExportFullJsonFileName" = "timelines_full.json";  // ^String.Titles.fullControlExportFullJsonFileName
 "FullControlExportXmlFileName" = "timelines.xml";  // ^String.Titles.fullControlExportXmlFileName
+"FullControlExportExcelFileName" = "timelines.xlsx";
+"FullControlExportExcelSaveError" = "Ошибка сохранения Excel: %@";
 "FullControlAiReportErrorGeneration" = "Ошибка генерации AI отчета: %@";  // ^String.Titles.fullControlAiReportErrorGeneration
 "FullControlErrorNoServerData" = "Ошибка: нет данных от сервера";  // ^String.Titles.fullControlErrorNoServerData
 "FullControlErrorServer" = "Ошибка сервера: %@";  // ^String.Titles.fullControlErrorServer
@@ -1115,6 +1117,12 @@
 "KeyBindingsItemVisible" = "Видима по умолчанию";
 "KeyBindingsTapSourceHint" = "Шаг 1: нажмите кнопку-источник на холсте";
 "KeyBindingsTapTargetHint" = "Шаг 2: нажмите кнопку-цель на холсте";
+"KeyBindingsButtonAllBindings" = "Все связки этой кнопки";
+"CanvasEditTabParameters" = "Параметры";
+"CanvasEditTabAppearance" = "Внешний вид";
+"CanvasEditName" = "Название";
+"KeyBindingsShowConnectionsToggle" = "Показ связок";
+"KeyBindingsShowConnectionsHint" = "Нажмите на кнопку, чтобы увидеть её связи стрелками";
 "KeyBindingsCanvasSummary" = "На холсте";
 "KeyBindingsCanvasTagsCount" = "Тегов: %d";
 "KeyBindingsCanvasLabelsCount" = "Лейблов: %d";

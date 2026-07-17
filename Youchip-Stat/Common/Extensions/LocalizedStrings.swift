@@ -249,6 +249,8 @@ extension String {
         case fullControlExportSimpleJsonFileName
         case fullControlExportFullJsonFileName
         case fullControlExportXmlFileName
+        case fullControlExportExcelFileName
+        case fullControlExportExcelSaveError
         case fullControlAiReportErrorGeneration
         case fullControlErrorNoServerData
         case fullControlErrorServer
@@ -1139,6 +1141,12 @@ extension String {
         case keyBindingsItemVisible
         case keyBindingsTapSourceHint
         case keyBindingsTapTargetHint
+        case keyBindingsButtonAllBindings
+        case keyBindingsShowConnectionsToggle
+        case keyBindingsShowConnectionsHint
+        case canvasEditTabParameters
+        case canvasEditTabAppearance
+        case canvasEditName
         case keyBindingsCanvasSummary
         case keyBindingsCanvasTagsCount
         case keyBindingsCanvasLabelsCount

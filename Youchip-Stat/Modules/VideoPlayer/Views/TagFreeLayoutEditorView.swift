@@ -44,11 +44,20 @@ enum TagFreeLayoutEditorPane {
     case full
 }
 
+/// Запрос на открытие редактора элемента холста (двойной клик по кнопке в раскладке).
+struct PendingCanvasEdit: Equatable, Identifiable {
+    let kind: CanvasButtonKind
+    let elementId: String
+    var id: String { "\(kind.rawValue):\(elementId)" }
+}
+
 final class TagFreeLayoutEditorSession: ObservableObject {
     @Published var editorMode: TagFreeLayoutEditorMode = .layout
     @Published var selectedItemId: String? = nil
     @Published var bindingSourceId: String? = nil
     @Published var selectedGroupKey: KeyBindingGroupKey? = nil
+    /// Группы связок, подсвечиваемые на холсте (раскрытые в деталке кнопки справа).
+    @Published var highlightedGroupKeys: Set<KeyBindingGroupKey> = []
     @Published var showGrid: Bool = false
     /// Глобальный режим показа стрелок-связок (скрыть / над кнопками / под кнопками).
     @Published var arrowVisibility: KeyBindingArrowVisibility = .above
@@ -57,6 +66,7 @@ final class TagFreeLayoutEditorSession: ObservableObject {
         selectedItemId = nil
         bindingSourceId = nil
         selectedGroupKey = nil
+        highlightedGroupKeys = []
     }
 }
 
@@ -72,6 +82,10 @@ struct TagFreeLayoutEditorContent: View {
     let timeEvents: [TimeEvent]
     var pane: TagFreeLayoutEditorPane = .full
     var showsModePicker: Bool = true
+    /// Панель настроек растягивается по ширине (иначе фиксированные 340pt).
+    var settingsPaneFillsWidth: Bool = false
+    /// Двойной клик по элементу холста — открыть редактирование самого тега/лейбла/события.
+    var onEditElement: ((CanvasButtonKind, String) -> Void)? = nil
 
     // Layout-mode drag / resize / rotate
     @State private var draggingItemId: String? = nil
@@ -143,7 +157,6 @@ struct TagFreeLayoutEditorContent: View {
                     let canvasPixelWidth = virtual.width * scale
                     let canvasPixelHeight = virtual.height * scale
 
-                    ScrollViewReader { proxy in
                     ScrollView([.horizontal, .vertical], showsIndicators: true) {
                         ZStack(alignment: .topLeading) {
                             RoundedRectangle(cornerRadius: 12)
@@ -153,31 +166,22 @@ struct TagFreeLayoutEditorContent: View {
                                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                 )
 
-                            // Невидимый маркер в центре холста — к нему центрируем скролл при зуме,
-                            // чтобы приближение шло в центр, а не в верхний левый угол.
-                            Color.clear
-                                .frame(width: 1, height: 1)
-                                .position(x: canvasPixelWidth / 2, y: canvasPixelHeight / 2)
-                                .id("canvasCenter")
-
                             if session.showGrid {
                                 gridOverlay(scale: scale)
                                     .frame(width: canvasPixelWidth, height: canvasPixelHeight)
                             }
 
-                            // Стрелки и бейджи «под кнопками» — рисуются ДО кнопок.
+                            // Стрелки «под кнопками» — рисуются ДО кнопок.
                             if session.editorMode == .bindings, session.arrowVisibility == .below {
                                 arrowLinesOverlay(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
-                                arrowBadgesOverlay(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
                             }
 
                             canvasView(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
 
                             if session.editorMode == .bindings {
-                                // Стрелки и бейджи «над кнопками» — рисуются ПОСЛЕ кнопок.
+                                // Стрелки «над кнопками» — рисуются ПОСЛЕ кнопок.
                                 if session.arrowVisibility == .above {
                                     arrowLinesOverlay(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
-                                    arrowBadgesOverlay(scale: scale, origin: origin, canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
                                 }
 
                                 bindingsModeBanner
@@ -199,10 +203,6 @@ struct TagFreeLayoutEditorContent: View {
                             }
                             .onEnded { _ in canvasZoomBase = canvasZoom }
                     )
-                    .onChange(of: canvasZoom) { _ in
-                        // При зуме держим центр холста в центре вьюпорта (приближение «в центр»).
-                        proxy.scrollTo("canvasCenter", anchor: .center)
-                    }
                     .onAppear {
                         // Один раз вписываем КОНТЕНТ в видимую область (но не увеличиваем больше 100%).
                         guard !didInitialFit else { return }
@@ -211,7 +211,6 @@ struct TagFreeLayoutEditorContent: View {
                         canvasZoom = min(1.0, max(canvasZoomRange.lowerBound, fit))
                         canvasZoomBase = canvasZoom
                     }
-                    } // ScrollViewReader
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)
@@ -230,23 +229,9 @@ struct TagFreeLayoutEditorContent: View {
             origin: origin,
             canvasPixelWidth: canvasPixelWidth,
             canvasPixelHeight: canvasPixelHeight,
-            selectedGroupKey: session.selectedGroupKey
-        )
-    }
-
-    private func arrowBadgesOverlay(scale: CGFloat, origin: CGPoint, canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
-        KeyBindingArrowBadgesOverlay(
-            layout: layout,
-            scale: scale,
-            origin: origin,
-            canvasPixelWidth: canvasPixelWidth,
-            canvasPixelHeight: canvasPixelHeight,
             selectedGroupKey: session.selectedGroupKey,
-            onSelectGroup: { key in
-                session.selectedGroupKey = key
-                session.selectedItemId = nil
-                session.bindingSourceId = nil
-            }
+            highlightedGroupKeys: session.highlightedGroupKeys,
+            focusedSourceKey: session.bindingSourceId
         )
     }
 
@@ -474,6 +459,8 @@ struct TagFreeLayoutEditorContent: View {
         )
         .opacity(item.isVisible ? 1.0 : 0.4)
         .contentShape(Rectangle())
+        // Двойной клик — открыть редактор самого элемента (объявляем до одиночного тапа).
+        .onTapGesture(count: 2) { onEditElement?(item.kind, item.elementId) }
         .onTapGesture { handleItemTap(item: item) }
         .gesture(
             DragGesture(minimumDistance: 1, coordinateSpace: .named("canvas"))
@@ -522,6 +509,7 @@ struct TagFreeLayoutEditorContent: View {
         // Bindings mode
         if let sourceKey = session.bindingSourceId {
             guard sourceKey != item.id else {
+                // Повторное нажатие на сфокусированную кнопку — снимаем фокус.
                 session.bindingSourceId = nil
                 return
             }
@@ -537,11 +525,11 @@ struct TagFreeLayoutEditorContent: View {
                 targetId: item.elementId, targetKind: item.kind
             )
             layout.bindings.append(newBinding)
-            let key = newBinding.groupKey
-            session.selectedGroupKey = key
-            session.bindingSourceId = nil
+            // Оставляем фокус на кнопке-источнике: справа показываются все её связки,
+            // на холсте — только исходящие из неё стрелки. Можно продолжать добавлять цели.
+            session.selectedGroupKey = nil
         } else {
-            // Select as source
+            // Фокус на кнопке: показать все её связки и оставить только их стрелки.
             session.bindingSourceId = item.id
             session.selectedGroupKey = nil
         }
@@ -640,9 +628,11 @@ struct TagFreeLayoutEditorContent: View {
                 labels: labels,
                 timeEvents: timeEvents,
                 selectedGroupKey: session.selectedGroupKey,
+                focusedSourceKey: session.bindingSourceId,
                 onAddLabel: addLabelToCanvas,
                 onAddTimeEvent: addTimeEventToCanvas,
-                onDeselect: { session.selectedGroupKey = nil; session.bindingSourceId = nil }
+                onDeselect: { session.selectedGroupKey = nil; session.bindingSourceId = nil },
+                onHighlightGroups: { session.highlightedGroupKeys = $0 }
             )
         } else {
             layoutModeSettingsPanel
@@ -663,8 +653,10 @@ struct TagFreeLayoutEditorContent: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .frame(maxWidth: settingsPaneFillsWidth ? .infinity : nil, alignment: .leading)
         }
-        .frame(width: 340)
+        .frame(minWidth: settingsPaneFillsWidth ? nil : 340,
+               maxWidth: settingsPaneFillsWidth ? .infinity : 340)
         .background(Color(NSColor.windowBackgroundColor))
     }
 
@@ -1001,17 +993,20 @@ struct TagFreeLayoutEditorView: View {
     let tags: [Tag]
     let labels: [Label]
     let timeEvents: [TimeEvent]
+    /// Двойной клик по элементу холста — открыть редактирование самого тега/лейбла/события.
+    var onEditElement: ((CanvasButtonKind, String) -> Void)? = nil
 
     @Environment(\.presentationMode) private var presentationMode
     @StateObject private var session = TagFreeLayoutEditorSession()
     @State private var layout: TagFreeLayout
 
-    init(collectionId: String, collectionName: String, tags: [Tag], labels: [Label] = [], timeEvents: [TimeEvent] = []) {
+    init(collectionId: String, collectionName: String, tags: [Tag], labels: [Label] = [], timeEvents: [TimeEvent] = [], onEditElement: ((CanvasButtonKind, String) -> Void)? = nil) {
         self.collectionId = collectionId
         self.collectionName = collectionName
         self.tags = tags
         self.labels = labels
         self.timeEvents = timeEvents
+        self.onEditElement = onEditElement
 
         let stored = TagFreeLayoutStorage.loadLayoutIfExists(
             collectionId: collectionId, tags: tags, labels: labels, timeEvents: timeEvents
@@ -1055,7 +1050,8 @@ struct TagFreeLayoutEditorView: View {
                 labels: labels,
                 timeEvents: timeEvents,
                 pane: .full,
-                showsModePicker: true
+                showsModePicker: true,
+                onEditElement: onEditElement
             )
         }
         .frame(minWidth: 960, minHeight: 600)
