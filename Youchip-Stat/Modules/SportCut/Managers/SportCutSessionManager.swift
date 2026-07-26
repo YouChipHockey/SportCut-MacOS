@@ -61,27 +61,114 @@ class SportCutSessionManager: ObservableObject {
     func addProjectSource(to session: inout SportCutSession, file: FilesFile) {
         guard let url = file.url else { return }
         guard let bookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) else { return }
-        
+
         let timelines = file.timelines
         let tagLibrary = TagLibraryManager.shared
-        
-        let source = SportCutSource(
-            name: file.name,
-            videoBookmark: bookmark,
+        let lib = Self.augmentedLibrary(
             timelines: timelines,
-            isStandaloneVideo: false,
-            projectID: file.id,
             tags: tagLibrary.allTags,
             tagGroups: tagLibrary.allTagGroups,
             labels: tagLibrary.allLabels,
             labelGroups: tagLibrary.allLabelGroups,
             timeEvents: tagLibrary.allTimeEvents
         )
-        
+
+        let source = SportCutSource(
+            name: file.name,
+            videoBookmark: bookmark,
+            timelines: timelines,
+            isStandaloneVideo: false,
+            projectID: file.id,
+            tags: lib.tags,
+            tagGroups: lib.tagGroups,
+            labels: lib.labels,
+            labelGroups: lib.labelGroups,
+            timeEvents: lib.timeEvents
+        )
+
         session.sources.append(source)
         updateSession(session)
     }
-    
+
+    /// Builds a tag/label library snapshot for a SportCut source, augmenting the current
+    /// global pool with synthetic entries derived from the timeline stamps themselves.
+    ///
+    /// Markup imported from other tools (Nacsport / Sportscode XML, etc.) may reference
+    /// tags and labels whose collection was never installed locally. Those entities are
+    /// still fully described inline on each stamp (`stamp.label`, `stamp.labels`), so we
+    /// reconstruct them here. This is purely additive: anything already present in the
+    /// pool wins, we only fill the gaps — so exporting cuts by tag or label works even
+    /// with no collection, without changing behavior when the collection *is* present.
+    static func augmentedLibrary(
+        timelines: [TimelineLine],
+        tags: [Tag],
+        tagGroups: [TagGroup],
+        labels: [Label],
+        labelGroups: [LabelGroupData],
+        timeEvents: [TimeEvent]
+    ) -> (tags: [Tag], tagGroups: [TagGroup], labels: [Label], labelGroups: [LabelGroupData], timeEvents: [TimeEvent]) {
+        var tagsById = Dictionary(tags.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var labelsById = Dictionary(labels.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var labelGroupsById = Dictionary(labelGroups.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        // Preserve the original ordering so appended synthetic entries stay stable.
+        var tagOrder = tags.map(\.id)
+        var labelOrder = labels.map(\.id)
+        var labelGroupOrder = labelGroups.map(\.id)
+
+        let fallbackLabelGroupName = ^String.Titles.sportCutLabels
+
+        for line in timelines {
+            for stamp in line.stamps {
+                // Tags: the stamp carries the display name of its main tag inline.
+                for ref in stamp.tagRefs where tagsById[ref.id] == nil {
+                    tagsById[ref.id] = Tag(
+                        id: ref.id,
+                        primaryID: stamp.primaryID,
+                        name: stamp.label,
+                        description: "",
+                        color: stamp.colorHex,
+                        defaultTimeBefore: 0,
+                        defaultTimeAfter: 0,
+                        collection: nil,
+                        lablesGroup: [],
+                        hotkey: nil,
+                        labelHotkeys: nil,
+                        mapEnabled: false,
+                        isInterval: true
+                    )
+                    tagOrder.append(ref.id)
+                }
+
+                // Labels: `FullLabelWithGroup` embeds the name/description and group id.
+                for lbl in stamp.labels {
+                    if labelsById[lbl.id] == nil, !lbl.name.isEmpty {
+                        labelsById[lbl.id] = Label(id: lbl.id, name: lbl.name, description: lbl.description)
+                        labelOrder.append(lbl.id)
+                    }
+                    let gid = lbl.lableGroupId
+                    guard !gid.isEmpty, labelsById[lbl.id] != nil else { continue }
+                    if var group = labelGroupsById[gid] {
+                        if !group.lables.contains(lbl.id) {
+                            group.lables.append(lbl.id)
+                            labelGroupsById[gid] = group
+                        }
+                    } else {
+                        labelGroupsById[gid] = LabelGroupData(id: gid, name: fallbackLabelGroupName, lables: [lbl.id])
+                        labelGroupOrder.append(gid)
+                    }
+                }
+            }
+        }
+
+        return (
+            tags: tagOrder.compactMap { tagsById[$0] },
+            tagGroups: tagGroups,
+            labels: labelOrder.compactMap { labelsById[$0] },
+            labelGroups: labelGroupOrder.compactMap { labelGroupsById[$0] },
+            timeEvents: timeEvents
+        )
+    }
+
     func addVideoSource(to session: inout SportCutSession, url: URL) {
         guard let bookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) else { return }
         
@@ -153,6 +240,14 @@ class SportCutSessionManager: ObservableObject {
         guard let idx = session.sources.firstIndex(where: { $0.projectID == file.id }) else { return }
         let old = session.sources[idx]
         let tagLibrary = TagLibraryManager.shared
+        let lib = Self.augmentedLibrary(
+            timelines: file.timelines,
+            tags: tagLibrary.allTags,
+            tagGroups: tagLibrary.allTagGroups,
+            labels: tagLibrary.allLabels,
+            labelGroups: tagLibrary.allLabelGroups,
+            timeEvents: tagLibrary.allTimeEvents
+        )
         session.sources[idx] = SportCutSource(
             id: old.id,
             name: file.name,
@@ -160,11 +255,11 @@ class SportCutSessionManager: ObservableObject {
             timelines: file.timelines,
             isStandaloneVideo: false,
             projectID: file.id,
-            tags: tagLibrary.allTags,
-            tagGroups: tagLibrary.allTagGroups,
-            labels: tagLibrary.allLabels,
-            labelGroups: tagLibrary.allLabelGroups,
-            timeEvents: tagLibrary.allTimeEvents
+            tags: lib.tags,
+            tagGroups: lib.tagGroups,
+            labels: lib.labels,
+            labelGroups: lib.labelGroups,
+            timeEvents: lib.timeEvents
         )
         updateSession(session)
     }
@@ -232,7 +327,50 @@ class SportCutSessionManager: ObservableObject {
         session.playlistGroups[groupIndex].playlists.insert(copy, after: playlistIndex)
         updateSession(session)
     }
-    
+
+    // MARK: - Slides (title cards between clips)
+
+    /// Находит плейлист по id в любой группе и применяет мутацию.
+    private func mutatePlaylist(in session: inout SportCutSession, playlistID: UUID, _ body: (inout SportCutPlaylist) -> Void) {
+        for gi in session.playlistGroups.indices {
+            if let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == playlistID }) {
+                body(&session.playlistGroups[gi].playlists[pi])
+                updateSession(session)
+                return
+            }
+        }
+    }
+
+    func addSlide(in session: inout SportCutSession, playlistID: UUID, slide: SportCutSlide) {
+        mutatePlaylist(in: &session, playlistID: playlistID) { $0.slides.append(slide) }
+    }
+
+    func updateSlide(in session: inout SportCutSession, playlistID: UUID, slide: SportCutSlide) {
+        mutatePlaylist(in: &session, playlistID: playlistID) { playlist in
+            if let idx = playlist.slides.firstIndex(where: { $0.id == slide.id }) {
+                playlist.slides[idx] = slide
+            }
+        }
+    }
+
+    func removeSlide(in session: inout SportCutSession, playlistID: UUID, slideID: UUID) {
+        mutatePlaylist(in: &session, playlistID: playlistID) { $0.slides.removeAll { $0.id == slideID } }
+    }
+
+    /// Перемещает плейлист в другую группу (сохраняя все его события/комментарии/рисунки).
+    func movePlaylist(in session: inout SportCutSession, playlistID: UUID, toGroupIndex: Int) {
+        guard toGroupIndex >= 0, toGroupIndex < session.playlistGroups.count else { return }
+        guard let sourceGroupIndex = session.playlistGroups.firstIndex(where: {
+            $0.playlists.contains(where: { $0.id == playlistID })
+        }) else { return }
+        guard sourceGroupIndex != toGroupIndex,
+              let playlistIndex = session.playlistGroups[sourceGroupIndex].playlists.firstIndex(where: { $0.id == playlistID }) else { return }
+
+        let playlist = session.playlistGroups[sourceGroupIndex].playlists.remove(at: playlistIndex)
+        session.playlistGroups[toGroupIndex].playlists.append(playlist)
+        updateSession(session)
+    }
+
     // MARK: - Persistence
     
     private func saveSessions() {

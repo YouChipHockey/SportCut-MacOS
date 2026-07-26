@@ -34,6 +34,12 @@ struct KeyBindingsCollectionEditorView: View {
         _layout = State(initialValue: TagFreeLayoutStorage.makeDefaultLayout(for: []))
     }
 
+    init(initialDisplayMode: CollectionTagLibraryDisplayMode, template: CollectionTemplate?) {
+        let manager = CustomCollectionManager(initialDisplayMode: initialDisplayMode, template: template)
+        _collectionManager = StateObject(wrappedValue: manager)
+        _layout = State(initialValue: TagFreeLayoutStorage.makeDefaultLayout(for: manager.tags))
+    }
+
     init(existingCollection: CollectionBookmark) {
         let manager = CustomCollectionManager(withBookmark: existingCollection)
         _collectionManager = StateObject(wrappedValue: manager)

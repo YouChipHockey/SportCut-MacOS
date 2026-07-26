@@ -41,6 +41,7 @@ extension String {
         case rootDownloadTitle
         case rootDownloadingHasStartedTitle
         
+        case fieldMapName // ^String.Titles.fieldMapName
         case fieldMapTitleTagsList // ^String.Titles.fieldMapTitleTagsList
         case fieldMapButtonFilters // ^String.Titles.fieldMapButtonFilters
         case fieldMapHelpResetFilters // ^String.Titles.fieldMapHelpResetFilters
@@ -111,6 +112,10 @@ extension String {
         case collectionsTagMapHelp // ^String.Titles.collectionsTagMapHelp
         case collectionsTagHotkey // ^String.Titles.collectionsTagHotkey
         case collectionsTagNoHotkey // ^String.Titles.collectionsTagNoHotkey
+        case collectionsStartFromTemplate
+        case collectionsTemplateStandard
+        case collectionsTemplateUser
+        case collectionsTemplateEmpty
         case collectionsTagTimeBefore // ^String.Titles.collectionsTagTimeBefore
         case collectionsTagTimeAfter // ^String.Titles.collectionsTagTimeAfter
         case collectionsTagTimeFormat // ^String.Titles.collectionsTagTimeFormat
@@ -171,6 +176,10 @@ extension String {
         case fullControlButtonMap
         case fullControlButtonAddTimeline
         case fullControlHelpAddTimeline
+        case fullControlButtonMergeTimelines
+        case fullControlMergeTimelinesHint
+        case collectionCopyGroup
+        case collectionPasteGroup
         case fullControlButtonTimelineZoomIn
         case fullControlButtonTimelineZoomOut
         case fullControlExportErrorStampNotFound
@@ -532,6 +541,11 @@ extension String {
         case projectImportCreateProject
         case selectNewVideo
         case warning
+        case appVersionTitle
+        case appearanceTitle
+        case appearanceSystem
+        case appearanceLight
+        case appearanceDark
         case playlists
         case load
         case currentUnsaved
@@ -610,6 +624,15 @@ extension String {
         case universal
         
         case exportProject
+        case exportProjectBundle
+        case bundleExportNoVideo
+        case csvExportTitle
+        case csvExportButton
+        case csvExportByTimelines
+        case csvExportByTags
+        case csvExportTimelinesHint
+        case csvExportTagsHint
+        case csvExportAll
         case selectProjectSaveLocation
         case projectExportedSuccessfully
         case projectSavedToFile
@@ -620,7 +643,11 @@ extension String {
         case projectImportChooseFormatMessage
         case projectImportSportcutFormat
         case projectImportSportcodeXmlFormat
+        case projectImportNacsportXmlFormat
+        case projectImportDartfishXmlFormat
         case selectSportcodeXmlForImport
+        case selectNacsportXmlForImport
+        case selectDartfishXmlForImport
         case xmlImportNoInstancesError
         case xmlImportParseFailedError
         case xmlImportCollectionDisplayName
@@ -786,6 +813,10 @@ extension String {
         case liveStreamPreloadedVideo
         case liveStreamPreloadedVideoHint
         case liveStreamPickPreloadFile
+        case liveStreamObsInstruction
+        case liveStreamSaveFolder
+        case liveStreamSaveFolderHint
+        case liveStreamPickSaveFolder
         case appendToVideo
         
         // Data Sync & Backup
@@ -897,6 +928,23 @@ extension String {
         case sportCutHidePlaylist
         case sportCutMoveUp
         case sportCutMoveDown
+        case sportCutMoveToGroup
+        case sportCutMakeOffline
+        case sportCutSlidesManage
+        case sportCutSlideUntitled
+        case sportCutSlideDurationSec
+        case sportCutSlideInsertHere
+        case sportCutSlideEditTitle
+        case sportCutSlideTitleField
+        case sportCutSlideTitlePlaceholder
+        case sportCutSlideDuration
+        case sportCutSlideTextSize
+        case sportCutSlideBackground
+        case sportCutSlideTextColor
+        case sportCutSlideLogo
+        case sportCutSlideAddLogo
+        case sportCutSlideDone
+        case sportCutSlideSave
         case sportCutMoveLeft
         case sportCutMoveRight
         case sportCutPlayAsFilm
@@ -959,6 +1007,7 @@ extension String {
         case sportCutStartColumn
         case sportCutEndColumn
         case sportCutDurationColumn
+        case sportCutDrawingColumn
         case sportCutLabelsColumn
         case sportCutEventsColumn
         case sportCutFilters

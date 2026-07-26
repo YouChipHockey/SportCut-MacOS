@@ -74,6 +74,10 @@ struct Youchip_StatApp: App {
                     Button("Excel") {
                         NotificationCenter.default.post(name: .toolsExportMarkupExcel, object: nil)
                     }
+
+                    Button("CSV") {
+                        NotificationCenter.default.post(name: .toolsExportMarkupCSV, object: nil)
+                    }
                 }
 
                 Menu(^String.Titles.toolsExportCuts) {
@@ -186,7 +190,19 @@ enum MainTab: String, CaseIterable {
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
     @State private var selectedTab: MainTab = .markup
-    
+    @AppStorage(AppSetupManager.appearanceKey) private var appearanceRaw: String = AppSetupManager.currentAppearanceMode().rawValue
+
+    /// Текущая версия приложения для отображения на главном экране: "v1.2.3 (45)".
+    private var appVersionString: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String
+        if let build, !build.isEmpty, build != short {
+            return "v\(short) (\(build))"
+        }
+        return "v\(short)"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             mainTabBar
@@ -202,6 +218,48 @@ struct ContentView: View {
         }
     }
     
+    private var appearanceMenu: some View {
+        Menu {
+            ForEach(AppAppearanceMode.allCases) { mode in
+                Button {
+                    appearanceRaw = mode.rawValue
+                    AppSetupManager.applyAppearanceMode(mode)
+                } label: {
+                    HStack {
+                        Text(appearanceTitle(mode))
+                        if appearanceRaw == mode.rawValue {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: appearanceIcon)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(^String.Titles.appearanceTitle)
+    }
+
+    private var appearanceIcon: String {
+        switch AppAppearanceMode(rawValue: appearanceRaw) ?? .dark {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max"
+        case .dark: return "moon"
+        }
+    }
+
+    private func appearanceTitle(_ mode: AppAppearanceMode) -> String {
+        switch mode {
+        case .system: return ^String.Titles.appearanceSystem
+        case .light: return ^String.Titles.appearanceLight
+        case .dark: return ^String.Titles.appearanceDark
+        }
+    }
+
     private var mainTabBar: some View {
         HStack(spacing: 0) {
             ForEach(MainTab.allCases, id: \.self) { tab in
@@ -219,8 +277,18 @@ struct ContentView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            
+
             Spacer()
+
+            appearanceMenu
+                .padding(.trailing, 12)
+
+            Text(appVersionString)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.secondary)
+                .textSelection(.enabled)
+                .padding(.trailing, 16)
+                .help(^String.Titles.appVersionTitle)
         }
         .background(Color(NSColor.windowBackgroundColor))
         .overlay(

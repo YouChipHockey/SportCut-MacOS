@@ -61,23 +61,21 @@ struct KeyCaptureView: NSViewRepresentable {
             guard isCapturing?.wrappedValue == true else { return }
             lastFlags = event.modifierFlags
             let characters = event.charactersIgnoringModifiers ?? ""
-            let modifiers = getModifierFlags(event.modifierFlags)
-            var keyRepresentation = modifiers.joined(separator: "+")
-            if !characters.isEmpty && !isOnlyModifier(characters) {
-                if !keyRepresentation.isEmpty {
-                    keyRepresentation += "+"
-                }
-                keyRepresentation += getKeyName(event)
-                if !keyRepresentation.isEmpty {
-                    let oldValue = keyString?.wrappedValue
-                    keyString?.wrappedValue = keyRepresentation
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        if self.keyString?.wrappedValue != keyRepresentation && self.keyString?.wrappedValue != nil {
-                            self.keyString?.wrappedValue = oldValue
-                        }
-                        self.isCapturing?.wrappedValue = false
-                    }
-                }
+            guard !characters.isEmpty, !isOnlyModifier(characters) else { return }
+
+            // Каноничная строка ровно как у матчера (HotKeyManager) — иначе комбинация shift/alt/ctrl/cmd+клавиша не совпадёт.
+            let canonical = HotKeyManager.shared.hotkeyStringFromEvent(event)
+
+            // Не разрешаем сочетания, конфликтующие с системными хоткеями приложения
+            // (стрелки/пробел/Enter/Esc и cmd+C/V/Z редактора).
+            if HotKeyManager.isReservedHotkey(canonical) {
+                NSSound.beep()
+                return
+            }
+
+            keyString?.wrappedValue = canonical
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self.isCapturing?.wrappedValue = false
             }
         }
         

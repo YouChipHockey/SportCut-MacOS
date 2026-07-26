@@ -26,7 +26,35 @@ class LiveStreamManager: NSObject, ObservableObject {
     @Published var liveDuration: Double = 0.0
     @Published var availableVideoDevices: [AVCaptureDevice] = []
     @Published var isSessionConfigured: Bool = false
-    
+
+    /// Папка (security-scoped bookmark), выбранная пользователем ДО старта — туда кладётся копия готовой записи.
+    private var saveCopyBookmark: Data?
+
+    /// Задаёт папку для копии записи (выбирается в настройках источника перед трансляцией). nil — не сохранять копию.
+    func setSaveCopyFolder(_ url: URL?) {
+        guard let url else { saveCopyBookmark = nil; return }
+        saveCopyBookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+    }
+
+    /// Копирует финализированную запись в выбранную пользователем папку (если задана). Имя — по проекту.
+    func copyFinalizedRecordingToUserFolder(_ recordingURL: URL, suggestedName: String) {
+        guard let bookmark = saveCopyBookmark else { return }
+        var isStale = false
+        guard let folder = try? URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) else { return }
+        guard folder.startAccessingSecurityScopedResource() else { return }
+        defer { folder.stopAccessingSecurityScopedResource() }
+
+        let ext = recordingURL.pathExtension.isEmpty ? "mov" : recordingURL.pathExtension
+        let base = suggestedName.components(separatedBy: CharacterSet(charactersIn: "/\\:")).joined(separator: "-")
+        var dest = folder.appendingPathComponent("\(base).\(ext)")
+        var counter = 1
+        while FileManager.default.fileExists(atPath: dest.path) {
+            dest = folder.appendingPathComponent("\(base) (\(counter)).\(ext)")
+            counter += 1
+        }
+        try? FileManager.default.copyItem(at: recordingURL, to: dest)
+    }
+
     // MARK: - HaishinKit
     
     /// MediaMixer actor — the heart of HaishinKit: manages camera/mic capture and routes frames.
@@ -917,7 +945,8 @@ class LiveStreamManager: NSObject, ObservableObject {
             self.preloadedBaseURL = nil
             self.preloadedBaseDuration = 0.0
         }
-        
+        saveCopyBookmark = nil
+
         let mixerToStop = mixer
         let recorderToCancel = recorder
         

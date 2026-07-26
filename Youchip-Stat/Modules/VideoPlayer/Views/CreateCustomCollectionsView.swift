@@ -8,6 +8,57 @@
 import SwiftUI
 import Foundation
 import AppKit
+import UniformTypeIdentifiers
+
+// MARK: - Reorder drag & drop
+
+/// Kinds of reorderable rows in the collection editor. The dragged payload carries the
+/// kind so a row can only ever be dropped onto its own list.
+enum CollectionReorderKind: String {
+    case tagGroup
+    case labelGroup
+    case timeEvent
+    case tag
+    case label
+}
+
+/// Reorders collection rows by dragging one row onto another.
+///
+/// `List`'s built-in `.onMove` is not used here: every row in this editor has its own tap
+/// gesture for selection, which swallows the drag on macOS, so nothing was movable.
+struct CollectionReorderDropDelegate: DropDelegate {
+    let kind: CollectionReorderKind
+    let targetID: String
+    let onReorder: (_ draggedID: String, _ targetID: String) -> Void
+
+    static func payload(kind: CollectionReorderKind, id: String) -> String {
+        "\(kind.rawValue)|\(id)"
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard let provider = info.itemProviders(for: [.text]).first else { return false }
+        provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
+            let raw: String?
+            if let data = item as? Data {
+                raw = String(data: data, encoding: .utf8)
+            } else if let string = item as? NSString {
+                raw = string as String
+            } else {
+                raw = nil
+            }
+            guard let raw else { return }
+            let parts = raw.split(separator: "|", maxSplits: 1).map(String.init)
+            // Ignore drops coming from a different list (e.g. a tag onto a label group).
+            guard parts.count == 2, parts[0] == kind.rawValue else { return }
+            let draggedID = parts[1]
+            guard draggedID != targetID else { return }
+            DispatchQueue.main.async {
+                onReorder(draggedID, targetID)
+            }
+        }
+        return true
+    }
+}
 
 // MARK: - Editable TextField Helper
 
@@ -76,6 +127,7 @@ struct AutoFocusTextField: NSViewRepresentable {
 struct CreateCustomCollectionsView: View {
     
     @StateObject private var collectionManager: CustomCollectionManager
+    @ObservedObject private var groupClipboard = CollectionGroupClipboard.shared
     @State private var viewMode: ViewMode = .tagGroups
     @State private var showAddTagGroupSheet = false
     @State private var showAddLabelGroupSheet = false
@@ -122,6 +174,10 @@ struct CreateCustomCollectionsView: View {
         _collectionManager = StateObject(wrappedValue: CustomCollectionManager(initialDisplayMode: initialDisplayMode))
     }
 
+    init(initialDisplayMode: CollectionTagLibraryDisplayMode, template: CollectionTemplate?) {
+        _collectionManager = StateObject(wrappedValue: CustomCollectionManager(initialDisplayMode: initialDisplayMode, template: template))
+    }
+
     init(existingCollection: CollectionBookmark) {
         _collectionManager = StateObject(wrappedValue: CustomCollectionManager(withBookmark: existingCollection))
     }
@@ -152,7 +208,7 @@ struct CreateCustomCollectionsView: View {
             }
         }
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             customToolbarView
@@ -503,8 +559,14 @@ struct CreateCustomCollectionsView: View {
         Section {
             ForEach(filteredTagGroups) { group in
                 tagGroupRowView(group: group)
+                    .onDrag {
+                        NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .tagGroup, id: group.id) as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .tagGroup, targetID: group.id) { draggedID, targetID in
+                        collectionManager.reorderTagGroups(draggedID: draggedID, targetID: targetID)
+                    })
             }
-            
+
             addTagGroupButton
         } header: {
             HStack {
@@ -513,6 +575,18 @@ struct CreateCustomCollectionsView: View {
                 Text(^String.Titles.tagGroups)
                     .font(.headline)
                 Spacer()
+                if let payload = groupClipboard.tagGroupPayload {
+                    Button {
+                        collectionManager.pasteTagGroup(payload.group, tags: payload.tags)
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    } label: {
+                        Image(systemName: "doc.on.clipboard")
+                            .foregroundColor(.blue)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("\(^String.Titles.collectionPasteGroup) «\(payload.group.name)»")
+                }
                 Text("\(collectionManager.tagGroups.count)")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -529,8 +603,14 @@ struct CreateCustomCollectionsView: View {
         Section {
             ForEach(filteredTimeEvents) { event in
                 timeEventRowView(event: event)
+                    .onDrag {
+                        NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .timeEvent, id: event.id) as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .timeEvent, targetID: event.id) { draggedID, targetID in
+                        collectionManager.reorderTimeEvents(draggedID: draggedID, targetID: targetID)
+                    })
             }
-            
+
             addTimeEventButton
         } header: {
             HStack {
@@ -721,7 +801,17 @@ struct CreateCustomCollectionsView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .help(^String.Titles.renameGroup)
-                    
+
+                    Button(action: {
+                        groupClipboard.copy(tagGroup: group, tags: getTagsForGroup(groupID: group.id))
+                    }) {
+                        Image(systemName: "doc.on.doc")
+                            .foregroundColor(.blue)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(^String.Titles.collectionCopyGroup)
+
                     Button(action: {
                         collectionManager.deleteTagGroup(id: group.id)
                         if selectedTagGroupID == group.id {
@@ -798,8 +888,14 @@ struct CreateCustomCollectionsView: View {
                 Section {
                     ForEach(filteredTags) { tag in
                         tagRowView(tag: tag)
+                            .onDrag {
+                                NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .tag, id: tag.id) as NSString)
+                            }
+                            .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .tag, targetID: tag.id) { draggedID, targetID in
+                                collectionManager.reorderTags(inGroup: groupID, draggedID: draggedID, targetID: targetID)
+                            })
                     }
-                    
+
                     addTagButton
                 } header: {
                     HStack {
@@ -912,13 +1008,12 @@ struct CreateCustomCollectionsView: View {
         .buttonStyle(PlainButtonStyle())
     }
     
+    /// Tags in the group's own order — the same order the markup tag library renders,
+    /// so what you arrange here is what you get there.
     func getTagsForGroup(groupID: String) -> [Tag] {
-        if let group = collectionManager.tagGroups.first(where: { $0.id == groupID }) {
-            return collectionManager.tags.filter { tag in
-                group.tags.contains(tag.id)
-            }
-        }
-        return []
+        guard let group = collectionManager.tagGroups.first(where: { $0.id == groupID }) else { return [] }
+        let byID = Dictionary(collectionManager.tags.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return group.tags.compactMap { byID[$0] }
     }
     
     func tagRowView(tag: Tag) -> some View {
@@ -1056,8 +1151,14 @@ struct CreateCustomCollectionsView: View {
         Section {
             ForEach(filteredLabelGroups) { group in
                 labelGroupRowView(group: group)
+                    .onDrag {
+                        NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .labelGroup, id: group.id) as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .labelGroup, targetID: group.id) { draggedID, targetID in
+                        collectionManager.reorderLabelGroups(draggedID: draggedID, targetID: targetID)
+                    })
             }
-            
+
             addLabelGroupButton
         } header: {
             HStack {
@@ -1066,6 +1167,18 @@ struct CreateCustomCollectionsView: View {
                 Text(^String.Titles.labelGroups)
                     .font(.headline)
                 Spacer()
+                if let payload = groupClipboard.labelGroupPayload {
+                    Button {
+                        collectionManager.pasteLabelGroup(payload.group, labels: payload.labels)
+                        _ = collectionManager.saveCollectionToFiles()
+                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    } label: {
+                        Image(systemName: "doc.on.clipboard")
+                            .foregroundColor(.green)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("\(^String.Titles.collectionPasteGroup) «\(payload.group.name)»")
+                }
                 Text("\(collectionManager.labelGroups.count)")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -1133,7 +1246,17 @@ struct CreateCustomCollectionsView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .help(^String.Titles.renameGroup)
-                    
+
+                    Button(action: {
+                        groupClipboard.copy(labelGroup: group, labels: getLabelsForGroup(groupID: group.id))
+                    }) {
+                        Image(systemName: "doc.on.doc")
+                            .foregroundColor(.green)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(^String.Titles.collectionCopyGroup)
+
                     Button(action: {
                         collectionManager.deleteLabelGroup(id: group.id)
                         if selectedLabelGroupID == group.id {
@@ -1210,8 +1333,14 @@ struct CreateCustomCollectionsView: View {
                 Section {
                     ForEach(filteredLabels) { label in
                         labelRowView(label: label)
+                            .onDrag {
+                                NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .label, id: label.id) as NSString)
+                            }
+                            .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .label, targetID: label.id) { draggedID, targetID in
+                                collectionManager.reorderLabels(inGroup: groupID, draggedID: draggedID, targetID: targetID)
+                            })
                     }
-                    
+
                     addLabelButton
                 } header: {
                     HStack {
@@ -1260,13 +1389,11 @@ struct CreateCustomCollectionsView: View {
         .buttonStyle(PlainButtonStyle())
     }
     
+    /// Labels in the group's own order — the same order the markup label picker renders.
     func getLabelsForGroup(groupID: String) -> [Label] {
-        if let group = collectionManager.labelGroups.first(where: { $0.id == groupID }) {
-            return collectionManager.labels.filter { label in
-                group.lables.contains(label.id)
-            }
-        }
-        return []
+        guard let group = collectionManager.labelGroups.first(where: { $0.id == groupID }) else { return [] }
+        let byID = Dictionary(collectionManager.labels.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return group.lables.compactMap { byID[$0] }
     }
     
     func labelRowView(label: Label) -> some View {

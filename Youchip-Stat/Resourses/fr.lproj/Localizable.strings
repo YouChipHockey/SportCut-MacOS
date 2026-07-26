@@ -50,6 +50,7 @@
 "FieldMapHelpExportImage" = "Exporter en image";  // ^String.Titles.fieldMapHelpExportImage
 "FieldMapLoading" = "Chargement de la carte...";  // ^String.Titles.fieldMapLoading
 "FieldMapNoMap" = "Carte non chargée";  // ^String.Titles.fieldMapNoMap
+"FieldMapName" = "Carte %d";
 "FieldMapWindowExportTitle" = "Exporter la carte";  // ^String.Titles.fieldMapWindowExportTitle
 "FieldMapSavePanelTitle" = "Enregistrer la carte";  // ^String.Titles.fieldMapSavePanelTitle
 "FieldMapSavePanelMessage" = "Choisir l'emplacement pour enregistrer l'image de la carte";  // ^String.Titles.fieldMapSavePanelMessage
@@ -167,6 +168,10 @@
 "FullControlButtonScreenshots" = "Mes captures d'écran";  // ^String.Titles.fullControlButtonScreenshots
 "FullControlButtonMap" = "Afficher sur la carte";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "Ajouter une chronologie";  // ^String.Titles.fullControlButtonAddTimeline
+"FullControlButtonMergeTimelines" = "Fusionner les timelines";
+"FullControlMergeTimelinesHint" = "Sélectionnez les timelines à fusionner";
+"CollectionCopyGroup" = "Copier le groupe";
+"CollectionPasteGroup" = "Coller le groupe";
 "FullControlHelpAddTimeline" = "Ajouter une chronologie";  // ^String.Titles.fullControlHelpAddTimeline
 "FullControlButtonTimelineZoomIn" = "Zoomer dans la chronologie";  // ^String.Titles.fullControlButtonTimelineZoomIn
 "FullControlButtonTimelineZoomOut" = "Dézoomer la chronologie";  // ^String.Titles.fullControlButtonTimelineZoomOut
@@ -285,6 +290,10 @@
 "DeleteMap" = "Supprimer la carte";  // ^String.Titles.deleteMap
 "AddTagGroup" = "Ajouter un groupe d'étiquettes";  // ^String.Titles.addTagGroup
 "CollectionName" = "Nom de la collection";  // ^String.Titles.collectionName
+"CollectionsStartFromTemplate" = "Partir dun modèle";
+"CollectionsTemplateStandard" = "Collections standard";
+"CollectionsTemplateUser" = "Mes collections";
+"CollectionsTemplateEmpty" = "Vide";
 "UpdateCollection" = "Mettre à jour la collection";  // ^String.Titles.updateCollection
 "SaveCollection" = "Enregistrer la collection";  // ^String.Titles.saveCollection
 "Saved" = "Enregistré !";  // ^String.Titles.saved
@@ -510,6 +519,11 @@
 "ProjectImportCreateProject" = "Créer un projet"; // ^String.Titles.projectImportCreateProject
 "SelectNewVideo" = "Sélectionner une nouvelle vidéo"; // ^String.Titles.selectNewVideo
 "Warning" = "Avertissement"; // ^String.Titles.warning
+"AppVersionTitle" = "App version";
+"AppearanceTitle" = "Apparence";
+"AppearanceSystem" = "Système";
+"AppearanceLight" = "Clair";
+"AppearanceDark" = "Sombre";
 "Playlists" = "Playlists"; // ^String.Titles.playlists
 "Load" = "Charger"; // ^String.Titles.load
 "CurrentUnsaved" = "Actuelle (non sauvegardée)"; // ^String.Titles.currentUnsaved
@@ -593,6 +607,15 @@
 "Universal" = "Universel"; // ^String.Titles.universal
 
 "ExportProject" = "Exporter le projet"; // ^String.Titles.exportProject
+"CsvExportTitle" = "Exporter en CSV";
+"CsvExportButton" = "CSV";
+"CsvExportByTimelines" = "Par chronologies";
+"CsvExportByTags" = "Par tags";
+"CsvExportTimelinesHint" = "Une ligne par tag sur la chronologie (durée, groupes de labels).";
+"CsvExportTagsHint" = "Une ligne par tag ; une colonne par label.";
+"CsvExportAll" = "Tout";
+"ExportProjectBundle" = "Exporter le pack (vidéo + marquage)";
+"BundleExportNoVideo" = "Le fichier vidéo est indisponible";
 "SelectProjectSaveLocation" = "Sélectionner l'emplacement pour enregistrer le projet"; // ^String.Titles.selectProjectSaveLocation
 "ProjectExportedSuccessfully" = "Projet exporté avec succès"; // ^String.Titles.projectExportedSuccessfully
 "ProjectSavedToFile" = "Projet enregistré dans le fichier : %@"; // ^String.Titles.projectSavedToFile
@@ -603,7 +626,11 @@
 "ProjectImportChooseFormatMessage" = "Choisissez le type de fichier : projet YouChip (JSON) ou annotations Sportcode / Angels / Wyscout (XML).";
 "ProjectImportSportcutFormat" = "Projet YouChip Sportcut (JSON)";
 "ProjectImportSportcodeXmlFormat" = "Sportscode / Angels / Wyscout (XML)";
+"ProjectImportNacsportXmlFormat" = "Nacsport (XML)";
+"ProjectImportDartfishXmlFormat" = "Dartfish (XML)";
 "SelectSportcodeXmlForImport" = "Sélectionnez un fichier XML (ALL_INSTANCES)";
+"SelectNacsportXmlForImport" = "Sélectionnez un fichier XML Nacsport (ALL_INSTANCES)";
+"SelectDartfishXmlForImport" = "Sélectionnez un fichier Dartfish (.dartclip / XML)";
 "XmlImportNoInstancesError" = "Le fichier XML ne contient aucun événement à importer.";
 "XmlImportParseFailedError" = "Impossible de lire le fichier XML.";
 "XmlImportCollectionDisplayName" = "Import XML";
@@ -745,6 +772,10 @@
 "LiveStreamPreloadedVideo" = "Vidéo préchargée";
 "LiveStreamPreloadedVideoHint" = "Optionnel. Choisissez une vidéo depuis votre appareil comme base de départ.";
 "LiveStreamPickPreloadFile" = "Choisir une vidéo...";
+"LiveStreamObsInstruction" = "Comment configurer OBS";
+"LiveStreamSaveFolder" = "Enregistrer dans un dossier";
+"LiveStreamSaveFolderHint" = "Une copie de lenregistrement y sera sauvegardée à la fin.";
+"LiveStreamPickSaveFolder" = "Choisir un dossier...";
 "AppendToVideo" = "Ajouter à la vidéo";
 
 // Data Sync & Backup
@@ -835,6 +866,8 @@
 "SportCutHidePlaylist" = "Masquer la playlist";
 "SportCutMoveUp" = "Déplacer vers le haut";
 "SportCutMoveDown" = "Déplacer vers le bas";
+"SportCutMoveToGroup" = "Déplacer vers le groupe";
+"SportCutMakeOffline" = "Rendre les clips hors ligne";
 "SportCutMoveLeft" = "Déplacer à gauche";
 "SportCutMoveRight" = "Déplacer à droite";
 "SportCutPlayAsFilm" = "Lire comme film";
@@ -897,6 +930,7 @@
 "SportCutStartColumn" = "Début";
 "SportCutEndColumn" = "Fin";
 "SportCutDurationColumn" = "Durée";
+"SportCutDrawingColumn" = "Dessin";
 "SportCutLabelsColumn" = "Étiquettes";
 "SportCutEventsColumn" = "Événements";
 "SportCutFilters" = "Filtres";
@@ -1129,3 +1163,18 @@
 "FreeTagModeNotConfiguredTitle" = "Mode libre non configuré";
 "FreeTagModeNotConfiguredMessage" = "Accédez aux paramètres de la collection et configurez le mode d'affichage libre des tags (bouton « Disposition »).";
 "FreeTagModeDisplay" = "Affichage libre";
+"SportCutSlidesManage" = "Diapositives";
+"SportCutSlideUntitled" = "Sans titre";
+"SportCutSlideDurationSec" = "%d s";
+"SportCutSlideInsertHere" = "Insérer une diapositive";
+"SportCutSlideEditTitle" = "Diapositive";
+"SportCutSlideTitleField" = "Titre";
+"SportCutSlideTitlePlaceholder" = "ex. Attaque";
+"SportCutSlideDuration" = "Durée";
+"SportCutSlideTextSize" = "Taille du texte";
+"SportCutSlideBackground" = "Arrière-plan";
+"SportCutSlideTextColor" = "Couleur du texte";
+"SportCutSlideLogo" = "Logo (PNG)";
+"SportCutSlideAddLogo" = "Ajouter un logo";
+"SportCutSlideDone" = "Terminé";
+"SportCutSlideSave" = "Enregistrer";

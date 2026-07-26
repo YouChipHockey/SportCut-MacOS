@@ -24,6 +24,10 @@ class TimelineDataManager: ObservableObject {
     /// Stamps toggled with ⌘-click for «open in SportCut» bulk action.
     @Published var stampsSelectedForSportCut: Set<UUID> = []
     @Published var unlinkedScreenshotPopups: [UnlinkedScreenshotPopup] = []
+    /// «Объединить таймлайны»: активен режим выбора линий для объединения.
+    @Published var isMergeSelectionActive: Bool = false
+    /// Линии, выбранные для объединения (по нажатию на название).
+    @Published var mergeSelectedLineIDs: Set<UUID> = []
     var currentBookmark: Data?
     var currentVideoId: String?
     
@@ -129,6 +133,64 @@ class TimelineDataManager: ObservableObject {
         updateTimelines()
     }
     
+    // MARK: - Merge timelines
+
+    /// Enters the "merge timelines" selection mode (standard markup mode only).
+    func beginMergeSelection() {
+        guard MarkupMode.current == .standard else { return }
+        mergeSelectedLineIDs = []
+        isMergeSelectionActive = true
+    }
+
+    /// Toggles a timeline's membership in the current merge selection.
+    func toggleMergeSelection(_ lineID: UUID) {
+        guard isMergeSelectionActive else { return }
+        if mergeSelectedLineIDs.contains(lineID) {
+            mergeSelectedLineIDs.remove(lineID)
+        } else {
+            mergeSelectedLineIDs.insert(lineID)
+        }
+    }
+
+    /// Exits merge mode without changes (Cancel / Esc).
+    func cancelMergeSelection() {
+        isMergeSelectionActive = false
+        mergeSelectedLineIDs = []
+    }
+
+    /// Merges the selected timelines into a single new timeline: all stamps from the
+    /// selected lines are moved into it (ordered by start time), the source lines are
+    /// removed, and the new line takes the position of the first selected one.
+    func commitMergeSelection() {
+        guard MarkupMode.current == .standard else { cancelMergeSelection(); return }
+        let selected = mergeSelectedLineIDs
+        // Keep original on-screen order and find where the merged line should land.
+        let selectedInOrder = lines.enumerated().filter { selected.contains($0.element.id) }
+        guard let insertIndex = selectedInOrder.first?.offset, !selectedInOrder.isEmpty else {
+            cancelMergeSelection()
+            return
+        }
+
+        var mergedStamps: [TimelineStamp] = []
+        for (_, line) in selectedInOrder {
+            mergedStamps.append(contentsOf: line.stamps)
+        }
+        mergedStamps.sort { $0.timeStartSeconds < $1.timeStartSeconds }
+
+        let mergedName = selectedInOrder.map { $0.element.name }.joined(separator: " + ")
+        var newLine = TimelineLine(name: mergedName)
+        newLine.stamps = mergedStamps
+
+        lines.removeAll { selected.contains($0.id) }
+        let clampedIndex = min(insertIndex, lines.count)
+        lines.insert(newLine, at: clampedIndex)
+        selectedLineID = newLine.id
+
+        isMergeSelectionActive = false
+        mergeSelectedLineIDs = []
+        updateTimelines()
+    }
+
     func findOrCreateTimelineForTag(tag: Tag) -> UUID {
         if let existingLine = lines.first(where: { $0.tagIdForMode == tag.id }) {
             return existingLine.id
@@ -170,6 +232,7 @@ class TimelineDataManager: ObservableObject {
         color: String,
         labels: [FullLabelWithGroup],
         position: CGPoint? = nil,
+        mapFieldId: String? = nil,
         timeEvents: [String]? = nil
     ) {
         let selectedEvents = timeEvents ?? Array(TagLibraryManager.shared.selectedTimeEvents)
@@ -177,7 +240,7 @@ class TimelineDataManager: ObservableObject {
         if MarkupMode.current == .standard {
             guard let lineID = selectedLineID,
                   let idx = lines.firstIndex(where: { $0.id == lineID }) else { return }
-            
+
             let stamp = TimelineStamp(
                 tagRefs: tagRefs,
                 primaryID: primaryId,
@@ -188,7 +251,8 @@ class TimelineDataManager: ObservableObject {
                 labels: labels,
                 timeEvents: selectedEvents,
                 position: position,
-                isActiveForMapView: position != nil
+                isActiveForMapView: position != nil,
+                mapFieldId: mapFieldId
             )
             lines[idx].stamps.append(stamp)
             lastAddedStampID = stamp.id
@@ -208,7 +272,8 @@ class TimelineDataManager: ObservableObject {
                         labels: labels,
                         timeEvents: selectedEvents,
                         position: position,
-                        isActiveForMapView: position != nil
+                        isActiveForMapView: position != nil,
+                        mapFieldId: mapFieldId
                     )
                     lines[idx].stamps.append(stamp)
                     lastAddedStampID = stamp.id

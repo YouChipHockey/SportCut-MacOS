@@ -30,7 +30,11 @@ struct FieldMapVisualizationView: View {
     
     @State private var filters = FieldMapFilters()
     @State private var showFilters = false
-    
+
+    /// Все карты коллекции и выбранная карта (показывается всегда одна).
+    @State private var availablePlayFields: [PlayField] = []
+    @State private var selectedMapId: String? = nil
+
     enum DisplayMode {
         case tags
         case heatmap
@@ -46,8 +50,15 @@ struct FieldMapVisualizationView: View {
     
     private var displayedStamps: [TimelineStamp] {
         stamps.filter { stamp in
-            visibleStampIDs.contains(stamp.id) && filteredStampIDs.contains(stamp.id)
+            visibleStampIDs.contains(stamp.id) && filteredStampIDs.contains(stamp.id) && matchesSelectedMap(stamp)
         }
+    }
+
+    /// Штамп относится к выбранной карте. Старые штампы без `mapFieldId` считаются первой картой.
+    private func matchesSelectedMap(_ stamp: TimelineStamp) -> Bool {
+        guard availablePlayFields.count > 1, let selectedMapId else { return true }
+        if let mid = stamp.mapFieldId { return mid == selectedMapId }
+        return availablePlayFields.first?.id == selectedMapId
     }
     
     var body: some View {
@@ -388,6 +399,21 @@ struct FieldMapVisualizationView: View {
         
         private var mapHeaderView: some View {
             HStack {
+                if availablePlayFields.count > 1 {
+                    Picker("", selection: Binding(
+                        get: { selectedMapId ?? availablePlayFields.first?.id ?? "" },
+                        set: { newValue in
+                            selectedMapId = newValue
+                            loadSelectedMapImage()
+                        }
+                    )) {
+                        ForEach(availablePlayFields, id: \.id) { field in
+                            Text(field.name).tag(field.id)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .frame(width: 160)
+                }
                 Spacer()
                 Picker(^String.Titles.displayMode, selection: $displayMode) {
                     Text(^String.Titles.fieldMapViewTags).tag(DisplayMode.tags)
@@ -1014,25 +1040,32 @@ struct FieldMapVisualizationView: View {
     }
     
     private func getGroupedLabels(for labelItems: [FullLabelWithGroup]) -> [(String, [Label])] {
-        let labelIDs = labelItems.map(\.id)
         var groupedLabels: [String: [Label]] = [:]
-        
-        for labelID in labelIDs {
-            if let label = TagLibraryManager.shared.findLabelById(labelID) {
-                var groupName = ^String.Titles.fieldMapDetailNoGroup
-                
-                for group in TagLibraryManager.shared.allLabelGroups {
-                    if group.lables.contains(labelID) {
-                        groupName = group.name
-                        break
-                    }
-                }
-                
-                if groupedLabels[groupName] == nil {
-                    groupedLabels[groupName] = []
-                }
-                groupedLabels[groupName]?.append(label)
+
+        for labelItem in labelItems {
+            // Prefer the pooled label; fall back to the name embedded in the stamp so
+            // imported markup (whose labels may not be in the global pool) still shows.
+            let label: Label
+            if let found = TagLibraryManager.shared.findLabelById(labelItem.id) {
+                label = found
+            } else if !labelItem.name.isEmpty {
+                label = Label(id: labelItem.id, name: labelItem.name, description: labelItem.description)
+            } else {
+                continue
             }
+
+            var groupName = ^String.Titles.fieldMapDetailNoGroup
+            for group in TagLibraryManager.shared.allLabelGroups {
+                if group.lables.contains(labelItem.id) {
+                    groupName = group.name
+                    break
+                }
+            }
+
+            if groupedLabels[groupName] == nil {
+                groupedLabels[groupName] = []
+            }
+            groupedLabels[groupName]?.append(label)
         }
         return groupedLabels.map { ($0.key, $0.value) }
             .sorted { $0.0 < $1.0 }
@@ -1060,17 +1093,25 @@ struct FieldMapVisualizationView: View {
     private func loadFieldImageAndDimensions() {
         let collectionManager = CustomCollectionManager()
         guard collectionManager.loadCollectionFromBookmarks(named: collection.name),
-              let playField = collectionManager.playField,
+              !collectionManager.playFields.isEmpty else {
+            return
+        }
+        availablePlayFields = collectionManager.playFields
+        if selectedMapId == nil || !availablePlayFields.contains(where: { $0.id == selectedMapId }) {
+            selectedMapId = availablePlayFields.first?.id
+        }
+        loadSelectedMapImage()
+    }
+
+    private func loadSelectedMapImage() {
+        guard let playField = availablePlayFields.first(where: { $0.id == selectedMapId }) ?? availablePlayFields.first,
               let imageBookmark = playField.imageBookmark else {
             return
         }
-        
         fieldDimensions = (Int(playField.width), Int(playField.height))
-        
         do {
             var isStale = false
             let url = try URL(resolvingBookmarkData: imageBookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
-            
             if url.startAccessingSecurityScopedResource() {
                 fieldImage = NSImage(contentsOf: url)
                 url.stopAccessingSecurityScopedResource()

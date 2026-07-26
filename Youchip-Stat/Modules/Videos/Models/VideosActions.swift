@@ -32,6 +32,7 @@ enum VideosActions {
     case showRebindAlert(file: FilesFile)
     case rebindVideo(file: FilesFile, newURL: URL)
     case exportProject(file: FilesFile)
+    case exportProjectBundle(file: FilesFile)
     case importProject
     case showProjectImportSheet(projectData: ProjectImportModel?)
     case bindVideoToProject(projectData: ProjectImportModel, videoURL: URL?)

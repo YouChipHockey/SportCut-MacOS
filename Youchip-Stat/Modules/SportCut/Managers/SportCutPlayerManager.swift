@@ -87,6 +87,8 @@ class SportCutPlayerManager: ObservableObject {
     /// Границы сегментов в «фильме» (секунды на оси склеенного таймлайна), по одному на элемент `playlistEvents`.
     private var filmSegmentStartSeconds: [Double] = []
     private var filmSegmentDurationSeconds: [Double] = []
+    /// Отрендеренные видео титульных слайдов (slideID → URL .mov) для текущего фильма.
+    private var slideVideoURLs: [UUID: URL] = [:]
 
     init() {
         let x = UserDefaults.standard.double(forKey: Self.wmOffsetXKey)
@@ -207,12 +209,29 @@ class SportCutPlayerManager: ObservableObject {
 
         if playbackKind == .singleFilm {
             currentPlaylistIndex = 0
-            loadPlaylistAsSingleFilm(
-                events: mapped,
-                autoPlayAfterSeek: autoPlayAfterLoad,
-                resumeGlobalAfterLoad: nil,
-                onSeekFinished: onSeekComplete
-            )
+            // Титульные слайды: рендерим их видео и вставляем между клипами фильма.
+            let slides = playlistForSlides(playlistID: playlistID)?.slides ?? []
+            if slides.isEmpty {
+                slideVideoURLs = [:]
+                loadPlaylistAsSingleFilm(
+                    events: mapped,
+                    autoPlayAfterSeek: autoPlayAfterLoad,
+                    resumeGlobalAfterLoad: nil,
+                    onSeekFinished: onSeekComplete
+                )
+            } else {
+                SportCutSlideVideoRenderer.renderVideos(for: slides) { [weak self] urls in
+                    guard let self else { return }
+                    self.slideVideoURLs = urls
+                    let interleaved = self.interleaveSlides(into: mapped, slides: slides, playlistID: playlistID)
+                    self.loadPlaylistAsSingleFilm(
+                        events: interleaved,
+                        autoPlayAfterSeek: autoPlayAfterLoad,
+                        resumeGlobalAfterLoad: nil,
+                        onSeekFinished: onSeekComplete
+                    )
+                }
+            }
             return
         }
 
@@ -687,6 +706,35 @@ class SportCutPlayerManager: ObservableObject {
         return session.timelineResolvedEvent(for: event)
     }
 
+    private func playlistForSlides(playlistID: UUID?) -> SportCutPlaylist? {
+        guard let playlistID, let sessionID,
+              let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }) else { return nil }
+        return session.playlistGroups.flatMap(\.playlists).first(where: { $0.id == playlistID })
+    }
+
+    /// Вставляет слайд-события между клипами по их `position` (индекс в полном списке событий плейлиста).
+    private func interleaveSlides(into visibleEvents: [SportCutEvent], slides: [SportCutSlide], playlistID: UUID?) -> [SportCutEvent] {
+        guard !slides.isEmpty, let playlist = playlistForSlides(playlistID: playlistID) else { return visibleEvents }
+        var fullIndexByKey: [String: Int] = [:]
+        for (i, e) in playlist.events.enumerated() { fullIndexByKey[e.hiddenKey] = i }
+        let sorted = slides.sorted { $0.position < $1.position }
+        var result: [SportCutEvent] = []
+        var si = 0
+        for ev in visibleEvents {
+            let f = fullIndexByKey[ev.hiddenKey] ?? Int.max
+            while si < sorted.count && sorted[si].position <= f {
+                result.append(SportCutEvent.slideEvent(from: sorted[si]))
+                si += 1
+            }
+            result.append(ev)
+        }
+        while si < sorted.count {
+            result.append(SportCutEvent.slideEvent(from: sorted[si]))
+            si += 1
+        }
+        return result
+    }
+
     private func loadPlaylistAsSingleFilm(
         events: [SportCutEvent],
         autoPlayAfterSeek: Bool = true,
@@ -714,11 +762,26 @@ class SportCutPlayerManager: ObservableObject {
 
         for event in events {
             let ev = resolvedAgainstSession(event)
-            guard let source = sources.first(where: { $0.id == ev.sourceID }),
-                  let url = source.resolveVideoURL() else { continue }
+
+            // Титульный слайд — отдельное видео без аудио. Автономный клип (кэш) — уже обрезанный файл целиком.
+            let cachedClipURL: URL? = ev.isSlide ? nil : sessionID.flatMap { SportCutClipCache.cachedClipURL(sessionID: $0, event: ev) }
+            let isCachedClip = cachedClipURL != nil
+            let treatAsWholeFile = ev.isSlide || isCachedClip
+
+            let resolvedURL: URL?
+            if ev.isSlide {
+                resolvedURL = ev.slideID.flatMap { slideVideoURLs[$0] }
+            } else if let cachedClipURL {
+                resolvedURL = cachedClipURL
+            } else {
+                resolvedURL = sources.first(where: { $0.id == ev.sourceID })?.resolveVideoURL()
+            }
+            guard let url = resolvedURL else { continue }
 
             let asset: AVAsset
-            if let cached = loadedAssets[ev.sourceID] {
+            if treatAsWholeFile {
+                asset = AVAsset(url: url)
+            } else if let cached = loadedAssets[ev.sourceID] {
                 asset = cached
             } else {
                 asset = AVAsset(url: url)
@@ -726,10 +789,13 @@ class SportCutPlayerManager: ObservableObject {
             }
 
             let assetDuration = CMTimeGetSeconds(asset.duration)
-            let overrideStart = playlistStartOverrides[ev.hiddenKey] ?? ev.startTime
+            let overrideStart = treatAsWholeFile ? 0 : (playlistStartOverrides[ev.hiddenKey] ?? ev.startTime)
             let safeStart = max(0.0, min(overrideStart, assetDuration))
             let maxAvailable = max(0.0, assetDuration - safeStart)
-            let overrideDuration = playlistDurationOverrides[ev.hiddenKey] ?? ev.duration
+            let overrideDuration: Double
+            if ev.isSlide { overrideDuration = ev.duration }
+            else if isCachedClip { overrideDuration = assetDuration }
+            else { overrideDuration = playlistDurationOverrides[ev.hiddenKey] ?? ev.duration }
             let safeDuration = min(max(0.0, overrideDuration), maxAvailable)
 
             guard safeDuration > 0,
@@ -741,16 +807,20 @@ class SportCutPlayerManager: ObservableObject {
 
             do {
                 try compVideoTrack.insertTimeRange(timeRange, of: sourceVideoTrack, at: cursor)
-                if let sourceAudioTrack = asset.tracks(withMediaType: .audio).first {
-                    if compAudioTrack == nil {
-                        compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-                    }
-                    if let at = compAudioTrack {
-                        try at.insertTimeRange(timeRange, of: sourceAudioTrack, at: cursor)
-                    }
-                }
             } catch {
                 continue
+            }
+            // Аудио — best-effort: слайды без звука, поэтому дозаполняем пропуски тишиной, чтобы звук не рассинхронился.
+            if !ev.isSlide, let sourceAudioTrack = asset.tracks(withMediaType: .audio).first {
+                if compAudioTrack == nil {
+                    compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+                }
+                if let at = compAudioTrack {
+                    if at.timeRange.duration < cursor {
+                        at.insertEmptyTimeRange(CMTimeRange(start: at.timeRange.duration, end: cursor))
+                    }
+                    try? at.insertTimeRange(timeRange, of: sourceAudioTrack, at: cursor)
+                }
             }
 
             filmSegmentStartSeconds.append(totalDuration)
@@ -918,14 +988,25 @@ class SportCutPlayerManager: ObservableObject {
         currentEvent = event
         shownDrawingNames.removeAll()
 
-        guard let source = sources.first(where: { $0.id == event.sourceID }),
-              let url = source.resolveVideoURL() else {
+        // Автономный клип из кэша (исходное видео могло быть удалено) — уже обрезанный файл целиком.
+        let cachedClipURL = sessionID.flatMap { SportCutClipCache.cachedClipURL(sessionID: $0, event: event) }
+        let isCachedClip = cachedClipURL != nil
+
+        let resolvedURL: URL?
+        if let cachedClipURL {
+            resolvedURL = cachedClipURL
+        } else {
+            resolvedURL = sources.first(where: { $0.id == event.sourceID })?.resolveVideoURL()
+        }
+        guard let url = resolvedURL else {
             advanceToNextEvent()
             return
         }
 
         let asset: AVAsset
-        if let cached = loadedAssets[event.sourceID] {
+        if isCachedClip {
+            asset = AVAsset(url: url)
+        } else if let cached = loadedAssets[event.sourceID] {
             asset = cached
         } else {
             asset = AVAsset(url: url)
@@ -936,10 +1017,10 @@ class SportCutPlayerManager: ObservableObject {
 
         let composition = AVMutableComposition()
         let assetDuration = CMTimeGetSeconds(asset.duration)
-        let overrideStart = playlistStartOverrides[event.hiddenKey] ?? event.startTime
+        let overrideStart = isCachedClip ? 0 : (playlistStartOverrides[event.hiddenKey] ?? event.startTime)
         let safeStart = max(0.0, min(overrideStart, assetDuration))
         let maxAvailable = max(0.0, assetDuration - safeStart)
-        let overrideDuration = playlistDurationOverrides[event.hiddenKey] ?? event.duration
+        let overrideDuration = isCachedClip ? assetDuration : (playlistDurationOverrides[event.hiddenKey] ?? event.duration)
         let safeDuration = min(max(0.0, overrideDuration), maxAvailable)
 
         guard safeDuration > 0,
@@ -1042,13 +1123,27 @@ class SportCutPlayerManager: ObservableObject {
         let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         tempScreenshotImage = nsImage
         let globalT = time.seconds
+        // Local time inside the EFFECTIVE (possibly resized) clip at the captured frame.
+        var localInEffectiveClip: Double? = nil
         if previewSourceID != nil, currentEvent != nil {
-            editorScreenshotVideoTime = clipLocalTimeFromPlayerSeconds(globalT)
+            localInEffectiveClip = clipLocalTimeFromPlayerSeconds(globalT)
         } else if playlistPlaybackKind == .singleFilm, let (idx, local) = filmEventIndexAndLocalTime(globalTime: globalT) {
             currentPlaylistIndex = idx
             currentEvent = resolvedAgainstSession(playlistEvents[idx])
             currentSourceID = playlistEvents[idx].sourceID
-            editorScreenshotVideoTime = local
+            localInEffectiveClip = local
+        }
+
+        if let effectiveLocal = localInEffectiveClip, let event = currentEvent {
+            // `drawing.videoTime` is stored in ORIGINAL-clip-local coordinates (relative to
+            // event.startTime) — that is what playback display, edit and export all expect.
+            // The captured time above is relative to the EFFECTIVE clip start, which differs
+            // from the original start whenever the clip was resized. Convert so a drawing
+            // added after a resize lands at the right moment instead of drifting by the
+            // resize delta. With no override the delta is 0, so behavior is unchanged.
+            let originalStart = event.startTime
+            let effectiveStart = playlistStartOverrides[event.hiddenKey] ?? event.startTime
+            editorScreenshotVideoTime = effectiveLocal + (effectiveStart - originalStart)
         } else {
             editorScreenshotVideoTime = globalT
         }

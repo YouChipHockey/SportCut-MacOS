@@ -9,10 +9,29 @@ import SwiftUI
 import Foundation
 import UniformTypeIdentifiers
 
+/// Шаблон, с которого стартует новая коллекция: стандартная (по имени) или пользовательская (по id).
+enum CollectionTemplate {
+    case standard(name: String)
+    case user(id: String, name: String)
+}
+
 class CustomCollectionManager: ObservableObject {
     
     var changedTags: [(id: String, newName: String)] = []
-    @Published var playField: PlayField?
+    /// Полный набор карт коллекции (источник истины). Может быть несколько.
+    @Published var playFields: [PlayField] = []
+    /// Первая карта — обратная совместимость с кодом, работающим с одной картой.
+    var playField: PlayField? {
+        get { playFields.first }
+        set {
+            if let newValue {
+                if playFields.isEmpty { playFields = [newValue] }
+                else { playFields[0] = newValue }
+            } else {
+                playFields = []
+            }
+        }
+    }
     @Published var tagGroups: [TagGroup] = []
     @Published var tags: [Tag] = []
     @Published var labelGroups: [LabelGroupData] = []
@@ -41,6 +60,12 @@ class CustomCollectionManager: ObservableObject {
     init(initialDisplayMode: CollectionTagLibraryDisplayMode) {
         self.tagLibraryDisplayMode = initialDisplayMode
     }
+
+    /// Новая коллекция выбранного типа, предзаполненная копией шаблона (стандартной/пользовательской).
+    convenience init(initialDisplayMode: CollectionTagLibraryDisplayMode, template: CollectionTemplate?) {
+        self.init(initialDisplayMode: initialDisplayMode)
+        applyTemplate(template)
+    }
     
     init(withBookmark bookmark: CollectionBookmark) {
         self.isEditingExisting = true
@@ -51,6 +76,129 @@ class CustomCollectionManager: ObservableObject {
         loadAllCollections()
     }
     
+    // MARK: - Reordering
+    //
+    // Reordering is driven by drag & drop of ids (see `CollectionReorderDropDelegate`)
+    // rather than List's `.onMove`: the editor rows carry their own tap gestures, which
+    // swallow the built-in drag on macOS.
+
+    /// Moves `draggedID` onto `targetID`'s position, matching the timeline reorder feel.
+    private func reorder<T>(_ array: inout [T], draggedID: String, targetID: String, id: (T) -> String) {
+        guard let draggedIndex = array.firstIndex(where: { id($0) == draggedID }),
+              let targetIndex = array.firstIndex(where: { id($0) == targetID }),
+              draggedIndex != targetIndex else { return }
+        let item = array.remove(at: draggedIndex)
+        let newIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex
+        array.insert(item, at: newIndex)
+    }
+
+    func reorderTagGroups(draggedID: String, targetID: String) {
+        reorder(&tagGroups, draggedID: draggedID, targetID: targetID, id: { $0.id })
+        objectWillChange.send()
+    }
+
+    func reorderLabelGroups(draggedID: String, targetID: String) {
+        reorder(&labelGroups, draggedID: draggedID, targetID: targetID, id: { $0.id })
+        objectWillChange.send()
+    }
+
+    func reorderTimeEvents(draggedID: String, targetID: String) {
+        reorder(&timeEvents, draggedID: draggedID, targetID: targetID, id: { $0.id })
+        objectWillChange.send()
+    }
+
+    /// Order of tags inside a group is the group's own id list — that is what the markup
+    /// tag library renders, so reordering edits it rather than the flat `tags` array.
+    func reorderTags(inGroup groupID: String, draggedID: String, targetID: String) {
+        guard let index = tagGroups.firstIndex(where: { $0.id == groupID }) else { return }
+        var ids = tagGroups[index].tags
+        reorder(&ids, draggedID: draggedID, targetID: targetID, id: { $0 })
+        tagGroups[index] = TagGroup(id: tagGroups[index].id, name: tagGroups[index].name, tags: ids)
+        objectWillChange.send()
+    }
+
+    /// Same idea as `reorderTags(inGroup:...)` — the label picker renders `group.lables` order.
+    func reorderLabels(inGroup groupID: String, draggedID: String, targetID: String) {
+        guard let index = labelGroups.firstIndex(where: { $0.id == groupID }) else { return }
+        var ids = labelGroups[index].lables
+        reorder(&ids, draggedID: draggedID, targetID: targetID, id: { $0 })
+        labelGroups[index] = LabelGroupData(id: labelGroups[index].id, name: labelGroups[index].name, lables: ids)
+        objectWillChange.send()
+    }
+
+    // MARK: - Pasting groups copied from another collection
+
+    /// Pastes a copied tag group as an independent copy with fresh IDs.
+    ///
+    /// New IDs are mandatory: the global pool merges collections and de-duplicates by id,
+    /// so reusing the source ids would make one collection's tags shadow the other's.
+    /// References that don't exist here (label groups, label hotkeys) are dropped.
+    func pasteTagGroup(_ group: TagGroup, tags sourceTags: [Tag]) {
+        let sourceByID = Dictionary(sourceTags.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let existingLabelGroupIDs = Set(labelGroups.map(\.id))
+        let existingLabelIDs = Set(labels.map(\.id))
+
+        var newTagIDs: [String] = []
+        for tagID in group.tags {
+            guard let source = sourceByID[tagID] else { continue }
+            let keptLabelGroups = source.lablesGroup.filter { existingLabelGroupIDs.contains($0) }
+            let keptLabelHotkeys = source.labelHotkeys?.filter { existingLabelIDs.contains($0.key) }
+            let newID = UUID().uuidString
+            tags.append(
+                Tag(
+                    id: newID,
+                    primaryID: source.primaryID,
+                    name: source.name,
+                    description: source.description,
+                    color: source.color,
+                    defaultTimeBefore: source.defaultTimeBefore,
+                    defaultTimeAfter: source.defaultTimeAfter,
+                    collection: collectionName,
+                    lablesGroup: keptLabelGroups,
+                    hotkey: source.hotkey,
+                    labelHotkeys: (keptLabelHotkeys?.isEmpty ?? true) ? nil : keptLabelHotkeys,
+                    mapEnabled: source.mapEnabled,
+                    isInterval: source.isInterval
+                )
+            )
+            newTagIDs.append(newID)
+        }
+
+        let name = uniqueName(group.name, taken: tagGroups.map(\.name))
+        tagGroups.append(TagGroup(id: UUID().uuidString, name: name, tags: newTagIDs))
+        objectWillChange.send()
+    }
+
+    /// Pastes a copied label group as an independent copy with fresh IDs.
+    func pasteLabelGroup(_ group: LabelGroupData, labels sourceLabels: [Label]) {
+        let sourceByID = Dictionary(sourceLabels.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        var newLabelIDs: [String] = []
+        for labelID in group.lables {
+            guard let source = sourceByID[labelID] else { continue }
+            let newID = UUID().uuidString
+            labels.append(Label(id: newID, name: source.name, description: source.description))
+            newLabelIDs.append(newID)
+        }
+
+        let name = uniqueName(group.name, taken: labelGroups.map(\.name))
+        labelGroups.append(LabelGroupData(id: UUID().uuidString, name: name, lables: newLabelIDs))
+        objectWillChange.send()
+    }
+
+    /// Appends a numeric suffix when `base` is already taken, so a pasted group never
+    /// silently collides with an existing one.
+    private func uniqueName(_ base: String, taken: [String]) -> String {
+        guard taken.contains(base) else { return base }
+        var suffix = 2
+        var candidate = "\(base) \(suffix)"
+        while taken.contains(candidate) {
+            suffix += 1
+            candidate = "\(base) \(suffix)"
+        }
+        return candidate
+    }
+
     func renameTagGroup(id: String, newName: String) {
         if let index = tagGroups.firstIndex(where: { $0.id == id }) {
             tagGroups[index] = TagGroup(
@@ -348,7 +496,8 @@ class CustomCollectionManager: ObservableObject {
             labelGroups: labelGroups,
             labels: labels,
             timeEvents: timeEvents,
-            playField: playField
+            playField: playField,
+            playFields: playFields.isEmpty ? nil : playFields
         )
         
         InMemoryStorageManager.shared.saveCollection(collection)
@@ -433,7 +582,7 @@ class CustomCollectionManager: ObservableObject {
             self.labelGroups = collection.labelGroups
             self.labels = collection.labels
             self.timeEvents = collection.timeEvents
-            self.playField = collection.playField
+            self.playFields = collection.playFields ?? collection.playField.map { [$0] } ?? []
         } else {
             DispatchQueue.main.sync {
                 self.collectionID = collection.id
@@ -444,7 +593,7 @@ class CustomCollectionManager: ObservableObject {
                 self.labelGroups = collection.labelGroups
                 self.labels = collection.labels
                 self.timeEvents = collection.timeEvents
-                self.playField = collection.playField
+                self.playFields = collection.playFields ?? collection.playField.map { [$0] } ?? []
             }
         }
         
@@ -455,6 +604,117 @@ class CustomCollectionManager: ObservableObject {
     
     private func loadAllCollections() {
         _ = CollectionsBookmarksManager.shared.loadCollections()
+    }
+
+    /// Применяет шаблон (стандартная коллекция по имени или пользовательская по id) с регенерацией id.
+    func applyTemplate(_ template: CollectionTemplate?) {
+        guard let template else { return }
+        switch template {
+        case .standard(let name):
+            guard let std = TagLibraryManager.shared.standardCollections.first(where: { $0.name == name }) else { return }
+            startFromTemplate(
+                name: std.name,
+                tags: std.tags,
+                tagGroups: std.tagGroups,
+                labelGroups: std.labelGroups,
+                labels: std.labels,
+                timeEvents: std.timeEvents
+            )
+        case .user(let id, let name):
+            guard let data = InMemoryStorageManager.shared.loadCollection(id: id) else { return }
+            startFromTemplate(
+                name: name,
+                tags: data.tags,
+                tagGroups: data.tagGroups,
+                labelGroups: data.labelGroups,
+                labels: data.labels,
+                timeEvents: data.timeEvents,
+                playFields: data.playFields ?? (data.playField.map { [$0] } ?? [])
+            )
+        }
+    }
+
+    /// Заполняет ТЕКУЩУЮ (новую) коллекцию копией переданной, регенерируя ВСЕ id (теги, группы, лейблы,
+    /// группы лейблов, события, карты), чтобы не было конфликтов с исходной коллекцией. Ссылки сохраняются.
+    func startFromTemplate(
+        name: String,
+        tags srcTags: [Tag],
+        tagGroups srcTagGroups: [TagGroup],
+        labelGroups srcLabelGroups: [LabelGroupData],
+        labels srcLabels: [Label],
+        timeEvents srcTimeEvents: [TimeEvent],
+        playFields srcPlayFields: [PlayField] = []
+    ) {
+        let copySuffix = NSLocalizedString("CollectionsCopySuffix", comment: "")
+        let newName = copySuffix.isEmpty ? name : "\(name) \(copySuffix)"
+
+        // Лейблы
+        var labelIdMap: [String: String] = [:]
+        let newLabels = srcLabels.map { lbl -> Label in
+            let nid = UUID().uuidString
+            labelIdMap[lbl.id] = nid
+            return Label(id: nid, name: lbl.name, description: lbl.description)
+        }
+        // Группы лейблов
+        var labelGroupIdMap: [String: String] = [:]
+        let newLabelGroups = srcLabelGroups.map { g -> LabelGroupData in
+            let nid = UUID().uuidString
+            labelGroupIdMap[g.id] = nid
+            return LabelGroupData(id: nid, name: g.name, lables: g.lables.compactMap { labelIdMap[$0] })
+        }
+        // Карты
+        var playFieldIdMap: [String: String] = [:]
+        let newPlayFields = srcPlayFields.map { pf -> PlayField in
+            let nid = UUID().uuidString
+            playFieldIdMap[pf.id] = nid
+            return PlayField(id: nid, name: pf.name, imagePath: pf.imagePath, width: pf.width, height: pf.height, imageBookmark: pf.imageBookmark)
+        }
+        // Теги
+        var tagIdMap: [String: String] = [:]
+        let newTags = srcTags.map { t -> Tag in
+            let nid = UUID().uuidString
+            tagIdMap[t.id] = nid
+            var newLabelHotkeys: [String: String]? = nil
+            if let lh = t.labelHotkeys {
+                newLabelHotkeys = Dictionary(uniqueKeysWithValues: lh.compactMap { key, value in
+                    labelIdMap[key].map { ($0, value) }
+                })
+            }
+            return Tag(
+                id: nid,
+                primaryID: t.primaryID,
+                name: t.name,
+                description: t.description,
+                color: t.color,
+                defaultTimeBefore: t.defaultTimeBefore,
+                defaultTimeAfter: t.defaultTimeAfter,
+                collection: newName,
+                lablesGroup: t.lablesGroup.compactMap { labelGroupIdMap[$0] },
+                hotkey: t.hotkey,
+                labelHotkeys: newLabelHotkeys,
+                mapEnabled: t.mapEnabled,
+                isInterval: t.isInterval,
+                mapFieldId: t.mapFieldId.flatMap { playFieldIdMap[$0] }
+            )
+        }
+        // Группы тегов
+        let newTagGroups = srcTagGroups.map { g -> TagGroup in
+            TagGroup(id: UUID().uuidString, name: g.name, tags: g.tags.compactMap { tagIdMap[$0] })
+        }
+        // Общие события
+        let newTimeEvents = srcTimeEvents.map { TimeEvent(id: UUID().uuidString, name: $0.name) }
+
+        collectionID = UUID().uuidString
+        isEditingExisting = false
+        originalName = ""
+        collectionName = newName
+        labels = newLabels
+        labelGroups = newLabelGroups
+        tags = newTags
+        tagGroups = newTagGroups
+        timeEvents = newTimeEvents
+        playFields = newPlayFields
+        objectWillChange.send()
     }
     
     func updateTagMapEnabled(id: String, mapEnabled: Bool) -> Bool {
@@ -471,14 +731,25 @@ class CustomCollectionManager: ObservableObject {
                 lablesGroup: tags[index].lablesGroup,
                 hotkey: tags[index].hotkey,
                 labelHotkeys: tags[index].labelHotkeys,
-                mapEnabled: mapEnabled
+                mapEnabled: mapEnabled,
+                isInterval: tags[index].isInterval,
+                mapFieldId: mapEnabled ? tags[index].mapFieldId : nil
             )
-            
+
             tags[index] = updatedTag
             objectWillChange.send()
             return true
         }
         return false
+    }
+
+    /// Назначает тегу конкретную карту (PlayField) для разметки.
+    @discardableResult
+    func updateTagMapField(id: String, mapFieldId: String?) -> Bool {
+        guard let index = tags.firstIndex(where: { $0.id == id }) else { return false }
+        tags[index].mapFieldId = mapFieldId
+        objectWillChange.send()
+        return true
     }
     
     func savePlayFieldForCollection() -> Bool {
@@ -618,7 +889,78 @@ class CustomCollectionManager: ObservableObject {
             return false
         }
     }
-    
+
+    /// Добавляет ещё одну карту в коллекцию (несколько карт). Возвращает id новой карты.
+    @discardableResult
+    func addFieldImage(from url: URL, name: String? = nil) -> String? {
+        do {
+            let fileManager = FileManager.default
+            let playFieldsFolder = URL.appDocumentsDirectory
+                .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+                .fixedFile()
+            if !fileManager.fileExists(atPath: playFieldsFolder.path) {
+                try fileManager.createDirectory(at: playFieldsFolder, withIntermediateDirectories: true)
+            }
+
+            let mapId = UUID().uuidString
+            // Первая карта коллекции хранится под легаси-именем "{collection}.png" ради совместимости.
+            let imageName = playFields.isEmpty ? "\(collectionName).png" : "\(collectionName)__\(mapId).png"
+            let destinationURL = playFieldsFolder.appendingPathComponent(imageName)
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            try fileManager.copyItem(at: url, to: destinationURL)
+
+            guard let imageBookmark = destinationURL.makeBookmark() else { return nil }
+
+            let field = PlayField(
+                id: mapId,
+                name: name?.isEmpty == false ? name! : String.Titles.fieldMapName.format(playFields.count + 1),
+                imagePath: imageName,
+                width: 100.0,
+                height: 60.0,
+                imageBookmark: imageBookmark
+            )
+            playFields.append(field)
+            _ = savePlayFieldForCollection()
+            objectWillChange.send()
+            _ = saveCollectionToFiles()
+            return mapId
+        } catch {
+            print("❌ Error adding field image: \(error)")
+            return nil
+        }
+    }
+
+    /// Удаляет карту по id: файл изображения, запись и привязки тегов к ней.
+    func removeFieldImage(id: String) {
+        guard let idx = playFields.firstIndex(where: { $0.id == id }) else { return }
+        let field = playFields[idx]
+
+        let fileManager = FileManager.default
+        let playFieldsFolder = URL.appDocumentsDirectory
+            .appendingPathComponent("YouChip-Stat/PlayFields", isDirectory: true)
+            .fixedFile()
+        let imagePath = playFieldsFolder.appendingPathComponent(field.imagePath)
+        if fileManager.fileExists(atPath: imagePath.path) {
+            try? fileManager.removeItem(at: imagePath)
+        }
+
+        playFields.remove(at: idx)
+
+        // Снимаем привязку к удалённой карте у тегов.
+        for i in tags.indices where tags[i].mapFieldId == id {
+            tags[i].mapFieldId = nil
+            if playFields.isEmpty {
+                tags[i].mapEnabled = false
+            }
+        }
+
+        objectWillChange.send()
+        _ = savePlayFieldForCollection()
+        _ = saveCollectionToFiles()
+    }
+
     func deleteFieldImage() {
         guard let field = playField else { return }
         
@@ -668,6 +1010,23 @@ class CustomCollectionManager: ObservableObject {
         updatedField.width = width
         updatedField.height = height
         playField = updatedField
+    }
+
+    /// Обновляет размеры конкретной карты (по id) — при нескольких картах.
+    func updateFieldDimensions(id: String, width: Double, height: Double) {
+        guard let idx = playFields.firstIndex(where: { $0.id == id }) else { return }
+        playFields[idx].width = width
+        playFields[idx].height = height
+        objectWillChange.send()
+        _ = saveCollectionToFiles()
+    }
+
+    /// Переименовывает карту (по id).
+    func renameFieldMap(id: String, name: String) {
+        guard let idx = playFields.firstIndex(where: { $0.id == id }) else { return }
+        playFields[idx].name = name
+        objectWillChange.send()
+        _ = saveCollectionToFiles()
     }
     
     

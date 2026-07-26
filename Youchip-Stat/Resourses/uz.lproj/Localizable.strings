@@ -50,6 +50,7 @@
 "FieldMapHelpExportImage" = "Rasm sifatida eksport qilish";  // ^String.Titles.fieldMapHelpExportImage
 "FieldMapLoading" = "Xarita yuklanmoqda...";  // ^String.Titles.fieldMapLoading
 "FieldMapNoMap" = "Xarita yuklanmagan";  // ^String.Titles.fieldMapNoMap
+"FieldMapName" = "Xarita %d";
 "FieldMapWindowExportTitle" = "Xaritani eksport qilish";  // ^String.Titles.fieldMapWindowExportTitle
 "FieldMapSavePanelTitle" = "Xaritani saqlash";  // ^String.Titles.fieldMapSavePanelTitle
 "FieldMapSavePanelMessage" = "Xarita rasmini saqlash uchun joyni tanlang";  // ^String.Titles.fieldMapSavePanelMessage
@@ -167,6 +168,10 @@
 "FullControlButtonScreenshots" = "Mening skrinshotlarim";  // ^String.Titles.fullControlButtonScreenshots
 "FullControlButtonMap" = "Xaritada ko'rsatish";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "Vaqt chiziqi qo'shish";  // ^String.Titles.fullControlButtonAddTimeline
+"FullControlButtonMergeTimelines" = "Vaqt chiziqlarini birlashtirish";
+"FullControlMergeTimelinesHint" = "Birlashtirish uchun vaqt chiziqlarini tanlang";
+"CollectionCopyGroup" = "Guruhdan nusxa olish";
+"CollectionPasteGroup" = "Guruhni joylash";
 "FullControlHelpAddTimeline" = "Vaqt chiziqi qo'shish";  // ^String.Titles.fullControlHelpAddTimeline
 "FullControlButtonTimelineZoomIn" = "Vaqt chiziqini kattalashtirish";  // ^String.Titles.fullControlButtonTimelineZoomIn
 "FullControlButtonTimelineZoomOut" = "Vaqt chiziqini kichiklashtirish";  // ^String.Titles.fullControlButtonTimelineZoomOut
@@ -285,6 +290,10 @@
 "DeleteMap" = "Xaritani o'chirish";  // ^String.Titles.deleteMap
 "AddTagGroup" = "Teg guruhini qo'shish";  // ^String.Titles.addTagGroup
 "CollectionName" = "To'plam nomi";  // ^String.Titles.collectionName
+"CollectionsStartFromTemplate" = "Shablondan boshlash";
+"CollectionsTemplateStandard" = "Standart to`plamlar";
+"CollectionsTemplateUser" = "Mening to`plamlarim";
+"CollectionsTemplateEmpty" = "Bo`sh";
 "UpdateCollection" = "To'plamni yangilash";  // ^String.Titles.updateCollection
 "SaveCollection" = "To'plamni saqlash";  // ^String.Titles.saveCollection
 "Saved" = "Saqlandi!";  // ^String.Titles.saved
@@ -510,6 +519,11 @@
 "ProjectImportCreateProject" = "Loyiha yaratish"; // ^String.Titles.projectImportCreateProject
 "SelectNewVideo" = "Yangi video tanlash"; // ^String.Titles.selectNewVideo
 "Warning" = "Ogohlantirish"; // ^String.Titles.warning
+"AppVersionTitle" = "App version";
+"AppearanceTitle" = "Ko`rinish";
+"AppearanceSystem" = "Tizim bo`yicha";
+"AppearanceLight" = "Yorug`";
+"AppearanceDark" = "Qorong`i";
 "Playlists" = "Pleylistlar"; // ^String.Titles.playlists
 "Load" = "Yuklash"; // ^String.Titles.load
 "CurrentUnsaved" = "Joriy (saqlanmagan)"; // ^String.Titles.currentUnsaved
@@ -593,6 +607,15 @@
 "Universal" = "Universal"; // ^String.Titles.universal
 
 "ExportProject" = "Loyihani eksport qilish"; // ^String.Titles.exportProject
+"CsvExportTitle" = "CSV ga eksport";
+"CsvExportButton" = "CSV";
+"CsvExportByTimelines" = "Vaqt chiziqlari bo'yicha";
+"CsvExportByTags" = "Teglar bo'yicha";
+"CsvExportTimelinesHint" = "Har bir teg — bitta qator (davomiylik, teg guruhlari).";
+"CsvExportTagsHint" = "Har bir teg — bitta qator; har bir yorliq uchun alohida ustun.";
+"CsvExportAll" = "Barchasi";
+"ExportProjectBundle" = "Arxiv eksporti (video + belgilar)";
+"BundleExportNoVideo" = "Video fayl mavjud emas";
 "SelectProjectSaveLocation" = "Loyihani saqlash joyini tanlang"; // ^String.Titles.selectProjectSaveLocation
 "ProjectExportedSuccessfully" = "Loyiha muvaffaqiyatli eksport qilindi"; // ^String.Titles.projectExportedSuccessfully
 "ProjectSavedToFile" = "Loyiha faylga saqlandi: %@"; // ^String.Titles.projectSavedToFile
@@ -603,7 +626,11 @@
 "ProjectImportChooseFormatMessage" = "Fayl turini tanlang: YouChip loyihasi (JSON) yoki Sportcode / Angels / Wyscout XML.";
 "ProjectImportSportcutFormat" = "YouChip Sportcut loyihasi (JSON)";
 "ProjectImportSportcodeXmlFormat" = "Sportscode / Angels / Wyscout (XML)";
+"ProjectImportNacsportXmlFormat" = "Nacsport (XML)";
+"ProjectImportDartfishXmlFormat" = "Dartfish (XML)";
 "SelectSportcodeXmlForImport" = "Voqealar bilan XML faylni tanlang (ALL_INSTANCES)";
+"SelectNacsportXmlForImport" = "Nacsport XML faylni tanlang (ALL_INSTANCES)";
+"SelectDartfishXmlForImport" = "Dartfish faylni tanlang (.dartclip / XML)";
 "XmlImportNoInstancesError" = "XML faylda import qilinadigan yozuvlar yo‘q.";
 "XmlImportParseFailedError" = "XML faylni o‘qib bo‘lmadi.";
 "XmlImportCollectionDisplayName" = "XML importi";
@@ -745,6 +772,10 @@
 "LiveStreamPreloadedVideo" = "Oldindan yuklangan video";
 "LiveStreamPreloadedVideoHint" = "Ixtiyoriy. Qurilmangizdan video tanlang — u sessiya uchun asos bo'ladi.";
 "LiveStreamPickPreloadFile" = "Video tanlash...";
+"LiveStreamObsInstruction" = "OBS ni qanday sozlash";
+"LiveStreamSaveFolder" = "Yozuvni papkaga saqlash";
+"LiveStreamSaveFolderHint" = "Yozuv tugagach, uning nusxasi shu yerga saqlanadi.";
+"LiveStreamPickSaveFolder" = "Papka tanlash...";
 "AppendToVideo" = "Videoga qo'shish";
 
 // Data Sync & Backup
@@ -835,6 +866,8 @@
 "SportCutHidePlaylist" = "Pleylistni yashirish";
 "SportCutMoveUp" = "Yuqoriga ko'chirish";
 "SportCutMoveDown" = "Pastga ko'chirish";
+"SportCutMoveToGroup" = "Guruhga ko'chirish";
+"SportCutMakeOffline" = "Kliplarni oflayn qilish";
 "SportCutMoveLeft" = "Chapga ko'chirish";
 "SportCutMoveRight" = "O'ngga ko'chirish";
 "SportCutPlayAsFilm" = "Film sifatida ijro etish";
@@ -897,6 +930,7 @@
 "SportCutStartColumn" = "Boshlanishi";
 "SportCutEndColumn" = "Tugashi";
 "SportCutDurationColumn" = "Davom.";
+"SportCutDrawingColumn" = "Rasm";
 "SportCutLabelsColumn" = "Yorliqlar";
 "SportCutEventsColumn" = "Voqealar";
 "SportCutFilters" = "Filtrlar";
@@ -1129,3 +1163,18 @@
 "FreeTagModeNotConfiguredTitle" = "Erkin rejim sozlanmagan";
 "FreeTagModeNotConfiguredMessage" = "Kolleksiya sozlamalariga o'ting va teglarning erkin ko'rinish rejimini sozlang («Tartib» tugmasi).";
 "FreeTagModeDisplay" = "Erkin tartib";
+"SportCutSlidesManage" = "Slaydlar";
+"SportCutSlideUntitled" = "Nomsiz";
+"SportCutSlideDurationSec" = "%d s";
+"SportCutSlideInsertHere" = "Slayd qo'shish";
+"SportCutSlideEditTitle" = "Slayd";
+"SportCutSlideTitleField" = "Sarlavha";
+"SportCutSlideTitlePlaceholder" = "masalan, Hujum";
+"SportCutSlideDuration" = "Davomiyligi";
+"SportCutSlideTextSize" = "Matn o'lchami";
+"SportCutSlideBackground" = "Fon";
+"SportCutSlideTextColor" = "Matn rangi";
+"SportCutSlideLogo" = "Logotip (PNG)";
+"SportCutSlideAddLogo" = "Logotip qo'shish";
+"SportCutSlideDone" = "Tayyor";
+"SportCutSlideSave" = "Saqlash";

@@ -50,6 +50,7 @@
 "FieldMapHelpExportImage" = "导出为图像";  // ^String.Titles.fieldMapHelpExportImage
 "FieldMapLoading" = "正在加载地图...";  // ^String.Titles.fieldMapLoading
 "FieldMapNoMap" = "地图未加载";  // ^String.Titles.fieldMapNoMap
+"FieldMapName" = "地图 %d";
 "FieldMapWindowExportTitle" = "导出地图";  // ^String.Titles.fieldMapWindowExportTitle
 "FieldMapSavePanelTitle" = "保存地图";  // ^String.Titles.fieldMapSavePanelTitle
 "FieldMapSavePanelMessage" = "选择保存地图图像的位置";  // ^String.Titles.fieldMapSavePanelMessage
@@ -167,6 +168,10 @@
 "FullControlButtonScreenshots" = "我的截图";  // ^String.Titles.fullControlButtonScreenshots
 "FullControlButtonMap" = "在地图上显示";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "添加时间线";  // ^String.Titles.fullControlButtonAddTimeline
+"FullControlButtonMergeTimelines" = "合并时间线";
+"FullControlMergeTimelinesHint" = "选择要合并的时间线";
+"CollectionCopyGroup" = "复制分组";
+"CollectionPasteGroup" = "粘贴分组";
 "FullControlHelpAddTimeline" = "添加时间线";  // ^String.Titles.fullControlHelpAddTimeline
 "FullControlButtonTimelineZoomIn" = "放大时间线";  // ^String.Titles.fullControlButtonTimelineZoomIn
 "FullControlButtonTimelineZoomOut" = "缩小时间线";  // ^String.Titles.fullControlButtonTimelineZoomOut
@@ -285,6 +290,10 @@
 "DeleteMap" = "删除地图";  // ^String.Titles.deleteMap
 "AddTagGroup" = "添加标签组";  // ^String.Titles.addTagGroup
 "CollectionName" = "集合名称";  // ^String.Titles.collectionName
+"CollectionsStartFromTemplate" = "从模板开始";
+"CollectionsTemplateStandard" = "标准合集";
+"CollectionsTemplateUser" = "我的合集";
+"CollectionsTemplateEmpty" = "空白";
 "UpdateCollection" = "更新集合";  // ^String.Titles.updateCollection
 "SaveCollection" = "保存集合";  // ^String.Titles.saveCollection
 "Saved" = "已保存！";  // ^String.Titles.saved
@@ -510,6 +519,11 @@
 "ProjectImportCreateProject" = "创建项目"; // ^String.Titles.projectImportCreateProject
 "SelectNewVideo" = "选择新视频"; // ^String.Titles.selectNewVideo
 "Warning" = "警告"; // ^String.Titles.warning
+"AppVersionTitle" = "App version";
+"AppearanceTitle" = "外观";
+"AppearanceSystem" = "跟随系统";
+"AppearanceLight" = "浅色";
+"AppearanceDark" = "深色";
 "Playlists" = "播放列表"; // ^String.Titles.playlists
 "Load" = "加载"; // ^String.Titles.load
 "CurrentUnsaved" = "当前（未保存）"; // ^String.Titles.currentUnsaved
@@ -593,6 +607,15 @@
 "Universal" = "通用"; // ^String.Titles.universal
 
 "ExportProject" = "导出项目"; // ^String.Titles.exportProject
+"CsvExportTitle" = "导出为 CSV";
+"CsvExportButton" = "CSV";
+"CsvExportByTimelines" = "按时间线";
+"CsvExportByTags" = "按标签";
+"CsvExportTimelinesHint" = "每个时间线上的标签一行（时长、标签组）。";
+"CsvExportTagsHint" = "每个标签一行；每个标注单独一列。";
+"CsvExportAll" = "全部";
+"ExportProjectBundle" = "导出打包（视频+标记）";
+"BundleExportNoVideo" = "视频文件不可用";
 "SelectProjectSaveLocation" = "选择项目保存位置"; // ^String.Titles.selectProjectSaveLocation
 "ProjectExportedSuccessfully" = "项目导出成功"; // ^String.Titles.projectExportedSuccessfully
 "ProjectSavedToFile" = "项目已保存到文件: %@"; // ^String.Titles.projectSavedToFile
@@ -603,7 +626,11 @@
 "ProjectImportChooseFormatMessage" = "选择文件类型：YouChip 项目（JSON）或 Sportcode / Angels / Wyscout 标注（XML）。";
 "ProjectImportSportcutFormat" = "YouChip Sportcut 项目（JSON）";
 "ProjectImportSportcodeXmlFormat" = "Sportscode / Angels / Wyscout（XML）";
+"ProjectImportNacsportXmlFormat" = "Nacsport（XML）";
+"ProjectImportDartfishXmlFormat" = "Dartfish（XML）";
 "SelectSportcodeXmlForImport" = "选择包含事件的 XML 文件（ALL_INSTANCES）";
+"SelectNacsportXmlForImport" = "选择 Nacsport XML 文件（ALL_INSTANCES）";
+"SelectDartfishXmlForImport" = "选择 Dartfish 文件（.dartclip / XML）";
 "XmlImportNoInstancesError" = "XML 中没有可导入的事件。";
 "XmlImportParseFailedError" = "无法读取 XML 文件。";
 "XmlImportCollectionDisplayName" = "XML 导入";
@@ -745,6 +772,10 @@
 "LiveStreamPreloadedVideo" = "预加载视频";
 "LiveStreamPreloadedVideoHint" = "可选。从您的设备中选择一个视频作为本次会话的起始内容。";
 "LiveStreamPickPreloadFile" = "选择视频...";
+"LiveStreamObsInstruction" = "如何设置 OBS";
+"LiveStreamSaveFolder" = "将录制保存到文件夹";
+"LiveStreamSaveFolderHint" = "录制结束后副本将保存到此处。";
+"LiveStreamPickSaveFolder" = "选择文件夹...";
 "AppendToVideo" = "追加到视频";
 
 // Data Sync & Backup
@@ -835,6 +866,8 @@
 "SportCutHidePlaylist" = "隐藏播放列表";
 "SportCutMoveUp" = "上移";
 "SportCutMoveDown" = "下移";
+"SportCutMoveToGroup" = "移动到分组";
+"SportCutMakeOffline" = "使片段可离线播放";
 "SportCutMoveLeft" = "左移";
 "SportCutMoveRight" = "右移";
 "SportCutPlayAsFilm" = "以影片播放";
@@ -897,6 +930,7 @@
 "SportCutStartColumn" = "开始";
 "SportCutEndColumn" = "结束";
 "SportCutDurationColumn" = "时长";
+"SportCutDrawingColumn" = "绘图";
 "SportCutLabelsColumn" = "标注";
 "SportCutEventsColumn" = "事件";
 "SportCutFilters" = "筛选";
@@ -1129,3 +1163,18 @@
 "FreeTagModeNotConfiguredTitle" = "自由模式未配置";
 "FreeTagModeNotConfiguredMessage" = "请前往集合设置并配置标签自由显示模式（「布局」按钮）。";
 "FreeTagModeDisplay" = "自由布局";
+"SportCutSlidesManage" = "幻灯片";
+"SportCutSlideUntitled" = "未命名";
+"SportCutSlideDurationSec" = "%d 秒";
+"SportCutSlideInsertHere" = "插入幻灯片";
+"SportCutSlideEditTitle" = "幻灯片";
+"SportCutSlideTitleField" = "标题";
+"SportCutSlideTitlePlaceholder" = "例如 进攻";
+"SportCutSlideDuration" = "时长";
+"SportCutSlideTextSize" = "文字大小";
+"SportCutSlideBackground" = "背景";
+"SportCutSlideTextColor" = "文字颜色";
+"SportCutSlideLogo" = "标志 (PNG)";
+"SportCutSlideAddLogo" = "添加标志";
+"SportCutSlideDone" = "完成";
+"SportCutSlideSave" = "保存";

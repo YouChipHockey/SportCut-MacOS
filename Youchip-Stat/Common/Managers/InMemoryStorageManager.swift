@@ -220,7 +220,18 @@ final class InMemoryStorageManager {
         } else {
             playField = nil
         }
-        
+
+        // Полный набор карт (новый формат). Если файла нет — падаем на единственную карту.
+        let playFieldsURL = collectionFolderUrl.appendingPathComponent("playFields.json")
+        let playFields: [PlayField]?
+        if fileManager.fileExists(atPath: playFieldsURL.path),
+           let data = try? Data(contentsOf: playFieldsURL),
+           let decoded = try? JSONDecoder().decode([PlayField].self, from: data) {
+            playFields = decoded
+        } else {
+            playFields = playField.map { [$0] }
+        }
+
         let collection = CollectionData(
             id: id,
             tagGroups: tagGroups.tagGroups,
@@ -228,7 +239,8 @@ final class InMemoryStorageManager {
             labelGroups: labelGroups.labelGroups,
             labels: labels.labels,
             timeEvents: timeEvents,
-            playField: playField
+            playField: playField,
+            playFields: playFields
         )
         
         let key = "collection_\(id)"
@@ -272,6 +284,15 @@ final class InMemoryStorageManager {
            let playFieldData = try? encoder.encode(playField) {
             try? playFieldData.write(to: collectionFolderUrl.appendingPathComponent("playField.json"))
         }
+
+        // Полный набор карт (новый формат). Пишем всегда, когда есть хотя бы одна карта.
+        let playFieldsURL = collectionFolderUrl.appendingPathComponent("playFields.json")
+        if let playFields = collection.playFields, !playFields.isEmpty,
+           let data = try? encoder.encode(playFields) {
+            try? data.write(to: playFieldsURL)
+        } else if fileManager.fileExists(atPath: playFieldsURL.path) {
+            try? fileManager.removeItem(at: playFieldsURL)
+        }
     }
     
     private func getTimelinesDirectory() -> URL {
@@ -292,5 +313,19 @@ struct CollectionData: Codable {
     var labelGroups: [LabelGroupData]
     var labels: [Label]
     var timeEvents: [TimeEvent]
+    /// Первая карта (для обратной совместимости со старым форматом).
     var playField: PlayField?
+    /// Полный набор карт коллекции. nil в старых данных — тогда используется `playField`.
+    var playFields: [PlayField]?
+
+    init(id: String, tagGroups: [TagGroup], tags: [Tag], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent], playField: PlayField?, playFields: [PlayField]? = nil) {
+        self.id = id
+        self.tagGroups = tagGroups
+        self.tags = tags
+        self.labelGroups = labelGroups
+        self.labels = labels
+        self.timeEvents = timeEvents
+        self.playFields = playFields ?? playField.map { [$0] }
+        self.playField = self.playFields?.first ?? playField
+    }
 }

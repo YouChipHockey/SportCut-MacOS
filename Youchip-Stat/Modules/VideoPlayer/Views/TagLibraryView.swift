@@ -41,7 +41,8 @@ struct TagLibraryView: View {
     
     @State private var expandedGroups: Set<String> = []
     @State private var collectionsScrollPosition: CGFloat = 0
-    @State private var cachedPlayField: (name: String, playField: PlayField)? = nil
+    /// Кэш всех карт текущей коллекции. Карта для тега выбирается по `tag.mapFieldId` (иначе первая).
+    @State private var cachedPlayFields: (name: String, fields: [PlayField])? = nil
     
     @State var activeIntervalTags: [ActiveIntervalTag] = []
     /// Время клика по мгновенному тегу до листа лейблов (в live иначе подтверждение сдвигает `currentTime`).
@@ -409,7 +410,7 @@ struct TagLibraryView: View {
         guard activeIntervalTags.isEmpty, !isLoadingCollections else { return }
         isUserCollectionActive = false
         lastSelectedCollectionName = collection.name
-        cachedPlayField = nil
+        cachedPlayFields = nil
         tagLibrary.applyStandardCollection(named: collection.name)
         tagDisplayMode = .grouped
         loadScalePreference()
@@ -494,7 +495,7 @@ struct TagLibraryView: View {
             
             Button(action: {
                 isUserCollectionActive = false
-                cachedPlayField = nil // Clear cached playField when switching to standard collection
+                cachedPlayFields = nil // Clear cached playField when switching to standard collection
                 if let collectionName =
                     tagLibrary.selectedStandardCollectionName
                     ??
@@ -764,8 +765,9 @@ struct TagLibraryView: View {
                                    lockWindowsDuringFieldMap: Bool = true,
                                    onComplete: (() -> Void)? = nil) {
         if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
-            if let cached = cachedPlayField, cached.name == collectionName,
-               let imageBookmark = cached.playField.imageBookmark {
+            if let cached = cachedPlayFields, cached.name == collectionName,
+               let field = resolveMapField(for: tag, in: cached.fields),
+               let imageBookmark = field.imageBookmark {
                 showFieldMapSelection(
                     tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
                     instantAnchorTime: instantAnchorTime,
@@ -778,17 +780,26 @@ struct TagLibraryView: View {
                 DispatchQueue.global(qos: .userInitiated).async {
                     let collectionManager = CustomCollectionManager()
                     if collectionManager.loadCollectionFromBookmarks(named: collectionName),
-                       let playField = collectionManager.playField,
-                       let imageBookmark = playField.imageBookmark {
+                       !collectionManager.playFields.isEmpty {
+                        let fields = collectionManager.playFields
                         DispatchQueue.main.async {
-                            self.cachedPlayField = (name: collectionName, playField: playField)
-                            self.showFieldMapSelection(
-                                tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
-                                instantAnchorTime: instantAnchorTime,
-                                overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter,
-                                lockWindows: lockWindowsDuringFieldMap,
-                                onComplete: onComplete
-                            )
+                            self.cachedPlayFields = (name: collectionName, fields: fields)
+                            if let field = self.resolveMapField(for: tag, in: fields),
+                               let imageBookmark = field.imageBookmark {
+                                self.showFieldMapSelection(
+                                    tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
+                                    instantAnchorTime: instantAnchorTime,
+                                    overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter,
+                                    lockWindows: lockWindowsDuringFieldMap,
+                                    onComplete: onComplete
+                                )
+                            } else {
+                                self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil,
+                                                           instantAnchorTime: instantAnchorTime,
+                                                           overrideTimeBefore: overrideTimeBefore,
+                                                           overrideTimeAfter: overrideTimeAfter)
+                                onComplete?()
+                            }
                         }
                     } else {
                         DispatchQueue.main.async {
@@ -840,6 +851,21 @@ struct TagLibraryView: View {
         if isUserCollectionActive, let name = lastSelectedCollectionName { return name }
         return UserDefaults.standard.string(forKey: UserDefaults.Keys.lastSelectedCollection)
     }
+
+    /// Карта, назначенная тегу (по `tag.mapFieldId`); если не задана — первая карта коллекции.
+    private func resolveMapField(for tag: Tag, in fields: [PlayField]) -> PlayField? {
+        if let mid = tag.mapFieldId, let field = fields.first(where: { $0.id == mid }) {
+            return field
+        }
+        return fields.first
+    }
+
+    /// Карта, назначенная тегу, из текущего кэша карт коллекции.
+    private func cachedMapField(for tag: Tag) -> PlayField? {
+        guard let collectionName = resolvedCollectionName(),
+              let cached = cachedPlayFields, cached.name == collectionName else { return nil }
+        return resolveMapField(for: tag, in: cached.fields)
+    }
     
     private func proceedWithTagAddition(tag: Tag, selectedLabels: [FullLabelWithGroup], coordinates: CGPoint?,
                                         instantAnchorTime: Double? = nil,
@@ -851,23 +877,15 @@ struct TagLibraryView: View {
         let startTime = max(0, anchorTime - timeBefore)
         let finishTime = min(videoDuration, startTime + timeBefore + timeAfter)
         
+        let mapField = cachedMapField(for: tag)
         var fieldPosition: CGPoint? = nil
-        if let normalizedCoords = coordinates {
-            if let collectionName = resolvedCollectionName(),
-               let cached = cachedPlayField, cached.name == collectionName {
-                let playField = cached.playField
-                let fieldWidth = CGFloat(playField.width)
-                let fieldHeight = CGFloat(playField.height)
-                
-                let fieldX = normalizedCoords.x * fieldWidth
-                let fieldY = normalizedCoords.y * fieldHeight
-                
-                fieldPosition = CGPoint(x: fieldX, y: fieldY)
-            }
+        if let normalizedCoords = coordinates, let playField = mapField {
+            fieldPosition = CGPoint(x: normalizedCoords.x * CGFloat(playField.width),
+                                    y: normalizedCoords.y * CGFloat(playField.height))
         }
-        
+
         let tagGroupId = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.id) })?.id ?? ""
-        
+
         timelineData.addStampToSelectedLine(
             tagRefs: [StampTagRef(id: tag.id, tagGroupId: tagGroupId)],
             primaryId: tag.primaryID,
@@ -877,6 +895,7 @@ struct TagLibraryView: View {
             color: tag.color,
             labels: selectedLabels,
             position: fieldPosition,
+            mapFieldId: fieldPosition != nil ? mapField?.id : nil,
             timeEvents: effectiveTimeEventsForStamp()
         )
         
@@ -1285,9 +1304,9 @@ struct TagLibraryView: View {
                         HotKeyManager.shared.registerHotkeys(from: collectionManager.tags, for: .user(name: collection.name))
                         UserDefaults.standard.set(collection.name, forKey: UserDefaults.Keys.lastSelectedCollection)
                         
-                        // Cache playField
-                        if let playField = collectionManager.playField {
-                            self.cachedPlayField = (name: collection.name, playField: playField)
+                        // Cache all play fields (maps) of the collection.
+                        if !collectionManager.playFields.isEmpty {
+                            self.cachedPlayFields = (name: collection.name, fields: collectionManager.playFields)
                         }
                         
                         self.updateTagCounts()
@@ -1306,21 +1325,22 @@ struct TagLibraryView: View {
                         self.keyBindingRuntime.reset()
                         self.tagLibrary.currentCollectionType = .standard
                         HotKeyManager.shared.clearHotkeys()
-                        self.cachedPlayField = nil
+                        self.cachedPlayFields = nil
                     }
                 }
             }
         }
     }
     
-    /// Cache playField for current collection to avoid reloading
+    /// Cache play fields for current collection to avoid reloading
     private func cachePlayFieldForCollection(_ collectionName: String) {
         DispatchQueue.global(qos: .userInitiated).async {
             let collectionManager = CustomCollectionManager()
             if collectionManager.loadCollectionFromBookmarks(named: collectionName),
-               let playField = collectionManager.playField {
+               !collectionManager.playFields.isEmpty {
+                let fields = collectionManager.playFields
                 DispatchQueue.main.async {
-                    self.cachedPlayField = (name: collectionName, playField: playField)
+                    self.cachedPlayFields = (name: collectionName, fields: fields)
                 }
             }
         }
@@ -1384,19 +1404,25 @@ struct TagLibraryView: View {
     
     private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup], useFieldMap: Bool = true, lockWindowsDuringFieldMap: Bool = true) {
         if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
-                if let cached = cachedPlayField, cached.name == collectionName,
-                   let imageBookmark = cached.playField.imageBookmark {
+                if let cached = cachedPlayFields, cached.name == collectionName,
+                   let field = resolveMapField(for: tag, in: cached.fields),
+                   let imageBookmark = field.imageBookmark {
                     showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels, lockWindows: lockWindowsDuringFieldMap)
                     return
                 } else {
                     DispatchQueue.global(qos: .userInitiated).async {
                         let collectionManager = CustomCollectionManager()
                         if collectionManager.loadCollectionFromBookmarks(named: collectionName),
-                           let playField = collectionManager.playField,
-                           let imageBookmark = playField.imageBookmark {
+                           !collectionManager.playFields.isEmpty {
+                            let fields = collectionManager.playFields
                             DispatchQueue.main.async {
-                                self.cachedPlayField = (name: collectionName, playField: playField)
-                                self.showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels, lockWindows: lockWindowsDuringFieldMap)
+                                self.cachedPlayFields = (name: collectionName, fields: fields)
+                                if let field = self.resolveMapField(for: tag, in: fields),
+                                   let imageBookmark = field.imageBookmark {
+                                    self.showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels, lockWindows: lockWindowsDuringFieldMap)
+                                } else {
+                                    self.proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
+                                }
                             }
                         } else {
                             DispatchQueue.main.async {
@@ -1424,21 +1450,15 @@ struct TagLibraryView: View {
     
     private func proceedWithTagAdditionInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, coordinates: CGPoint?, selectedLabels: [FullLabelWithGroup]) {
         
+        let mapField = cachedMapField(for: tag)
         var fieldPosition: CGPoint? = nil
-        if let normalizedCoords = coordinates {
-            if let collectionName = resolvedCollectionName(),
-               let cached = cachedPlayField, cached.name == collectionName {
-                let playField = cached.playField
-                let fieldWidth = CGFloat(playField.width)
-                let fieldHeight = CGFloat(playField.height)
-                let fieldX = normalizedCoords.x * fieldWidth
-                let fieldY = normalizedCoords.y * fieldHeight
-                fieldPosition = CGPoint(x: fieldX, y: fieldY)
-            }
+        if let normalizedCoords = coordinates, let playField = mapField {
+            fieldPosition = CGPoint(x: normalizedCoords.x * CGFloat(playField.width),
+                                    y: normalizedCoords.y * CGFloat(playField.height))
         }
-        
+
         let tagGroupId = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.id) })?.id ?? ""
-        
+
         timelineData.addStampToSelectedLine(
             tagRefs: [StampTagRef(id: tag.id, tagGroupId: tagGroupId)],
             primaryId: tag.primaryID,
@@ -1448,6 +1468,7 @@ struct TagLibraryView: View {
             color: tag.color,
             labels: selectedLabels,
             position: fieldPosition,
+            mapFieldId: fieldPosition != nil ? mapField?.id : nil,
             timeEvents: effectiveTimeEventsForStamp()
         )
         

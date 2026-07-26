@@ -359,6 +359,17 @@ class HotKeyManager: ObservableObject {
         setupKeyboardMonitoring()
     }
     
+    /// Комбинации, зарезервированные под системные хоткеи приложения (редактор). Их нельзя назначать тегам.
+    /// Стрелки/пробел/Enter/Esc отсекаются отдельно (они превращаются в "key-<code>").
+    static let reservedHotkeys: Set<String> = ["cmd+c", "cmd+v", "cmd+z"]
+
+    /// true, если строка хоткея конфликтует с системными сочетаниями приложения и не должна назначаться тегу/лейблу.
+    static func isReservedHotkey(_ hotkey: String) -> Bool {
+        let normalized = hotkey.lowercased()
+        if normalized.contains("key-") { return true }   // пробел, стрелки, Enter, Esc и прочие спец-клавиши
+        return reservedHotkeys.contains(normalized)
+    }
+
     func hotkeyStringFromEvent(_ event: NSEvent) -> String {
         var components: [String] = []
         if event.modifierFlags.contains(.control) { components.append("ctrl") }

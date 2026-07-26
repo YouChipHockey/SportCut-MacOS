@@ -7,7 +7,16 @@
       "Bash(textutil -convert txt -stdout \"Вылет_при_редактировании_коллекции_со_связками.rtf\")",
       "Read(//tmp/**)",
       "Bash(awk '/Heaviest stack for the main thread/{f=1} f{print}' /tmp/hang.txt)",
-      "Bash(dwarfdump --uuid SportCut.app.dSYM)"
+      "Bash(dwarfdump --uuid SportCut.app.dSYM)",
+      "Bash(xcodebuild -list -workspace Youchip-Stat.xcworkspace)",
+      "Bash(xcodebuild build *)",
+      "Bash(perl -0pi -e 's/labelGroupItems\\\\\\(forLabels: segment\\\\.stamp\\\\.labelIDs\\\\\\)/labelGroupItems\\(forStamp: segment.stamp\\)/g' Youchip-Stat/Modules/VideoPlayer/Helpers/ExportHelper.swift)",
+      "Bash(grep -n \"case warning$\" /Users/sergejbekezin/Documents/Projects/YouChip-MacOs-Stat/Youchip-Stat/Common/Extensions/LocalizedStrings.swift)",
+      "Bash(perl -i -pe 's/\\\\^String\\\\.Titles\\\\.collectionsButtonClose/^String.Titles.sportCutSlideDone/g; s/\\\\^String\\\\.Titles\\\\.collectionsButtonSave\\\\b/^String.Titles.sportCutSlideSave/g' Youchip-Stat/Modules/SportCut/Views/SportCutSlidesEditor.swift)",
+      "Bash(plutil -lint es.lproj/Localizable.strings)",
+      "Bash(plutil -lint uz.lproj/Localizable.strings)",
+      "Bash(grep -n \"case exportProject$\\\\|case exportProject \" /Users/sergejbekezin/Documents/Projects/YouChip-MacOs-Stat/Youchip-Stat/Common/Extensions/LocalizedStrings.swift)",
+      "Bash(grep -n \"case collectionsTagNoHotkey\\\\|case collectionName$\" /Users/sergejbekezin/Documents/Projects/YouChip-MacOs-Stat/Youchip-Stat/Common/Extensions/LocalizedStrings.swift)"
     ]
   }
 }

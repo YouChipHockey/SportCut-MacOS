@@ -224,7 +224,12 @@ struct SportCutPlaylistsView: View {
                                 onMoveDown: { movePlaylist(playlist.id, direction: 1) },
                                 onReorderDrop: { draggedID in
                                     movePlaylist(draggedID, before: playlist.id)
-                                }
+                                },
+                                otherGroups: otherGroups(excluding: selectedGroupIndex),
+                                onMoveToGroup: { targetGroupIndex in
+                                    movePlaylist(playlist.id, toGroupIndex: targetGroupIndex)
+                                },
+                                onMakeOffline: { makeOffline(playlist) }
                             )
                         }
                     }
@@ -356,6 +361,37 @@ struct SportCutPlaylistsView: View {
 
         session.playlistGroups[selectedGroupIndex].playlists = playlists
         sessionManager.updateSession(session)
+    }
+
+    /// Список групп, в которые можно перенести плейлист (все, кроме текущей).
+    private func otherGroups(excluding currentIndex: Int) -> [(index: Int, name: String)] {
+        guard let session = session else { return [] }
+        return session.playlistGroups.enumerated().compactMap { index, group in
+            index == currentIndex ? nil : (index: index, name: group.name)
+        }
+    }
+
+    private func movePlaylist(_ playlistID: UUID, toGroupIndex: Int) {
+        guard var session = session else { return }
+        sessionManager.movePlaylist(in: &session, playlistID: playlistID, toGroupIndex: toGroupIndex)
+        if selectedPlaylistID == playlistID {
+            selectedPlaylistID = nil
+            playerManager.currentPlaylistID = nil
+        }
+    }
+
+    /// Экспортирует клипы плейлиста в локальный кэш, чтобы они играли даже после удаления исходного видео.
+    private func makeOffline(_ playlist: SportCutPlaylist) {
+        guard let session = session else { return }
+        let events = playlist.events.filter { !playlist.hiddenEventKeys.contains($0.hiddenKey) }
+        guard !events.isEmpty else { return }
+        SportCutClipCache.exportClips(
+            events: events,
+            sessionID: sessionID,
+            sources: session.sources,
+            startOverrides: playlist.eventStartOverrides,
+            durationOverrides: playlist.eventDurationOverrides
+        )
     }
 
     private func visibleEvents(in playlist: SportCutPlaylist) -> [SportCutEvent] {
@@ -512,10 +548,15 @@ struct SportCutPlaylistCardView: View {
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
     let onReorderDrop: (UUID) -> Void
+    /// Другие группы, в которые можно перенести плейлист: (индекс группы, имя).
+    let otherGroups: [(index: Int, name: String)]
+    let onMoveToGroup: (Int) -> Void
+    let onMakeOffline: () -> Void
     
     @State private var cardDropTargeted = false
     @State private var dragOverIndex: Int?
     @State private var commentEditorState: EventCommentEditorState?
+    @State private var showSlidesManager = false
     
     private var cardBG: Color {
         if cardDropTargeted { return Color.blue.opacity(0.15) }
@@ -594,8 +635,13 @@ struct SportCutPlaylistCardView: View {
                 commentEditorState = nil
             }
         }
+        .sheet(isPresented: $showSlidesManager) {
+            SportCutSlidesManagerSheet(sessionID: sessionID, playlistID: playlist.id) {
+                showSlidesManager = false
+            }
+        }
     }
-    
+
     // MARK: - Card Header
     
     private var cardHeader: some View {
@@ -638,6 +684,14 @@ struct SportCutPlaylistCardView: View {
             .disabled(!canMoveDown)
             .help(^String.Titles.sportCutMoveDown)
             
+            Button(action: { showSlidesManager = true }) {
+                Image(systemName: playlist.slides.isEmpty ? "rectangle.badge.plus" : "rectangle.stack.badge.plus")
+                    .font(.system(size: 12))
+                    .foregroundColor(playlist.slides.isEmpty ? .secondary : .purple)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help(^String.Titles.sportCutSlidesManage)
+
             if isPlayingClipsMode {
                 Button(action: onPlayAsFilm) {
                     Image(systemName: "film")
@@ -947,6 +1001,15 @@ struct SportCutPlaylistCardView: View {
             .disabled(!canMoveUp)
         Button(^String.Titles.sportCutMoveDown) { onMoveDown() }
             .disabled(!canMoveDown)
+        if !otherGroups.isEmpty {
+            Menu(^String.Titles.sportCutMoveToGroup) {
+                ForEach(otherGroups, id: \.index) { group in
+                    Button(group.name) { onMoveToGroup(group.index) }
+                }
+            }
+        }
+        Divider()
+        Button(^String.Titles.sportCutMakeOffline) { onMakeOffline() }
         Divider()
         Button(playlist.isHidden ? ^String.Titles.sportCutShowPlaylist : ^String.Titles.sportCutHidePlaylist) { onToggleHidden() }
         Divider()

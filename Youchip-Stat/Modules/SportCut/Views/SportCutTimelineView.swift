@@ -116,7 +116,9 @@ struct SportCutTimelineView: View {
     @State private var bulkSelectedStampIDs: Set<UUID> = []
     /// Cached video durations by source ID, loaded once.
     @State private var sourceVideoDurations: [UUID: Double] = [:]
-    
+    /// Когда плейлистов несколько — держит собранные клипы до выбора плейлиста назначения.
+    @State private var pendingAddAll: PendingAddAllClips?
+
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
     }
@@ -173,6 +175,16 @@ struct SportCutTimelineView: View {
             SportCutAddSourceSheet(sessionID: sessionID) {
                 showAddSourceSheet = false
             }
+        }
+        .sheet(item: $pendingAddAll) { pending in
+            SportCutPlaylistPickerSheet(
+                groups: session?.playlistGroups ?? [],
+                onSelect: { playlistID in
+                    addCollectedEvents(pending, toPlaylistID: playlistID)
+                    pendingAddAll = nil
+                },
+                onCancel: { pendingAddAll = nil }
+            )
         }
         .background(Color.gray.opacity(0.1))
         .onChange(of: selectedSourceIndex) { newIdx in
@@ -590,9 +602,23 @@ struct SportCutTimelineView: View {
     }
     
     private func addAllFilteredEvents() {
-        guard var session = session else { return }
+        guard let session = session else { return }
         guard !session.playlistGroups.isEmpty else { return }
-        
+
+        let collected = collectFilteredEvents()
+        guard !collected.events.isEmpty else { return }
+
+        // Если плейлистов больше одного — спросить у пользователя, в какой добавить клипы.
+        let totalPlaylists = session.playlistGroups.reduce(0) { $0 + $1.playlists.count }
+        if totalPlaylists > 1 {
+            pendingAddAll = collected
+        } else {
+            addCollectedEventsToDefaultPlaylist(collected)
+        }
+    }
+
+    /// Собирает клипы для событий, проходящих фильтр (с их комментариями).
+    private func collectFilteredEvents() -> PendingAddAllClips {
         let sourcesToProcess: [SportCutSource]
         if selectedSourceIndex == SportCutTimelineSourceTab.allProjects
             || selectedSourceIndex == SportCutTimelineSourceTab.playlists {
@@ -600,31 +626,139 @@ struct SportCutTimelineView: View {
         } else if let source = currentSource {
             sourcesToProcess = [source]
         } else {
-            return
+            return PendingAddAllClips(events: [], comments: [:])
         }
-        
+
+        var events: [SportCutEvent] = []
+        var comments: [String: String] = [:]
         for source in sourcesToProcess {
             for line in source.timelines {
                 for stamp in line.stamps where filter.matches(stamp: stamp) {
                     let event = SportCutEvent.from(stamp: stamp, line: line, source: source)
-                    let groupIdx = 0
-                    if session.playlistGroups[groupIdx].playlists.isEmpty {
-                        session.playlistGroups[groupIdx].playlists.append(
-                            SportCutPlaylist(name: "1")
-                        )
-                    }
-                    let playlistIdx = session.playlistGroups[groupIdx].playlists.count - 1
-                    if !session.playlistGroups[groupIdx].playlists[playlistIdx].events.contains(event) {
-                        session.playlistGroups[groupIdx].playlists[playlistIdx].events.append(event)
-                        if let raw = stamp.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
-                            session.playlistGroups[groupIdx].playlists[playlistIdx].eventComments[event.hiddenKey] = raw
-                        }
+                    events.append(event)
+                    if let raw = stamp.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+                        comments[event.hiddenKey] = raw
                     }
                 }
             }
         }
-        
+        return PendingAddAllClips(events: events, comments: comments)
+    }
+
+    /// Поведение по умолчанию: единственный (или последний) плейлист первой группы; создаёт плейлист, если нужно.
+    private func addCollectedEventsToDefaultPlaylist(_ collected: PendingAddAllClips) {
+        guard var session = session else { return }
+        guard !session.playlistGroups.isEmpty else { return }
+        let groupIdx = 0
+        if session.playlistGroups[groupIdx].playlists.isEmpty {
+            session.playlistGroups[groupIdx].playlists.append(SportCutPlaylist(name: "1"))
+        }
+        let playlistIdx = session.playlistGroups[groupIdx].playlists.count - 1
+        appendClips(collected, to: &session.playlistGroups[groupIdx].playlists[playlistIdx])
         sessionManager.updateSession(session)
+    }
+
+    /// Добавляет собранные клипы в конкретный плейлист (выбранный пользователем).
+    private func addCollectedEvents(_ collected: PendingAddAllClips, toPlaylistID playlistID: UUID) {
+        guard var session = session else { return }
+        guard let gi = session.playlistGroups.firstIndex(where: { $0.playlists.contains { $0.id == playlistID } }),
+              let pi = session.playlistGroups[gi].playlists.firstIndex(where: { $0.id == playlistID }) else { return }
+        appendClips(collected, to: &session.playlistGroups[gi].playlists[pi])
+        sessionManager.updateSession(session)
+    }
+
+    private func appendClips(_ collected: PendingAddAllClips, to playlist: inout SportCutPlaylist) {
+        for event in collected.events where !playlist.events.contains(event) {
+            playlist.events.append(event)
+            if let comment = collected.comments[event.hiddenKey] {
+                playlist.eventComments[event.hiddenKey] = comment
+            }
+        }
+    }
+}
+
+// MARK: - Add-all pending clips + playlist picker
+
+/// Собранные клипы, ожидающие выбора плейлиста назначения.
+private struct PendingAddAllClips: Identifiable {
+    let id = UUID()
+    let events: [SportCutEvent]
+    let comments: [String: String]
+}
+
+/// Лист выбора плейлиста для клипов «Добавить все», когда плейлистов несколько.
+private struct SportCutPlaylistPickerSheet: View {
+    let groups: [SportCutPlaylistGroup]
+    let onSelect: (UUID) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "plus.rectangle.on.folder")
+                    .foregroundColor(.green)
+                Text(^String.Titles.sportCutAddToPlaylist)
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(groups) { group in
+                        if !group.playlists.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(group.name)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                ForEach(group.playlists) { playlist in
+                                    Button(action: { onSelect(playlist.id) }) {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "list.and.film")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.blue.opacity(0.8))
+                                            Text(playlist.name)
+                                                .font(.system(size: 13))
+                                                .foregroundColor(.primary)
+                                            Spacer()
+                                            Text(String.Titles.sportCutEventsCount.format(playlist.events.count))
+                                                .font(.system(size: 11))
+                                                .foregroundColor(.secondary)
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.gray.opacity(0.06))
+                                        .cornerRadius(8)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                        )
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(20)
+            }
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button(^String.Titles.cancelButtonTitle) { onCancel() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .frame(width: 380, height: 460)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 }
 

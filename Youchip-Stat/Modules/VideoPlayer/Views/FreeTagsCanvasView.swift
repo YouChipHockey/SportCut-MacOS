@@ -49,7 +49,10 @@ struct FreeTagsCanvasView: View {
             // Библиотека ограничена итоговыми размерами/краями контента (в отличие от бесконечного редактора).
             let content = contentRect(of: effectiveLayout)
             let origin = CGPoint(x: content.minX, y: content.minY)
-            let scale = fitScale * userScale
+            // Базовый fit считаем реактивно от ТЕКУЩЕГО вьюпорта и контента — так весь холст
+            // всегда помещается целиком, независимо от того, как был зумлен холст в редакторе.
+            let baseFit = min(viewportWidth / max(content.width, 1), availableHeight / max(content.height, 1))
+            let scale = baseFit * userScale
             let canvasWidth = content.width * scale
             let canvasHeight = content.height * scale
 

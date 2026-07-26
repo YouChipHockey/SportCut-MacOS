@@ -11,8 +11,24 @@ import Firebase
 import FirebaseCore
 import FirebaseInstallations
 
+/// Режим внешнего вида приложения: как в системе / светлая / тёмная.
+enum AppAppearanceMode: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+
+    var appearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 class AppSetupManager {
-    
+
+    static let appearanceKey = "appAppearanceMode"
+
     class func setup() {
         TimelineMigrationManager.shared.migrateIfNeeded()
         DataSyncManager.shared.synchronizeOnAppLaunch()
@@ -20,9 +36,20 @@ class AppSetupManager {
         setupMenu()
         setupBaseAppearence()
     }
-    
+
     class func setAppearance(name: NSAppearance.Name) {
         NSApp.appearance = NSAppearance(named: name)
+    }
+
+    /// Текущий выбранный режим (по умолчанию тёмный — как было раньше).
+    class func currentAppearanceMode() -> AppAppearanceMode {
+        AppAppearanceMode(rawValue: UserDefaults.standard.string(forKey: appearanceKey) ?? "") ?? .dark
+    }
+
+    /// Сохраняет и применяет режим внешнего вида ко всем окнам приложения.
+    class func applyAppearanceMode(_ mode: AppAppearanceMode) {
+        UserDefaults.standard.set(mode.rawValue, forKey: appearanceKey)
+        NSApp.appearance = mode.appearance
     }
     
     private class func setupMenu() {
@@ -40,7 +67,7 @@ class AppSetupManager {
     }
     
     private class func setupBaseAppearence() {
-        NSApp.appearance = NSAppearance(named: .darkAqua)
+        NSApp.appearance = currentAppearanceMode().appearance
     }
     
 }

@@ -16,9 +16,14 @@ struct SportCutMainView: View {
     @State private var showTimelinePanel = true
     @State private var leftPanelWidth: CGFloat = 300
     @State private var topAreaHeightRatio: CGFloat = 0.55
+    /// Базовые значения, зафиксированные в начале перетаскивания разделителей.
+    @State private var dragStartLeftWidth: CGFloat?
+    @State private var dragStartTopHeight: CGFloat?
 
     private let minTopAreaHeight: CGFloat = 240
     private let minBottomAreaHeight: CGFloat = 180
+    private let minLeftPanelWidth: CGFloat = 220
+    private let minPlayerWidth: CGFloat = 360
     
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
@@ -28,6 +33,8 @@ struct SportCutMainView: View {
         GeometryReader { geometry in
             if let session = session {
                 let availableHeight = geometry.size.height
+                let maxLeftWidth = max(minLeftPanelWidth, geometry.size.width - minPlayerWidth)
+                let clampedLeftWidth = min(leftPanelWidth, maxLeftWidth)
                 let currentTopHeight = showTimelinePanel
                     ? max(minTopAreaHeight, min(availableHeight - minBottomAreaHeight, availableHeight * topAreaHeightRatio))
                     : availableHeight
@@ -39,12 +46,12 @@ struct SportCutMainView: View {
                             sessionID: sessionID,
                             playerManager: playerManager
                         )
-                        .frame(width: showPlaylistPanel ? leftPanelWidth : 0)
+                        .frame(width: showPlaylistPanel ? clampedLeftWidth : 0)
                         .clipped()
                         .allowsHitTesting(showPlaylistPanel)
 
                         if showPlaylistPanel {
-                            Divider()
+                            playlistResizeHandle(maxWidth: maxLeftWidth)
                         }
 
                         SportCutVideoPlayerView(
@@ -57,7 +64,7 @@ struct SportCutMainView: View {
                     .frame(height: currentTopHeight)
 
                     if showTimelinePanel {
-                        Divider()
+                        timelineResizeHandle(availableHeight: availableHeight, currentTopHeight: currentTopHeight)
                     }
 
                     SportCutTimelineView(
@@ -130,6 +137,64 @@ struct SportCutMainView: View {
             }
         }
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    // MARK: - Resize handles
+
+    /// Вертикальный разделитель между панелью плейлистов и плеером — тянется по горизонтали.
+    private func playlistResizeHandle(maxWidth: CGFloat) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(Color(NSColor.separatorColor))
+                .frame(width: 1)
+            Color.clear
+                .frame(width: 10)
+                .contentShape(Rectangle())
+        }
+        .frame(width: 10)
+        .onHover { hovering in
+            if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
+        }
+        .gesture(
+            // Глобальная система координат: перемещение считается от экрана, а не от самого
+            // разделителя (который двигается при ресайзе) — иначе получается рывками.
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { value in
+                    if dragStartLeftWidth == nil { dragStartLeftWidth = leftPanelWidth }
+                    let base = dragStartLeftWidth ?? leftPanelWidth
+                    leftPanelWidth = min(max(base + value.translation.width, minLeftPanelWidth), maxWidth)
+                }
+                .onEnded { _ in dragStartLeftWidth = nil }
+        )
+    }
+
+    /// Горизонтальный разделитель между верхней областью (плеер/плейлисты) и таймлайном — тянется по вертикали.
+    private func timelineResizeHandle(availableHeight: CGFloat, currentTopHeight: CGFloat) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(Color(NSColor.separatorColor))
+                .frame(height: 1)
+            Color.clear
+                .frame(height: 10)
+                .contentShape(Rectangle())
+        }
+        .frame(height: 10)
+        .onHover { hovering in
+            if hovering { NSCursor.resizeUpDown.set() } else { NSCursor.arrow.set() }
+        }
+        .gesture(
+            // Глобальная система координат — стабильное следование за курсором без рывков.
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { value in
+                    if dragStartTopHeight == nil { dragStartTopHeight = currentTopHeight }
+                    let base = dragStartTopHeight ?? currentTopHeight
+                    let newHeight = min(max(base + value.translation.height, minTopAreaHeight), availableHeight - minBottomAreaHeight)
+                    if availableHeight > 0 {
+                        topAreaHeightRatio = newHeight / availableHeight
+                    }
+                }
+                .onEnded { _ in dragStartTopHeight = nil }
+        )
     }
 
     private static func isSportCutTextInputActive() -> Bool {

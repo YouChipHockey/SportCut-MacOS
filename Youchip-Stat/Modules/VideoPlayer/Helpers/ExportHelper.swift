@@ -283,7 +283,7 @@ class ExportHelper: ObservableObject {
                         let overlayItem = OverlayItem(
                             tag: tag,
                             stamp: segment.stamp,
-                            selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labelIDs),
+                            selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forStamp: segment.stamp),
                             start: timeBefore,
                             duration: currentTime - timeBefore,
                             videoSize: videoSize,
@@ -312,7 +312,7 @@ class ExportHelper: ObservableObject {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
-                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labelIDs),
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forStamp: segment.stamp),
                     start: currentTime - segment.timeRange.duration,
                     duration: segment.timeRange.duration,
                     videoSize: videoSize,
@@ -523,11 +523,13 @@ class ExportHelper: ObservableObject {
                 
             case .tagWithLabels(let selectedTag, let selectedLabels):
                 let groupName = segment.groupName ?? "group"
-                let stampLabels = segment.stamp.labelIDs.compactMap { labelID in
-                    tagLibrary.allLabels.first(where: { $0.id == labelID })
+                // Resolve label names from the pool, else from the stamp's embedded labels,
+                // so imported markup still names the file correctly.
+                let stampLabels: [String] = segment.stamp.labels.compactMap { item in
+                    tagLibrary.findLabelById(item.id)?.name ?? (item.name.isEmpty ? nil : item.name)
                 }
                 if !stampLabels.isEmpty {
-                    let labelsString = stampLabels.map { $0.name }.joined(separator: "_")
+                    let labelsString = stampLabels.joined(separator: "_")
                     fileName = "\(groupName)_\(selectedTag.name)_\(labelsString)_\(index + 1).mp4"
                 } else {
                     fileName = "\(groupName)_\(selectedTag.name)_\(index + 1).mp4"
@@ -556,7 +558,7 @@ class ExportHelper: ObservableObject {
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
-                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forLabels: segment.stamp.labelIDs),
+                    selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forStamp: segment.stamp),
                     start: .zero,
                     duration: segment.timeRange.duration,
                     videoSize: videoSize,

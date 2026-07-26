@@ -16,17 +16,121 @@ class ProjectExportManager {
     
     func exportProject(file: FilesFile) {
         let projectData = createProjectData(from: file)
-        
+
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [UTType.json]
         savePanel.nameFieldStringValue = "\(file.name).youchip"
         savePanel.title = ^String.Titles.exportProject
         savePanel.message = ^String.Titles.selectProjectSaveLocation
-        
+
         savePanel.begin { response in
             if response == .OK, let url = savePanel.url {
                 self.saveProject(projectData, to: url)
             }
+        }
+    }
+
+    /// Пакетный экспорт: видео + разметка проекта в одном ZIP-архиве.
+    func exportProjectBundle(file: FilesFile) {
+        guard let videoURL = file.url else {
+            showBundleError(message: ^String.Titles.bundleExportNoVideo)
+            return
+        }
+        let projectData = createProjectData(from: file)
+        let projectName = file.name
+
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [UTType.zip]
+        savePanel.nameFieldStringValue = "\(projectName).zip"
+        savePanel.title = ^String.Titles.exportProjectBundle
+        savePanel.message = ^String.Titles.selectProjectSaveLocation
+
+        savePanel.begin { response in
+            guard response == .OK, let destURL = savePanel.url else {
+                videoURL.stopAccessingSecurityScopedResource()
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.buildProjectBundle(videoURL: videoURL, projectData: projectData, projectName: projectName, destURL: destURL)
+            }
+        }
+    }
+
+    private func buildProjectBundle(videoURL: URL, projectData: ProjectExportModel, projectName: String, destURL: URL) {
+        defer { videoURL.stopAccessingSecurityScopedResource() }
+        let fm = FileManager.default
+        let folderName = sanitizedFileName(projectName)
+        let staging = fm.temporaryDirectory.appendingPathComponent("YouChipBundle-\(UUID().uuidString)", isDirectory: true)
+        let bundleDir = staging.appendingPathComponent(folderName, isDirectory: true)
+
+        do {
+            try fm.createDirectory(at: bundleDir, withIntermediateDirectories: true)
+
+            // Разметка проекта (JSON).
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = .prettyPrinted
+            let jsonData = try encoder.encode(projectData)
+            try jsonData.write(to: bundleDir.appendingPathComponent("\(folderName).youchip"))
+
+            // Видео: сначала пробуем жёсткую ссылку (без копии), иначе копируем.
+            let videoDest = bundleDir.appendingPathComponent(videoURL.lastPathComponent)
+            if (try? fm.linkItem(at: videoURL, to: videoDest)) == nil {
+                try fm.copyItem(at: videoURL, to: videoDest)
+            }
+
+            try zipDirectory(bundleDir, to: destURL)
+            try? fm.removeItem(at: staging)
+
+            showBundleSuccess(url: destURL)
+        } catch {
+            try? fm.removeItem(at: staging)
+            showBundleError(message: String(format: ^String.Titles.failedToSaveProject, error.localizedDescription))
+        }
+    }
+
+    /// Zip директории в `destURL` через NSFileCoordinator (.forUploading) — работает в песочнице, без буферизации в память.
+    private func zipDirectory(_ dir: URL, to destURL: URL) throws {
+        var coordError: NSError?
+        var innerError: Error?
+        let coordinator = NSFileCoordinator()
+        coordinator.coordinate(readingItemAt: dir, options: [.forUploading], error: &coordError) { zippedURL in
+            do {
+                try? FileManager.default.removeItem(at: destURL)
+                try FileManager.default.copyItem(at: zippedURL, to: destURL)
+            } catch {
+                innerError = error
+            }
+        }
+        if let coordError { throw coordError }
+        if let innerError { throw innerError }
+    }
+
+    private func sanitizedFileName(_ name: String) -> String {
+        let invalid = CharacterSet(charactersIn: "/\\:?%*|\"<>")
+        let cleaned = name.components(separatedBy: invalid).joined(separator: "-")
+        return cleaned.isEmpty ? "Project" : cleaned
+    }
+
+    private func showBundleSuccess(url: URL) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = ^String.Titles.projectExportedSuccessfully
+            alert.informativeText = String(format: ^String.Titles.projectSavedToFile, url.lastPathComponent)
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+    }
+
+    private func showBundleError(message: String) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = ^String.Titles.exportError
+            alert.informativeText = message
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
         }
     }
     
@@ -104,14 +208,20 @@ class ProjectExportManager {
             alert.informativeText = ^String.Titles.projectImportChooseFormatMessage
             alert.addButton(withTitle: ^String.Titles.projectImportSportcutFormat)
             alert.addButton(withTitle: ^String.Titles.projectImportSportcodeXmlFormat)
+            alert.addButton(withTitle: ^String.Titles.projectImportNacsportXmlFormat)
+            alert.addButton(withTitle: ^String.Titles.projectImportDartfishXmlFormat)
             alert.addButton(withTitle: ^String.Titles.cancelButtonTitle)
-            
+
             let response = alert.runModal()
             switch response {
             case .alertFirstButtonReturn:
                 self.presentSportcutJSONImportPanel(completion: completion)
             case .alertSecondButtonReturn:
                 self.presentSportcodeXMLImportPanel(completion: completion)
+            case .alertThirdButtonReturn:
+                self.presentNacsportXMLImportPanel(completion: completion)
+            case NSApplication.ModalResponse(rawValue: NSApplication.ModalResponse.alertThirdButtonReturn.rawValue + 1):
+                self.presentDartfishXMLImportPanel(completion: completion)
             default:
                 completion(nil)
             }
@@ -154,6 +264,80 @@ class ProjectExportManager {
         do {
             let data = try Data(contentsOf: url)
             let model = try SportcodeXMLProjectImporter.makeProjectImport(from: data, fileName: url.lastPathComponent)
+            completion(model)
+        } catch {
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = ^String.Titles.importError
+                alert.informativeText = error.localizedDescription
+                alert.alertStyle = .critical
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
+            completion(nil)
+        }
+    }
+
+    private func presentNacsportXMLImportPanel(completion: @escaping (ProjectImportModel?) -> Void) {
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = [UTType.xml]
+        openPanel.title = ^String.Titles.projectImportTitle
+        openPanel.message = ^String.Titles.selectNacsportXmlForImport
+        openPanel.allowsMultipleSelection = false
+
+        openPanel.begin { response in
+            if response == .OK, let url = openPanel.url {
+                self.loadProjectFromNacsportXML(url: url, completion: completion)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    private func loadProjectFromNacsportXML(url: URL, completion: @escaping (ProjectImportModel?) -> Void) {
+        do {
+            let data = try Data(contentsOf: url)
+            let model = try NacsportXMLProjectImporter.makeProjectImport(from: data, fileName: url.lastPathComponent)
+            completion(model)
+        } catch {
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = ^String.Titles.importError
+                alert.informativeText = error.localizedDescription
+                alert.alertStyle = .critical
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
+            completion(nil)
+        }
+    }
+
+    private func presentDartfishXMLImportPanel(completion: @escaping (ProjectImportModel?) -> Void) {
+        let openPanel = NSOpenPanel()
+        // `.dartclip` is XML content but carries its own extension, so allow both.
+        var types: [UTType] = [.xml]
+        if let dartclip = UTType(filenameExtension: "dartclip") {
+            types.append(dartclip)
+        }
+        openPanel.allowedContentTypes = types
+        openPanel.allowsOtherFileTypes = true
+        openPanel.title = ^String.Titles.projectImportTitle
+        openPanel.message = ^String.Titles.selectDartfishXmlForImport
+        openPanel.allowsMultipleSelection = false
+
+        openPanel.begin { response in
+            if response == .OK, let url = openPanel.url {
+                self.loadProjectFromDartfishXML(url: url, completion: completion)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    private func loadProjectFromDartfishXML(url: URL, completion: @escaping (ProjectImportModel?) -> Void) {
+        do {
+            let data = try Data(contentsOf: url)
+            let model = try DartfishXMLProjectImporter.makeProjectImport(from: data, fileName: url.lastPathComponent)
             completion(model)
         } catch {
             DispatchQueue.main.async {

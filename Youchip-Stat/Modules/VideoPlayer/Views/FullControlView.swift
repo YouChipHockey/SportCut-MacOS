@@ -38,6 +38,9 @@ struct FullControlView: View {
     @State private var editingStampLineID: UUID?
     @State private var editingStampID: UUID?
     @State private var timelineScale: CGFloat = 1.0
+    // Effective scale at the time of the last zoom, so a new zoom can be
+    // anchored on the playhead (see handleZoomChanged).
+    @State private var previousEffectiveScale: CGFloat = 1.0
     @GestureState private var magnifyScale: CGFloat = 1.0
     @State private var keyEventMonitor: Any?
     @State private var tagEdgePosition: CGFloat? = nil
@@ -75,21 +78,27 @@ struct FullControlView: View {
             }
             
             switch event.keyCode {
-            /// removed because it blocks "escape" from handling cancelAction in sheets
-//            case 53:
-//                timelineData.selectStamp(stampID: nil)
-//                return nil
-            case 51:
-                if event.modifierFlags.contains(.option) {
-                    if let stampID = timelineData.selectedStampID {
-                        for line in timelineData.lines {
-                            if line.stamps.contains(where: { $0.id == stampID }) {
-                                timelineData.removeStamp(lineID: line.id, stampID: stampID)
-                                break
-                            }
+            case 53:
+                // Esc cancels the "merge timelines" selection; otherwise pass through
+                // so it still reaches sheets' cancel actions.
+                if timelineData.isMergeSelectionActive {
+                    timelineData.cancelMergeSelection()
+                    return nil
+                }
+                return event
+            case 51, 117:
+                // Delete / Backspace (51) and Forward Delete (117) remove the
+                // currently selected stamp in any markup mode. Text-field focus is
+                // already handled by the early return above, so this can't eat a
+                // deletion the user meant for a text field.
+                if let stampID = timelineData.selectedStampID {
+                    for line in timelineData.lines {
+                        if line.stamps.contains(where: { $0.id == stampID }) {
+                            timelineData.removeStamp(lineID: line.id, stampID: stampID)
+                            break
                         }
-                        return nil
                     }
+                    return nil
                 }
                 return event
             default:
@@ -117,7 +126,9 @@ struct FullControlView: View {
     
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
-    @State private var hoveredStampInfo: String? = nil
+    @State private var showCSVExport = false
+    @State private var hoveredStampInfo: AttributedString? = nil
+    @State private var showZoomPopover = false
 
     @State private var isLoading = false
     @State private var availableTags: [Tag] = []
@@ -405,11 +416,40 @@ struct FullControlView: View {
     }
 
     // After zoom the pixel coordinate of the playhead shifts while the
-    // NSScrollView keeps its old content offset. Treat zoom like a manual scroll
-    // so auto-scroll is suppressed until the user pauses and resumes playback.
+    // NSScrollView keeps its old content offset, so the timeline would appear to
+    // zoom around its left edge. Instead we keep the playhead pinned to its
+    // current on-screen position (or centered if it was off-screen), so zooming
+    // happens "around the playhead". Auto-scroll is suppressed until the user
+    // pauses and resumes playback.
     private func handleZoomChanged(duration: Double) {
         timelineScrollController.stopAutoScrollFollow()
         timelineScrollController.userDidManuallyScroll = true
+
+        let visibleWidth = timelineScrollController.visibleWidth
+        let oldEffectiveScale = max(previousEffectiveScale, 1.0)
+        let newEffectiveScale = max(timelineScale, 1.0)
+        // Record the new baseline regardless, so a later zoom starts from here.
+        previousEffectiveScale = newEffectiveScale
+
+        guard visibleWidth > 0, duration > 0,
+              abs(newEffectiveScale - oldEffectiveScale) > 0.0001 else { return }
+
+        let ratio = max(0.0, min(videoManager.currentTime / duration, 1.0))
+        let oldGridWidth = visibleWidth * oldEffectiveScale
+        let newGridWidth = visibleWidth * newEffectiveScale
+
+        // On-screen position of the playhead before the zoom. If it was outside
+        // the viewport, anchor on the centre instead.
+        let playheadViewportX = ratio * oldGridWidth - timelineScrollController.currentScrollX
+        let anchorX = (playheadViewportX < 0 || playheadViewportX > visibleWidth)
+            ? visibleWidth / 2
+            : playheadViewportX
+
+        let newScrollX = ratio * newGridWidth - anchorX
+        // The content view resizes on the next layout pass, so jump after it.
+        DispatchQueue.main.async {
+            timelineScrollController.scrollTo(x: max(0, newScrollX))
+        }
     }
     
     private func formatTimeForHover(_ time: Double) -> String {
@@ -573,13 +613,11 @@ struct FullControlView: View {
                                     .padding(.vertical, 3)
                                     .background(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .fill((line.id == timelineData.selectedLineID) ?
-                                                  Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
+                                            .fill(lineNameFill(line))
                                     )
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .stroke((line.id == timelineData.selectedLineID) ?
-                                                    Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
+                                            .stroke(lineNameStroke(line), lineWidth: lineNameStrokeWidth(line))
                                     )
                             }
                             
@@ -627,6 +665,12 @@ struct FullControlView: View {
                         .frame(width: 195, height: 30, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
+                            if timelineData.isMergeSelectionActive {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    timelineData.toggleMergeSelection(line.id)
+                                }
+                                return
+                            }
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 let commandDown = NSEvent.modifierFlags.contains(.command)
                                 if commandDown {
@@ -671,13 +715,11 @@ struct FullControlView: View {
                                     .padding(.vertical, 3)
                                     .background(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .fill((line.id == timelineData.selectedLineID) ?
-                                                  Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
+                                            .fill(lineNameFill(line))
                                     )
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .stroke((line.id == timelineData.selectedLineID) ?
-                                                    Color.blue.opacity(0.4) : Color.gray.opacity(0.2), lineWidth: 0.5)
+                                            .stroke(lineNameStroke(line), lineWidth: lineNameStrokeWidth(line))
                                     )
                             }
                             
@@ -1029,7 +1071,10 @@ struct FullControlView: View {
     @ViewBuilder
     private func timelineTableCornerControls() -> some View {
         HStack(spacing: 3) {
-            if markupMode == .standard {
+            if timelineData.isMergeSelectionActive {
+                mergeSelectionBar()
+            }
+            if !timelineData.isMergeSelectionActive, markupMode == .standard {
                 Button {
                     showAddLineSheet = true
                 } label: {
@@ -1039,8 +1084,19 @@ struct FullControlView: View {
                 }
                 .buttonStyle(.plain)
                 .help(^String.Titles.fullControlButtonAddTimeline)
+
+                Button {
+                    timelineData.beginMergeSelection()
+                } label: {
+                    Image(systemName: "arrow.triangle.merge")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.fullControlButtonMergeTimelines)
             }
-            
+
+            if !timelineData.isMergeSelectionActive {
             HStack(spacing: 1) {
                 Button(action: {
                     WindowsManager.shared.setMarkupMode(.standard)
@@ -1070,37 +1126,125 @@ struct FullControlView: View {
             }
             .help(^String.Titles.fullControlModeHelp)
             
-            HStack(spacing: 2) {
-                Button {
-                    timelineScale = max(1.0, timelineScale - 0.5)
-                } label: {
-                    Image(systemName: "minus.magnifyingglass")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .buttonStyle(.plain)
-                .help(^String.Titles.fullControlButtonTimelineZoomOut)
-                
-                Text(String(format: "%.1fx", timelineScale))
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .frame(width: 30)
-                
-                Button {
-                    timelineScale += 0.5
-                } label: {
+            Button {
+                showZoomPopover.toggle()
+            } label: {
+                HStack(spacing: 3) {
                     Image(systemName: "plus.magnifyingglass")
                         .font(.system(size: 10, weight: .medium))
+                    Text(String(format: "%.1fx", timelineScale))
+                        .font(.system(size: 9, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-                .buttonStyle(.plain)
-                .help(^String.Titles.fullControlButtonTimelineZoomIn)
+                .frame(minHeight: 22)
+                .padding(.horizontal, 6)
+                .background(Color.gray.opacity(0.12))
+                .foregroundColor(.primary)
+                .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+            .help(^String.Titles.fullControlButtonTimelineZoomIn)
+            .popover(isPresented: $showZoomPopover, arrowEdge: .bottom) {
+                zoomPopoverContent()
+            }
             }
         }
         .padding(.leading, 4)
         .padding(.trailing, 2)
     }
-    
+
+    /// Zoom control shown in a popover so it doesn't take up space in the
+    /// timeline corner toolbar (which would otherwise hide the merge button).
+    @ViewBuilder
+    private func zoomPopoverContent() -> some View {
+        HStack(spacing: 8) {
+            Button {
+                timelineScale = max(1.0, timelineScale - 0.5)
+            } label: {
+                Image(systemName: "minus.magnifyingglass")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .help(^String.Titles.fullControlButtonTimelineZoomOut)
+
+            Slider(value: $timelineScale, in: 1.0...10.0)
+                .controlSize(.small)
+                .frame(width: 140)
+
+            Button {
+                timelineScale = min(10.0, timelineScale + 0.5)
+            } label: {
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .help(^String.Titles.fullControlButtonTimelineZoomIn)
+
+            Text(String(format: "%.1fx", timelineScale))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .frame(width: 34, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private func isMergeSelected(_ line: TimelineLine) -> Bool {
+        timelineData.isMergeSelectionActive && timelineData.mergeSelectedLineIDs.contains(line.id)
+    }
+
+    private func lineNameFill(_ line: TimelineLine) -> Color {
+        if isMergeSelected(line) { return Color.green.opacity(0.25) }
+        return line.id == timelineData.selectedLineID ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1)
+    }
+
+    private func lineNameStroke(_ line: TimelineLine) -> Color {
+        if isMergeSelected(line) { return Color.green.opacity(0.7) }
+        return line.id == timelineData.selectedLineID ? Color.blue.opacity(0.4) : Color.gray.opacity(0.2)
+    }
+
+    private func lineNameStrokeWidth(_ line: TimelineLine) -> CGFloat {
+        isMergeSelected(line) ? 1.5 : 0.5
+    }
+
+    /// Compact Done / Cancel bar shown in the timeline corner while choosing timelines to merge.
+    @ViewBuilder
+    private func mergeSelectionBar() -> some View {
+        Button {
+            timelineData.commitMergeSelection()
+        } label: {
+            Text(^String.Titles.done)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(timelineData.mergeSelectedLineIDs.isEmpty ? Color.gray.opacity(0.5) : Color.green)
+                .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+        .disabled(timelineData.mergeSelectedLineIDs.isEmpty)
+        .help(^String.Titles.fullControlMergeTimelinesHint)
+
+        Button {
+            timelineData.cancelMergeSelection()
+        } label: {
+            Text(^String.Titles.cancelButtonTitle)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.primary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.gray.opacity(0.15))
+                .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+
+        Text("\(timelineData.mergeSelectedLineIDs.count)")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(.secondary)
+    }
+
     private var playbackActions: VideoControlPanelActions {
         videoManager.isReviewMode
             ? .init(
@@ -1243,6 +1387,17 @@ struct FullControlView: View {
         }
     }
 
+    /// Резолвер имён для CSV-экспорта разметки на основе глобальной библиотеки тегов.
+    static func markupCSVResolver() -> CSVNameResolver {
+        let lib = TagLibraryManager.shared
+        return CSVNameResolver(
+            tagName: { lib.findTagById($0)?.name ?? $0 },
+            labelName: { lib.findLabelById($0)?.name ?? $0 },
+            labelGroupName: { id in lib.allLabelGroups.first(where: { $0.lables.contains(id) })?.name ?? "Лейблы" },
+            eventName: { id in lib.allTimeEvents.first(where: { $0.id == id })?.name ?? id }
+        )
+    }
+
     private func exportExcel() {
         let data = MarkupExcelExporter.makeWorkbookData(
             lines: timelineData.lines,
@@ -1310,7 +1465,7 @@ struct FullControlView: View {
         }
     }
 
-    private var stampHoverInlineInfo: String? {
+    private var stampHoverInlineInfo: AttributedString? {
         hoveredStampInfo
     }
     
@@ -1331,8 +1486,8 @@ struct FullControlView: View {
 
             timelineFilterMenuButton
 
-            Text(stampHoverInlineInfo ?? " ")
-                .font(.system(size: 11, weight: .regular))
+            Text(stampHoverInlineInfo ?? AttributedString(" "))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -1596,6 +1751,10 @@ struct FullControlView: View {
                     } else {
                         self.markupMode = MarkupMode.current
                     }
+                    // Merging is a standard-mode action; leaving that mode drops the selection.
+                    if self.markupMode != .standard {
+                        self.timelineData.cancelMergeSelection()
+                    }
                 }
                 
                 let hoverObserver = NotificationCenter.default.addObserver(
@@ -1604,7 +1763,7 @@ struct FullControlView: View {
                     queue: .main
                 ) { notification in
                     if let userInfo = notification.userInfo {
-                        if let stampInfo = userInfo["stampInfo"] as? String {
+                        if let stampInfo = userInfo["stampInfo"] as? AttributedString {
                             hoveredStampInfo = stampInfo
                         } else {
                             hoveredStampInfo = nil
@@ -1762,6 +1921,17 @@ struct FullControlView: View {
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportMarkupExcel)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
             exportExcel()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toolsExportMarkupCSV)) { _ in
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
+            showCSVExport = true
+        }
+        .sheet(isPresented: $showCSVExport) {
+            CSVExportSheet(
+                lines: timelineData.lines,
+                resolver: Self.markupCSVResolver(),
+                defaultFileName: "markup"
+            ) { showCSVExport = false }
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportCutsCurrentTimeline)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
@@ -1945,60 +2115,93 @@ struct FullControlView: View {
         }
     }
     
+    // MARK: - Export pickers (tag/label lists)
+    //
+    // These build the tag/label choices for "export cuts by tag/label". They resolve
+    // each id against the global pool but fall back to the data embedded in the stamp
+    // itself (`stamp.label`/`stamp.colorHex` for tags, `stamp.labels` for labels), so
+    // markup imported from other tools — whose collection isn't installed locally — is
+    // still selectable. Purely additive: pooled entries win, we only fill the gaps.
+
+    /// Resolves a tag id from the pool, or synthesizes one from the stamp it appears on.
+    private func resolvedTag(id tagId: String, from stamp: TimelineStamp) -> Tag {
+        if let pooled = TagLibraryManager.shared.findTagById(tagId) { return pooled }
+        return Tag(
+            id: tagId,
+            primaryID: stamp.primaryID,
+            name: stamp.label,
+            description: "",
+            color: stamp.colorHex,
+            defaultTimeBefore: 0,
+            defaultTimeAfter: 0,
+            collection: nil,
+            lablesGroup: [],
+            hotkey: nil,
+            labelHotkeys: nil,
+            mapEnabled: false,
+            isInterval: true
+        )
+    }
+
+    /// Resolves a label from the pool, or synthesizes it from the stamp's embedded label.
+    private func resolvedLabel(_ item: FullLabelWithGroup) -> Label? {
+        if let pooled = TagLibraryManager.shared.findLabelById(item.id) { return pooled }
+        return item.name.isEmpty ? nil : Label(id: item.id, name: item.name, description: item.description)
+    }
+
     func uniqueLabelsFromTimelines() -> [Label] {
-        let labelIDs = timelineData.lines.flatMap { line in
-            line.stamps.flatMap { stamp in
-                stamp.labelIDs
+        var result: [Label] = []
+        var seen = Set<String>()
+        for line in timelineData.lines {
+            for stamp in line.stamps {
+                for item in stamp.labels where seen.insert(item.id).inserted {
+                    if let label = resolvedLabel(item) { result.append(label) }
+                }
             }
         }
-        
-        let uniqueLabelIDs = Array(Set(labelIDs))
-        
-        let labels = TagLibraryManager.shared.allLabels.filter { label in
-            return uniqueLabelIDs.contains(label.id)
-        }
-        
-        return labels
+        return result
     }
 
     func labelsForTag(_ tag: Tag) -> [Label] {
-        let labelIDs = timelineData.lines.flatMap { line in
-            line.stamps.filter { $0.idTags.contains(tag.id) }
-                .flatMap { $0.labelIDs }
+        var result: [Label] = []
+        var seen = Set<String>()
+        for line in timelineData.lines {
+            for stamp in line.stamps where stamp.idTags.contains(tag.id) {
+                for item in stamp.labels where seen.insert(item.id).inserted {
+                    if let label = resolvedLabel(item) { result.append(label) }
+                }
+            }
         }
-        
-        let uniqueLabelIDs = Array(Set(labelIDs))
-        
-        let labels = TagLibraryManager.shared.allLabels.filter { uniqueLabelIDs.contains($0.id) }
-        return labels
+        return result
     }
 
     func tagsForLabel(_ label: Label) -> [Tag] {
-        let tagIDs = timelineData.lines.flatMap { line in
-            line.stamps.filter { $0.labelIDs.contains(label.id) }
-                .flatMap { $0.idTags }
-        }
-
-        let uniqueTagIDs = Array(Set(tagIDs))
-        
-        let tags = TagLibraryManager.shared.allTags.filter { uniqueTagIDs.contains($0.id) }
-        return tags
-    }
-    
-    func uniqueTagsFromTimelines() -> [Tag] {
-        let tagIDs = timelineData.lines.flatMap { line in
-            line.stamps.flatMap { stamp in
-                stamp.idTags
+        var result: [Tag] = []
+        var seen = Set<String>()
+        for line in timelineData.lines {
+            for stamp in line.stamps where stamp.labelIDs.contains(label.id) {
+                // Process the main tag first so its name (stamp.label) matches when synthesized.
+                let orderedIds = [stamp.idTag] + stamp.idTags.filter { $0 != stamp.idTag }
+                for tagId in orderedIds where !tagId.isEmpty && seen.insert(tagId).inserted {
+                    result.append(resolvedTag(id: tagId, from: stamp))
+                }
             }
         }
-        
-        let uniqueTagIDs = Array(Set(tagIDs))
-        
-        let tags = TagLibraryManager.shared.allTags.filter { tag in
-            return uniqueTagIDs.contains { $0 == tag.id }
+        return result
+    }
+
+    func uniqueTagsFromTimelines() -> [Tag] {
+        var result: [Tag] = []
+        var seen = Set<String>()
+        for line in timelineData.lines {
+            for stamp in line.stamps {
+                let orderedIds = [stamp.idTag] + stamp.idTags.filter { $0 != stamp.idTag }
+                for tagId in orderedIds where !tagId.isEmpty && seen.insert(tagId).inserted {
+                    result.append(resolvedTag(id: tagId, from: stamp))
+                }
+            }
         }
-        
-        return tags
+        return result
     }
     
 }
@@ -2197,6 +2400,8 @@ struct TimelineDropDelegate: DropDelegate {
         let draggedLine = timelineData.lines.remove(at: draggedIndex)
         let newTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex
         timelineData.lines.insert(draggedLine, at: newTargetIndex)
+        // Сохраняем новый порядок таймлайнов на диск (иначе сбрасывается при перезагрузке).
+        timelineData.updateTimelines()
     }
 }
 
@@ -2280,8 +2485,8 @@ struct TimelineMouseTracker: NSViewRepresentable {
     let gridWidth: CGFloat
     let lines: [TimelineLine]
     let tagLibrary: TagLibraryManager
-    let onStampUpdate: (String?, CGPoint?) -> Void
-    
+    let onStampUpdate: (AttributedString?, CGPoint?) -> Void
+
     func makeNSView(context: Context) -> NSView {
         let view = TrackingView()
         view.duration = duration
@@ -2307,7 +2512,7 @@ struct TimelineMouseTracker: NSViewRepresentable {
         var gridWidth: CGFloat = 0
         var lines: [TimelineLine] = []
         var tagLibrary: TagLibraryManager?
-        var onStampUpdate: ((String?, CGPoint?) -> Void)?
+        var onStampUpdate: ((AttributedString?, CGPoint?) -> Void)?
         private var trackingArea: NSTrackingArea?
         private var lastUpdateTime: TimeInterval = 0
         private let updateInterval: TimeInterval = 0.1
@@ -2389,30 +2594,65 @@ struct TimelineMouseTracker: NSViewRepresentable {
                 let tagName = tag?.name ?? stamp.label
                 let currentTagOrdinal = stamp.chronologicalOrdinalAmongSameTag(in: lines)
 
-                var infoParts: [String] = []
-                infoParts.append("\(tagName)_\(currentTagOrdinal)")
+                let sep = " • "
+                var info = AttributedString()
+                func add(_ text: String, bold: Bool = false) {
+                    var piece = AttributedString(text)
+                    if bold { piece.font = .system(size: 13, weight: .semibold) }
+                    info += piece
+                }
 
+                // «Порядковый номер. Тег»
+                add("\(currentTagOrdinal). \(tagName)")
+
+                // Общие события через запятую
                 let eventNames = stamp.timeEvents.compactMap { eventID in
                     tagLibrary.allTimeEvents.first(where: { $0.id == eventID })?.name
                 }
                 if !eventNames.isEmpty {
-                    infoParts.append(eventNames.joined(separator: ", "))
+                    add(sep + eventNames.joined(separator: ", "))
                 }
-                let labelNames = stamp.labelIDs.compactMap { labelID in
-                    tagLibrary.findLabelById(labelID)?.name
+
+                // Лейблы, сгруппированные по группам. Имя группы — жирным. Префер пула
+                // (учитывает переименования), иначе имя, вшитое в штамп (для импортов).
+                // Если группа неизвестна (нет в пуле) — показываем лейблы без префикса.
+                var knownGroups: [(name: String, labels: [String])] = []
+                var indexByGroup: [String: Int] = [:]
+                var ungrouped: [String] = []
+                for item in stamp.labels {
+                    let labelName: String
+                    if let pooled = tagLibrary.findLabelById(item.id)?.name, !pooled.isEmpty {
+                        labelName = pooled
+                    } else if !item.name.isEmpty {
+                        labelName = item.name
+                    } else {
+                        continue
+                    }
+                    let groupName = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(item.id) })?.name
+                        ?? tagLibrary.allLabelGroups.first(where: { $0.id == item.lableGroupId })?.name
+                    if let groupName, !groupName.isEmpty {
+                        if let idx = indexByGroup[groupName] {
+                            knownGroups[idx].labels.append(labelName)
+                        } else {
+                            indexByGroup[groupName] = knownGroups.count
+                            knownGroups.append((name: groupName, labels: [labelName]))
+                        }
+                    } else {
+                        ungrouped.append(labelName)
+                    }
                 }
-                if !labelNames.isEmpty {
-                    infoParts.append(labelNames.joined(separator: ", "))
+                for group in knownGroups {
+                    add(sep)
+                    add("\(group.name):", bold: true)
+                    add(" " + group.labels.joined(separator: ", "))
                 }
-                if let comment = stamp.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !comment.isEmpty {
-                    infoParts.append(comment)
+                if !ungrouped.isEmpty {
+                    add(sep + ungrouped.joined(separator: ", "))
                 }
-                
-                let durationTime = formatTimeStringCompact(stamp.duration)
-                infoParts.append(durationTime)
-                
-                let info = infoParts.joined(separator: " - ")
-                
+
+                // Длина клипа
+                add(sep + formatTimeStringCompact(stamp.duration))
+
                 onStampUpdate?(info, nil)
             } else {
                 onStampUpdate?(nil, nil)

@@ -25,6 +25,8 @@ struct Tag: Identifiable, Codable, Equatable {
     var labelHotkeys: [String: String]?
     var mapEnabled: Bool?
     var isInterval: Bool?
+    /// Id карты (PlayField), которую использует этот тег при разметке. nil = первая карта коллекции (обратная совместимость).
+    var mapFieldId: String? = nil
 }
 
 extension Tag {
@@ -229,7 +231,7 @@ struct FullTimelineLine: Codable {
     let stamps: [FullTimelineStamp]
 }
 
-struct PlayField: Codable {
+struct PlayField: Codable, Identifiable {
     let id: String
     var name: String
     var imagePath: String

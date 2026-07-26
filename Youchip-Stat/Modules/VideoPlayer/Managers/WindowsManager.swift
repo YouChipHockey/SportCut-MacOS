@@ -435,7 +435,10 @@ class WindowsManager: NSObject, NSWindowDelegate {
                     print("WindowsManager: stop live failed - no file produced")
                     return
                 }
-                
+
+                // Копия записи в выбранную пользователем папку (если выбрана до старта).
+                LiveStreamManager.shared.copyFinalizedRecordingToUserFolder(finalURL, suggestedName: fileName)
+
                 if wasAppending, let existing = appendTarget {
                     VideoFilesManager.shared.updateVideoURL(for: existing, newURL: finalURL)
                     VideoFilesManager.shared.saveTimelines(timelines, for: existing.id)
@@ -493,6 +496,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
             
             DispatchQueue.main.async {
                 if let url = fileURL {
+                    LiveStreamManager.shared.copyFinalizedRecordingToUserFolder(url, suggestedName: fileName)
                     if let filesFile = VideoFilesManager.shared.importFile(url: url, newName: fileName) {
                         VideoFilesManager.shared.updateTimelines(
                             forVideoId: filesFile.videoData.id,
@@ -524,6 +528,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
             
             DispatchQueue.main.async {
                 if let url = fileURL {
+                    LiveStreamManager.shared.copyFinalizedRecordingToUserFolder(url, suggestedName: existingFile.name)
                     // Update the existing project's video to the combined (old + new) file.
                     VideoFilesManager.shared.updateVideoURL(for: existingFile, newURL: url)
                     // Save the merged timelines back to the existing project's ID.
@@ -680,12 +685,13 @@ class WindowsManager: NSObject, NSWindowDelegate {
 
     func openCustomCollectionsWindow(
         withExistingCollection existingCollection: CollectionBookmark? = nil,
-        initialDisplayMode: CollectionTagLibraryDisplayMode = .grouped
+        initialDisplayMode: CollectionTagLibraryDisplayMode = .grouped,
+        template: CollectionTemplate? = nil
     ) {
         VideoPlayerManager.shared.player?.pause()
-        
+
         let view: AnyView
-        
+
         if let existingCollection = existingCollection {
             let mode = CollectionsBookmarksManager.shared.loadCollections()
                 .first(where: { $0.id == existingCollection.id })?.displayMode ?? .grouped
@@ -695,9 +701,9 @@ class WindowsManager: NSObject, NSWindowDelegate {
                 view = AnyView(CreateCustomCollectionsView(existingCollection: existingCollection))
             }
         } else if initialDisplayMode == .free {
-            view = AnyView(KeyBindingsCollectionEditorView(initialDisplayMode: .free))
+            view = AnyView(KeyBindingsCollectionEditorView(initialDisplayMode: .free, template: template))
         } else {
-            view = AnyView(CreateCustomCollectionsView(initialDisplayMode: initialDisplayMode))
+            view = AnyView(CreateCustomCollectionsView(initialDisplayMode: initialDisplayMode, template: template))
         }
         
         let hostingController = NSHostingController(rootView: view)

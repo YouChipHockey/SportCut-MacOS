@@ -105,34 +105,38 @@ struct SportCutFilterSheet: View {
         return result.sorted { $0.name < $1.name }
     }
 
+    /// Группа лейблов имеет настоящее имя, если оно непустое и не равно её id.
+    /// У экспортируемых/импортированных видео своих групп лейблов нет — их имя не резолвится,
+    /// поэтому такие группы (без имени) в фильтре не показываем.
+    private func hasResolvedName(_ name: String, id: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed != id
+    }
+
     private func availableLabelGroups(for source: SportCutSource, used: Set<String>) -> [LabelGroupData] {
         let fromSource = source.labelGroups.filter { group in
-            group.lables.contains { used.contains($0) }
+            group.lables.contains { used.contains($0) } && hasResolvedName(group.name, id: group.id)
         }
         if !fromSource.isEmpty { return fromSource }
-        // Fallback: build label groups from stamp data
+        // Fallback: build label groups from stamp data — только группы с настоящим именем из библиотеки.
         var groupMap: [String: Set<String>] = [:] // groupId -> label IDs
         var groupNames: [String: String] = [:]
         for line in source.timelines {
             for stamp in line.stamps {
                 for lbl in stamp.labels where used.contains(lbl.id) {
                     let gid = lbl.lableGroupId
-                    if !gid.isEmpty {
-                        groupMap[gid, default: []].insert(lbl.id)
-                        if groupNames[gid] == nil {
-                            // Try to get name from TagLibrary
-                            if let lg = TagLibraryManager.shared.allLabelGroups.first(where: { $0.id == gid }) {
-                                groupNames[gid] = lg.name
-                            } else {
-                                groupNames[gid] = gid
-                            }
-                        }
-                    }
+                    guard !gid.isEmpty else { continue }
+                    // Имя берём только из библиотеки. Если группа не резолвится в имя — не показываем её (id как имя не используем).
+                    guard let lg = TagLibraryManager.shared.allLabelGroups.first(where: { $0.id == gid }),
+                          hasResolvedName(lg.name, id: gid) else { continue }
+                    groupMap[gid, default: []].insert(lbl.id)
+                    groupNames[gid] = lg.name
                 }
             }
         }
-        return groupMap.map { gid, labelIds in
-            LabelGroupData(id: gid, name: groupNames[gid] ?? gid, lables: Array(labelIds))
+        return groupMap.compactMap { gid, labelIds -> LabelGroupData? in
+            guard let name = groupNames[gid] else { return nil }
+            return LabelGroupData(id: gid, name: name, lables: Array(labelIds))
         }.sorted { $0.name < $1.name }
     }
 

@@ -253,7 +253,10 @@ class VideosViewModel: ObservableObject {
             
         case .exportProject(let file):
             projectExportManager.exportProject(file: file)
-            
+
+        case .exportProjectBundle(let file):
+            projectExportManager.exportProjectBundle(file: file)
+
         case .importProject:
             projectExportManager.importProject { [weak self] projectData in
                 DispatchQueue.main.async {

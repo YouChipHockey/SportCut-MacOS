@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVFoundation
+import WebKit
 
 struct LiveSourceSelectionView: View {
     
@@ -18,10 +19,14 @@ struct LiveSourceSelectionView: View {
     @State private var errorMessage: String?
     @State private var isConfiguring: Bool = false
     @State private var selectedPreloadURL: URL? = nil
-    
+    @State private var showObsInstruction: Bool = false
+    @State private var selectedSaveFolder: URL? = nil
+
+    private let obsInstructionURL = URL(string: "https://sportcut.youchip.pro/obs")!
+
     /// When true the sheet was opened via "Append to video" — the preloaded video picker is hidden.
     var isAppendMode: Bool = false
-    var onConfigure: (AVCaptureDevice, AVCaptureDevice?, AVCaptureDevice.Format?, URL?) -> Void
+    var onConfigure: (AVCaptureDevice, AVCaptureDevice?, AVCaptureDevice.Format?, URL?, URL?) -> Void
     var onCancel: () -> Void
     
     var body: some View {
@@ -35,7 +40,8 @@ struct LiveSourceSelectionView: View {
                     if !isAppendMode {
                         preloadedVideoSection
                     }
-                    
+                    saveFolderSection
+
                     if let error = errorMessage {
                         errorSection(error)
                     }
@@ -56,6 +62,11 @@ struct LiveSourceSelectionView: View {
                 updateFormats(for: first)
             }
         }
+        .sheet(isPresented: $showObsInstruction) {
+            ObsInstructionSheet(url: obsInstructionURL) {
+                showObsInstruction = false
+            }
+        }
     }
     
     // MARK: - Header
@@ -71,8 +82,16 @@ struct LiveSourceSelectionView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                     .foregroundColor(.primary)
-                
+
                 Spacer()
+
+                Button(action: { showObsInstruction = true }) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(^String.Titles.liveStreamObsInstruction)
             }
             
             Text(^String.Titles.liveStreamDescription)
@@ -231,6 +250,82 @@ struct LiveSourceSelectionView: View {
             selectedPreloadURL = url
         }
     }
+
+    // MARK: - Save Folder Section
+
+    /// Папка для сохранения копии записи — выбирается ДО старта трансляции.
+    private var saveFolderSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(^String.Titles.liveStreamSaveFolder)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+
+            Text(^String.Titles.liveStreamSaveFolderHint)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+
+            HStack(spacing: 10) {
+                if let url = selectedSaveFolder {
+                    Image(systemName: "folder.fill")
+                        .foregroundColor(.blue)
+                        .font(.system(size: 14))
+                    Text(url.lastPathComponent)
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button(action: { selectedSaveFolder = nil }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    Button(action: { pickSaveFolder() }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 13))
+                            Text(^String.Titles.liveStreamPickSaveFolder)
+                                .font(.system(size: 13))
+                        }
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.blue.opacity(0.08))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            )
+        }
+    }
+
+    private func pickSaveFolder() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.title = ^String.Titles.liveStreamPickSaveFolder
+        if panel.runModal() == .OK, let url = panel.url {
+            selectedSaveFolder = url
+        }
+    }
     
     // MARK: - Error Section
     
@@ -384,7 +479,7 @@ struct LiveSourceSelectionView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [self] in
             if liveManager.isSessionConfigured {
                 isConfiguring = false
-                onConfigure(videoDevice, nil, format, selectedPreloadURL)
+                onConfigure(videoDevice, nil, format, selectedPreloadURL, selectedSaveFolder)
             } else if attempts >= maxAttempts {
                 isConfiguring = false
                 errorMessage = ^String.Titles.liveStreamConfigError
@@ -393,4 +488,57 @@ struct LiveSourceSelectionView: View {
             }
         }
     }
+}
+
+// MARK: - OBS Instruction Sheet
+
+private struct ObsInstructionSheet: View {
+
+    let url: URL
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "questionmark.circle.fill")
+                    .foregroundColor(.accentColor)
+                    .font(.system(size: 18))
+
+                Text(^String.Titles.liveStreamObsInstruction)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 18))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+
+            Divider()
+
+            ObsInstructionWebView(url: url)
+        }
+        .frame(width: 900, height: 640)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+private struct ObsInstructionWebView: NSViewRepresentable {
+
+    let url: URL
+
+    func makeNSView(context: Context) -> WKWebView {
+        let webView = WKWebView()
+        webView.load(URLRequest(url: url))
+        return webView
+    }
+
+    func updateNSView(_ nsView: WKWebView, context: Context) {}
 }

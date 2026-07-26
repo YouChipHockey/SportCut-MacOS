@@ -13,24 +13,13 @@ struct CollectionFieldMapEditorView: View {
     @ObservedObject var collectionManager: CustomCollectionManager
 
     @State private var showCropSheet = false
-    @State private var activeAlert: FieldMapAlert?
-    @State private var activeTagsOnTimelines = 0
-
-    private enum FieldMapAlert: Identifiable {
-        case fieldChange
-        case fieldDelete
-        var id: Self { self }
-    }
+    @State private var mapPendingDelete: PlayField?
 
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 header
-                if let playField = collectionManager.playField {
-                    existingMapSection(playField)
-                } else {
-                    emptyMapSection
-                }
+                mapsSection
                 tagsForMapSection
             }
             .padding(24)
@@ -44,31 +33,15 @@ struct CollectionFieldMapEditorView: View {
                 }
             }
         }
-        .alert(item: $activeAlert) { alert in
-            switch alert {
-            case .fieldChange:
-                return Alert(
-                    title: Text(^String.Titles.fieldMapChange),
-                    message: Text(String(format: ^String.Titles.fieldMapChangeWarning, String(activeTagsOnTimelines))),
-                    primaryButton: .default(Text(^String.Titles.resetPositions)) {
-                        resetTagPositionsOnTimelines()
-                        selectNewFieldImage()
-                    },
-                    secondaryButton: .destructive(Text(^String.Titles.savePositions)) {
-                        selectNewFieldImage()
-                    }
-                )
-            case .fieldDelete:
-                return Alert(
-                    title: Text(^String.Titles.deleteFieldMap),
-                    message: Text(String(format: ^String.Titles.fieldMapChangeWarning, String(activeTagsOnTimelines))),
-                    primaryButton: .destructive(Text(^String.Titles.deleteMap)) {
-                        collectionManager.deleteFieldImage()
-                        resetTagPositionsOnTimelines()
-                    },
-                    secondaryButton: .cancel(Text(^String.Titles.collectionsButtonCancel))
-                )
-            }
+        .alert(item: $mapPendingDelete) { field in
+            Alert(
+                title: Text(^String.Titles.deleteFieldMap),
+                message: Text(field.name),
+                primaryButton: .destructive(Text(^String.Titles.deleteMap)) {
+                    collectionManager.removeFieldImage(id: field.id)
+                },
+                secondaryButton: .cancel(Text(^String.Titles.collectionsButtonCancel))
+            )
         }
     }
 
@@ -77,25 +50,35 @@ struct CollectionFieldMapEditorView: View {
             Image(systemName: "map.fill").foregroundColor(.purple).font(.title2)
             Text(^String.Titles.fieldMapSettings).font(.title2.weight(.semibold))
             Spacer()
+            Button {
+                selectNewFieldImage()
+            } label: {
+                SwiftUI.Label(^String.Titles.uploadFieldMap, systemImage: "photo.badge.plus")
+            }
+            .buttonStyle(.borderedProminent)
         }
     }
 
-    private func existingMapSection(_ playField: PlayField) -> some View {
+    private var mapsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if collectionManager.playFields.isEmpty {
+                emptyMapSection
+            } else {
+                ForEach(collectionManager.playFields, id: \.id) { field in
+                    mapCard(field)
+                }
+            }
+        }
+    }
+
+    private func mapCard(_ playField: PlayField) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
+                Image(systemName: "map").foregroundColor(.purple)
+                Text(playField.name).font(.headline)
                 Spacer()
-                Button(^String.Titles.replace) {
-                    activeTagsOnTimelines = countActiveMapTagsOnTimelines()
-                    if activeTagsOnTimelines > 0 { activeAlert = .fieldChange }
-                    else { selectNewFieldImage() }
-                }
-                .buttonStyle(.bordered)
-                Button(^String.Titles.delete) {
-                    activeTagsOnTimelines = countActiveMapTagsOnTimelines()
-                    if activeTagsOnTimelines > 0 { activeAlert = .fieldDelete }
-                    else { collectionManager.deleteFieldImage() }
-                }
-                .buttonStyle(.bordered)
+                Button(^String.Titles.delete) { mapPendingDelete = playField }
+                    .buttonStyle(.bordered)
             }
 
             if let bookmark = playField.imageBookmark,
@@ -104,7 +87,7 @@ struct CollectionFieldMapEditorView: View {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxHeight: 400)
+                    .frame(maxHeight: 300)
                     .cornerRadius(12)
             }
 
@@ -112,12 +95,12 @@ struct CollectionFieldMapEditorView: View {
                 dimensionField(
                     title: ^String.Titles.collectionsFieldWidth,
                     value: playField.width,
-                    onChange: { collectionManager.updateFieldDimensions(width: $0, height: playField.height) }
+                    onChange: { collectionManager.updateFieldDimensions(id: playField.id, width: $0, height: playField.height) }
                 )
                 dimensionField(
                     title: ^String.Titles.collectionsFieldHeight,
                     value: playField.height,
-                    onChange: { collectionManager.updateFieldDimensions(width: playField.width, height: $0) }
+                    onChange: { collectionManager.updateFieldDimensions(id: playField.id, width: playField.width, height: $0) }
                 )
             }
         }
@@ -162,6 +145,19 @@ struct CollectionFieldMapEditorView: View {
                                 Circle().fill(Color(hex: tag.color)).frame(width: 10, height: 10)
                                 Text(tag.name).font(.caption)
                                 Spacer()
+                                // Выбор карты для тега (если карт несколько и включена карта).
+                                if (tag.mapEnabled ?? false), collectionManager.playFields.count > 1 {
+                                    Picker("", selection: Binding(
+                                        get: { tag.mapFieldId ?? collectionManager.playFields.first?.id ?? "" },
+                                        set: { collectionManager.updateTagMapField(id: tag.id, mapFieldId: $0) }
+                                    )) {
+                                        ForEach(collectionManager.playFields, id: \.id) { field in
+                                            Text(field.name).tag(field.id)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                    .frame(width: 130)
+                                }
                                 Toggle("", isOn: Binding(
                                     get: { tag.mapEnabled ?? false },
                                     set: { collectionManager.updateTagMapEnabled(id: tag.id, mapEnabled: $0) }
@@ -214,7 +210,7 @@ struct CollectionFieldMapEditorView: View {
            let bitmap = NSBitmapImageRep(data: tiff),
            let png = bitmap.representation(using: .png, properties: [:]) {
             try? png.write(to: tempUrl)
-            _ = collectionManager.setFieldImage(from: tempUrl)
+            _ = collectionManager.addFieldImage(from: tempUrl)
         }
         tempUrl.stopAccessingSecurityScopedResource()
         try? FileManager.default.removeItem(at: tempUrl)
@@ -237,23 +233,4 @@ struct CollectionFieldMapEditorView: View {
         } catch { return nil }
     }
 
-    private func countActiveMapTagsOnTimelines() -> Int {
-        TimelineDataManager.shared.lines.flatMap(\.stamps).filter { stamp in
-            guard collectionManager.tags.contains(where: { stamp.idTags.contains($0.id) }) else { return false }
-            return stamp.position != nil && (stamp.isActiveForMapView ?? false)
-        }.count
-    }
-
-    private func resetTagPositionsOnTimelines() {
-        let timeline = TimelineDataManager.shared
-        for i in timeline.lines.indices {
-            for j in timeline.lines[i].stamps.indices {
-                let stamp = timeline.lines[i].stamps[j]
-                if collectionManager.tags.contains(where: { stamp.idTags.contains($0.id) }) {
-                    timeline.lines[i].stamps[j].isActiveForMapView = false
-                }
-            }
-        }
-        timeline.updateTimelines()
-    }
 }

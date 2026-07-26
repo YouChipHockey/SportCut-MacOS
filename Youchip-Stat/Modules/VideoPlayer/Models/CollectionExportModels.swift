@@ -19,7 +19,10 @@ struct SportcutCollectionExport: Codable {
     let labelGroups: [LabelGroupData]
     let labels: [Label]
     let timeEvents: [TimeEvent]
+    /// Первая карта — обратная совместимость со старыми экспортами.
     let playField: PlayFieldExport?
+    /// Полный набор карт коллекции. nil в старых экспортах — тогда используется `playField`.
+    let playFields: [PlayFieldExport]?
     /// Режим коллекции: "grouped" (обычная) или "free" (со связками клавиш). nil в старых экспортах = grouped.
     let tagLibraryDisplayMode: String?
     /// Раскладка холста и связки клавиш — только для коллекций со связками (free). Наличие = коллекция со связками.
@@ -35,6 +38,7 @@ struct SportcutCollectionExport: Codable {
         self.labels = collectionManager.labels
         self.timeEvents = collectionManager.timeEvents
         self.playField = collectionManager.playField.map { PlayFieldExport(from: $0) }
+        self.playFields = collectionManager.playFields.isEmpty ? nil : collectionManager.playFields.map { PlayFieldExport(from: $0) }
         self.tagLibraryDisplayMode = collectionManager.tagLibraryDisplayMode.rawValue
         if collectionManager.tagLibraryDisplayMode == .free {
             self.freeLayout = TagFreeLayoutStorage.loadLayoutIfExists(
@@ -159,9 +163,12 @@ class CollectionImportManager: ObservableObject {
             collectionManager.labels = exportData.labels
             collectionManager.timeEvents = exportData.timeEvents
 
-            if let playFieldExport = exportData.playField,
-               let playField = playFieldExport.toPlayField() {
-                collectionManager.playField = playField
+            // Карты: предпочитаем новый массив; иначе — одиночная карта (старые экспорты).
+            if let playFieldExports = exportData.playFields, !playFieldExports.isEmpty {
+                collectionManager.playFields = playFieldExports.compactMap { $0.toPlayField() }
+            } else if let playFieldExport = exportData.playField,
+                      let playField = playFieldExport.toPlayField() {
+                collectionManager.playFields = [playField]
             }
 
             // Авто-определение типа: коллекция со связками клавиш, если задан режим .free

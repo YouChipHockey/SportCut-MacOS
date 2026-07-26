@@ -557,7 +557,8 @@ class CollectionsBookmarksManager {
             labelGroups: data.labelGroups,
             labels: data.labels,
             timeEvents: data.timeEvents,
-            playField: data.playField
+            playField: data.playField,
+            playFields: data.playFields
         )
         InMemoryStorageManager.shared.saveCollection(newData)
         saveCollection(id: newId, name: newName, tagLibraryDisplayMode: info.displayMode)

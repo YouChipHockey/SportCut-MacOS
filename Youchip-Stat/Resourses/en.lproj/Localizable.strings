@@ -50,6 +50,7 @@
 "FieldMapHelpExportImage" = "Export as Image";  // ^String.Titles.fieldMapHelpExportImage
 "FieldMapLoading" = "Loading map...";  // ^String.Titles.fieldMapLoading
 "FieldMapNoMap" = "Map not loaded";  // ^String.Titles.fieldMapNoMap
+"FieldMapName" = "Map %d";
 "FieldMapWindowExportTitle" = "Export Map";  // ^String.Titles.fieldMapWindowExportTitle
 "FieldMapSavePanelTitle" = "Save Map";  // ^String.Titles.fieldMapSavePanelTitle
 "FieldMapSavePanelMessage" = "Choose location to save map image";  // ^String.Titles.fieldMapSavePanelMessage
@@ -167,6 +168,10 @@
 "FullControlButtonScreenshots" = "My Screenshots";  // ^String.Titles.fullControlButtonScreenshots
 "FullControlButtonMap" = "Display on Map";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "Add Timeline";  // ^String.Titles.fullControlButtonAddTimeline
+"FullControlButtonMergeTimelines" = "Merge timelines";
+"FullControlMergeTimelinesHint" = "Select timelines to merge";
+"CollectionCopyGroup" = "Copy group";
+"CollectionPasteGroup" = "Paste group";
 "FullControlHelpAddTimeline" = "Add Timeline";  // ^String.Titles.fullControlHelpAddTimeline
 "FullControlButtonTimelineZoomIn" = "Zoom In Timeline";  // ^String.Titles.fullControlButtonTimelineZoomIn
 "FullControlButtonTimelineZoomOut" = "Zoom Out Timeline";  // ^String.Titles.fullControlButtonTimelineZoomOut
@@ -285,6 +290,10 @@
 "DeleteMap" = "Delete Map";  // ^String.Titles.deleteMap
 "AddTagGroup" = "Add Tag Group";  // ^String.Titles.addTagGroup
 "CollectionName" = "Collection name";  // ^String.Titles.collectionName
+"CollectionsStartFromTemplate" = "Start from template";
+"CollectionsTemplateStandard" = "Standard collections";
+"CollectionsTemplateUser" = "My collections";
+"CollectionsTemplateEmpty" = "Empty";
 "UpdateCollection" = "Update Collection";  // ^String.Titles.updateCollection
 "SaveCollection" = "Save Collection";  // ^String.Titles.saveCollection
 "Saved" = "Saved!";  // ^String.Titles.saved
@@ -522,6 +531,11 @@
 "ProjectImportCreateProject" = "Create Project"; // ^String.Titles.projectImportCreateProject
 "SelectNewVideo" = "Select new video"; // ^String.Titles.selectNewVideo
 "Warning" = "Warning"; // ^String.Titles.warning
+"AppVersionTitle" = "App version";
+"AppearanceTitle" = "Appearance";
+"AppearanceSystem" = "System";
+"AppearanceLight" = "Light";
+"AppearanceDark" = "Dark";
 "Playlists" = "Playlists"; // ^String.Titles.playlists
 "Load" = "Load"; // ^String.Titles.load
 "CurrentUnsaved" = "Current (unsaved)"; // ^String.Titles.currentUnsaved
@@ -605,6 +619,15 @@
 "Universal" = "Universal"; // ^String.Titles.universal
 
 "ExportProject" = "Export Project"; // ^String.Titles.exportProject
+"CsvExportTitle" = "Export to CSV";
+"CsvExportButton" = "CSV";
+"CsvExportByTimelines" = "By timelines";
+"CsvExportByTags" = "By tags";
+"CsvExportTimelinesHint" = "One row per tag on the timeline (duration, label groups).";
+"CsvExportTagsHint" = "One row per tag; a separate column for each label.";
+"CsvExportAll" = "All";
+"ExportProjectBundle" = "Export bundle (video + markup)";
+"BundleExportNoVideo" = "Video file is unavailable";
 "SelectProjectSaveLocation" = "Select location to save project"; // ^String.Titles.selectProjectSaveLocation
 "ProjectExportedSuccessfully" = "Project exported successfully"; // ^String.Titles.projectExportedSuccessfully
 "ProjectSavedToFile" = "Project saved to file: %@"; // ^String.Titles.projectSavedToFile
@@ -615,7 +638,11 @@
 "ProjectImportChooseFormatMessage" = "Choose which kind of project file you are importing.";
 "ProjectImportSportcutFormat" = "YouChip Sportcut (JSON)";
 "ProjectImportSportcodeXmlFormat" = "Sportscode / Angels / Wyscout (XML)";
+"ProjectImportNacsportXmlFormat" = "Nacsport (XML)";
+"ProjectImportDartfishXmlFormat" = "Dartfish (XML)";
 "SelectSportcodeXmlForImport" = "Select an XML file with events (ALL_INSTANCES)";
+"SelectNacsportXmlForImport" = "Select a Nacsport XML file (ALL_INSTANCES)";
+"SelectDartfishXmlForImport" = "Select a Dartfish file (.dartclip / XML)";
 "XmlImportNoInstancesError" = "The XML file contains no instances to import.";
 "XmlImportParseFailedError" = "Could not read the XML file.";
 "XmlImportCollectionDisplayName" = "XML import";
@@ -783,6 +810,10 @@
 "LiveStreamPreloadedVideo" = "Pre-loaded video"; // ^String.Titles.liveStreamPreloadedVideo
 "LiveStreamPreloadedVideoHint" = "Optional. Pick a video from your device to use as the starting base for this session."; // ^String.Titles.liveStreamPreloadedVideoHint
 "LiveStreamPickPreloadFile" = "Choose video..."; // ^String.Titles.liveStreamPickPreloadFile
+"LiveStreamObsInstruction" = "How to set up OBS"; // ^String.Titles.liveStreamObsInstruction
+"LiveStreamSaveFolder" = "Save recording to folder";
+"LiveStreamSaveFolderHint" = "A copy of the recording will be saved here after it finishes.";
+"LiveStreamPickSaveFolder" = "Choose folder...";
 "AppendToVideo" = "Append to video"; // ^String.Titles.appendToVideo
 
 // Data Sync & Backup
@@ -873,6 +904,8 @@
 "SportCutHidePlaylist" = "Hide playlist";
 "SportCutMoveUp" = "Move up";
 "SportCutMoveDown" = "Move down";
+"SportCutMoveToGroup" = "Move to group";
+"SportCutMakeOffline" = "Make clips offline";
 "SportCutMoveLeft" = "Move left";
 "SportCutMoveRight" = "Move right";
 "SportCutPlayAsFilm" = "Play as film";
@@ -935,6 +968,7 @@
 "SportCutStartColumn" = "Start";
 "SportCutEndColumn" = "End";
 "SportCutDurationColumn" = "Dur.";
+"SportCutDrawingColumn" = "Drawing";
 "SportCutLabelsColumn" = "Labels";
 "SportCutEventsColumn" = "Events";
 "SportCutFilters" = "Filters";
@@ -1170,3 +1204,18 @@
 "FreeTagModeNotConfiguredTitle" = "Free mode not configured";
 "FreeTagModeNotConfiguredMessage" = "Go to collection settings and configure the free tag display mode (Layout button).";
 "FreeTagModeDisplay" = "Free layout";
+"SportCutSlidesManage" = "Slides";
+"SportCutSlideUntitled" = "Untitled slide";
+"SportCutSlideDurationSec" = "%d sec";
+"SportCutSlideInsertHere" = "Insert slide";
+"SportCutSlideEditTitle" = "Slide";
+"SportCutSlideTitleField" = "Title";
+"SportCutSlideTitlePlaceholder" = "e.g. Attack";
+"SportCutSlideDuration" = "Duration";
+"SportCutSlideTextSize" = "Text size";
+"SportCutSlideBackground" = "Background";
+"SportCutSlideTextColor" = "Text color";
+"SportCutSlideLogo" = "Logo (PNG)";
+"SportCutSlideAddLogo" = "Add logo";
+"SportCutSlideDone" = "Done";
+"SportCutSlideSave" = "Save";

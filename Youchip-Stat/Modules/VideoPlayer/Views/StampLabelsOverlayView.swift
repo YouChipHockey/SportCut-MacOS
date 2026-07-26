@@ -70,8 +70,17 @@ struct StampLabelsOverlayView: View {
     }
     
     private func updateDisplayedLabels(availableWidth: CGFloat) {
-        let stampLabels = stamp.labelIDs.compactMap { labelID in
-            tagLibrary.findLabelById(labelID)
+        // Prefer the label from the global pool (so edits/renames are reflected),
+        // but fall back to the name embedded in the stamp itself. Imported markup
+        // (XML, etc.) carries its labels inline via `stamp.labels` and those labels
+        // may not live in the global pool, so a pool-only lookup would silently drop
+        // them — leaving the stamp showing just the tag name.
+        let stampLabels: [Label] = stamp.labels.compactMap { labelItem in
+            if let found = tagLibrary.findLabelById(labelItem.id) {
+                return found
+            }
+            guard !labelItem.name.isEmpty else { return nil }
+            return Label(id: labelItem.id, name: labelItem.name, description: labelItem.description)
         }
         
         if stampLabels.isEmpty {

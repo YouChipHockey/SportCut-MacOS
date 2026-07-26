@@ -69,6 +69,41 @@ struct OverlayLabelGroupItem: Hashable {
         }
         return selectedLabelGroups
     }
+
+    /// Same as `labelGroupItems(forLabels:)` but resolves each label (and its group) from
+    /// the pool first, falling back to the data embedded in the stamp's `labels`. This lets
+    /// imported markup — whose labels/groups aren't in the local collection — still render
+    /// in the burned-in export overlay. Additive: pooled entries always win.
+    static func labelGroupItems(forStamp stamp: TimelineStamp) -> [OverlayLabelGroupItem] {
+        let tagLibrary = TagLibraryManager.shared
+        var selectedLabelGroups: [OverlayLabelGroupItem] = []
+        for item in stamp.labels {
+            let label: Label
+            if let pooled = tagLibrary.findLabelById(item.id) {
+                label = pooled
+            } else if !item.name.isEmpty {
+                label = Label(id: item.id, name: item.name, description: item.description)
+            } else {
+                continue
+            }
+
+            let group: LabelGroupData
+            if let pooledGroup = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(item.id) }) {
+                group = pooledGroup
+            } else if !item.lableGroupId.isEmpty {
+                group = LabelGroupData(id: item.lableGroupId, name: ^String.Titles.sportCutLabels, lables: [item.id])
+            } else {
+                continue
+            }
+
+            if let index = selectedLabelGroups.firstIndex(where: { $0.group.id == group.id }) {
+                selectedLabelGroups[index].selectedLabels.append(label)
+            } else {
+                selectedLabelGroups.append(OverlayLabelGroupItem(group: group, selectedLabels: [label]))
+            }
+        }
+        return selectedLabelGroups
+    }
 }
 
 extension Array where Element == OverlayLabelGroupItem {

@@ -50,6 +50,7 @@
 "FieldMapHelpExportImage" = "Экспортировать как изображение";  // ^String.Titles.fieldMapHelpExportImage
 "FieldMapLoading" = "Загрузка карты...";  // ^String.Titles.fieldMapLoading
 "FieldMapNoMap" = "Карта не загружена";  // ^String.Titles.fieldMapNoMap
+"FieldMapName" = "Карта %d";
 "FieldMapWindowExportTitle" = "Экспорт карты";  // ^String.Titles.fieldMapWindowExportTitle
 "FieldMapSavePanelTitle" = "Сохранить карту";  // ^String.Titles.fieldMapSavePanelTitle
 "FieldMapSavePanelMessage" = "Выберите место для сохранения изображения карты";  // ^String.Titles.fieldMapSavePanelMessage
@@ -166,6 +167,10 @@
 "FullControlButtonScreenshots" = "Мои скриншоты";  // ^String.Titles.fullControlButtonScreenshots
 "FullControlButtonMap" = "Отобразить на карте";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "Добавить таймлайн";  // ^String.Titles.fullControlButtonAddTimeline
+"FullControlButtonMergeTimelines" = "Объединить таймлайны";
+"FullControlMergeTimelinesHint" = "Выберите таймлайны для объединения";
+"CollectionCopyGroup" = "Копировать группу";
+"CollectionPasteGroup" = "Вставить группу";
 "FullControlHelpAddTimeline" = "Добавить таймлайн";  // ^String.Titles.fullControlHelpAddTimeline
 "FullControlButtonTimelineZoomIn" = "Приблизить таймлайн";  // ^String.Titles.fullControlButtonTimelineZoomIn
 "FullControlButtonTimelineZoomOut" = "Отдалить таймлайн";  // ^String.Titles.fullControlButtonTimelineZoomOut
@@ -284,6 +289,10 @@
 "DeleteMap" = "Удалить карту";  // ^String.Titles.deleteMap
 "AddTagGroup" = "Добавить группу тегов";  // ^String.Titles.addTagGroup
 "CollectionName" = "Имя коллекции";  // ^String.Titles.collectionName
+"CollectionsStartFromTemplate" = "Начать с шаблона";
+"CollectionsTemplateStandard" = "Стандартные коллекции";
+"CollectionsTemplateUser" = "Мои коллекции";
+"CollectionsTemplateEmpty" = "Пустая";
 "UpdateCollection" = "Обновить коллекцию";  // ^String.Titles.updateCollection
 "SaveCollection" = "Сохранить коллекцию";  // ^String.Titles.saveCollection
 "Saved" = "Сохранено!";  // ^String.Titles.saved
@@ -521,6 +530,11 @@
 "ProjectImportCreateProject" = "Создать проект"; // ^String.Titles.projectImportCreateProject
 "SelectNewVideo" = "Выбрать новое видео"; // ^String.Titles.selectNewVideo
 "Warning" = "Предупреждение"; // ^String.Titles.warning
+"AppVersionTitle" = "Версия приложения";
+"AppearanceTitle" = "Тема оформления";
+"AppearanceSystem" = "Как в системе";
+"AppearanceLight" = "Светлая";
+"AppearanceDark" = "Тёмная";
 "Playlists" = "Плейлисты"; // ^String.Titles.playlists
 "Load" = "Загрузить"; // ^String.Titles.load
 "CurrentUnsaved" = "Текущий (не сохранен)"; // ^String.Titles.currentUnsaved
@@ -604,6 +618,15 @@
 "Universal" = "Универсал"; // ^String.Titles.universal
 
 "ExportProject" = "Экспорт проекта"; // ^String.Titles.exportProject
+"CsvExportTitle" = "Экспорт в CSV";
+"CsvExportButton" = "CSV";
+"CsvExportByTimelines" = "По таймлайнам";
+"CsvExportByTags" = "По тегам";
+"CsvExportTimelinesHint" = "Строка — тег на таймлайне (длительность, группы лейблов).";
+"CsvExportTagsHint" = "Строка — тег; отдельная колонка на каждый лейбл.";
+"CsvExportAll" = "Все";
+"ExportProjectBundle" = "Экспорт архивом (видео + разметка)";
+"BundleExportNoVideo" = "Видеофайл недоступен";
 "SelectProjectSaveLocation" = "Выберите место для сохранения проекта"; // ^String.Titles.selectProjectSaveLocation
 "ProjectExportedSuccessfully" = "Проект успешно экспортирован"; // ^String.Titles.projectExportedSuccessfully
 "ProjectSavedToFile" = "Проект сохранен в файл: %@"; // ^String.Titles.projectSavedToFile
@@ -614,7 +637,11 @@
 "ProjectImportChooseFormatMessage" = "Выберите тип файла: проект YouChip (JSON) или разметка Sportcode / Angels / Wyscout (XML).";
 "ProjectImportSportcutFormat" = "Импорт проекта Sportcut (JSON)";
 "ProjectImportSportcodeXmlFormat" = "Импорт Sportcode / Angels / Wyscout (XML)";
+"ProjectImportNacsportXmlFormat" = "Импорт Nacsport (XML)";
+"ProjectImportDartfishXmlFormat" = "Импорт Dartfish (XML)";
 "SelectSportcodeXmlForImport" = "Выберите XML-файл с событиями (ALL_INSTANCES)";
+"SelectNacsportXmlForImport" = "Выберите XML-файл Nacsport (ALL_INSTANCES)";
+"SelectDartfishXmlForImport" = "Выберите файл Dartfish (.dartclip / XML)";
 "XmlImportNoInstancesError" = "В XML нет ни одного события для импорта.";
 "XmlImportParseFailedError" = "Не удалось прочитать XML-файл.";
 "XmlImportCollectionDisplayName" = "Импорт XML";
@@ -784,6 +811,10 @@
 "LiveStreamPreloadedVideo" = "Предзагруженное видео"; // ^String.Titles.liveStreamPreloadedVideo
 "LiveStreamPreloadedVideoHint" = "Необязательно. Выберите видео с устройства — оно станет основой нового сеанса."; // ^String.Titles.liveStreamPreloadedVideoHint
 "LiveStreamPickPreloadFile" = "Выбрать видео..."; // ^String.Titles.liveStreamPickPreloadFile
+"LiveStreamObsInstruction" = "Как настроить OBS"; // ^String.Titles.liveStreamObsInstruction
+"LiveStreamSaveFolder" = "Сохранять запись в папку";
+"LiveStreamSaveFolderHint" = "После окончания записи её копия сохранится сюда.";
+"LiveStreamPickSaveFolder" = "Выбрать папку...";
 "AppendToVideo" = "Дозаписать видео"; // ^String.Titles.appendToVideo
 
 // Data Sync & Backup
@@ -874,6 +905,8 @@
 "SportCutHidePlaylist" = "Скрыть плейлист";
 "SportCutMoveUp" = "Переместить выше";
 "SportCutMoveDown" = "Переместить ниже";
+"SportCutMoveToGroup" = "Переместить в группу";
+"SportCutMakeOffline" = "Сделать клипы автономными";
 "SportCutMoveLeft" = "Переместить влево";
 "SportCutMoveRight" = "Переместить вправо";
 "SportCutPlayAsFilm" = "Воспроизвести как фильм";
@@ -936,6 +969,7 @@
 "SportCutStartColumn" = "Начало";
 "SportCutEndColumn" = "Конец";
 "SportCutDurationColumn" = "Длит.";
+"SportCutDrawingColumn" = "Рисунок";
 "SportCutLabelsColumn" = "Лейблы";
 "SportCutEventsColumn" = "События";
 "SportCutFilters" = "Фильтры";
@@ -1171,3 +1205,18 @@
 
 // Version Alert
 "VersionOutdatedMessage" = "Ваша версия устарела, обновитесь до актуальной версии";
+"SportCutSlidesManage" = "Слайды";
+"SportCutSlideUntitled" = "Без названия";
+"SportCutSlideDurationSec" = "%d сек";
+"SportCutSlideInsertHere" = "Вставить слайд";
+"SportCutSlideEditTitle" = "Слайд";
+"SportCutSlideTitleField" = "Заголовок";
+"SportCutSlideTitlePlaceholder" = "напр. Атака";
+"SportCutSlideDuration" = "Длительность";
+"SportCutSlideTextSize" = "Размер текста";
+"SportCutSlideBackground" = "Фон";
+"SportCutSlideTextColor" = "Цвет текста";
+"SportCutSlideLogo" = "Логотип (PNG)";
+"SportCutSlideAddLogo" = "Добавить логотип";
+"SportCutSlideDone" = "Готово";
+"SportCutSlideSave" = "Сохранить";

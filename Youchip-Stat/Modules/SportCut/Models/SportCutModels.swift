@@ -131,7 +131,34 @@ struct SportCutEvent: Identifiable, Codable, Equatable {
     let tagGroupName: String?
     let labelIDs: [String]
     let eventIDs: [String]
-    
+    /// Если задан — это не клип, а титульный слайд (заставка), встроенный в фильм плейлиста.
+    var slideID: UUID? = nil
+
+    var isSlide: Bool { slideID != nil }
+
+    /// Синтетический источник для слайд-событий (не реальный источник сессии).
+    static let slideSourceID = UUID(uuidString: "51D0E000-0000-0000-0000-000000000000")!
+
+    /// Строит слайд-событие из слайда (для встраивания в фильм между клипами).
+    static func slideEvent(from slide: SportCutSlide) -> SportCutEvent {
+        SportCutEvent(
+            id: UUID(),
+            sourceID: slideSourceID,
+            stampID: slide.id,
+            lineID: slide.id,
+            mainTagID: "",
+            tagName: slide.title,
+            lineName: "",
+            startTime: 0,
+            duration: slide.durationSeconds,
+            color: slide.backgroundColorHex,
+            tagGroupName: nil,
+            labelIDs: [],
+            eventIDs: [],
+            slideID: slide.id
+        )
+    }
+
     static func == (lhs: SportCutEvent, rhs: SportCutEvent) -> Bool {
         lhs.stampID == rhs.stampID && lhs.sourceID == rhs.sourceID
     }
@@ -205,6 +232,8 @@ struct SportCutPlaylist: Identifiable, Codable {
     var eventStartOverrides: [String: Double]
     /// Per-event clip duration overrides (keyed by `event.hiddenKey`). Only affects playlist playback, not original markup.
     var eventDurationOverrides: [String: Double]
+    /// Титульные слайды-заставки, вставленные между клипами (для показа в виде презентации).
+    var slides: [SportCutSlide]
     let createdAt: Date
 
     init(
@@ -217,6 +246,7 @@ struct SportCutPlaylist: Identifiable, Codable {
         eventDrawings: [String: [SportCutEventDrawing]] = [:],
         eventStartOverrides: [String: Double] = [:],
         eventDurationOverrides: [String: Double] = [:],
+        slides: [SportCutSlide] = [],
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -228,6 +258,7 @@ struct SportCutPlaylist: Identifiable, Codable {
         self.eventDrawings = eventDrawings
         self.eventStartOverrides = eventStartOverrides
         self.eventDurationOverrides = eventDurationOverrides
+        self.slides = slides
         self.createdAt = createdAt
     }
 
@@ -249,6 +280,7 @@ struct SportCutPlaylist: Identifiable, Codable {
         }
         eventStartOverrides = try container.decodeIfPresent([String: Double].self, forKey: .eventStartOverrides) ?? [:]
         eventDurationOverrides = try container.decodeIfPresent([String: Double].self, forKey: .eventDurationOverrides) ?? [:]
+        slides = try container.decodeIfPresent([SportCutSlide].self, forKey: .slides) ?? []
         createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
     
@@ -299,6 +331,56 @@ extension SportCutPlaylist {
             guard let text = SportCutPlaylist.markupComment(for: ev, session: session) else { continue }
             eventComments[ev.hiddenKey] = text
         }
+    }
+}
+
+// MARK: - Title Slide (between playlist clips)
+
+/// Титульный слайд-заставка, показываемый между клипами плейлиста (презентация).
+struct SportCutSlide: Identifiable, Codable, Equatable {
+    let id: UUID
+    var title: String
+    /// Длительность показа, сек (по умолчанию 5).
+    var durationSeconds: Double
+    var backgroundColorHex: String
+    var textColorHex: String
+    /// Кегль заголовка в пунктах (при рендере 1080p).
+    var textSize: Double
+    /// Позиция среди клипов: слайд показывается ПЕРЕД клипом с этим индексом (0 = перед первым).
+    var position: Int
+    /// PNG-логотип, встроенный как данные (переносится вместе с сессией).
+    var imageData: Data?
+
+    init(
+        id: UUID = UUID(),
+        title: String = "",
+        durationSeconds: Double = 5,
+        backgroundColorHex: String = "1B1B1B",
+        textColorHex: String = "FFFFFF",
+        textSize: Double = 96,
+        position: Int = 0,
+        imageData: Data? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.durationSeconds = durationSeconds
+        self.backgroundColorHex = backgroundColorHex
+        self.textColorHex = textColorHex
+        self.textSize = textSize
+        self.position = position
+        self.imageData = imageData
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        durationSeconds = try c.decodeIfPresent(Double.self, forKey: .durationSeconds) ?? 5
+        backgroundColorHex = try c.decodeIfPresent(String.self, forKey: .backgroundColorHex) ?? "1B1B1B"
+        textColorHex = try c.decodeIfPresent(String.self, forKey: .textColorHex) ?? "FFFFFF"
+        textSize = try c.decodeIfPresent(Double.self, forKey: .textSize) ?? 96
+        position = try c.decodeIfPresent(Int.self, forKey: .position) ?? 0
+        imageData = try c.decodeIfPresent(Data.self, forKey: .imageData)
     }
 }
 

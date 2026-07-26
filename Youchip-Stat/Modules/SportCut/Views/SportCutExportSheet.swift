@@ -18,6 +18,7 @@ struct SportCutExportSheet: View {
     @State private var selectedPlaylistIDs: Set<UUID> = []
     @State private var addWatermark = true
     @State private var watermarkOptions: ExportWatermarkOptions = .default
+    @State private var didStartExport = false
     @StateObject private var exportUI = SportCutExportUIState()
 
     private var session: SportCutSession? {
@@ -119,16 +120,6 @@ struct SportCutExportSheet: View {
                 .padding(.vertical, 16)
             }
 
-            if exportUI.isExporting {
-                VStack(spacing: 8) {
-                    ProgressView(value: exportUI.progress)
-                    Text(String.Titles.sportCutExportProgress.format(Int(exportUI.progress * 100)))
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 24)
-            }
-
             Divider()
 
             HStack {
@@ -152,6 +143,26 @@ struct SportCutExportSheet: View {
             .padding(.vertical, 16)
         }
         .frame(width: 500, height: 620)
+        .overlay {
+            if exportUI.isExporting {
+                VStack(spacing: 16) {
+                    CircularPercentProgressView(progress: exportUI.progress)
+                        .frame(width: 80, height: 80)
+                }
+                .padding(30)
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(12)
+                .shadow(radius: 20)
+                .transition(.opacity)
+            }
+        }
+        .onChange(of: exportUI.isExporting) { exporting in
+            // Auto-close the export window once the export finishes.
+            if !exporting, didStartExport {
+                didStartExport = false
+                dismiss()
+            }
+        }
     }
 
     private func startExport() {
@@ -159,9 +170,6 @@ struct SportCutExportSheet: View {
 
         let selectedPlaylists = allPlaylists.filter { selectedPlaylistIDs.contains($0.id) }
         guard !selectedPlaylists.isEmpty else { return }
-
-        exportUI.isExporting = true
-        exportUI.progress = 0
 
         let panel = NSSavePanel()
 
@@ -179,9 +187,12 @@ struct SportCutExportSheet: View {
         }
 
         guard panel.runModal() == .OK, let outputURL = panel.url else {
-            exportUI.isExporting = false
             return
         }
+
+        exportUI.isExporting = true
+        exportUI.progress = 0
+        didStartExport = true
 
         let type = exportType
         let ui = exportUI
@@ -227,6 +238,51 @@ private final class SportCutExportBackend {
 
     private func resolvedEvent(_ event: SportCutEvent, session: SportCutSession) -> SportCutEvent {
         session.timelineResolvedEvent(for: event)
+    }
+
+    /// Вставляет слайд-события между клипами по `position` (индекс в `playlist.events`).
+    private func interleavedExportEvents(_ playlist: SportCutPlaylist) -> [SportCutEvent] {
+        guard !playlist.slides.isEmpty else { return playlist.events }
+        let sorted = playlist.slides.sorted { $0.position < $1.position }
+        var result: [SportCutEvent] = []
+        var si = 0
+        for (idx, ev) in playlist.events.enumerated() {
+            while si < sorted.count && sorted[si].position <= idx {
+                result.append(SportCutEvent.slideEvent(from: sorted[si])); si += 1
+            }
+            result.append(ev)
+        }
+        while si < sorted.count { result.append(SportCutEvent.slideEvent(from: sorted[si])); si += 1 }
+        return result
+    }
+
+    /// Вставляет видео-сегмент слайда в композицию (без звука), дозаполняя аудио тишиной. Возвращает новый `currentTime`.
+    private func insertSlideSegment(
+        event: SportCutEvent,
+        slideURLs: [UUID: URL],
+        composition: AVMutableComposition,
+        startTime: CMTime,
+        firstVideoTrack: inout AVAssetTrack?,
+        allSegmentTracks: inout [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)]
+    ) -> CMTime {
+        guard let sid = event.slideID, let url = slideURLs[sid] else { return startTime }
+        let asset = AVAsset(url: url)
+        guard let vTrack = asset.tracks(withMediaType: .video).first else { return startTime }
+        if firstVideoTrack == nil { firstVideoTrack = vTrack }
+        let dur = CMTime(seconds: event.duration, preferredTimescale: 600)
+        let range = CMTimeRange(start: .zero, duration: dur)
+        do {
+            try composition.tracks(withMediaType: .video).first?.insertTimeRange(range, of: vTrack, at: startTime)
+        } catch {
+            return startTime
+        }
+        let newTime = startTime + dur
+        // Держим аудиодорожку той же длины (тишина под слайдом), чтобы звук клипов не сдвигался.
+        if let compAudio = composition.tracks(withMediaType: .audio).first, compAudio.timeRange.duration < newTime {
+            compAudio.insertEmptyTimeRange(CMTimeRange(start: compAudio.timeRange.duration, end: newTime))
+        }
+        allSegmentTracks.append((start: startTime, duration: dur, sourceTrack: vTrack))
+        return newTime
     }
 
     private static func bestPreset(for asset: AVAsset) -> String {
@@ -1074,6 +1130,16 @@ private final class SportCutExportBackend {
     }
 
     private func exportAsFilm(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession) {
+        // Сначала рендерим титульные слайды в видео, потом собираем фильм.
+        let allSlides = playlists.flatMap { $0.slides }
+        SportCutSlideVideoRenderer.renderVideos(for: allSlides) { [self] slideURLs in
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.exportAsFilmBuild(playlists: playlists, outputURL: outputURL, session: session, slideURLs: slideURLs)
+            }
+        }
+    }
+
+    private func exportAsFilmBuild(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession, slideURLs: [UUID: URL]) {
         let sink = ui
         let drawingsFolder = SportCutPlayerManager.drawingsFolder(sessionID: session.id)
         let composition = AVMutableComposition()
@@ -1092,7 +1158,15 @@ private final class SportCutExportBackend {
         var allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)] = []
 
         for playlist in playlists {
-            for rawEvent in playlist.events {
+            for rawEvent in interleavedExportEvents(playlist) {
+                // Титульный слайд: вставляем отрендеренный видео-сегмент без звука/рисунков/вотермарки.
+                if rawEvent.isSlide {
+                    currentTime = insertSlideSegment(
+                        event: rawEvent, slideURLs: slideURLs, composition: composition,
+                        startTime: currentTime, firstVideoTrack: &firstVideoTrack, allSegmentTracks: &allSegmentTracks
+                    )
+                    continue
+                }
                 let event = resolvedEvent(rawEvent, session: session)
                 let drawings = playlist.eventDrawings[rawEvent.hiddenKey] ?? []
 
@@ -1189,6 +1263,15 @@ private final class SportCutExportBackend {
     }
 
     private func exportAsFilmPerPlaylist(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession) {
+        let allSlides = playlists.flatMap { $0.slides }
+        SportCutSlideVideoRenderer.renderVideos(for: allSlides) { [self] slideURLs in
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.exportAsFilmPerPlaylistBuild(playlists: playlists, outputURL: outputURL, session: session, slideURLs: slideURLs)
+            }
+        }
+    }
+
+    private func exportAsFilmPerPlaylistBuild(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession, slideURLs: [UUID: URL]) {
         let sink = ui
         let parentDir = outputURL.deletingLastPathComponent()
         let baseName = outputURL.deletingPathExtension().lastPathComponent
@@ -1213,7 +1296,14 @@ private final class SportCutExportBackend {
             var eventOrdinal = 0
             var allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)] = []
 
-            for rawEvent in playlist.events {
+            for rawEvent in interleavedExportEvents(playlist) {
+                if rawEvent.isSlide {
+                    currentTime = insertSlideSegment(
+                        event: rawEvent, slideURLs: slideURLs, composition: composition,
+                        startTime: currentTime, firstVideoTrack: &firstVideoTrack, allSegmentTracks: &allSegmentTracks
+                    )
+                    continue
+                }
                 let event = resolvedEvent(rawEvent, session: session)
                 let drawings = playlist.eventDrawings[rawEvent.hiddenKey] ?? []
 

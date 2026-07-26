@@ -15,6 +15,9 @@ struct SportCutTableView: View {
 
     @ObservedObject var sessionManager = SportCutSessionManager.shared
     @State private var sortMode: SportCutTableSortMode = .startTimeAsc
+    /// Stamp IDs (across all project sources) that have a drawing attached in the original markup.
+    @State private var stampsWithDrawings: Set<UUID> = []
+    @State private var showCSVExport = false
 
     private enum SportCutTableSortMode: String, CaseIterable {
         case startTimeAsc
@@ -85,6 +88,33 @@ struct SportCutTableView: View {
         }
     }
     
+    // MARK: - CSV export data
+
+    /// Источники в текущей области видимости (все проекты или выбранный).
+    private var csvSources: [SportCutSource] {
+        guard let session = session else { return [] }
+        if selectedSourceIndex < 0 { return session.sources }
+        if selectedSourceIndex < session.sources.count { return [session.sources[selectedSourceIndex]] }
+        return []
+    }
+
+    private var csvLines: [TimelineLine] {
+        csvSources.flatMap { $0.timelines }
+    }
+
+    /// Резолвер имён для CSV — ищет теги/лейблы/группы/события по всем источникам в области.
+    private var csvResolver: CSVNameResolver {
+        let sources = csvSources
+        return CSVNameResolver(
+            tagName: { id in sources.compactMap { $0.findTag(byID: id) }.first?.name ?? id },
+            labelName: { id in sources.compactMap { $0.findLabel(byID: id) }.first?.name ?? id },
+            labelGroupName: { id in
+                sources.compactMap { src in src.labelGroups.first { $0.lables.contains(id) } }.first?.name ?? "Лейблы"
+            },
+            eventName: { id in sources.compactMap { $0.timeEvents.first { $0.id == id } }.first?.name ?? id }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -111,14 +141,34 @@ struct SportCutTableView: View {
                     .cornerRadius(6)
                 }
                 .menuStyle(.borderlessButton)
-                
+
+                Button(action: { showCSVExport = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "tablecells").font(.system(size: 11))
+                        Text(^String.Titles.csvExportButton).font(.system(size: 10, weight: .medium))
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.green.opacity(0.15))
+                    .foregroundColor(.green)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(^String.Titles.csvExportTitle)
+
                 Text(String.Titles.sportCutEventsCount.format(filteredStamps.count))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            
+            .sheet(isPresented: $showCSVExport) {
+                CSVExportSheet(
+                    lines: csvLines,
+                    resolver: csvResolver,
+                    defaultFileName: session?.name ?? "sportcut"
+                ) { showCSVExport = false }
+            }
+
             Divider()
 
             if !bulkSelectedStampIDs.isEmpty {
@@ -145,12 +195,46 @@ struct SportCutTableView: View {
                                 row: row,
                                 playerManager: playerManager,
                                 sessionID: sessionID,
+                                hasDrawing: stampsWithDrawings.contains(row.stamp.id),
                                 bulkSelectedStampIDs: $bulkSelectedStampIDs
                             )
                         }
                     }
                 }
             }
+        }
+        .onAppear { loadDrawingMarkers() }
+        .onChange(of: sessionID) { _ in loadDrawingMarkers() }
+        .onChange(of: session?.sources.count ?? 0) { _ in loadDrawingMarkers() }
+    }
+
+    /// Loads, per project source, the set of stamp IDs that have a drawing attached in the
+    /// original markup. Markup drawings are stored as per-project screenshot metadata JSONs
+    /// (each with `relatedStampIds`); the SportCut table can span several projects, so we
+    /// index all of them here rather than relying on the single-project shared manager.
+    private func loadDrawingMarkers() {
+        guard let session = session else { return }
+        let folders: [URL] = session.sources.compactMap { source in
+            guard let projectID = source.projectID,
+                  let file = VideoFilesManager.shared.files.first(where: { $0.videoData.id == projectID }) else { return nil }
+            return file.screenshotsFolder
+        }
+        guard !folders.isEmpty else {
+            stampsWithDrawings = []
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            var result: Set<UUID> = []
+            let fm = FileManager.default
+            for folder in folders {
+                guard let urls = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { continue }
+                for url in urls where url.pathExtension.lowercased() == "json" {
+                    guard let data = try? Data(contentsOf: url),
+                          let meta = try? JSONDecoder().decode(ScreenshotMetadata.self, from: data) else { continue }
+                    result.formUnion(meta.relatedStampIds)
+                }
+            }
+            DispatchQueue.main.async { self.stampsWithDrawings = result }
         }
     }
     
@@ -173,7 +257,10 @@ struct SportCutTableView: View {
             
             headerCell(^String.Titles.sportCutDurationColumn, width: 60)
             Divider().frame(height: 20)
-            
+
+            headerCell(^String.Titles.sportCutDrawingColumn, width: 60)
+            Divider().frame(height: 20)
+
             headerCell(^String.Titles.sportCutLabelsColumn)
             Divider().frame(height: 20)
             
@@ -248,6 +335,7 @@ struct SportCutTableRowView: View {
     let row: SportCutEventRow
     @ObservedObject var playerManager: SportCutPlayerManager
     let sessionID: UUID
+    let hasDrawing: Bool
     @Binding var bulkSelectedStampIDs: Set<UUID>
 
     @ObservedObject var sessionManager = SportCutSessionManager.shared
@@ -321,7 +409,23 @@ struct SportCutTableRowView: View {
                 .frame(width: 60, alignment: .leading)
                 .padding(.horizontal, 6)
             Divider().frame(height: 20)
-            
+
+            Group {
+                if hasDrawing {
+                    Image(systemName: "scribble.variable")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.blue)
+                        .help(^String.Titles.sportCutDrawingColumn)
+                } else {
+                    Text("—")
+                        .font(.system(size: 10))
+                        .foregroundColor(.gray)
+                }
+            }
+            .frame(width: 60, alignment: .center)
+            .padding(.horizontal, 6)
+            Divider().frame(height: 20)
+
             HStack(spacing: 4) {
                 if labels.isEmpty {
                     Text("—")

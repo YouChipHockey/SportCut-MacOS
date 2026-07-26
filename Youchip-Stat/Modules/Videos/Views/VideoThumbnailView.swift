@@ -242,7 +242,17 @@ struct VideoThumbnailView: View {
                     Text(^String.Titles.exportProject)
                 }
             }
-            
+
+            Button(action: {
+                viewModel.action.send(.exportProjectBundle(file: file))
+            }) {
+                HStack {
+                    Image(systemName: "shippingbox")
+                        .foregroundColor(.green)
+                    Text(^String.Titles.exportProjectBundle)
+                }
+            }
+
             Divider()
             
             Button(action: {

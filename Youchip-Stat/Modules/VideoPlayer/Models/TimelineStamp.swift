@@ -29,6 +29,8 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
     var timeEvents: [String]
     var position: CGPoint?
     var comment: String?
+    /// Id карты (PlayField), на которой поставлена точка `position`. nil = первая карта коллекции (обратная совместимость).
+    var mapFieldId: String?
     var color: Color {
         Color(hex: colorHex)
     }
@@ -62,7 +64,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         timeFinishSeconds - timeStartSeconds
     }
     
-    init(id: UUID = UUID(), tagRefs: [StampTagRef], primaryID: String?, timeStartSeconds: Double, timeFinishSeconds: Double, timeStartString: String? = nil, timeFinishString: String? = nil, colorHex: String, label: String, labels: [FullLabelWithGroup], timeEvents: [String] = [], position: CGPoint? = nil, isActiveForMapView: Bool? = nil, comment: String? = nil) {
+    init(id: UUID = UUID(), tagRefs: [StampTagRef], primaryID: String?, timeStartSeconds: Double, timeFinishSeconds: Double, timeStartString: String? = nil, timeFinishString: String? = nil, colorHex: String, label: String, labels: [FullLabelWithGroup], timeEvents: [String] = [], position: CGPoint? = nil, isActiveForMapView: Bool? = nil, comment: String? = nil, mapFieldId: String? = nil) {
         self.id = id
         self.primaryID = primaryID
         self.tagRefs = tagRefs
@@ -73,14 +75,15 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         self.position = position
         self.isActiveForMapView = isActiveForMapView
         self.comment = comment
+        self.mapFieldId = mapFieldId
 
         self.timeStartSeconds = timeStartSeconds
         self.timeFinishSeconds = timeFinishSeconds
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case id, tagRefs, idTags, idTag, tagGroupId, primaryID, timeStartSeconds, timeFinishSeconds
-        case colorHex, label, isActiveForMapView, labels, timeEvents, position, comment
+        case colorHex, label, isActiveForMapView, labels, timeEvents, position, comment, mapFieldId
     }
     
     func encode(to encoder: Encoder) throws {
@@ -97,6 +100,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         try container.encode(timeEvents, forKey: .timeEvents)
         try container.encodeIfPresent(position, forKey: .position)
         try container.encodeIfPresent(comment, forKey: .comment)
+        try container.encodeIfPresent(mapFieldId, forKey: .mapFieldId)
     }
     
     init(from decoder: Decoder) throws {
@@ -111,6 +115,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         timeEvents = try container.decodeIfPresent([String].self, forKey: .timeEvents) ?? []
         position = try container.decodeIfPresent(CGPoint.self, forKey: .position)
         comment = try container.decodeIfPresent(String.self, forKey: .comment)
+        mapFieldId = try container.decodeIfPresent(String.self, forKey: .mapFieldId)
 
         if let refs = try? container.decode([StampTagRef].self, forKey: .tagRefs) {
             tagRefs = refs

@@ -22,22 +22,25 @@ struct StampItemsSelectionSheet: View {
     let onDone: ([String]) -> Void
     let onCancel: () -> Void
     
-    @State private var selectedItems: Set<String> = []
+    /// Ordered by click — NOT a Set. The pick order is what the user sees later in the
+    /// tag info line and the viewer table (it flows through to `stamp.labels`), so it
+    /// must be preserved here rather than collapsed into an arbitrary hash order.
+    @State private var selectedItems: [String] = []
     @Environment(\.presentationMode) private var presentationMode
     @ObservedObject private var hotkeyManager = HotKeyManager.shared
     @State private var markupMode = MarkupMode.current
     @ObservedObject var timelineData = TimelineDataManager.shared
     @State private var hotkeyObserver: Any? = nil
     
+    /// Groups keep the order set in the collection editor rather than being sorted by
+    /// name, so the arrangement authored there is what the user sees while tagging.
     private var filteredLabelGroups: [LabelGroupData] {
         if let tag {
             // Optimize using Set for O(1) lookup
             let labelGroupIdsSet = Set(tag.lablesGroup)
-            return tagLibrary.allLabelGroups
-                .filter { labelGroupIdsSet.contains($0.id) }
-                .sortedByName
+            return tagLibrary.allLabelGroups.filter { labelGroupIdsSet.contains($0.id) }
         } else {
-            return tagLibrary.allLabelGroups.sortedByName
+            return tagLibrary.allLabelGroups
         }
     }
     
@@ -125,7 +128,9 @@ struct StampItemsSelectionSheet: View {
         .frame(minWidth: 400, minHeight: isDop ? 0 : 400)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {
-            selectedItems = Set(initialIds)
+            // Keep the previously stored order; drop any accidental duplicates.
+            var seen = Set<String>()
+            selectedItems = initialIds.filter { seen.insert($0).inserted }
             setupLabelHotkeys()
             markupMode = MarkupMode.current
         }
@@ -135,7 +140,16 @@ struct StampItemsSelectionSheet: View {
     }
     
     // MARK: - Helpers
-    
+
+    /// Toggles an item, appending on select so the pick order is preserved.
+    private func toggleSelection(_ id: String) {
+        if let index = selectedItems.firstIndex(of: id) {
+            selectedItems.remove(at: index)
+        } else {
+            selectedItems.append(id)
+        }
+    }
+
     private func stackForLabelsLayout() -> some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(filteredLabelGroups) { group in
@@ -147,11 +161,7 @@ struct StampItemsSelectionSheet: View {
                         ForEach(group.lables, id: \.self) { labelID in
                             if let label = tagLibrary.findLabelById(labelID) {
                                 Button {
-                                    if selectedItems.contains(label.id) {
-                                        selectedItems.remove(label.id)
-                                    } else {
-                                        selectedItems.insert(label.id)
-                                    }
+                                    toggleSelection(label.id)
                                 } label: {
                                     HStack(spacing: 4) {
                                         Image(
@@ -204,11 +214,7 @@ struct StampItemsSelectionSheet: View {
                 ) {
                     ForEach(timeEvents, id: \.self) { event in
                         Button {
-                            if selectedItems.contains(event.id) {
-                                selectedItems.remove(event.id)
-                            } else {
-                                selectedItems.insert(event.id)
-                            }
+                            toggleSelection(event.id)
                         } label: {
                             HStack(spacing: 4) {
                                 Image(
@@ -259,11 +265,7 @@ struct StampItemsSelectionSheet: View {
         ) { notification in
             if let labelInfo = notification.object as? (labelId: String, tagId: String),
                labelInfo.tagId == tag?.id {
-                if selectedItems.contains(labelInfo.labelId) {
-                    selectedItems.remove(labelInfo.labelId)
-                } else {
-                    selectedItems.insert(labelInfo.labelId)
-                }
+                toggleSelection(labelInfo.labelId)
             }
         }
     }
@@ -282,7 +284,7 @@ struct StampItemsSelectionSheet: View {
     }
     
     private func completeSelection() {
-        onDone(Array(selectedItems))
+        onDone(selectedItems)
         presentationMode.wrappedValue.dismiss()
     }
     

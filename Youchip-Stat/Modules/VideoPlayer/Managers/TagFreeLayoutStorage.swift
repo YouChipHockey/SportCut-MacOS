@@ -116,12 +116,38 @@ struct TagFreeLayoutStorage {
             }
         }
 
-        // Add items for new tags (labels are added manually via palette)
+        // Add items for new tags (labels are added manually via palette).
+        // Новые теги раскладываются сеткой ПОД уже существующими элементами,
+        // чтобы каждая новая кнопка не появлялась поверх предыдущих.
         let existingTagItemIds = Set(filteredItems.filter { $0.kind == .tag }.map { $0.elementId })
         let missingTags = tags.filter { !existingTagItemIds.contains($0.id) }
         if !missingTags.isEmpty {
-            let defaultLayout = makeDefaultLayout(for: missingTags)
-            filteredItems.append(contentsOf: defaultLayout.items)
+            let itemWidth: CGFloat = 180
+            let itemHeight: CGFloat = 70
+            let horizontalSpacing: CGFloat = 40
+            let verticalSpacing: CGFloat = 40
+            let totalItemWidth = itemWidth + horizontalSpacing
+            let columns = max(Int((layout.canvasWidth - horizontalSpacing) / totalItemWidth), 1)
+
+            // Начинаем ниже самого нижнего существующего элемента (или от верха для пустой раскладки).
+            let hasExistingItems = !filteredItems.isEmpty
+            let lowestBottom = filteredItems.map { $0.center.y + $0.size.height / 2 }.max() ?? 0
+            let startTop = hasExistingItems ? lowestBottom + verticalSpacing : verticalSpacing
+
+            for (index, tag) in missingTags.enumerated() {
+                let column = index % columns
+                let row = index / columns
+                let x = horizontalSpacing + CGFloat(column) * totalItemWidth + itemWidth / 2
+                let y = startTop + CGFloat(row) * (itemHeight + verticalSpacing) + itemHeight / 2
+                filteredItems.append(TagFreeLayoutItem(
+                    elementId: tag.id,
+                    kind: .tag,
+                    center: CGPoint(x: x, y: y),
+                    size: CGSize(width: itemWidth, height: itemHeight),
+                    rotation: 0,
+                    shape: .square
+                ))
+            }
         }
 
         // Filter bindings: remove bindings whose source or target no longer exist
