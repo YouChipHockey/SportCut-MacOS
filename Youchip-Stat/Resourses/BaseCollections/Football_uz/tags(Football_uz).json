@@ -1,0 +1,393 @@
+{
+  "tags": [
+    {
+      "id": "11a07b10-22a9-4d53-b84b-16a5c7c25429",
+      "name": "Muvaffaqiyatli dribling",
+      "description": "",
+      "color": "#28dfb2",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "46a619b3-e6f6-4be9-af06-06dd1c863438"
+      ]
+    },
+    {
+      "id": "189fd42c-8146-4bf9-8bb5-1c2aead0a028",
+      "name": "Aniq zarba",
+      "description": "",
+      "color": "#3386fd",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "b3d55d65-26ca-498c-b07a-6e3a22fa30c2"
+      ]
+    },
+    {
+      "id": "1ade9411-d127-4a49-bd97-4d87b2579989",
+      "name": "Muvaffaqiyatsiz dribling",
+      "description": "",
+      "color": "#fc6262",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "46a619b3-e6f6-4be9-af06-06dd1c863438"
+      ]
+    },
+    {
+      "id": "2186e0ea-3d10-4140-8a9d-b114fbb18263",
+      "name": "Hujum qurish",
+      "description": "",
+      "color": "#3386fd",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "f3b9ebe6-cfd5-4248-8292-0c950b3b5c1d"
+      ]
+    },
+    {
+      "id": "24c06786-4723-4959-a338-4a88b4300c1f",
+      "name": "Nazoratli",
+      "description": "",
+      "color": "#b0b0b0",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "26a055c4-4f33-4e1d-909a-bc032cdb3f1f",
+      "name": "Havodagi jang",
+      "description": "",
+      "color": "#3386fd",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "02d868d7-7d52-4d58-8934-775a96e3e133",
+        "9aec8014-47dd-4376-b6dd-b81d1d938d21"
+      ]
+    },
+    {
+      "id": "38a64157-128a-444a-8885-7fd8412ee1f0",
+      "name": "Havodagi yutqazilgan jang",
+      "description": "",
+      "color": "#fc6262",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "836cb0e4-0ffb-4e38-a541-4ff187dd77ff"
+      ]
+    },
+    {
+      "id": "3b1a331a-856c-4ff4-88a7-27b0c367b8ba",
+      "name": "Noaniq zarba",
+      "description": "",
+      "color": "#fc6262",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "b3d55d65-26ca-498c-b07a-6e3a22fa30c2"
+      ]
+    },
+    {
+      "id": "3f67c3d2-1a3e-44df-87aa-601d3afd0f45",
+      "name": "Muvaffaqiyatli otbor",
+      "description": "",
+      "color": "#28dfb2",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "836cb0e4-0ffb-4e38-a541-4ff187dd77ff"
+      ]
+    },
+    {
+      "id": "49aec77e-185a-4412-b750-c28f8042ed76",
+      "name": "Kontrhujum",
+      "description": "",
+      "color": "#3386fd",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "49ba28a4-439f-4568-9ff7-d58c931e23cd",
+      "name": "Bosim ostida toʻpni yoʻqotish",
+      "description": "",
+      "color": "#fc6262",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "4d7618d0-78d0-419c-939f-f24b235e627a",
+      "name": "Uzun uzatma",
+      "description": "",
+      "color": "#ffffff",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "9aec8014-47dd-4376-b6dd-b81d1d938d21"
+      ]
+    },
+    {
+      "id": "55c6d297-2948-4a8c-9165-5b1064e72b36",
+      "name": "Toʻsilgan zarba",
+      "description": "",
+      "color": "#b0b0b0",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "836cb0e4-0ffb-4e38-a541-4ff187dd77ff"
+      ]
+    },
+    {
+      "id": "5f8b1166-b079-4135-8d1c-987cc24d31b6",
+      "name": "Muvaffaqiyatsiz otbor",
+      "description": "",
+      "color": "#fc6262",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "836cb0e4-0ffb-4e38-a541-4ff187dd77ff"
+      ]
+    },
+    {
+      "id": "6a2685f2-5e80-4146-ac1e-039f80b07696",
+      "name": "Muvaffaqiyatsiz uzatma",
+      "description": "",
+      "color": "#fc6262",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "46a619b3-e6f6-4be9-af06-06dd1c863438"
+      ]
+    },
+    {
+      "id": "6c977d14-4616-4002-bf18-d75ca95f6229",
+      "name": "Oʻtkazib yuborilgan gol",
+      "description": "",
+      "color": "#fc6262",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "91155e72-1af3-4748-8c94-c0ca8ea9ef0e"
+      ]
+    },
+    {
+      "id": "796d2058-6514-4d7b-9b03-6dfd1839ce8a",
+      "name": "Uzatmani ushlash",
+      "description": "",
+      "color": "#e0e0e0",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "02d868d7-7d52-4d58-8934-775a96e3e133"
+      ]
+    },
+    {
+      "id": "8034887a-d6fa-4074-8711-59e32eb64f13",
+      "name": "Yuqori pressing",
+      "description": "",
+      "color": "#3386fd",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "877a6f1b-9af9-4ec6-9755-b17868aaf8bc",
+      "name": "Qisqa uzatma",
+      "description": "",
+      "color": "#ffffff",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "885723ce-c26c-46e7-945b-083b00e89b8b",
+      "name": "Past pressing",
+      "description": "",
+      "color": "#ffb300",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "88b94659-0685-4631-a7e5-2bc9529630bf",
+      "name": "Yutilgan jang",
+      "description": "",
+      "color": "#28dfb2",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "836cb0e4-0ffb-4e38-a541-4ff187dd77ff"
+      ]
+    },
+    {
+      "id": "8f776ec3-723e-4a7e-a6fa-f29b458ff63e",
+      "name": "Himoya xatosi",
+      "description": "",
+      "color": "#ffc400",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "836cb0e4-0ffb-4e38-a541-4ff187dd77ff"
+      ]
+    },
+    {
+      "id": "97f64cbd-367a-4bdf-b2de-9c7b413a7a78",
+      "name": "Gol",
+      "description": "",
+      "color": "#28dfb2",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "b3d55d65-26ca-498c-b07a-6e3a22fa30c2"
+      ]
+    },
+    {
+      "id": "99ebdbe9-eaf9-4dc8-9aaf-7071c1d79850",
+      "name": "Muvaffaqiyatli uzatma",
+      "description": "",
+      "color": "#28dfb2",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "46a619b3-e6f6-4be9-af06-06dd1c863438"
+      ]
+    },
+    {
+      "id": "a871c9ec-a376-45d5-88da-a6f4e38e949c",
+      "name": "Yutqazilgan jang",
+      "description": "",
+      "color": "#fc6262",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "836cb0e4-0ffb-4e38-a541-4ff187dd77ff"
+      ]
+    },
+    {
+      "id": "b5655ea6-2991-4e12-a73e-942a10a9694a",
+      "name": "Hujumda chiqish",
+      "description": "",
+      "color": "#f7ff19",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "b82a291b-8319-4c98-a1c7-deba8cc8695d",
+      "name": "Faul kartochkasi",
+      "description": "",
+      "color": "#f7ff19",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "836cb0e4-0ffb-4e38-a541-4ff187dd77ff"
+      ]
+    },
+    {
+      "id": "bad2552f-92b3-48ed-99e0-ae9b67a26d5e",
+      "name": "Kontrpressing",
+      "description": "",
+      "color": "#28dfb2",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "c099640c-ae41-44e4-b68b-bf4e6000cf0d",
+      "name": "Zarbani qaytarish",
+      "description": "",
+      "color": "#28dfb2",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "91155e72-1af3-4748-8c94-c0ca8ea9ef0e"
+      ]
+    },
+    {
+      "id": "c9ed0f07-bc14-4418-83db-b0150b626bf4",
+      "name": "Burchak zarbasi",
+      "description": "",
+      "color": "#3386fd",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "ba1ebcaf-ebfe-48a8-8a8b-efcdb98beb98"
+      ]
+    },
+    {
+      "id": "cd551872-7128-4b26-b340-4e4f3a42f291",
+      "name": "Toʻsilgan zarba",
+      "description": "",
+      "color": "#b0b0b0",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "b3d55d65-26ca-498c-b07a-6e3a22fa30c2"
+      ]
+    },
+    {
+      "id": "dc8c713b-7078-451e-8b50-5ccee8137880",
+      "name": "Penalti",
+      "description": "",
+      "color": "#1f1700",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "e140e82f-4779-47f4-b8e4-498a461459c0",
+      "name": "Markaz pressingi",
+      "description": "",
+      "color": "#b0b0b0",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": []
+    },
+    {
+      "id": "f1c9bc91-54b1-456d-9f08-766a5a9b6b24",
+      "name": "Havodagi yutilgan jang",
+      "description": "",
+      "color": "#28dfb2",
+      "defaultTimeBefore": 35,
+      "defaultTimeAfter": 10,
+      "collection": "Football(SC)",
+      "lablesGroup": [
+        "836cb0e4-0ffb-4e38-a541-4ff187dd77ff"
+      ]
+    }
+  ]
+}

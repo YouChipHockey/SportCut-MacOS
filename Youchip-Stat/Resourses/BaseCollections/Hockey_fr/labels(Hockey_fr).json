@@ -1,0 +1,234 @@
+{
+  "labels": [
+    {
+      "id": "2899bfb3-0a40-4afa-a430-d97bf31dcae8",
+      "name": "En contre",
+      "description": ""
+    },
+    {
+      "id": "0d05f06e-414b-43ad-bdd6-724e6b25e199",
+      "name": "Possession en zone offensive",
+      "description": ""
+    },
+    {
+      "id": "57750b31-3ab7-47f5-8706-fd41be2857a3",
+      "name": "Sur la mise au jeu",
+      "description": ""
+    },
+    {
+      "id": "3e16b05f-77a6-4927-bb63-4946f31e9abc",
+      "name": "Forecheck",
+      "description": ""
+    },
+    {
+      "id": "8342c976-7ab0-415d-b930-2bf913ca3f26",
+      "name": "Trafic devant le filet",
+      "description": ""
+    },
+    {
+      "id": "dbb6f522-c19a-47b8-9356-9916b4ffe944",
+      "name": "Déviation",
+      "description": ""
+    },
+    {
+      "id": "301a4593-87b3-417c-9527-fbf1b9e88e0f",
+      "name": "Depuis le slot",
+      "description": ""
+    },
+    {
+      "id": "dbe62629-6c0b-45a9-ab2a-642f8262ae43",
+      "name": "Depuis la ligne bleue",
+      "description": ""
+    },
+    {
+      "id": "325ab5dd-cf0e-437d-9ca0-3e42fb392484",
+      "name": "Depuis la périphérie",
+      "description": ""
+    },
+    {
+      "id": "902a5dad-4ed7-4530-9e18-cfdd469c1fda",
+      "name": "Préparation du tir",
+      "description": ""
+    },
+    {
+      "id": "1a5f0eb4-be87-47e8-8eb8-e6e8da372215",
+      "name": "Précis",
+      "description": ""
+    },
+    {
+      "id": "aa622577-55ee-42bf-afff-85bbf411d5e1",
+      "name": "Imprécis",
+      "description": ""
+    },
+    {
+      "id": "521c956b-b92d-4bf1-a9fd-dce954622b81",
+      "name": "One-timer",
+      "description": ""
+    },
+    {
+      "id": "e3c60937-edad-4c05-bb28-e4dab09fc355",
+      "name": "À travers le trafic",
+      "description": ""
+    },
+    {
+      "id": "6cc39328-cebd-45fe-b53e-332e76c0f203",
+      "name": "Vers le slot",
+      "description": ""
+    },
+    {
+      "id": "8b3d6cb9-cce0-4884-a9c2-22a9c20ac550",
+      "name": "Passe d'entrée",
+      "description": ""
+    },
+    {
+      "id": "89ac25bc-e300-45fb-99c7-6d11c49b4e1f",
+      "name": "Entrée en conduite",
+      "description": ""
+    },
+    {
+      "id": "d8e9c3aa-492f-4fa0-b434-4f3eaf721ec7",
+      "name": "Réussi",
+      "description": ""
+    },
+    {
+      "id": "f488a8fa-9ec3-4a6c-b38a-cd13bdeacdcd",
+      "name": "Raté",
+      "description": ""
+    },
+    {
+      "id": "b9fb7879-3520-426b-92d7-dbc750b0e5dd",
+      "name": "Neutre",
+      "description": ""
+    },
+    {
+      "id": "36ca29fa-6bab-46c5-b198-0e9744a9fb24",
+      "name": "Réussi",
+      "description": ""
+    },
+    {
+      "id": "5ccdb86e-1af5-446f-b95c-8416785b7440",
+      "name": "Raté",
+      "description": ""
+    },
+    {
+      "id": "51109e53-77fc-40e8-9dc4-f840a319b492",
+      "name": "Neutre",
+      "description": ""
+    },
+    {
+      "id": "48c98a8e-49ad-434e-9da6-c492d1a2b4c8",
+      "name": "Zone défensive",
+      "description": ""
+    },
+    {
+      "id": "48c98a8e-49ad-434e-9da6-c492d1a2b4c7",
+      "name": "Zone neutre",
+      "description": ""
+    },
+    {
+      "id": "def9cfb6-f056-41c5-9db5-4f68dfded1ca",
+      "name": "Zone offensive",
+      "description": ""
+    },
+    {
+      "id": "94031c94-9915-4f0c-b4cd-d6bd869bbb21",
+      "name": "Côté fort",
+      "description": ""
+    },
+    {
+      "id": "179e7be2-06b3-416b-a0f6-610e23759c6e",
+      "name": "Côté faible",
+      "description": ""
+    },
+    {
+      "id": "cbd0b8f2-f3f7-42c3-ad26-858b0981be68",
+      "name": "Passe de sortie",
+      "description": ""
+    },
+    {
+      "id": "eb81fdb6-ae5d-4410-b148-0a65d5344b9d",
+      "name": "Sortie en conduite",
+      "description": ""
+    },
+    {
+      "id": "2510e2b8-6cc9-4360-9859-e28e8b056843",
+      "name": "Relance",
+      "description": ""
+    },
+    {
+      "id": "5153a28a-8387-4372-ab7e-d02f7e135fa5",
+      "name": "Regroupement en zone défensive",
+      "description": ""
+    },
+    {
+      "id": "bbac12fc-8cdb-4c02-b642-a24d5cbcf8aa",
+      "name": "Sur mise au jeu en zone défensive",
+      "description": ""
+    },
+    {
+      "id": "520d6b5e-880b-445a-874e-6c674d6ee594",
+      "name": "Réussi",
+      "description": ""
+    },
+    {
+      "id": "f43b723d-983d-4636-8e4d-011b99e55326",
+      "name": "Raté",
+      "description": ""
+    },
+    {
+      "id": "0aa5ff66-5742-4600-875d-7a7900a2f672",
+      "name": "Neutre",
+      "description": ""
+    },
+    {
+      "id": "46eebb8e-96b3-4ee9-96e6-6fe36fc38c08",
+      "name": "Relance",
+      "description": ""
+    },
+    {
+      "id": "e650df69-2fd4-4f11-8ee3-661dab0a1c76",
+      "name": "Regroupement en zone défensive",
+      "description": ""
+    },
+    {
+      "id": "f6b73db2-4bf1-4b47-8782-886799990adb",
+      "name": "Sur la mise au jeu",
+      "description": ""
+    },
+    {
+      "id": "bd21b2fc-ea75-46d6-ba89-5d49ceb77fae",
+      "name": "Réussi",
+      "description": ""
+    },
+    {
+      "id": "dec941da-9cca-4af6-bd9d-69d6b48c009e",
+      "name": "Raté",
+      "description": ""
+    },
+    {
+      "id": "53e86e03-890d-4ed0-8157-1a4bd9d0b07a",
+      "name": "Neutre",
+      "description": ""
+    },
+    {
+      "id": "0b9c79d7-fcf0-4157-9503-2c2697565da3",
+      "name": "Gagné",
+      "description": ""
+    },
+    {
+      "id": "f8ed5fc0-fff5-42ea-b967-95a5b836ee56",
+      "name": "Perdu",
+      "description": ""
+    },
+    {
+      "id": "e81e9b48-df78-48f7-831c-5ec8f9b3rt34",
+      "name": "Joueur défensif",
+      "description": ""
+    },
+    {
+      "id": "0d05f06e-414b-43df-zzd6-724e6b25e199",
+      "name": "Joueur offensif",
+      "description": ""
+    }
+  ]
+}

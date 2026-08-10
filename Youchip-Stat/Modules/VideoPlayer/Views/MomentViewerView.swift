@@ -10,19 +10,31 @@ import Combine
 
 @MainActor
 final class MomentViewerSession: ObservableObject {
-    let player = AVPlayer()
+    let player = AVPlayer().applyDebugMuteIfNeeded()
     let tagName: String
     let lineName: String
     let lineID: UUID?
     let stampID: UUID?
     /// Длительность исходного ассета (сек), для ограничения видимого окна мини-таймлайна.
-    let sourceAssetDuration: Double
+    private(set) var sourceAssetDuration: Double
 
     @Published private(set) var displayStartTime: Double
     @Published private(set) var displayDuration: Double
     @Published private(set) var compositionPlaybackSeconds: Double = 0
+    /// true, если исходный буфер ещё не покрывает всю длительность тега (напр. «время после» ещё не
+    /// дозаписалось в лайве). Тогда во вью показываем плашку «не дозаписано» + кнопку «Обновить».
+    @Published private(set) var isTruncated: Bool = false
+    /// Идёт повторное вытягивание буфера по кнопке «Обновить».
+    @Published private(set) var isRefreshing: Bool = false
 
-    private let sourceAsset: AVAsset
+    /// Запрошенная (полная) длительность тега — до обрезки под доступный буфер. Нужна для детекта обрезки.
+    private var requestedDuration: Double
+    /// Разрешён ли рефреш буфера (только лайв-разметка). В остальных режимах ассет полный.
+    let allowsRefresh: Bool
+    /// Поставщик свежего ассета (форс-финализация буфера) для кнопки «Обновить». nil — рефреш недоступен.
+    private let assetProvider: ((@escaping (AVAsset?) -> Void) -> Void)?
+
+    private var sourceAsset: AVAsset
     private var endObserver: NSObjectProtocol?
     private var timeObserver: Any?
     private var didInvalidate = false
@@ -49,15 +61,20 @@ final class MomentViewerSession: ObservableObject {
         tagName: String,
         lineName: String,
         lineID: UUID? = nil,
-        stampID: UUID? = nil
+        stampID: UUID? = nil,
+        allowsRefresh: Bool = false,
+        assetProvider: ((@escaping (AVAsset?) -> Void) -> Void)? = nil
     ) {
         self.sourceAsset = asset
         self.tagName = tagName
         self.lineName = lineName
         self.lineID = lineID
         self.stampID = stampID
+        self.allowsRefresh = allowsRefresh
+        self.assetProvider = assetProvider
         self.displayStartTime = startTime
         self.displayDuration = max(duration, 0.000_001)
+        self.requestedDuration = max(duration, 0.000_001)
         let ad = sourceAssetDuration.isFinite && sourceAssetDuration > 0
             ? sourceAssetDuration
             : (startTime + duration + 1)
@@ -72,11 +89,32 @@ final class MomentViewerSession: ObservableObject {
     func recompose(startTime: Double, duration: Double, anchorAbsoluteTime: Double?, resumePlaybackAfterSeek: Bool = true) {
         displayStartTime = startTime
         displayDuration = max(duration, 0.5)
+        requestedDuration = max(duration, 0.5)
         configure(anchorAbsoluteTime: anchorAbsoluteTime, resumePlaybackAfterSeek: resumePlaybackAfterSeek)
     }
 
     func pausePlayback() {
         player.pause()
+    }
+
+    /// По кнопке «Обновить»: повторно вытягивает буфер (форс-финализация) и пересобирает клип,
+    /// чтобы дозаписавшееся «время после» тега попало в нарезку — без закрытия/переоткрытия окна.
+    func refresh() {
+        guard allowsRefresh, !isRefreshing, !didInvalidate, let assetProvider else { return }
+        isRefreshing = true
+        assetProvider { [weak self] newAsset in
+            Task { @MainActor [weak self] in
+                guard let self, !self.didInvalidate else { return }
+                defer { self.isRefreshing = false }
+                guard let newAsset else { return }
+                self.sourceAsset = newAsset
+                let ad = CMTimeGetSeconds(newAsset.duration)
+                if ad.isFinite, ad > 0 {
+                    self.sourceAssetDuration = max(ad, self.displayStartTime + self.requestedDuration + 0.01)
+                }
+                self.configure(anchorAbsoluteTime: nil, resumePlaybackAfterSeek: false)
+            }
+        }
     }
 
     /// Локальное время внутри композиции (0…cap), то же ограничение, что в `seekToCompositionTime`.
@@ -166,7 +204,14 @@ final class MomentViewerSession: ObservableObject {
         let assetDuration = CMTimeGetSeconds(sourceAsset.duration)
         let safeStart = max(0.0, min(displayStartTime, assetDuration))
         let maxAvailable = max(0.0, assetDuration - safeStart)
-        let safeDuration = min(max(0.0, displayDuration), maxAvailable)
+        // Считаем от ПОЛНОЙ запрошенной длительности тега (а не от ранее обрезанной displayDuration),
+        // чтобы после рефреша (более длинный буфер) клип снова дотягивался до полной длины.
+        let safeDuration = min(max(0.0, requestedDuration), maxAvailable)
+
+        // Обрезка: доступного буфера не хватает на всю длительность тега (напр. «время после» в лайве
+        // ещё не дозаписалось). Показываем плашку + кнопку «Обновить» (только в лайв-разметке).
+        isTruncated = allowsRefresh && (requestedDuration - safeDuration) > 0.1
+
         guard safeDuration > 0 else { return }
 
         displayStartTime = safeStart
@@ -299,8 +344,17 @@ struct MomentViewerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VideoPlayer(player: session.player)
+            ZoomableVideoPlayerView(player: session.player) {
+                VideoPlayer(player: session.player)
+            }
                 .background(Color.black)
+                .overlay(alignment: .top) {
+                    if session.isTruncated {
+                        truncationBanner
+                            .padding(.top, 10)
+                            .padding(.horizontal, 10)
+                    }
+                }
 
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -409,6 +463,40 @@ struct MomentViewerView: View {
         .onDisappear {
             session.invalidate()
         }
+    }
+
+    /// Плашка «клип ещё не дозаписан» + кнопка «Обновить» (только в лайв-разметке).
+    private var truncationBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.yellow)
+            Text(^String.Titles.momentClipNotFullyRecorded)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 8)
+
+            Button(action: { session.refresh() }) {
+                HStack(spacing: 5) {
+                    if session.isRefreshing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    Text(^String.Titles.momentRefreshClip)
+                }
+                .font(.system(size: 12, weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(session.isRefreshing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.78))
+        )
     }
 
     private func stampOrdinal(for stamp: TimelineStamp) -> Int {

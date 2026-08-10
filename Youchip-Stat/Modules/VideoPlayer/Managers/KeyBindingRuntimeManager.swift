@@ -77,6 +77,9 @@ final class KeyBindingRuntimeManager: ObservableObject {
     var onAttachLabelsToLastStamp: AttachLabelsToLastStampCallback?
     var onAttachLabelsIfTagMatches: AttachLabelsIfTagMatchesCallback?
     var onAttachTimeEventsToAnchor: AttachTimeEventsToAnchorCallback?
+    /// Ставит позицию на карте нужному тегу. allowedTagIds=nil — к якорю/крайнему штампу;
+    /// непустой набор — только к штампам этих тегов (эксклюзивные партнёры карты).
+    var onAttachMapPosition: ((_ fieldId: String, _ normalized: CGPoint, _ allowedTagIds: Set<String>?, _ onDone: (() -> Void)?) -> Void)?
 
     private init() {}
 
@@ -159,6 +162,16 @@ final class KeyBindingRuntimeManager: ObservableObject {
     }
 
     // MARK: - Exclusive on interval stop (вызывается до завершения записи)
+
+    /// Снимает подсветку, если её источник — этот тег. Нужно для интервального тега,
+    /// который при запуске подсветил свои лейблы (связка подсветки тег→лейбл): когда
+    /// тег выключают, подсветка должна гаснуть сразу, не дожидаясь нажатия на лейбл.
+    func clearHighlightIfOriginatedFromTag(_ tagId: String) {
+        let tagKey = "\(CanvasButtonKind.tag.rawValue):\(tagId)"
+        guard highlightModeActive,
+              highlightOriginButtonKey == tagKey || anchorTagId == tagId else { return }
+        clearHighlight()
+    }
 
     func applyExclusiveOnTagDeactivation(tagId: String) {
         let buttonKey = "\(CanvasButtonKind.tag.rawValue):\(tagId)"
@@ -337,6 +350,44 @@ final class KeyBindingRuntimeManager: ObservableObject {
         var labels = takeActivatedLabels()
         if !labels.contains(labelId) { labels.append(labelId) }
         onAttachLabelsToLastStamp?(labels, nil)
+    }
+
+    // MARK: - Map tap (зона карты)
+
+    /// Клик по зоне карты. Работает как лейбл: ставит позицию нужному тегу и запускает
+    /// исходящие связки карты. При эксклюзивных связках карта↔тег — только к этим тегам.
+    func handleMapTap(mapId: String, normalized: CGPoint) {
+        let buttonKey = "\(CanvasButtonKind.map.rawValue):\(mapId)"
+
+        let exclusivePartners = exclusiveTagPartners(ofMap: mapId)
+        if !exclusivePartners.isEmpty {
+            if highlightModeActive { clearHighlight() }
+            onAttachMapPosition?(mapId, normalized, exclusivePartners, nil)
+            return
+        }
+
+        // Позиция к якорю/крайнему штампу (как обычный лейбл со всеми тегами).
+        onAttachMapPosition?(mapId, normalized, nil, nil)
+
+        // Исходящие связки карты (активация тегов и т.п.).
+        var visited = Set<String>()
+        applyOutgoingBindings(
+            from: buttonKey, sourceKind: .map, sourceId: mapId,
+            sourceTagActivating: nil, triggeringLabelId: nil, visited: &visited
+        )
+    }
+
+    /// Теги — эксклюзивные партнёры карты (эксклюзивные связки тег↔карта с участием этой карты).
+    func exclusiveTagPartners(ofMap mapId: String) -> Set<String> {
+        var result = Set<String>()
+        for binding in bindings where binding.type == .exclusive {
+            if binding.sourceKind == .map, binding.sourceId == mapId, binding.targetKind == .tag {
+                result.insert(binding.targetId)
+            } else if binding.targetKind == .map, binding.targetId == mapId, binding.sourceKind == .tag {
+                result.insert(binding.sourceId)
+            }
+        }
+        return result
     }
 
     /// Нажат подсвеченный лейбл. Копим его. Если тег-якорь УЖЕ на таймлайне (не висит сам в подсветке) —
@@ -656,6 +707,14 @@ final class KeyBindingRuntimeManager: ObservableObject {
         let targetId = binding.targetId
         let targetKey = binding.targetButtonKey
 
+        // Защита от зацикливания: если целевой тег уже активирован в текущей цепочке
+        // (теги связаны активацией в обе стороны — например бросок→нападение→защита и
+        // защита→нападение), повторно его не активируем, иначе цепочка зациклится и
+        // тег добавится ещё раз. `visited` содержит все теги, отработавшие в этой цепочке.
+        if binding.targetKind == .tag, visited.contains(targetKey) {
+            return
+        }
+
         // Цепочка активаций: исходный лейбл тоже копится, чтобы попасть в итоговый тег.
         if binding.sourceKind == .label {
             activateLabel(id: binding.sourceId)
@@ -677,6 +736,11 @@ final class KeyBindingRuntimeManager: ObservableObject {
                     triggeringLabelId: capturedTrigger,
                     visited: &mutableVisited
                 )
+                // Лейблы, активированные исходящими связками этого тега (тег→лейбл в цепочке,
+                // например лейбл→тег→лейбл), прикрепляем к нему же — иначе они терялись.
+                if !self.activatedLabelIds.isEmpty {
+                    self.onAttachLabelsToAnchor?(targetId, self.takeActivatedLabels(), nil)
+                }
             }
         } else if binding.targetKind == .label {
             activateLabel(id: targetId)

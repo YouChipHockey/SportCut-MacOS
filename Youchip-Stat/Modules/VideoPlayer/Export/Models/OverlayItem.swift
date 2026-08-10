@@ -11,6 +11,8 @@ struct ExportWatermarkOptions {
     var showEpisodeNumbering: Bool = true
     var showTagAndLabels: Bool = true
     var showComment: Bool = true
+    /// Наносить ли логотип клуба (настраивается в настройках приложения).
+    var showClubLogo: Bool = false
 
     static let `default` = ExportWatermarkOptions()
 }

@@ -16,11 +16,9 @@ struct FieldMapVisualizationView: View {
     let mode: VisualizationMode
     let stamps: [TimelineStamp]
     
-    @State private var fieldImage: NSImage? = nil
-    @State private var imageSize: CGSize = .zero
-    @State private var imageFrame: CGRect = .zero
     @State private var selectedStamp: TimelineStamp? = nil
-    @State private var fieldDimensions: (width: Int, height: Int) = (0, 0)
+    /// Изображения всех карт коллекции по id карты.
+    @State private var fieldImages: [String: NSImage] = [:]
     @State private var visibleStampIDs: Set<UUID> = Set()
     @State private var filteredStampIDs: Set<UUID> = Set()
     @State private var contextMenuStamp: TimelineStamp? = nil
@@ -31,9 +29,8 @@ struct FieldMapVisualizationView: View {
     @State private var filters = FieldMapFilters()
     @State private var showFilters = false
 
-    /// Все карты коллекции и выбранная карта (показывается всегда одна).
+    /// Все карты коллекции — показываются одновременно, каждая со своими точками.
     @State private var availablePlayFields: [PlayField] = []
-    @State private var selectedMapId: String? = nil
 
     enum DisplayMode {
         case tags
@@ -41,6 +38,7 @@ struct FieldMapVisualizationView: View {
     }
     
     @State private var displayMode: DisplayMode = .tags
+    @State private var heatMapSettings = HeatMapSettings()
     
     private var sortedStamps: [TimelineStamp] {
         stamps.sorted {
@@ -48,17 +46,28 @@ struct FieldMapVisualizationView: View {
         }
     }
     
+    /// Все показываемые штампы (по видимости и фильтрам), без привязки к конкретной карте.
     private var displayedStamps: [TimelineStamp] {
         stamps.filter { stamp in
-            visibleStampIDs.contains(stamp.id) && filteredStampIDs.contains(stamp.id) && matchesSelectedMap(stamp)
+            visibleStampIDs.contains(stamp.id) && filteredStampIDs.contains(stamp.id)
         }
     }
 
-    /// Штамп относится к выбранной карте. Старые штампы без `mapFieldId` считаются первой картой.
-    private func matchesSelectedMap(_ stamp: TimelineStamp) -> Bool {
-        guard availablePlayFields.count > 1, let selectedMapId else { return true }
-        if let mid = stamp.mapFieldId { return mid == selectedMapId }
-        return availablePlayFields.first?.id == selectedMapId
+    /// Позиция штампа на конкретной карте (по её id). Старые точки без `mapFieldId`
+    /// считаются относящимися к первой карте коллекции (обратная совместимость).
+    /// Один штамп может иметь точки сразу на нескольких картах.
+    private func position(of stamp: TimelineStamp, on field: PlayField) -> CGPoint? {
+        if let p = stamp.position(forFieldId: field.id) { return p }
+        if let first = stamp.mapPositions.first, first.mapFieldId == nil,
+           availablePlayFields.first?.id == field.id {
+            return first.position
+        }
+        return nil
+    }
+
+    /// Штампы, у которых есть точка на данной карте.
+    private func stampsForField(_ field: PlayField) -> [TimelineStamp] {
+        displayedStamps.filter { position(of: $0, on: field) != nil }
     }
     
     var body: some View {
@@ -382,7 +391,7 @@ struct FieldMapVisualizationView: View {
                 
                 Spacer()
                 
-                Text(String(format: ^String.Titles.fieldMapFooterDisplayed, displayedStamps.count, stamps.count))
+                Text(String(format: ^String.Titles.fieldMapFooterDisplayed, displayedStamps.filter { $0.position != nil }.count, stamps.count))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -392,28 +401,17 @@ struct FieldMapVisualizationView: View {
         private var mapContentView: some View {
             VStack {
                 mapHeaderView
-                
+
+                if displayMode == .heatmap {
+                    HeatMapControlsView(settings: $heatMapSettings)
+                }
+
                 mapAreaView
             }
         }
         
         private var mapHeaderView: some View {
             HStack {
-                if availablePlayFields.count > 1 {
-                    Picker("", selection: Binding(
-                        get: { selectedMapId ?? availablePlayFields.first?.id ?? "" },
-                        set: { newValue in
-                            selectedMapId = newValue
-                            loadSelectedMapImage()
-                        }
-                    )) {
-                        ForEach(availablePlayFields, id: \.id) { field in
-                            Text(field.name).tag(field.id)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                    .frame(width: 160)
-                }
                 Spacer()
                 Picker(^String.Titles.displayMode, selection: $displayMode) {
                     Text(^String.Titles.fieldMapViewTags).tag(DisplayMode.tags)
@@ -454,50 +452,87 @@ struct FieldMapVisualizationView: View {
         
         private var mapAreaContent: some View {
             ZStack {
-                if let image = fieldImage {
-                    ZStack(alignment: .center) {
-                        Image(nsImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .overlay(
-                                GeometryReader { geo in
-                                    mapOverlayContent(geo)
-                                }
-                            )
-                    }
-                    .padding()
-                } else {
+                if availablePlayFields.isEmpty {
                     Text(^String.Titles.fieldMapLoading)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            ForEach(availablePlayFields, id: \.id) { field in
+                                mapCard(for: field)
+                            }
+                        }
+                        .padding()
+                    }
                 }
             }
         }
-        
+
+        /// Одна карта коллекции с заголовком, изображением и наложенными точками.
         @ViewBuilder
-        private func mapOverlayContent(_ geo: GeometryProxy) -> some View {
+        private func mapCard(for field: PlayField) -> some View {
+            VStack(spacing: 6) {
+                if availablePlayFields.count > 1 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "map")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                        Text(field.name)
+                            .font(.subheadline.weight(.medium))
+                        Text("(\(stampsForField(field).count))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                }
+
+                if let image = fieldImages[field.id] {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .overlay(
+                            GeometryReader { geo in
+                                mapOverlayContent(for: field, geo: geo)
+                            }
+                        )
+                } else {
+                    Text(^String.Titles.fieldMapLoading)
+                        .frame(maxWidth: .infinity, minHeight: 160)
+                }
+            }
+        }
+
+        @ViewBuilder
+        private func mapOverlayContent(for field: PlayField, geo: GeometryProxy) -> some View {
+            let fieldStamps = stampsForField(field)
+            let dims = (CGFloat(field.width), CGFloat(field.height))
             ZStack {
                 if displayMode == .tags {
-                    mapTagsOverlay(geo)
+                    mapTagsOverlay(for: field, stamps: fieldStamps, geo: geo)
                 } else {
                     HeatMapView(
-                        stamps: displayedStamps.filter { $0.position != nil },
-                        fieldDimensions: (CGFloat(fieldDimensions.width), CGFloat(fieldDimensions.height)),
-                        viewSize: geo.size
+                        points: fieldStamps.compactMap { position(of: $0, on: field) },
+                        fieldDimensions: dims,
+                        viewSize: geo.size,
+                        settings: heatMapSettings
                     )
-                    .opacity(0.7)
+
+                    if heatMapSettings.showsMarkers {
+                        mapTagsOverlay(for: field, stamps: fieldStamps, geo: geo)
+                    }
                 }
             }
         }
-        
-        private func mapTagsOverlay(_ geo: GeometryProxy) -> some View {
-            ForEach(displayedStamps.filter { $0.position != nil }, id: \.id) { stamp in
-                if let position = stamp.position {
+
+        private func mapTagsOverlay(for field: PlayField, stamps: [TimelineStamp], geo: GeometryProxy) -> some View {
+            ForEach(stamps, id: \.id) { stamp in
+                if let position = position(of: stamp, on: field) {
                     let screenPosition = fieldPositionToScreenPosition(
                         position,
-                        fieldDimensions: (CGFloat(fieldDimensions.width), CGFloat(fieldDimensions.height)),
+                        fieldDimensions: (CGFloat(field.width), CGFloat(field.height)),
                         imageSize: geo.size
                     )
-                    
+
                     mapTagMarker(stamp, at: screenPosition)
                 }
             }
@@ -652,66 +687,22 @@ struct FieldMapVisualizationView: View {
     
     private func makeMapCaptureView(id: String) -> NSWindow {
         let captureContent = AnyView(
-            ZStack {
-                if let image = fieldImage {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .overlay(
-                            GeometryReader { geo in
-                                ZStack {
-                                    if displayMode == .tags {
-                                        ForEach(displayedStamps.filter { $0.position != nil }, id: \.id) { stamp in
-                                            if let position = stamp.position {
-                                                let screenPosition = fieldPositionToScreenPosition(
-                                                    position,
-                                                    fieldDimensions: (CGFloat(fieldDimensions.width), CGFloat(fieldDimensions.height)),
-                                                    imageSize: geo.size
-                                                )
-                                                
-                                                ZStack {
-                                                    Circle()
-                                                        .fill(Color(hex: stamp.colorHex))
-                                                        .frame(width: 20, height: 20)
-                                                    
-                                                    if let number = numberedStamps[stamp.id] {
-                                                        Text("\(number)")
-                                                            .font(.system(size: 10, weight: .bold))
-                                                            .foregroundColor(.white)
-                                                    }
-                                                    
-                                                    if selectedStamp?.id == stamp.id {
-                                                        Circle()
-                                                            .stroke(Color.black, lineWidth: 2)
-                                                            .frame(width: 22, height: 22)
-                                                        Circle()
-                                                            .stroke(Color.red, lineWidth: 2)
-                                                            .frame(width: 24, height: 24)
-                                                        Circle()
-                                                            .stroke(Color.black, lineWidth: 2)
-                                                            .frame(width: 26, height: 26)
-                                                    }
-                                                }
-                                                .position(screenPosition)
-                                            }
-                                        }
-                                    } else {
-                                        HeatMapView(
-                                            stamps: displayedStamps.filter { $0.position != nil },
-                                            fieldDimensions: (CGFloat(fieldDimensions.width), CGFloat(fieldDimensions.height)),
-                                            viewSize: geo.size
-                                        )
-                                        .opacity(0.7)
-                                    }
-                                }
-                            }
-                        )
-                } else {
+            Group {
+                if availablePlayFields.isEmpty {
                     Text(^String.Titles.fieldMapNoMap)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            ForEach(availablePlayFields, id: \.id) { field in
+                                mapCard(for: field)
+                            }
+                        }
+                        .padding()
+                    }
                 }
             }
         )
-        
+
         let hostingController = NSHostingController(rootView: captureContent)
         let window = NSWindow(contentViewController: hostingController)
         window.setContentSize(NSSize(width: 1024, height: 768))
@@ -1097,27 +1088,23 @@ struct FieldMapVisualizationView: View {
             return
         }
         availablePlayFields = collectionManager.playFields
-        if selectedMapId == nil || !availablePlayFields.contains(where: { $0.id == selectedMapId }) {
-            selectedMapId = availablePlayFields.first?.id
-        }
-        loadSelectedMapImage()
+        loadAllMapImages()
     }
 
-    private func loadSelectedMapImage() {
-        guard let playField = availablePlayFields.first(where: { $0.id == selectedMapId }) ?? availablePlayFields.first,
-              let imageBookmark = playField.imageBookmark else {
-            return
-        }
-        fieldDimensions = (Int(playField.width), Int(playField.height))
-        do {
-            var isStale = false
-            let url = try URL(resolvingBookmarkData: imageBookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
-            if url.startAccessingSecurityScopedResource() {
-                fieldImage = NSImage(contentsOf: url)
-                url.stopAccessingSecurityScopedResource()
+    /// Загружает изображения всех карт коллекции в кэш `fieldImages`.
+    private func loadAllMapImages() {
+        for field in availablePlayFields {
+            guard fieldImages[field.id] == nil, let imageBookmark = field.imageBookmark else { continue }
+            do {
+                var isStale = false
+                let url = try URL(resolvingBookmarkData: imageBookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
+                if url.startAccessingSecurityScopedResource() {
+                    fieldImages[field.id] = NSImage(contentsOf: url)
+                    url.stopAccessingSecurityScopedResource()
+                }
+            } catch {
+                print(error)
             }
-        } catch {
-            print(error)
         }
     }
     

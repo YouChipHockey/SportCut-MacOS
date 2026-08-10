@@ -606,7 +606,7 @@ struct FieldMapConfigurationView: View {
             if timelineData.lines[lineIndex].id == tag.lineId {
                 for stampIndex in timelineData.lines[lineIndex].stamps.indices {
                     if timelineData.lines[lineIndex].stamps[stampIndex].id == tag.stampId {
-                        timelineData.lines[lineIndex].stamps[stampIndex].position = position
+                        timelineData.lines[lineIndex].stamps[stampIndex].setPrimaryPosition(position)
                         updateLocalTagPosition(tag, position: position)
                         timelineData.updateTimelines()
                         return

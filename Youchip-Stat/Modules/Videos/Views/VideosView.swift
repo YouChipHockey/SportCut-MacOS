@@ -20,6 +20,11 @@ struct VideosView: View {
     @State private var selectedFilter: VideoFilter = .all
     @State private var showImportCollectionSheet = false
     @State private var showDataManagementSheet = false
+    /// Режим выбора проектов для объединения.
+    @State private var isMergeSelectionMode = false
+    /// Id выбранных проектов в порядке выбора — этот порядок и станет порядком склейки.
+    @State private var mergeSelection: [String] = []
+    @State private var showMergeSheet = false
     @StateObject private var importManager = CollectionImportManager()
     
     enum VideoFilter: String, CaseIterable {
@@ -58,10 +63,21 @@ struct VideosView: View {
         return files
     }
     
+    /// Выбранные проекты в порядке выбора.
+    private var mergeSources: [ProjectMergeSource] {
+        mergeSelection.compactMap { id in
+            viewModel.state.files.first(where: { $0.videoData.id == id }).map(ProjectMergeSource.init(file:))
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             headerView
-            
+
+            if isMergeSelectionMode {
+                mergeSelectionBar
+            }
+
             if filteredFiles.isEmpty {
                 emptyStateView
             } else {
@@ -72,128 +88,6 @@ struct VideosView: View {
         .background(Color(NSColor.controlBackgroundColor))
         .navigationTitle(^String.Titles.video)
         .overlay(loadingOverlay)
-        .toolbar(content: {
-            ToolbarItemGroup(placement: .primaryAction) {
-                // Import Project button
-                Button(action: {
-                    viewModel.action.send(.importProject)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.system(size: 14))
-                        Text(^String.Titles.projectImportTitle)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(6)
-                    .shadow(color: .green.opacity(0.3), radius: 2, x: 0, y: 1)
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                // Import Collection button
-                Button(action: {
-                    showImportCollectionSheet = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.system(size: 14))
-                        Text(^String.Titles.importCollection)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.purple, Color.purple.opacity(0.8)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(6)
-                    .shadow(color: .purple.opacity(0.3), radius: 2, x: 0, y: 1)
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                // Collections button
-                Button(action: {
-                    WindowsManager.shared.openCollectionsMenuWindow()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder.fill")
-                            .font(.system(size: 14))
-                        Text(^String.Titles.collectionsMenuButton)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(6)
-                    .shadow(color: .blue.opacity(0.3), radius: 2, x: 0, y: 1)
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                // Settings menu (Guides, License, Data Management)
-                Menu {
-                    Button {
-                        viewModel.action.send(.openGuide)
-                    } label: {
-                        SwiftUI.Label(^String.Titles.videosViewButtonGuides, systemImage: "book")
-                    }
-
-                    Button {
-                        viewModel.action.send(.showAuthSheet)
-                    } label: {
-                        SwiftUI.Label(
-                            viewModel.authManager.isAuthValid ? ^String.Titles.renewLicense : ^String.Titles.buyLicense,
-                            systemImage: viewModel.authManager.isAuthValid ? "checkmark.shield" : "exclamationmark.shield"
-                        )
-                    }
-
-                    Divider()
-
-                    Button {
-                        showDataManagementSheet = true
-                    } label: {
-                        SwiftUI.Label(^String.Titles.dataManagementTitle, systemImage: "externaldrive.fill")
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 14))
-                        Text(^String.Titles.settings)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                    )
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-            }
-        })
         .infoAlert(
             title: ^String.Titles.alertsErrorTitle,
             message: viewModel.state.errorTitle,
@@ -257,6 +151,19 @@ struct VideosView: View {
         .sheet(isPresented: $showDataManagementSheet) {
             DataManagementSheet()
         }
+        .sheet(isPresented: $showMergeSheet) {
+            ProjectMergeView(
+                sources: mergeSources,
+                onFinished: { _ in
+                    showMergeSheet = false
+                    exitMergeSelectionMode()
+                },
+                onCancel: {
+                    showMergeSheet = false
+                }
+            )
+            .environmentObject(viewModel)
+        }
         .alert(^String.Titles.videoUnavailable, isPresented: $viewModel.state.showRebindAlert) {
             Button(^String.Titles.cancelButtonTitle, role: .cancel) {
                 viewModel.state.fileToRebind = nil
@@ -275,13 +182,13 @@ struct VideosView: View {
     }
     
     private var headerView: some View {
-        VStack(spacing: 16) {
-            HStack {
-                HStack {
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
-                        .font(.system(size: 16))
-                    
+                        .font(.system(size: 14))
+
                     TextField(^String.Titles.searchVideos, text: $searchText)
                         .textFieldStyle(PlainTextFieldStyle())
                         .font(.system(size: 14))
@@ -294,123 +201,41 @@ struct VideosView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                 )
-                
-                Button(action: {
-                    viewModel.action.send(.openFiles)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(^String.Titles.addVideoTitle)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(8)
-                    .shadow(color: .blue.opacity(0.3), radius: 2, x: 0, y: 1)
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                Button(action: {
-                    viewModel.action.send(.showDownloadFromURLSheet)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "link")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(^String.Titles.addVideoFromURL)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(8)
-                    .shadow(color: .green.opacity(0.3), radius: 2, x: 0, y: 1)
-                }
-                .buttonStyle(PlainButtonStyle())
 
-                Button(action: {
-                    viewModel.action.send(.showLiveSourceSelection)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "record.circle")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(^String.Titles.recordVideo)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.red)
-                    .cornerRadius(8)
-                    .shadow(color: .red.opacity(0.3), radius: 2, x: 0, y: 1)
-                }
-                .buttonStyle(PlainButtonStyle())
+                addMenu
+                importMenu
+                mergeButton
+                settingsMenu
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
-            
-            HStack {
+
+            HStack(spacing: 8) {
                 ForEach(VideoFilter.allCases, id: \.self) { filter in
                     Button(action: {
                         selectedFilter = filter
                     }) {
                         Text(filter.localizedTitle)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(selectedFilter == filter ? .white : .primary)
-                            .padding(.horizontal, 16)
+                            .foregroundColor(selectedFilter == filter ? .white : .secondary)
+                            .padding(.horizontal, 14)
                             .padding(.vertical, 6)
                             .background(
-                                selectedFilter == filter 
-                                    ? Color.blue 
-                                    : Color(NSColor.controlBackgroundColor)
+                                Capsule().fill(selectedFilter == filter ? Color.accentColor : Color(NSColor.controlBackgroundColor))
                             )
-                            .cornerRadius(6)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(
-                                        selectedFilter == filter 
-                                            ? Color.clear 
-                                            : Color(NSColor.separatorColor), 
-                                        lineWidth: 1
-                                    )
+                                Capsule().stroke(selectedFilter == filter ? Color.clear : Color(NSColor.separatorColor), lineWidth: 1)
                             )
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
-                
+
                 Spacer()
-                
-                HStack(spacing: 4) {
-                    Image(systemName: viewModel.authManager.isAuthValid ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .foregroundColor(viewModel.authManager.isAuthValid ? .green : .orange)
-                        .font(.system(size: 12))
-                    
-                    Text(viewModel.state.limitInfoText)
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(6)
+
+                licenseBadge
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 16)
+            .padding(.bottom, 14)
         }
         .background(Color(NSColor.windowBackgroundColor))
         .overlay(
@@ -418,6 +243,236 @@ struct VideosView: View {
                 .frame(height: 1)
                 .foregroundColor(Color(NSColor.separatorColor)),
             alignment: .bottom
+        )
+    }
+
+    /// Основное акцентное действие — «Добавить» (файл / по ссылке / запись трансляции).
+    private var addMenu: some View {
+        Menu {
+            Button {
+                viewModel.action.send(.openFiles)
+            } label: {
+                SwiftUI.Label(^String.Titles.videosAddFromFile, systemImage: "folder")
+            }
+            Button {
+                viewModel.action.send(.showDownloadFromURLSheet)
+            } label: {
+                SwiftUI.Label(^String.Titles.addVideoFromURL, systemImage: "link")
+            }
+            Button {
+                viewModel.action.send(.showLiveSourceSelection)
+            } label: {
+                SwiftUI.Label(^String.Titles.recordVideo, systemImage: "record.circle")
+            }
+        } label: {
+            primaryHeaderLabel(icon: "plus", text: ^String.Titles.videosAddMenuTitle)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    /// Импорт проекта / коллекции.
+    private var importMenu: some View {
+        Menu {
+            Button {
+                viewModel.action.send(.importProject)
+            } label: {
+                SwiftUI.Label(^String.Titles.projectImportTitle, systemImage: "square.and.arrow.down")
+            }
+            Button {
+                showImportCollectionSheet = true
+            } label: {
+                SwiftUI.Label(^String.Titles.importCollection, systemImage: "tray.and.arrow.down")
+            }
+        } label: {
+            secondaryHeaderLabel(icon: "square.and.arrow.down", text: ^String.Titles.videosImportMenuTitle, showsChevron: true)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    /// Вход в режим выбора проектов для объединения.
+    private var mergeButton: some View {
+        Button(action: {
+            if isMergeSelectionMode {
+                exitMergeSelectionMode()
+            } else {
+                isMergeSelectionMode = true
+            }
+        }) {
+            secondaryHeaderLabel(
+                icon: "arrow.triangle.merge",
+                text: isMergeSelectionMode ? ^String.Titles.mergeProjectsExitSelection : ^String.Titles.mergeProjectsButton
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .help(^String.Titles.mergeProjectsHelp)
+    }
+
+    /// Панель под шапкой: сколько выбрано и кнопка перехода к объединению.
+    private var mergeSelectionBar: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle")
+                .foregroundColor(.accentColor)
+
+            Text(String(format: ^String.Titles.mergeProjectsSelectedCount, mergeSelection.count))
+                .font(.system(size: 13, weight: .medium))
+
+            Text(^String.Titles.mergeProjectsSelectionHint)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Button(^String.Titles.cancelButtonTitle) {
+                exitMergeSelectionMode()
+            }
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.secondary)
+
+            Button(action: { showMergeSheet = true }) {
+                Text(^String.Titles.mergeProjectsStartButton)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(mergeSelection.count >= 2 ? Color.accentColor : Color.gray))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(mergeSelection.count < 2)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Color.accentColor.opacity(0.08))
+    }
+
+    private func toggleMergeSelection(for file: FilesFile) {
+        let id = file.videoData.id
+        if let index = mergeSelection.firstIndex(of: id) {
+            mergeSelection.remove(at: index)
+        } else {
+            mergeSelection.append(id)
+        }
+    }
+
+    private func exitMergeSelectionMode() {
+        isMergeSelectionMode = false
+        mergeSelection.removeAll()
+    }
+
+    private var settingsMenu: some View {
+        Menu {
+            Button {
+                viewModel.action.send(.openGuide)
+            } label: {
+                SwiftUI.Label(^String.Titles.videosViewButtonGuides, systemImage: "book")
+            }
+            Button {
+                viewModel.action.send(.showAuthSheet)
+            } label: {
+                SwiftUI.Label(
+                    viewModel.authManager.isAuthValid ? ^String.Titles.renewLicense : ^String.Titles.buyLicense,
+                    systemImage: viewModel.authManager.isAuthValid ? "checkmark.shield" : "exclamationmark.shield"
+                )
+            }
+            Divider()
+            Button {
+                WindowsManager.shared.openSettingsWindow()
+            } label: {
+                SwiftUI.Label(^String.Titles.settingsMenuItem, systemImage: "slider.horizontal.3")
+            }
+            Button {
+                showDataManagementSheet = true
+            } label: {
+                SwiftUI.Label(^String.Titles.dataManagementTitle, systemImage: "externaldrive.fill")
+            }
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 15))
+                .foregroundColor(.secondary)
+                .frame(width: 34, height: 34)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(^String.Titles.settings)
+    }
+
+    /// Лицензия: если активна — просто «Лицензия активна» (лимитов нет); иначе показываем лимиты
+    /// разметки И режима просмотра (отдельными строками).
+    @ViewBuilder
+    private var licenseBadge: some View {
+        let active = viewModel.authManager.isAuthValid
+        HStack(spacing: 6) {
+            Image(systemName: active ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                .foregroundColor(active ? .green : .orange)
+                .font(.system(size: 12))
+            if active {
+                Text(^String.Titles.licenseActive)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.green)
+            } else {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(viewModel.state.limitInfoText)
+                    if let viewingText = viewModel.state.viewingLimitInfoText {
+                        Text(viewingText)
+                    }
+                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background((active ? Color.green : Color.orange).opacity(0.12))
+        .cornerRadius(20)
+    }
+
+    private func primaryHeaderLabel(icon: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+            Text(text)
+                .font(.system(size: 14, weight: .medium))
+            Image(systemName: "chevron.down")
+                .font(.system(size: 10, weight: .semibold))
+                .opacity(0.85)
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.accentColor)
+        .cornerRadius(8)
+    }
+
+    private func secondaryHeaderLabel(icon: String, text: String, showsChevron: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+            Text(text)
+                .font(.system(size: 14, weight: .medium))
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .opacity(0.6)
+            }
+        }
+        .foregroundColor(.primary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
         )
     }
     
@@ -430,7 +485,13 @@ struct VideosView: View {
                 spacing: 20
             ) {
                 ForEach(filteredFiles, id: \.videoData.id) { file in
-                    VideoThumbnailView(file: file, viewModel: viewModel)
+                    VideoThumbnailView(
+                        file: file,
+                        viewModel: viewModel,
+                        isSelectionMode: isMergeSelectionMode,
+                        selectionOrder: mergeSelection.firstIndex(of: file.videoData.id).map { $0 + 1 },
+                        onToggleSelection: { toggleMergeSelection(for: file) }
+                    )
                 }
             }
             .padding(.horizontal, 20)
@@ -1024,8 +1085,11 @@ struct VideosView: View {
         if panel.runModal() == .OK, let url = panel.url {
             if let importedManager = importManager.importCollection(from: url) {
                 _ = importedManager.saveCollectionToFiles()
+                // Сразу подхватываем импортированную коллекцию в общий пул — иначе она не
+                // открывается из списка до перезапуска (обсервер пулов вешается только редактором).
+                TagLibraryManager.shared.refreshGlobalPools()
                 NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
-                
+
                 showImportCollectionSheet = false
                 importManager.importError = nil
             }

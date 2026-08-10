@@ -62,7 +62,14 @@ class TagLibraryManager: ObservableObject {
             name: .collectionDataChanged,
             object: nil
         )
-        
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppLanguageChanged),
+            name: .appLanguageChanged,
+            object: nil
+        )
+
         allTags = tags
         allTagGroups = tagGroups
         allLabelGroups = labelGroups
@@ -149,16 +156,10 @@ class TagLibraryManager: ObservableObject {
     }
         
     private func getAppCollectionLanguage() -> String {
-        let appLanguage = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
-        if appLanguage.hasPrefix("ru") {
-            return "ru"
-        } else if appLanguage.hasPrefix("uz") {
-            return "ru"
-        } else if appLanguage.hasPrefix("en") {
-            return "en"
-        } else {
-            return "en"
-        }
+        // Учитываем выбор языка в приложении (см. LanguageManager). При отсутствии выбора
+        // возвращается системный язык. Базовые коллекции есть для всех этих языков; если
+        // для языка коллекций нет — сработает фолбэк на "en" в loadBaseCollections().
+        return LanguageManager.shared.effectiveLanguage.rawValue
     }
     
     private func getCollectionFileURL(for resourceName: String, collectionName: String) -> URL? {
@@ -172,23 +173,22 @@ class TagLibraryManager: ObservableObject {
         guard let languageCollectionsData: LanguageCollectionsData = loadJSON(url: namesUrl) else { return }
         
         let currentLanguage = getAppCollectionLanguage()
-        
-        guard let currentLanguageCollection = languageCollectionsData.collections.first(where: { $0.language == currentLanguage }) else {
-            guard let fallbackCollection = languageCollectionsData.collections.first(where: { $0.language == "en" }) else { return }
-            loadCollectionsForNames(fallbackCollection.names)
-            return
-        }
-        
-        loadCollectionsForNames(currentLanguageCollection.names)
+
+        let languageCollection = languageCollectionsData.collections.first(where: { $0.language == currentLanguage })
+            ?? languageCollectionsData.collections.first(where: { $0.language == "en" })
+        guard let languageCollection else { return }
+
+        loadCollections(languageCollection.resolvedItems)
     }
-    
-    private func loadCollectionsForNames(_ names: [String]) {
-        for name in names {
-            let tagsURL = getCollectionFileURL(for: "tags", collectionName: name)
-            let tagsGroupsURL = getCollectionFileURL(for: "tagsGroups", collectionName: name)
-            let labelsGroupsURL = getCollectionFileURL(for: "labelsGroups", collectionName: name)
-            let labelsURL = getCollectionFileURL(for: "labels", collectionName: name)
-            let timeEventsURL = getCollectionFileURL(for: "timeEvents", collectionName: name)
+
+    private func loadCollections(_ items: [LanguageCollectionItem]) {
+        for item in items {
+            let folder = item.folder
+            let tagsURL = getCollectionFileURL(for: "tags", collectionName: folder)
+            let tagsGroupsURL = getCollectionFileURL(for: "tagsGroups", collectionName: folder)
+            let labelsGroupsURL = getCollectionFileURL(for: "labelsGroups", collectionName: folder)
+            let labelsURL = getCollectionFileURL(for: "labels", collectionName: folder)
+            let timeEventsURL = getCollectionFileURL(for: "timeEvents", collectionName: folder)
             
             var tags: [Tag] = []
             var tagGroups: [TagGroup] = []
@@ -226,7 +226,7 @@ class TagLibraryManager: ObservableObject {
                 }
             }
             
-            let displayName = name
+            let displayName = item.name
             let collection = StandardCollection(
                 name: displayName,
                 tags: tags,
@@ -239,6 +239,35 @@ class TagLibraryManager: ObservableObject {
         }
     }
     
+    /// Перезагружает базовые (стандартные) коллекции под текущий язык приложения.
+    /// Если сейчас выбрана стандартная коллекция — переключает на аналогичную (тот же
+    /// вид спорта по индексу) на новом языке. Пользовательские коллекции не трогаем.
+    @objc private func handleAppLanguageChanged() {
+        let work: () -> Void = { [weak self] in
+            guard let self = self else { return }
+
+            var reapplyIndex: Int? = nil
+            if case .standard = self.currentCollectionType,
+               let selected = self.selectedStandardCollectionName,
+               let idx = self.standardCollections.firstIndex(where: { $0.name == selected }) {
+                reapplyIndex = idx
+            }
+
+            self.standardCollections.removeAll()
+            self.loadBaseCollections()
+
+            if let idx = reapplyIndex, idx < self.standardCollections.count {
+                let name = self.standardCollections[idx].name
+                self.applyStandardCollection(named: name)
+                self.selectedStandardCollectionName = name
+                NotificationCenter.default.post(name: .currentCollectionRefreshed, object: nil)
+            }
+
+            self.objectWillChange.send()
+        }
+        if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
+    }
+
     func applyStandardCollection(named name: String) {
         guard let collection = standardCollections.first(where: { $0.name == name }) else { return }
         UserDefaults.standard.set(name, forKey: UserDefaults.Keys.lastSelectedCollection)

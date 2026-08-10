@@ -1,0 +1,110 @@
+{
+  "labelGroups": [
+    {
+      "id": "02d868d7-7d52-4d58-8934-775a96e3e133",
+      "name": "Jarima maydonini nazorat qilish",
+      "lables": [
+        "3c977f1b-8028-4a4a-bbfd-01d56944269a",
+        "61af4bbf-3af6-4ac3-9d28-3cf00aa5026a"
+      ]
+    },
+    {
+      "id": "46a619b3-e6f6-4be9-af06-06dd1c863438",
+      "name": "Uzatmalar",
+      "lables": [
+        "5f718207-106d-4cf1-80dd-29f55652edac",
+        "a8d9309d-e133-4d88-accc-bc566b4b5850",
+        "c9680509-0436-4216-a7be-02af4a9c8bf9",
+        "0267a30f-3d80-4a4c-9c1b-81c153b7fb7e",
+        "172de494-21f4-4cfe-87da-781b6c5a6047",
+        "76dfc6c6-c955-46e9-827a-5aa3b1621285",
+        "8a16fd18-e636-4e10-b171-c298f8925379",
+        "5e786ccd-bd36-4d04-aae4-b2f188da89ac",
+        "a40f8de0-8315-4774-a0d0-79857fbae238",
+        "829d74cf-e265-4bb0-a52d-814da2b5c8a6",
+        "31678510-c24e-4550-893d-4f73a5dd2b1d",
+        "fcd33391-36e7-4d86-93f7-3e8c0f27fc7c"
+      ]
+    },
+    {
+      "id": "836cb0e4-0ffb-4e38-a541-4ff187dd77ff",
+      "name": "Himoya",
+      "lables": [
+        "e1c5ae43-dee7-40dd-9825-5e0320a66a68",
+        "a75c76f7-827b-4236-8674-0ac30853c12a",
+        "8de2581a-be88-4920-8814-5630d3fdb49f",
+        "e8ab68b2-5792-4762-8d41-69ba0279b396",
+        "46ce936d-6cde-4bbf-89ff-aeb41200de88"
+      ]
+    },
+    {
+      "id": "91155e72-1af3-4748-8c94-c0ca8ea9ef0e",
+      "name": "Zarbalarni qaytarish",
+      "lables": [
+        "9c747e70-db58-4af9-8934-76f89d3e71e3",
+        "008ef2e1-dc1f-43e3-8fad-9eeaedceca98",
+        "e16705fd-0158-4f34-bf71-7cc35c587e4d",
+        "03ad29d5-b74c-4937-9a06-eb654b0edb89",
+        "f102fb4a-1387-4ba3-96c7-1e5bd44d8d05",
+        "3f3066a9-1baa-4456-a557-10f66c890851",
+        "00753281-7245-42dd-b913-9b247873b607",
+        "c1d7a07e-a7ca-4f0b-ba1c-2f671ac6343b"
+      ]
+    },
+    {
+      "id": "9aec8014-47dd-4376-b6dd-b81d1d938d21",
+      "name": "Darvozabon uzatmalari",
+      "lables": [
+        "70d6fa28-2f5d-4a12-870e-f1ed91447928",
+        "a5fe155d-ad3c-4b07-80b7-a614dd3e8f56",
+        "05edd08f-ecbc-42a7-87d1-3f71cd9894c3",
+        "d6d24760-8f30-4ec1-a1c8-eef0e1ae3184",
+        "6cde01b7-a14e-43e7-aec1-a67883880da6"
+      ]
+    },
+    {
+      "id": "b3d55d65-26ca-498c-b07a-6e3a22fa30c2",
+      "name": "Hujum",
+      "lables": [
+        "133e0fc8-491e-411a-bd93-095787d66f45",
+        "d2addd12-d8c8-4c4f-abbf-c0fe982f629d",
+        "60c1bf29-082b-421f-92f3-0abe53db2d99",
+        "85bdcfde-ad54-4951-a193-6fa54c55a82a",
+        "932f1e64-04b3-45fd-81ce-973850d4e81d",
+        "3458b032-1ee5-49ba-9aa2-345d3f1be354"
+      ]
+    },
+    {
+      "id": "ba1ebcaf-ebfe-48a8-8a8b-efcdb98beb98",
+      "name": "Standart holatlar",
+      "lables": [
+        "8402ea27-92ba-4d44-8af2-2d0200177ef9",
+        "73967109-7d15-4259-bc6d-469dc1ff7aef",
+        "db9a5b96-3694-48d3-aa62-9037a71751b8"
+      ]
+    },
+    {
+      "id": "c2e2ca17-7fd8-446f-9819-8403ec4ae163",
+      "name": "Oʻtkazib yuborilgan gol",
+      "lables": [
+        "b41481a7-d68b-4bfd-883c-6ab835b56480",
+        "367f1c42-4bb1-4321-bb8e-495e7d3dec02",
+        "fc20e5b3-cd2c-437f-8a25-46ea6bcd960d",
+        "c9db9998-2d78-47bc-8d90-f4be27033ac0",
+        "e7b61e27-a122-4a29-8c2d-8c77d115709f",
+        "27addda0-7eb9-4bbf-95ee-0d70dcf359ba",
+        "82678000-2424-4e7b-a6fc-c9b4fedda81e",
+        "f12e2f9b-0fbc-4a0b-ad69-7ed2a75cc186"
+      ]
+    },
+    {
+      "id": "f3b9ebe6-cfd5-4248-8292-0c950b3b5c1d",
+      "name": "Hujum qurish",
+      "lables": [
+        "c50b96a1-4ae8-41bb-bb4f-36aa7466824f",
+        "dc70d2c1-9e2e-4c9d-af71-213121b7c8c7",
+        "65b5db67-7627-40b5-a984-ebe1008d739b"
+      ]
+    }
+  ]
+}

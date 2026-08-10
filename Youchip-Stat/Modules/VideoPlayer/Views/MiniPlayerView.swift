@@ -111,6 +111,7 @@ struct MiniPlayerView: View {
                     
                     let playerItem = AVPlayerItem(url: outputURL)
                     let queuePlayer = AVQueuePlayer(playerItem: playerItem)
+                    queuePlayer.applyDebugMuteIfNeeded()
                     self.loopingPlayer = queuePlayer
                     self.looper = AVPlayerLooper(player: queuePlayer, templateItem: playerItem)
                     self.player = queuePlayer

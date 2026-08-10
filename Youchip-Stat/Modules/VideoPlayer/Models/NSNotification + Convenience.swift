@@ -42,6 +42,8 @@ extension NSNotification.Name {
     static let takeReviewScreenshot = NSNotification.Name("takeReviewScreenshot")
     /// Обновление videoId в VideoPlayerViewModel после перехода из лайв-режима в обычный.
     static let videoIdDidChange = NSNotification.Name("videoIdDidChange")
+    /// Запись с камеры завершается — открытые интервальные теги нужно закрыть по текущему времени.
+    static let liveRecordingWillStop = NSNotification.Name("liveRecordingWillStop")
     
     // MARK: - Tools Menu Commands (macOS menu bar)
     static let toolsExportMarkupJSONFull = NSNotification.Name("toolsExportMarkupJSONFull")

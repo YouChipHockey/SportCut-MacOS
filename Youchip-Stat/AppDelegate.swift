@@ -17,6 +17,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
     }
+
+    /// Открывает единый экран настроек. Вызывается пунктом главного меню «Настройки…» (⌘,)
+    /// и кнопкой-шестерёнкой в верхней панели.
+    @objc func openSettings() {
+        WindowsManager.shared.openSettingsWindow()
+    }
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         closeAllSheetsAndModals()

@@ -14,9 +14,12 @@ struct FreeTagsCanvasView: View {
     let tags: [Tag]
     let labels: [Label]
     let timeEvents: [TimeEvent]
+    var playFields: [PlayField] = []
     let onTagTap: (Tag) -> Void
     let onLabelTap: ((Label, Bool) -> Void)?
     let onTimeEventTap: ((TimeEvent) -> Void)?
+    /// Клик по зоне карты: id карты + нормализованная точка (0…1). Ставит позицию тегу.
+    var onMapTap: ((_ fieldId: String, _ normalized: CGPoint) -> Void)? = nil
     let activeIntervalTags: [TagLibraryView.ActiveIntervalTag]
     let hoveredTagID: String?
     let tagCounts: [String: Int]
@@ -29,9 +32,25 @@ struct FreeTagsCanvasView: View {
     @State private var fitScale: CGFloat = 1.0
     /// Составной ключ кнопки ("kind:id"), для которой показываются стрелки связок.
     @State private var selectedBindingButtonKey: String? = nil
+    /// Карты, подгруженные самим канвасом — на случай, когда родитель ещё не закешировал их
+    /// (например при открытии проекта): иначе инлайн-карта не рисуется до захода в редактор.
+    @State private var selfLoadedPlayFields: [PlayField] = []
+    // Ручной pan + зум к курсору (вместо ScrollView) — чтобы приближение шло к мыши, а не в угол.
+    @State private var panOffset: CGSize = .zero
+    @State private var hoverInViewport: CGPoint? = nil
+    /// Последний ПОЛЬЗОВАТЕЛЬСКИЙ зум (userScale). Зум-к-курсору реагирует только на него,
+    /// а не на изменения base-fit при ресайзе окна — иначе при первом открытии, когда
+    /// геометрия «доезжает» до реального размера, контент улетал в угол.
+    @State private var lastUserScale: CGFloat = 0
+    @State private var scrollMonitor: Any? = nil
 
     /// Режим показа связок включён (стрелки под или над кнопками).
     private var showBindingsMode: Bool { arrowVisibility != .hidden }
+
+    /// Карты для отрисовки: приоритет — переданные родителем, иначе подгруженные самим канвасом.
+    private var effectivePlayFields: [PlayField] {
+        !playFields.isEmpty ? playFields : selfLoadedPlayFields
+    }
 
     private var currentCollectionId: String? {
         if case .user(let name) = TagLibraryManager.shared.currentCollectionType {
@@ -56,66 +75,72 @@ struct FreeTagsCanvasView: View {
             let canvasWidth = content.width * scale
             let canvasHeight = content.height * scale
 
-            ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .top, spacing: 0) {
-                        ZStack(alignment: .topLeading) {
-                            // В режиме показа связок фон холста снимает выделение по нажатию.
-                            if showBindingsMode {
-                                Color.clear
-                                    .frame(width: canvasWidth, height: canvasHeight)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { selectedBindingButtonKey = nil }
-                                    .zIndex(0)
-                            } else {
-                                Color.clear
-                                    .frame(width: canvasWidth, height: canvasHeight)
-                                    .allowsHitTesting(false)
-                            }
-
-                            ForEach(effectiveLayout.items) { item in
-                                if isVisible(item: item) {
-                                    let viewWidth = item.size.width * scale
-                                    let viewHeight = item.size.height * scale
-                                    let isHighlighted = runtime.highlightModeActive
-                                        && runtime.highlightedButtonIds.contains(item.id)
-
-                                    runtimeItemView(item: item, scale: scale, isHighlighted: isHighlighted)
-                                        .frame(width: viewWidth, height: viewHeight)
-                                        .offset(
-                                            x: (item.center.x - origin.x) * scale - viewWidth / 2,
-                                            y: (item.center.y - origin.y) * scale - viewHeight / 2
-                                        )
-                                        .zIndex(canvasZIndex(for: item, isHighlighted: isHighlighted))
-                                }
-                            }
-
-                            // Стрелки связок выбранной кнопки, без хит-теста.
-                            // Под кнопками (.below) — zIndex ниже кнопок, над (.above) — выше.
-                            if showBindingsMode, let focus = selectedBindingButtonKey {
-                                KeyBindingArrowLinesOverlay(
-                                    layout: effectiveLayout,
-                                    scale: scale,
-                                    origin: origin,
-                                    canvasPixelWidth: canvasWidth,
-                                    canvasPixelHeight: canvasHeight,
-                                    selectedGroupKey: nil,
-                                    focusedSourceKey: focus
-                                )
-                                .zIndex(arrowVisibility == .below ? 1 : 500)
-                            }
-                        }
-                        .frame(width: canvasWidth, height: canvasHeight, alignment: .topLeading)
-
-                        Spacer(minLength: 0)
+            ZStack(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    // В режиме показа связок фон холста снимает выделение по нажатию.
+                    if showBindingsMode {
+                        Color.clear
+                            .frame(width: canvasWidth, height: canvasHeight)
+                            .contentShape(Rectangle())
+                            .onTapGesture { selectedBindingButtonKey = nil }
+                            .zIndex(0)
+                    } else {
+                        Color.clear
+                            .frame(width: canvasWidth, height: canvasHeight)
+                            .allowsHitTesting(false)
                     }
-                    .frame(minWidth: viewportWidth, alignment: .leading)
 
-                    Spacer(minLength: 0)
+                    ForEach(effectiveLayout.items) { item in
+                        if isVisible(item: item) {
+                            let viewWidth = item.size.width * scale
+                            let viewHeight = item.size.height * scale
+                            let isHighlighted = runtime.highlightModeActive
+                                && runtime.highlightedButtonIds.contains(item.id)
+
+                            runtimeItemView(item: item, scale: scale, isHighlighted: isHighlighted)
+                                .frame(width: viewWidth, height: viewHeight)
+                                .offset(
+                                    x: (item.center.x - origin.x) * scale - viewWidth / 2,
+                                    y: (item.center.y - origin.y) * scale - viewHeight / 2
+                                )
+                                .zIndex(canvasZIndex(for: item, isHighlighted: isHighlighted))
+                        }
+                    }
+
+                    // Стрелки связок выбранной кнопки, без хит-теста.
+                    if showBindingsMode, let focus = selectedBindingButtonKey {
+                        KeyBindingArrowLinesOverlay(
+                            layout: effectiveLayout,
+                            scale: scale,
+                            origin: origin,
+                            canvasPixelWidth: canvasWidth,
+                            canvasPixelHeight: canvasHeight,
+                            selectedGroupKey: nil,
+                            focusedSourceKey: focus
+                        )
+                        .zIndex(arrowVisibility == .below ? 1 : 500)
+                    }
                 }
-                .frame(minHeight: availableHeight, alignment: .top)
+                .frame(width: canvasWidth, height: canvasHeight, alignment: .topLeading)
+                .offset(x: panOffset.width, y: panOffset.height)
             }
-            .frame(width: viewportWidth, height: availableHeight)
+            .frame(width: viewportWidth, height: availableHeight, alignment: .topLeading)
+            .clipped()
+            .contentShape(Rectangle())
+            .modifier(CanvasHoverTracker { p in hoverInViewport = p })
+            // Зум к курсору: реагируем ТОЛЬКО на пользовательский зум (пинч/слайдер), т.е. на
+            // userScale. При ресайзе окна меняется base-fit (и `scale`), но пользовательский зум
+            // прежний — тогда контент остаётся прижат к левому верхнему углу, а не улетает в угол.
+            .onChange(of: userScale) { newUserScale in
+                guard lastUserScale > 0 else { lastUserScale = newUserScale; return }
+                let ratio = newUserScale / lastUserScale
+                let pivot = hoverInViewport ?? CGPoint(x: viewportWidth / 2, y: availableHeight / 2)
+                panOffset = CGSize(
+                    width: pivot.x - (pivot.x - panOffset.width) * ratio,
+                    height: pivot.y - (pivot.y - panOffset.height) * ratio
+                )
+                lastUserScale = newUserScale
+            }
             .onAppear {
                 loadLayoutIfNeeded()
                 syncFitScale(
@@ -124,7 +149,12 @@ struct FreeTagsCanvasView: View {
                     availableHeight: availableHeight,
                     layout: effectiveLayout
                 )
+                lastUserScale = userScale
+                // Открываем коллекцию в левом верхнем углу — пользователь сам подвинет/приблизит.
+                panOffset = .zero
+                installScrollMonitor()
             }
+            .onDisappear { removeScrollMonitor() }
             .onChange(of: currentCollectionId) { _ in
                 loadLayoutIfNeeded()
                 selectedBindingButtonKey = nil
@@ -139,6 +169,9 @@ struct FreeTagsCanvasView: View {
                     availableHeight: availableHeight,
                     layout: effectiveLayout
                 )
+                // Новая раскладка/коллекция — показываем от левого верхнего угла.
+                lastUserScale = userScale
+                panOffset = .zero
             }
             .onChange(of: geometry.size.width) { newWidth in
                 captureInitialFitScaleIfNeeded(
@@ -166,9 +199,10 @@ struct FreeTagsCanvasView: View {
             ?? ""
     }
 
-    /// Прямоугольник контента раскладки (с небольшим отступом). Библиотека показывает только его.
+    /// Прямоугольник контента раскладки строго по краям объектов (без лишнего пустого места).
+    /// Библиотека показывает только его: от самого левого до самого правого, от верхнего до нижнего.
     private func contentRect(of layout: TagFreeLayout) -> CGRect {
-        layout.contentRect(padding: 24)
+        layout.contentRect(padding: 0)
             ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight)
     }
 
@@ -242,6 +276,7 @@ struct FreeTagsCanvasView: View {
         case .label: return 30
         case .timeEvent: return 20
         case .tag: return 10
+        case .map: return 1   // карта — фон-зона под кнопками
         }
     }
 
@@ -309,6 +344,22 @@ struct FreeTagsCanvasView: View {
                     }
                 )
             }
+
+        case .map:
+            if let field = effectivePlayFields.first(where: { $0.id == item.elementId }) {
+                FreeMapRuntimeItemView(
+                    field: field,
+                    item: item,
+                    scale: scale,
+                    isHighlighted: isHighlighted,
+                    showBindingsMode: showBindingsMode,
+                    onSelectBinding: { toggleBindingSelection(buttonKey) },
+                    onPick: { normalized in
+                        runtime.applyRevertVisibilityIfNeeded(for: buttonKey)
+                        onMapTap?(field.id, normalized)
+                    }
+                )
+            }
         }
     }
 
@@ -317,19 +368,66 @@ struct FreeTagsCanvasView: View {
         selectedBindingButtonKey = (selectedBindingButtonKey == key) ? nil : key
     }
 
+    /// Панорама холста двухпальцевым скроллом, когда курсор над холстом.
+    private func installScrollMonitor() {
+        guard scrollMonitor == nil else { return }
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            guard hoverInViewport != nil else { return event }
+            panOffset.width += event.scrollingDeltaX
+            panOffset.height += event.scrollingDeltaY
+            return nil
+        }
+    }
+
+    private func removeScrollMonitor() {
+        if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
+    }
+
+    /// Асинхронно подгружает карты текущей коллекции (когда родитель их ещё не передал).
+    private func loadSelfPlayFieldsIfNeeded() {
+        guard case .user(let name) = TagLibraryManager.shared.currentCollectionType else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let manager = CustomCollectionManager()
+            guard manager.loadCollectionFromBookmarks(named: name), !manager.playFields.isEmpty else { return }
+            let fields = manager.playFields
+            DispatchQueue.main.async { selfLoadedPlayFields = fields }
+        }
+    }
+
     // MARK: - Load layout
 
     private func loadLayoutIfNeeded() {
         guard let collectionId = currentCollectionId else { return }
         if let stored = TagFreeLayoutStorage.loadLayoutIfExists(
-            collectionId: collectionId, tags: tags, labels: labels, timeEvents: timeEvents
+            collectionId: collectionId, tags: tags, labels: labels, timeEvents: timeEvents, playFields: playFields
         ) {
             layout = stored
             runtime.configure(layout: stored)
+            // Родитель мог ещё не закешировать карты (при открытии проекта) — подгружаем сами.
+            if playFields.isEmpty, stored.items.contains(where: { $0.kind == .map }) {
+                loadSelfPlayFieldsIfNeeded()
+            }
         } else {
             let def = TagFreeLayoutStorage.makeDefaultLayout(for: tags)
             layout = def
             runtime.configure(layout: def)
+        }
+    }
+}
+
+/// Отслеживает курсор внутри канваса библиотеки (для зума к курсору). macOS 13+; на 12 — no-op.
+private struct CanvasHoverTracker: ViewModifier {
+    let onMove: (CGPoint?) -> Void
+    func body(content: Content) -> some View {
+        if #available(macOS 13.0, *) {
+            content.onContinuousHover(coordinateSpace: .local) { phase in
+                switch phase {
+                case .active(let p): onMove(p)
+                case .ended: onMove(nil)
+                }
+            }
+        } else {
+            content
         }
     }
 }
@@ -345,6 +443,11 @@ private struct FreeTagRuntimeItemView: View {
     let isHighlighted: Bool
     let tagCount: Int
     let onTap: () -> Void
+
+    /// Пульсация включается только для записи интервального тега — чтобы его было
+    /// видно среди множества кнопок. Обычная активность подсвечивается без пульсации.
+    @State private var pulsing = false
+    private var shouldPulse: Bool { isActive && tag.isInterval == true }
 
     var body: some View {
         let s = max(scale, 0.01)
@@ -376,6 +479,21 @@ private struct FreeTagRuntimeItemView: View {
         ZStack {
             TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s)
                 .fill(baseColor)
+                // Фон-картинка кнопки (если задана пользователем).
+                .overlay(
+                    Group {
+                        if let bm = item.backgroundImageBookmark, let img = PlayFieldImageCache.shared.image(forBookmark: bm) {
+                            Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                                .frame(width: item.size.width * s, height: item.size.height * s)
+                                .clipShape(TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s))
+                        }
+                    }
+                )
+                // Синяя подсветка активной (записываемой) кнопки поверх заливки.
+                .overlay(
+                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s)
+                        .fill(Color.accentColor.opacity(isActive ? 0.28 : 0))
+                )
                 .overlay(
                     TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * s)
                         .stroke(strokeCol, style: strokeStyle)
@@ -427,9 +545,33 @@ private struct FreeTagRuntimeItemView: View {
             radius: item.shadowEnabled ? (isHovered || isActive || isHighlighted ? 6 : 3) : 0,
             x: 0, y: item.shadowEnabled ? 2 : 0
         )
+        // Пульсирует сам тег: масштаб + синее свечение (не обводка). Визуал завязан
+        // ТОЛЬКО на `pulsing` — тогда конечная анимация остановки полностью им управляет
+        // и repeatForever гарантированно гасится (иначе тег «дрыгается» после записи).
+        .shadow(
+            color: pulsing ? Color.accentColor.opacity(0.9) : .clear,
+            radius: pulsing ? 14 * s : 0
+        )
+        .scaleEffect(pulsing ? 1.06 : 1.0)
         .rotationEffect(.degrees(item.rotation))
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+        .onAppear { updatePulsing(shouldPulse) }
+        .onChange(of: shouldPulse) { updatePulsing($0) }
+    }
+
+    /// Явно запускает/останавливает пульсацию. Старт — бесконечная анимация,
+    /// стоп — конечная, чтобы repeatForever не «зависал» и тег вернулся в покой.
+    private func updatePulsing(_ active: Bool) {
+        if active {
+            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                pulsing = true
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                pulsing = false
+            }
+        }
     }
 }
 
@@ -546,5 +688,83 @@ private struct FreeTimeEventRuntimeItemView: View {
         .rotationEffect(.degrees(item.rotation))
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+    }
+}
+
+// MARK: - Map runtime item (zone)
+
+/// Карта прямо на холсте: зона-изображение. Клик по точке ставит на карте временну́ю
+/// точку (гаснет за ~3с) и через onPick передаёт нормализованные координаты — как у карты
+/// в отдельном окне, но встроено в раскладку.
+private struct FreeMapRuntimeItemView: View {
+    let field: PlayField
+    let item: TagFreeLayoutItem
+    var scale: CGFloat = 1.0
+    let isHighlighted: Bool
+    let showBindingsMode: Bool
+    let onSelectBinding: () -> Void
+    let onPick: (_ normalized: CGPoint) -> Void
+
+    @State private var pointNormalized: CGPoint? = nil
+    @State private var pointOpacity: Double = 0
+
+    var body: some View {
+        let s = max(scale, 0.01)
+        let cr = item.cornerRadius * s
+        let w = item.size.width * s
+        let h = item.size.height * s
+        let strokeCol: Color = isHighlighted ? .yellow : (item.strokeColor.map { Color(hex: $0) } ?? Color.secondary.opacity(0.4))
+
+        ZStack {
+            Group {
+                if let img = PlayFieldImageCache.shared.image(for: field) {
+                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Color(NSColor.controlBackgroundColor)
+                        .overlay(Image(systemName: "map").font(.system(size: 24 * s)).foregroundColor(.secondary))
+                }
+            }
+            .frame(width: w, height: h)
+            .clipShape(TagFreeShapeView(shape: item.shape, cornerRadius: cr))
+
+            // Временна́я точка на карте — фиксированного размера, чтобы всегда была видна.
+            if let p = pointNormalized {
+                let dot: CGFloat = 26
+                ZStack {
+                    Circle().fill(Color.red).frame(width: dot, height: dot)
+                    Circle().stroke(Color.white, lineWidth: 3).frame(width: dot, height: dot)
+                }
+                .position(x: p.x * w, y: p.y * h)
+                .opacity(pointOpacity)
+                .allowsHitTesting(false)
+            }
+        }
+        .frame(width: w, height: h)
+        .overlay(
+            TagFreeShapeView(shape: item.shape, cornerRadius: cr)
+                .stroke(strokeCol, lineWidth: (isHighlighted ? 2.5 : item.strokeWidth) * s)
+        )
+        .rotationEffect(.degrees(item.rotation))
+        .contentShape(Rectangle())
+        // Клик по зоне: важно КУДА нажали, а не сам факт.
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onEnded { value in
+                    if showBindingsMode { onSelectBinding(); return }
+                    guard w > 0, h > 0,
+                          value.location.x >= 0, value.location.x <= w,
+                          value.location.y >= 0, value.location.y <= h else { return }
+                    let norm = CGPoint(x: value.location.x / w, y: value.location.y / h)
+                    showTransientPoint(norm)
+                    onPick(norm)
+                }
+        )
+    }
+
+    private func showTransientPoint(_ norm: CGPoint) {
+        pointNormalized = norm
+        withAnimation(.easeIn(duration: 0.1)) { pointOpacity = 1 }
+        // Держим ~3 секунды, затем плавно гасим.
+        withAnimation(.easeOut(duration: 0.6).delay(2.4)) { pointOpacity = 0 }
     }
 }

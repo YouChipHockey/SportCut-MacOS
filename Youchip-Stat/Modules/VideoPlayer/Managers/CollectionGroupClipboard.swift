@@ -2,51 +2,62 @@
 //  CollectionGroupClipboard.swift
 //  Youchip-Stat
 //
-//  Buffer for copying a tag/label group (with its contents) between collections.
+//  Buffer for copying tag/label groups (with their contents) between collections.
 //
 
 import Foundation
 import Combine
 
-/// Holds a group copied from one collection so it can be pasted into another.
+/// Holds groups copied from one collection so they can be pasted into another.
 ///
 /// Each collection editor owns its own `CustomCollectionManager`, so the buffer has to
 /// live outside of it: the user copies in one collection, closes it, opens another and
-/// pastes there.
+/// pastes there. Поддерживает копирование нескольких групп одновременно.
 final class CollectionGroupClipboard: ObservableObject {
 
     static let shared = CollectionGroupClipboard()
 
-    enum Item {
-        case tagGroup(group: TagGroup, tags: [Tag])
-        case labelGroup(group: LabelGroupData, labels: [Label])
-    }
+    struct TagGroupItem { let group: TagGroup; let tags: [Tag] }
+    struct LabelGroupItem { let group: LabelGroupData; let labels: [Label] }
 
-    @Published private(set) var item: Item?
+    /// Скопированные группы тегов (несколько сразу). Буфер держит либо теги, либо лейблы.
+    @Published private(set) var tagGroups: [TagGroupItem] = []
+    @Published private(set) var labelGroups: [LabelGroupItem] = []
 
     private init() {}
 
+    // MARK: - Копирование
+
     func copy(tagGroup: TagGroup, tags: [Tag]) {
-        item = .tagGroup(group: tagGroup, tags: tags)
+        copy(tagGroups: [(tagGroup, tags)])
+    }
+
+    func copy(tagGroups groups: [(group: TagGroup, tags: [Tag])]) {
+        self.tagGroups = groups.map { TagGroupItem(group: $0.group, tags: $0.tags) }
+        self.labelGroups = []
     }
 
     func copy(labelGroup: LabelGroupData, labels: [Label]) {
-        item = .labelGroup(group: labelGroup, labels: labels)
+        copy(labelGroups: [(labelGroup, labels)])
+    }
+
+    func copy(labelGroups groups: [(group: LabelGroupData, labels: [Label])]) {
+        self.labelGroups = groups.map { LabelGroupItem(group: $0.group, labels: $0.labels) }
+        self.tagGroups = []
     }
 
     func clear() {
-        item = nil
+        tagGroups = []
+        labelGroups = []
     }
 
-    /// Non-nil only when the buffer holds a tag group.
-    var tagGroupPayload: (group: TagGroup, tags: [Tag])? {
-        if case let .tagGroup(group, tags) = item { return (group, tags) }
-        return nil
-    }
+    // MARK: - Состояние (для UI/подсветки)
 
-    /// Non-nil only when the buffer holds a label group.
-    var labelGroupPayload: (group: LabelGroupData, labels: [Label])? {
-        if case let .labelGroup(group, labels) = item { return (group, labels) }
-        return nil
-    }
+    var hasTagGroups: Bool { !tagGroups.isEmpty }
+    var hasLabelGroups: Bool { !labelGroups.isEmpty }
+
+    /// Id скопированных групп тегов — для подсветки в редакторе.
+    var copiedTagGroupIDs: Set<String> { Set(tagGroups.map { $0.group.id }) }
+    /// Id скопированных групп лейблов — для подсветки в редакторе.
+    var copiedLabelGroupIDs: Set<String> { Set(labelGroups.map { $0.group.id }) }
 }

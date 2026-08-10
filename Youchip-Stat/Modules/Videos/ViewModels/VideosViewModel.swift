@@ -27,9 +27,6 @@ class VideosViewModel: ObservableObject {
     private let projectExportManager = ProjectExportManager.shared
     private let downloadManager = VideoDownloadManager.shared
     
-    private let maxFreeVideos = 3
-    private let addedVideosCountKey = "added_videos_count"
-    
     @Published var authManager = AuthManager()
     
     init() {
@@ -45,7 +42,17 @@ class VideosViewModel: ObservableObject {
                 self?.handleAction(action)
             }
             .store(in: &observables)
-        
+
+        // Лимиты (в т.ч. просмотра) могут меняться из других модулей — обновляем бейдж.
+        LicenseLimitsManager.shared.$addedViewingSessionsCount
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateLimitInfo() }
+            .store(in: &observables)
+        LicenseLimitsManager.shared.$addedVideosCount
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateLimitInfo() }
+            .store(in: &observables)
+
         updateLimitInfo()
     }
     
@@ -54,9 +61,8 @@ class VideosViewModel: ObservableObject {
     }
     
     private func updateLimitInfo() {
-        let addedVideosCount = UserDefaults.standard.integer(forKey: addedVideosCountKey)
-        let remainingVideos = max(0, maxFreeVideos - addedVideosCount)
-        
+        let limits = LicenseLimitsManager.shared
+
         if authManager.isAuthValid {
             if let deadlineString = UserDefaults.standard.string(forKey: "auth_deadline"),
                let deadline = formatAuthDate(deadlineString) {
@@ -65,8 +71,12 @@ class VideosViewModel: ObservableObject {
                 state.limitInfoText = ^String.Titles.subscriptionActive
             }
         } else {
-            state.limitInfoText = String(format: ^String.Titles.videoUploadLimit, remainingVideos, maxFreeVideos)
+            state.limitInfoText = String(format: ^String.Titles.videoUploadLimit, limits.remainingMarkupVideos, limits.maxFreeVideos)
         }
+        // Лимит режима просмотра показываем отдельной строкой в бейдже (только без активной лицензии).
+        state.viewingLimitInfoText = authManager.isAuthValid
+            ? nil
+            : String(format: ^String.Titles.viewingSessionsLimit, limits.remainingViewingSessions, limits.maxFreeViewingSessions)
     }
     
     private func formatAuthDate(_ dateString: String) -> String? {
@@ -83,20 +93,51 @@ class VideosViewModel: ObservableObject {
     }
     
     private func canAddMoreVideos() -> Bool {
-        if authManager.isAuthValid {
-            return true
-        } else {
-            let addedVideosCount = UserDefaults.standard.integer(forKey: addedVideosCountKey)
-            return addedVideosCount < maxFreeVideos
-        }
+        LicenseLimitsManager.shared.canAddMarkupVideo
     }
-    
+
     private func incrementAddedVideosCount() {
-        let currentCount = UserDefaults.standard.integer(forKey: addedVideosCountKey)
-        UserDefaults.standard.set(currentCount + 1, forKey: addedVideosCountKey)
+        LicenseLimitsManager.shared.consumeMarkupVideoIfNeeded()
         updateLimitInfo()
     }
     
+    /// Объединяет выбранные проекты в новый: склеивает видео и сдвигает разметку.
+    func mergeProjects(
+        sources: [ProjectMergeSource],
+        options: ProjectMergeOptions,
+        outputURL: URL,
+        completion: @escaping (Result<FilesFile, Error>) -> Void
+    ) {
+        if !canAddMoreVideos() {
+            completion(.failure(NSError(
+                domain: "ProjectMerge",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: ^String.Titles.videoUploadLimitReached]
+            )))
+            return
+        }
+
+        ProjectMergeManager.shared.merge(sources: sources, options: options, outputURL: outputURL) { [weak self] result in
+            guard let self else { return }
+
+            if case .success(let file) = result {
+                if !self.authManager.isAuthValid {
+                    self.incrementAddedVideosCount()
+                }
+                if let url = file.url {
+                    self.filesPreviewManager.saveThumbnail(for: url) {
+                        DispatchQueue.main.async {
+                            self.action.send(.refreshFiles)
+                        }
+                    }
+                }
+                self.action.send(.refreshFiles)
+            }
+
+            completion(result)
+        }
+    }
+
     private func openFiles() {
         if !canAddMoreVideos() {
             action.send(.showError(error: ^String.Titles.videoUploadLimitReached))
@@ -371,6 +412,10 @@ class VideosViewModel: ObservableObject {
                 // Append mode: skip metadata sheet, open directly with existing project.
                 state.appendVideoFile = nil
                 state.isLiveSessionConfigured = false
+                // Дозапись видео считается как -1 лимит (как новое видео) при неактивной лицензии.
+                if !authManager.isAuthValid {
+                    incrementAddedVideosCount()
+                }
                 WindowsManager.shared.openLiveVideoAppending(file: appendFile)
             } else {
                 // New session: always show metadata sheet; carry the optional preloaded URL.
@@ -400,6 +445,11 @@ class VideosViewModel: ObservableObject {
         case .appendToVideo(let file):
             if file.isBroken {
                 self.action.send(.showError(error: ^String.Titles.videoUnavailable))
+                return
+            }
+            // Дозапись — тоже расход лимита: блокируем, если лимит исчерпан и лицензия неактивна.
+            if !canAddMoreVideos() {
+                self.action.send(.showError(error: ^String.Titles.videoUploadLimitReached))
                 return
             }
             state.appendVideoFile = file

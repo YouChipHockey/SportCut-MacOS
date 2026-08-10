@@ -70,7 +70,7 @@ class VideoPlayerManager: ObservableObject {
         isLiveMode = false
         isBroadcastActive = false
         isSeeking = false
-        player = AVPlayer(url: url)
+        player = AVPlayer(url: url).applyDebugMuteIfNeeded()
         player?.play()
         startTimeObserver()
         observePlayerState()
@@ -257,7 +257,7 @@ class VideoPlayerManager: ObservableObject {
                                 self.setupReviewTimeObserver(for: pending)
                                 
                                 self.reviewPlayer?.pause()
-                                pending.isMuted = false
+                                pending.isMuted = AppConfig.isDebug
                                 self.reviewPlayer = pending
                                 self.pendingReviewPlayer = nil
                                 if wasPlaying {

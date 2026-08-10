@@ -16,6 +16,7 @@ struct ViewerTableView: View {
     
     @State private var selectedStamps: Set<UUID> = []
     @State private var isShiftPressed: Bool = false
+    @State private var shiftMonitor: Any? = nil
     
     private var filteredStamps: [TimelineStampWithLine] {
         let filteredLines: [TimelineLine] = timelineData.lines.compactMap { line in
@@ -148,20 +149,29 @@ struct ViewerTableView: View {
         .onAppear {
             setupShiftKeyMonitoring()
         }
+        .onDisappear {
+            if let monitor = shiftMonitor {
+                NSEvent.removeMonitor(monitor)
+                shiftMonitor = nil
+            }
+        }
     }
-    
+
     private func setupShiftKeyMonitoring() {
-        NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
+        // Идемпотентно и с хранением ссылки: иначе каждый показ таблицы добавлял новый
+        // .flagsChanged-монитор навсегда (утечка) — мониторы копились и «затупливали» ввод.
+        guard shiftMonitor == nil else { return }
+        shiftMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
             let shiftPressed = event.modifierFlags.contains(.shift)
-            
+
             if self.isShiftPressed != shiftPressed {
                 self.isShiftPressed = shiftPressed
-                
+
                 if !shiftPressed {
                     self.selectedStamps.removeAll()
                 }
             }
-            
+
             return event
         }
     }

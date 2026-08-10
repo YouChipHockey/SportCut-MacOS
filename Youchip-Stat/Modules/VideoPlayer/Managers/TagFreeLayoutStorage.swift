@@ -30,7 +30,8 @@ struct TagFreeLayoutStorage {
         collectionId: String,
         tags: [Tag],
         labels: [Label] = [],
-        timeEvents: [TimeEvent] = []
+        timeEvents: [TimeEvent] = [],
+        playFields: [PlayField] = []
     ) -> TagFreeLayout? {
         let url = layoutFileURL(forCollectionId: collectionId)
         guard FileManager.default.fileExists(atPath: url.path),
@@ -38,7 +39,7 @@ struct TagFreeLayoutStorage {
               let decoded = try? JSONDecoder().decode(TagFreeLayout.self, from: data) else {
             return nil
         }
-        return normalizeLayout(decoded, tags: tags, labels: labels, timeEvents: timeEvents)
+        return normalizeLayout(decoded, tags: tags, labels: labels, timeEvents: timeEvents, playFields: playFields)
     }
 
     /// Сохранить раскладку для коллекции.
@@ -87,6 +88,8 @@ struct TagFreeLayoutStorage {
         }
 
         let canvasHeight = max(verticalSpacing + CGFloat(row + 1) * (itemHeight + verticalSpacing), 800)
+        // Простор вокруг кнопок в редакторе даёт infiniteMargin, а не размер холста —
+        // поэтому canvasWidth/Height оставляем компактными (их использует и выравнивание по центру).
         return TagFreeLayout(canvasWidth: canvasWidth, canvasHeight: canvasHeight, items: items)
     }
 
@@ -101,11 +104,13 @@ struct TagFreeLayoutStorage {
         _ layout: TagFreeLayout,
         tags: [Tag],
         labels: [Label] = [],
-        timeEvents: [TimeEvent] = []
+        timeEvents: [TimeEvent] = [],
+        playFields: [PlayField] = []
     ) -> TagFreeLayout {
         let existingTagIds = Set(tags.map { $0.id })
         let existingLabelIds = Set(labels.map { $0.id })
         let existingTimeEventIds = Set(timeEvents.map { $0.id })
+        let existingPlayFieldIds = Set(playFields.map { $0.id })
 
         // Filter items: keep tags that still exist and labels that still exist
         var filteredItems = layout.items.filter { item in
@@ -113,6 +118,9 @@ struct TagFreeLayoutStorage {
             case .tag:       return existingTagIds.contains(item.elementId)
             case .label:     return existingLabelIds.contains(item.elementId)
             case .timeEvent: return existingTimeEventIds.contains(item.elementId)
+            // Карты не выкидываем, пока список карт не загружен (иначе на переключениях
+            // экранов карта пропадала из-за временно пустого playFields).
+            case .map:       return existingPlayFieldIds.isEmpty ? true : existingPlayFieldIds.contains(item.elementId)
             }
         }
 
@@ -197,6 +205,38 @@ struct TagFreeLayoutStorage {
             fontWeight: .medium,
             showLabel: true,
             cornerRadius: 8
+        )
+        layout.items.append(newItem)
+    }
+
+    /// Кладёт карту (PlayField) на холст как зону-изображение. Размер — по РЕАЛЬНЫМ пропорциям
+    /// картинки (field.width/height — плейсхолдеры), пропорции блокируем, чтобы зона = картинке.
+    static func addMapToLayout(_ layout: inout TagFreeLayout, field: PlayField) {
+        guard !layout.items.contains(where: { $0.elementId == field.id && $0.kind == .map }) else { return }
+        let maxY = layout.items.map { $0.center.y + $0.size.height / 2 }.max() ?? 100
+        let baseWidth: CGFloat = 360
+        // Пропорции берём из самого изображения; иначе — по field, иначе 0.6.
+        let aspect: CGFloat = {
+            if let img = PlayFieldImageCache.shared.image(for: field), img.size.width > 0 {
+                return img.size.height / img.size.width
+            }
+            return field.width > 0 ? CGFloat(field.height / field.width) : 0.6
+        }()
+        let size = CGSize(width: baseWidth, height: max(80, baseWidth * aspect))
+        let newItem = TagFreeLayoutItem(
+            elementId: field.id,
+            kind: .map,
+            center: CGPoint(x: layout.canvasWidth / 2, y: maxY + 80 + size.height / 2),
+            size: size,
+            rotation: 0,
+            shape: .square,
+            fillOpacity: 1.0,
+            strokeWidth: 1.0,
+            fontSize: 12,
+            fontWeight: .medium,
+            showLabel: false,
+            cornerRadius: 6,
+            aspectRatioLocked: true
         )
         layout.items.append(newItem)
     }

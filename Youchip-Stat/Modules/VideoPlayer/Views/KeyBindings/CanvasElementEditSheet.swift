@@ -92,6 +92,24 @@ struct CanvasElementEditSheet: View {
             labelForm
         case .timeEvent:
             eventForm
+        case .map:
+            mapForm
+        }
+    }
+
+    private var mapForm: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(collectionManager.playFields.first(where: { $0.id == target.elementId })?.name ?? target.elementId)
+                        .font(.headline)
+                    Text(^String.Titles.keyBindingsMapZoneHint)
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                .padding(24)
+            }
+            Divider()
+            saveCancelBar { }
         }
     }
 

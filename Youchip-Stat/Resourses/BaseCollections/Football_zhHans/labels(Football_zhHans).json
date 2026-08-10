@@ -1,0 +1,264 @@
+{
+  "labels": [
+    {
+      "id": "133e0fc8-491e-411a-bd93-095787d66f45",
+      "name": "头球",
+      "description": ""
+    },
+    {
+      "id": "d2addd12-d8c8-4c4f-abbf-c0fe982f629d",
+      "name": "运动战进攻",
+      "description": ""
+    },
+    {
+      "id": "60c1bf29-082b-421f-92f3-0abe53db2d99",
+      "name": "定位球进球",
+      "description": ""
+    },
+    {
+      "id": "85bdcfde-ad54-4951-a193-6fa54c55a82a",
+      "name": "远程进攻",
+      "description": ""
+    },
+    {
+      "id": "932f1e64-04b3-45fd-81ce-973850d4e81d",
+      "name": "任意球进攻",
+      "description": ""
+    },
+    {
+      "id": "3458b032-1ee5-49ba-9aa2-345d3f1be354",
+      "name": "界外球发动",
+      "description": ""
+    },
+    {
+      "id": "70d6fa28-2f5d-4a12-870e-f1ed91447928",
+      "name": "成功",
+      "description": ""
+    },
+    {
+      "id": "a5fe155d-ad3c-4b07-80b7-a614dd3e8f56",
+      "name": "失败",
+      "description": ""
+    },
+    {
+      "id": "05edd08f-ecbc-42a7-87d1-3f71cd9894c3",
+      "name": "受压",
+      "description": ""
+    },
+    {
+      "id": "d6d24760-8f30-4ec1-a1c8-eef0e1ae3184",
+      "name": "向边路",
+      "description": ""
+    },
+    {
+      "id": "6cde01b7-a14e-43e7-aec1-a67883880da6",
+      "name": "界外球",
+      "description": ""
+    },
+    {
+      "id": "3c977f1b-8028-4a4a-bbfd-01d56944269a",
+      "name": "成功",
+      "description": ""
+    },
+    {
+      "id": "61af4bbf-3af6-4ac3-9d28-3cf00aa5026a",
+      "name": "失败",
+      "description": ""
+    },
+    {
+      "id": "b41481a7-d68b-4bfd-883c-6ab835b56480",
+      "name": "远距离",
+      "description": ""
+    },
+    {
+      "id": "367f1c42-4bb1-4321-bb8e-495e7d3dec02",
+      "name": "任意球",
+      "description": ""
+    },
+    {
+      "id": "fc20e5b3-cd2c-437f-8a25-46ea6bcd960d",
+      "name": "定位球之后",
+      "description": ""
+    },
+    {
+      "id": "c9db9998-2d78-47bc-8d90-f4be27033ac0",
+      "name": "失误",
+      "description": ""
+    },
+    {
+      "id": "e7b61e27-a122-4a29-8c2d-8c77d115709f",
+      "name": "打近角",
+      "description": ""
+    },
+    {
+      "id": "27addda0-7eb9-4bbf-95ee-0d70dcf359ba",
+      "name": "打远门柱",
+      "description": ""
+    },
+    {
+      "id": "82678000-2424-4e7b-a6fc-c9b4fedda81e",
+      "name": "折射",
+      "description": ""
+    },
+    {
+      "id": "f12e2f9b-0fbc-4a0b-ad69-7ed2a75cc186",
+      "name": "一对一",
+      "description": ""
+    },
+    {
+      "id": "9c747e70-db58-4af9-8934-76f89d3e71e3",
+      "name": "成功",
+      "description": ""
+    },
+    {
+      "id": "008ef2e1-dc1f-43e3-8fad-9eeaedceca98",
+      "name": "远门柱",
+      "description": ""
+    },
+    {
+      "id": "e16705fd-0158-4f34-bf71-7cc35c587e4d",
+      "name": "近角",
+      "description": ""
+    },
+    {
+      "id": "03ad29d5-b74c-4937-9a06-eb654b0edb89",
+      "name": "折射",
+      "description": ""
+    },
+    {
+      "id": "f102fb4a-1387-4ba3-96c7-1e5bd44d8d05",
+      "name": "定位球之后",
+      "description": ""
+    },
+    {
+      "id": "3f3066a9-1baa-4456-a557-10f66c890851",
+      "name": "远距离",
+      "description": ""
+    },
+    {
+      "id": "00753281-7245-42dd-b913-9b247873b607",
+      "name": "任意球区域",
+      "description": ""
+    },
+    {
+      "id": "c1d7a07e-a7ca-4f0b-ba1c-2f671ac6343b",
+      "name": "一对一",
+      "description": ""
+    },
+    {
+      "id": "8402ea27-92ba-4d44-8af2-2d0200177ef9",
+      "name": "组织进攻",
+      "description": ""
+    },
+    {
+      "id": "73967109-7d15-4259-bc6d-469dc1ff7aef",
+      "name": "传中",
+      "description": ""
+    },
+    {
+      "id": "db9a5b96-3694-48d3-aa62-9037a71751b8",
+      "name": "射门",
+      "description": ""
+    },
+    {
+      "id": "c50b96a1-4ae8-41bb-bb4f-36aa7466824f",
+      "name": "摆脱逼抢",
+      "description": ""
+    },
+    {
+      "id": "dc70d2c1-9e2e-4c9d-af71-213121b7c8c7",
+      "name": "丢球",
+      "description": ""
+    },
+    {
+      "id": "65b5db67-7627-40b5-a984-ebe1008d739b",
+      "name": "向前长传",
+      "description": ""
+    },
+    {
+      "id": "e1c5ae43-dee7-40dd-9825-5e0320a66a68",
+      "name": "防守三区",
+      "description": ""
+    },
+    {
+      "id": "a75c76f7-827b-4236-8674-0ac30853c12a",
+      "name": "中路",
+      "description": ""
+    },
+    {
+      "id": "8de2581a-be88-4920-8814-5630d3fdb49f",
+      "name": "进攻三区",
+      "description": ""
+    },
+    {
+      "id": "e8ab68b2-5792-4762-8d41-69ba0279b396",
+      "name": "边路",
+      "description": ""
+    },
+    {
+      "id": "46ce936d-6cde-4bbf-89ff-aeb41200de88",
+      "name": "任意球区域内",
+      "description": ""
+    },
+    {
+      "id": "5f718207-106d-4cf1-80dd-29f55652edac",
+      "name": "回传",
+      "description": ""
+    },
+    {
+      "id": "a8d9309d-e133-4d88-accc-bc566b4b5850",
+      "name": "前传",
+      "description": ""
+    },
+    {
+      "id": "c9680509-0436-4216-a7be-02af4a9c8bf9",
+      "name": "最后三区",
+      "description": ""
+    },
+    {
+      "id": "0267a30f-3d80-4a4c-9c1b-81c153b7fb7e",
+      "name": "进入任意球区域",
+      "description": ""
+    },
+    {
+      "id": "172de494-21f4-4cfe-87da-781b6c5a6047",
+      "name": "穿透性",
+      "description": ""
+    },
+    {
+      "id": "76dfc6c6-c955-46e9-827a-5aa3b1621285",
+      "name": "打身后",
+      "description": ""
+    },
+    {
+      "id": "8a16fd18-e636-4e10-b171-c298f8925379",
+      "name": "威胁传球",
+      "description": ""
+    },
+    {
+      "id": "5e786ccd-bd36-4d04-aae4-b2f188da89ac",
+      "name": "传中",
+      "description": ""
+    },
+    {
+      "id": "a40f8de0-8315-4774-a0d0-79857fbae238",
+      "name": "高传中",
+      "description": ""
+    },
+    {
+      "id": "829d74cf-e265-4bb0-a52d-814da2b5c8a6",
+      "name": "低传中",
+      "description": ""
+    },
+    {
+      "id": "31678510-c24e-4550-893d-4f73a5dd2b1d",
+      "name": "长传",
+      "description": ""
+    },
+    {
+      "id": "fcd33391-36e7-4d86-93f7-3e8c0f27fc7c",
+      "name": "定位球发动",
+      "description": ""
+    }
+  ]
+}

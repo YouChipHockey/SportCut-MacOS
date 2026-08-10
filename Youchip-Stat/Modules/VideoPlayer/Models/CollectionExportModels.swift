@@ -45,11 +45,32 @@ struct SportcutCollectionExport: Codable {
                 collectionId: collectionManager.collectionID,
                 tags: collectionManager.tags,
                 labels: collectionManager.labels,
-                timeEvents: collectionManager.timeEvents
+                timeEvents: collectionManager.timeEvents,
+                playFields: collectionManager.playFields
             )
         } else {
             self.freeLayout = nil
         }
+    }
+
+    /// Частичный экспорт: заранее отфильтрованные наборы + готовая раскладка.
+    init(collectionName: String,
+         tagGroups: [TagGroup], tags: [Tag],
+         labelGroups: [LabelGroupData], labels: [Label],
+         timeEvents: [TimeEvent], playFields: [PlayField],
+         displayMode: String, freeLayout: TagFreeLayout?) {
+        self.version = "1.1"
+        self.collectionName = collectionName
+        self.exportDate = Date()
+        self.tagGroups = tagGroups
+        self.tags = tags
+        self.labelGroups = labelGroups
+        self.labels = labels
+        self.timeEvents = timeEvents
+        self.playField = playFields.first.map { PlayFieldExport(from: $0) }
+        self.playFields = playFields.isEmpty ? nil : playFields.map { PlayFieldExport(from: $0) }
+        self.tagLibraryDisplayMode = displayMode
+        self.freeLayout = freeLayout
     }
 }
 

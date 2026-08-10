@@ -7,6 +7,7 @@ import SwiftUI
 
 struct SportCutListView: View {
     @ObservedObject var sessionManager = SportCutSessionManager.shared
+    @ObservedObject private var limits = LicenseLimitsManager.shared
     @State private var showCreateSheet = false
     @State private var sessionToDelete: SportCutSession?
     @State private var showDeleteAlert = false
@@ -107,6 +108,22 @@ struct SportCutListView: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 16)
+
+            // Лимит режима просмотра (только без активной лицензии).
+            if !limits.isLicenseActive {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 12))
+                    Text(String(format: ^String.Titles.viewingSessionsLimit,
+                                limits.remainingViewingSessions, limits.maxFreeViewingSessions))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+            }
         }
         .background(Color(NSColor.windowBackgroundColor))
         .overlay(

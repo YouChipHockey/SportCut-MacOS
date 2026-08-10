@@ -37,10 +37,10 @@ struct LiveSourceSelectionView: View {
                 VStack(spacing: 20) {
                     videoSourceSection
                     qualitySection
+                    saveFolderSection
                     if !isAppendMode {
                         preloadedVideoSection
                     }
-                    saveFolderSection
 
                     if let error = errorMessage {
                         errorSection(error)
@@ -52,7 +52,7 @@ struct LiveSourceSelectionView: View {
             
             footerSection
         }
-        .frame(minWidth: 500, maxWidth: 500, minHeight: 480, maxHeight: 620)
+        .frame(minWidth: 500, maxWidth: 500, minHeight: 640, maxHeight: 760)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             liveManager.discoverDevices()

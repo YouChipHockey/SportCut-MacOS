@@ -248,6 +248,11 @@ class ExportHelper: ObservableObject {
         
         var overlayItems: [OverlayItem] = []
         var currentTime = CMTime.zero
+        // «Фильм по рисункам»: у каждого рисунка свой synthetic-тег (id = stamp.idTag), поэтому
+        // нумерация «по эпизодам того же тега» всегда даёт 1. Нумеруем последовательно по порядку
+        // сегментов через playlistIndex.
+        let isDrawingsFilm: Bool = { if case .drawingsTimeline = type { return true }; return false }()
+        var episodeOrdinal = 0
         for segment in segments {
             // Проверяем, что сегмент не равен всему видео (с допуском 0.1 секунды)
             let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
@@ -280,6 +285,7 @@ class ExportHelper: ObservableObject {
                     let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
                         ?? Tag.syntheticDrawingTag(for: segment.stamp)
                     if let tag {
+                        episodeOrdinal += 1
                         let overlayItem = OverlayItem(
                             tag: tag,
                             stamp: segment.stamp,
@@ -287,6 +293,7 @@ class ExportHelper: ObservableObject {
                             start: timeBefore,
                             duration: currentTime - timeBefore,
                             videoSize: videoSize,
+                            playlistIndex: isDrawingsFilm ? episodeOrdinal : nil,
                             watermarkOptions: watermarkOptions
                         )
                         overlayItems.append(overlayItem)
@@ -309,6 +316,7 @@ class ExportHelper: ObservableObject {
             let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
                 ?? Tag.syntheticDrawingTag(for: segment.stamp)
             if let tag {
+                episodeOrdinal += 1
                 let overlayItem = OverlayItem(
                     tag: tag,
                     stamp: segment.stamp,
@@ -316,6 +324,7 @@ class ExportHelper: ObservableObject {
                     start: currentTime - segment.timeRange.duration,
                     duration: segment.timeRange.duration,
                     videoSize: videoSize,
+                    playlistIndex: isDrawingsFilm ? episodeOrdinal : nil,
                     watermarkOptions: watermarkOptions
                 )
                 overlayItems.append(overlayItem)
@@ -418,39 +427,51 @@ class ExportHelper: ObservableObject {
         
         isExportCancelled = false
         var exportedURLs: [URL] = []
-        let group = DispatchGroup()
         var exportError: Error? = nil
-        
+
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
             completion(.failure(NSError(domain: "Export", code: 0, userInfo: [NSLocalizedDescriptionKey: "Video track not found"])))
             return
         }
         let audioTrack = asset.tracks(withMediaType: .audio).first
-        
-        // Получаем длительность видео для валидации сегментов
         let videoDuration = CMTimeGetSeconds(asset.duration)
-        
-        for (index, segment) in segments.enumerated() {
-            // Проверяем, что сегмент не равен всему видео (с допуском 0.1 секунды)
+
+        // Клипы экспортируются ПОСЛЕДОВАТЕЛЬНО. Параллельные AVAssetExportSession (каждая со своим
+        // текстовым оверлеем) на длинном видео с множеством отметок перегружают систему и вешают Mac.
+        func finish() {
+            DispatchQueue.main.async { [weak self] in self?.progress = 1 }
+            if self.exportWasCancelled {
+                completion(.failure(ExportHelper.exportCancelledError))
+            } else if let error = exportError {
+                completion(.failure(error))
+            } else if exportedURLs.isEmpty {
+                completion(.failure(NSError(domain: "Export", code: -3, userInfo: [NSLocalizedDescriptionKey: "No valid segments were exported"])))
+            } else {
+                self.compressFiles(urls: exportedURLs, completion: completion)
+            }
+        }
+
+        func exportNext(_ index: Int) {
+            if isExportCancelled { finish(); return }
+            guard index < segments.count else { finish(); return }
+            let segment = segments[index]
+
+            // Пропускаем сегменты, которые покрывают почти всё видео (более 99% длительности).
             let segmentStart = CMTimeGetSeconds(segment.timeRange.start)
             let segmentDuration = CMTimeGetSeconds(segment.timeRange.duration)
             let segmentEnd = segmentStart + segmentDuration
-            
-            // Пропускаем сегменты, которые покрывают почти всё видео (более 99% длительности)
             if segmentStart < 0.1 && segmentEnd > videoDuration * 0.99 {
-                print("Пропущен сегмент в плейлисте, который равен всему видео: start=\(segmentStart), duration=\(segmentDuration), videoDuration=\(videoDuration)")
-                continue
+                exportNext(index + 1)
+                return
             }
-            
-            group.enter()
-            
+
             let composition = AVMutableComposition()
             guard let compVideoTrack = composition.addMutableTrack(withMediaType: .video,
                                                                    preferredTrackID: kCMPersistentTrackID_Invalid)
             else {
                 exportError = NSError(domain: "Export", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])
-                group.leave()
-                continue
+                exportNext(index + 1)
+                return
             }
             var compAudioTrack: AVMutableCompositionTrack? = nil
             if let aTrack = audioTrack {
@@ -481,8 +502,8 @@ class ExportHelper: ObservableObject {
                         }
                     } catch {
                         exportError = error
-                        group.leave()
-                        continue
+                        exportNext(index + 1)
+                        return
                     }
                 }
             } else {
@@ -494,8 +515,8 @@ class ExportHelper: ObservableObject {
                     }
                 } catch {
                     exportError = error
-                    group.leave()
-                    continue
+                    exportNext(index + 1)
+                    return
                 }
             }
             let fileName: String
@@ -570,39 +591,30 @@ class ExportHelper: ObservableObject {
             }
             
             
-            let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
-            exportSession?.outputURL = clipOutputURL
-            exportSession?.outputFileType = .mp4
-            exportSession?.videoComposition = overlayVideoComposition
-            
-            addExportSession(exportSession)
-            
-            exportSession?.exportAsynchronously { [weak self] in
-                self?.removeExportSession(exportSession)
-                if exportSession?.status == .completed {
-                    exportedURLs.append(clipOutputURL)
-                } else if self?.isExportCancelled != true {
-                    exportError = exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
-                }
-                self?.processSegment(segmentsCount: segments.count)
-                group.leave()
-            }
-        }
-        
-        group.notify(queue: .main) { [weak self] in
-            self?.progress = 1
-            if self?.exportWasCancelled == true {
-                completion(.failure(ExportHelper.exportCancelledError))
+            guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+                exportError = NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not create export session"])
+                exportNext(index + 1)
                 return
             }
-            if let error = exportError {
-                completion(.failure(error))
-            } else if exportedURLs.isEmpty {
-                completion(.failure(NSError(domain: "Export", code: -3, userInfo: [NSLocalizedDescriptionKey: "No valid segments were exported"])))
-            } else {
-                self?.compressFiles(urls: exportedURLs, completion: completion)
+            exportSession.outputURL = clipOutputURL
+            exportSession.outputFileType = .mp4
+            exportSession.videoComposition = overlayVideoComposition
+
+            addExportSession(exportSession)
+
+            exportSession.exportAsynchronously { [weak self] in
+                self?.removeExportSession(exportSession)
+                if exportSession.status == .completed {
+                    exportedURLs.append(clipOutputURL)
+                } else if self?.isExportCancelled != true {
+                    exportError = exportSession.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
+                }
+                self?.processSegment(segmentsCount: segments.count)
+                exportNext(index + 1)
             }
         }
+
+        exportNext(0)
     }
     
     
@@ -1063,6 +1075,12 @@ class ExportHelper: ObservableObject {
                 bgLayer.add(opacity, forKey: "opacity")
                 textLayer.add(opacity.copy() as! CAKeyframeAnimation, forKey: "opacity")
             }
+
+            // Логотип клуба — статично на весь клип, поверх текстового оверлея.
+            if overlayItems.first?.watermarkOptions.showClubLogo == true,
+               let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
+                parentLayer.addSublayer(logoLayer)
+            }
         }
 
         if Thread.isMainThread {
@@ -1070,15 +1088,15 @@ class ExportHelper: ObservableObject {
         } else {
             DispatchQueue.main.sync { buildOverlayLayers() }
         }
-        
+
         videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
             postProcessingAsVideoLayer: videoLayer,
             in: parentLayer
         )
-        
+
         return videoComposition
     }
-    
+
     func videoCompositionWithTextOverlay(
         overlayItem: OverlayItem,
         videoTrack: AVAssetTrack,
@@ -1128,20 +1146,30 @@ class ExportHelper: ObservableObject {
             let minHeight = max(ceil(textRect.height), 20)
             let overlayHeight = min(minHeight + padding * 2, maxOverlayHeight)
 
-            let bgLayer = CALayer()
-            bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
-            bgLayer.frame = CGRect(x: 0, y: 0, width: renderSize.width, height: overlayHeight)
-            parentLayer.addSublayer(bgLayer)
+            // Плашку с текстом рисуем только если текст не пустой — иначе при
+            // экспорте «только логотип» появлялась бы пустая чёрная полоса.
+            if fittedText.length > 0 {
+                let bgLayer = CALayer()
+                bgLayer.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
+                bgLayer.frame = CGRect(x: 0, y: 0, width: renderSize.width, height: overlayHeight)
+                parentLayer.addSublayer(bgLayer)
 
-            let textLayer = CATextLayer()
-            textLayer.string = fittedText
-            textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
-            textLayer.alignmentMode = .left
-            textLayer.isWrapped = true
-            textLayer.truncationMode = .end
-            textLayer.frame = CGRect(x: padding, y: padding, width: textMaxWidth, height: overlayHeight - padding * 2)
-            textLayer.displayIfNeeded()
-            parentLayer.addSublayer(textLayer)
+                let textLayer = CATextLayer()
+                textLayer.string = fittedText
+                textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+                textLayer.alignmentMode = .left
+                textLayer.isWrapped = true
+                textLayer.truncationMode = .end
+                textLayer.frame = CGRect(x: padding, y: padding, width: textMaxWidth, height: overlayHeight - padding * 2)
+                textLayer.displayIfNeeded()
+                parentLayer.addSublayer(textLayer)
+            }
+
+            // Логотип клуба — статично на весь клип, поверх текстового оверлея.
+            if overlayItem.watermarkOptions.showClubLogo,
+               let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
+                parentLayer.addSublayer(logoLayer)
+            }
         }
 
         if Thread.isMainThread {
@@ -1149,15 +1177,15 @@ class ExportHelper: ObservableObject {
         } else {
             DispatchQueue.main.sync { buildLayer() }
         }
-        
+
         videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
             postProcessingAsVideoLayer: videoLayer,
             in: parentLayer
         )
-        
+
         return videoComposition
     }
-    
+
     // MARK: - Screenshot Export Helper Functions
 
     private func getCurrentFile() -> FilesFile? {

@@ -21,6 +21,8 @@ struct VideosState {
     var fileToRename: FilesFile? = nil
     var newFileName: String = ""
     var limitInfoText: String = ""
+    /// Строка лимита режима просмотра для бейджа (nil при активной лицензии).
+    var viewingLimitInfoText: String? = nil
     var showAuthSheet: Bool = false
     var showRebindAlert: Bool = false
     var fileToRebind: FilesFile? = nil    

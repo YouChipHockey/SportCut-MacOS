@@ -15,7 +15,14 @@ import UserNotifications
 class TimelineDataManager: ObservableObject {
     
     static let shared = TimelineDataManager()
-    @Published var lines: [TimelineLine] = []
+    @Published var lines: [TimelineLine] = [] {
+        didSet {
+            // Удалили все таймлайны → чистим историю разметки тегов.
+            if lines.isEmpty && !oldValue.isEmpty {
+                VideoMarkupActivityBanner.shared.clearTagMarkupHistoryForNewVideoSession()
+            }
+        }
+    }
     @Published var selectedLineID: UUID? = nil
     @Published var selectedStampID: UUID? = nil
     /// Последний добавленный на таймлайн штамп (id) — независимо от линии/режима разметки.
@@ -66,11 +73,35 @@ class TimelineDataManager: ObservableObject {
         stampsSelectedForSportCut.removeAll()
     }
     
+    /// cmd-клик по названию таймлайна выделяет все его штампы; повторный клик — снимает выделение (toggle).
     func selectAllSportCutExportStamps(in lineID: UUID) {
         guard let line = lines.first(where: { $0.id == lineID }) else { return }
         let stampIDs = line.stamps.map(\.id)
-        stampsSelectedForSportCut.formUnion(stampIDs)
+        guard !stampIDs.isEmpty else { return }
+        if stampIDs.allSatisfy({ stampsSelectedForSportCut.contains($0) }) {
+            stampsSelectedForSportCut.subtract(stampIDs)
+        } else {
+            stampsSelectedForSportCut.formUnion(stampIDs)
+        }
     }
+    /// Удаляет весь таймлайн (линию) вместе с его записями в истории разметки тегов.
+    /// Записи истории убираем по одному экземпляру на штамп — только для обычных
+    /// линий (в таймлайне рисунков `label` это имя скриншота, а не тег).
+    func removeLine(lineID: UUID) {
+        guard let line = lines.first(where: { $0.id == lineID }) else { return }
+        if !line.isDrawingsTimeline {
+            for stamp in line.stamps {
+                VideoMarkupActivityBanner.shared.removeFromHistory(tagName: stamp.label)
+            }
+        }
+        let wasSelected = (selectedLineID == lineID)
+        lines.removeAll { $0.id == lineID }
+        if wasSelected {
+            selectedLineID = nil
+        }
+        updateTimelines()
+    }
+
     func removeStamp(lineID: UUID, stampID: UUID) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
         
@@ -86,9 +117,15 @@ class TimelineDataManager: ObservableObject {
             }
         }
         
+        let removedLabel = line.stamps.first(where: { $0.id == stampID })?.label
         lines[lineIndex].stamps.removeAll(where: { $0.id == stampID })
         updateTimelines()
-        
+
+        // Удалённый тег убираем и из истории разметки.
+        if let removedLabel, !isDrawingsTimeline {
+            VideoMarkupActivityBanner.shared.removeFromHistory(tagName: removedLabel)
+        }
+
         NotificationCenter.default.post(name: .stampCountsChanged, object: nil)
     }
     
@@ -135,9 +172,9 @@ class TimelineDataManager: ObservableObject {
     
     // MARK: - Merge timelines
 
-    /// Enters the "merge timelines" selection mode (standard markup mode only).
+    /// Enters the "merge timelines" selection mode. Available in both markup modes
+    /// (standard and tag-based): the merged result is a new free-form line.
     func beginMergeSelection() {
-        guard MarkupMode.current == .standard else { return }
         mergeSelectedLineIDs = []
         isMergeSelectionActive = true
     }
@@ -158,37 +195,56 @@ class TimelineDataManager: ObservableObject {
         mergeSelectedLineIDs = []
     }
 
-    /// Merges the selected timelines into a single new timeline: all stamps from the
-    /// selected lines are moved into it (ordered by start time), the source lines are
-    /// removed, and the new line takes the position of the first selected one.
+    /// Merges the selected timelines into a single *new* timeline appended at the end.
+    /// The source lines are kept intact (non-destructive): the merged line receives
+    /// copies of their stamps (fresh ids), ordered by start time. Works in both markup
+    /// modes; the merged line is a free-form line (no `tagIdForMode`).
     func commitMergeSelection() {
-        guard MarkupMode.current == .standard else { cancelMergeSelection(); return }
         let selected = mergeSelectedLineIDs
-        // Keep original on-screen order and find where the merged line should land.
-        let selectedInOrder = lines.enumerated().filter { selected.contains($0.element.id) }
-        guard let insertIndex = selectedInOrder.first?.offset, !selectedInOrder.isEmpty else {
+        // Keep original on-screen order for a stable merged name.
+        let selectedInOrder = lines.filter { selected.contains($0.id) }
+        guard !selectedInOrder.isEmpty else {
             cancelMergeSelection()
             return
         }
 
         var mergedStamps: [TimelineStamp] = []
-        for (_, line) in selectedInOrder {
-            mergedStamps.append(contentsOf: line.stamps)
+        for line in selectedInOrder {
+            for stamp in line.stamps {
+                mergedStamps.append(copyStamp(stamp))
+            }
         }
         mergedStamps.sort { $0.timeStartSeconds < $1.timeStartSeconds }
 
-        let mergedName = selectedInOrder.map { $0.element.name }.joined(separator: " + ")
+        let mergedName = selectedInOrder.map { $0.name }.joined(separator: " + ")
         var newLine = TimelineLine(name: mergedName)
         newLine.stamps = mergedStamps
 
-        lines.removeAll { selected.contains($0.id) }
-        let clampedIndex = min(insertIndex, lines.count)
-        lines.insert(newLine, at: clampedIndex)
+        // Originals stay put; the merged timeline is added as a new, separate row at the end.
+        lines.append(newLine)
         selectedLineID = newLine.id
 
         isMergeSelectionActive = false
         mergeSelectedLineIDs = []
         updateTimelines()
+    }
+
+    /// Deep-copies a stamp with a fresh id so it can live in the merged timeline
+    /// alongside the untouched original.
+    private func copyStamp(_ stamp: TimelineStamp) -> TimelineStamp {
+        TimelineStamp(
+            tagRefs: stamp.tagRefs,
+            primaryID: stamp.primaryID,
+            timeStartSeconds: stamp.timeStartSeconds,
+            timeFinishSeconds: stamp.timeFinishSeconds,
+            colorHex: stamp.colorHex,
+            label: stamp.label,
+            labels: stamp.labels,
+            timeEvents: stamp.timeEvents,
+            isActiveForMapView: stamp.isActiveForMapView,
+            comment: stamp.comment,
+            mapPositions: stamp.mapPositions
+        )
     }
 
     func findOrCreateTimelineForTag(tag: Tag) -> UUID {
@@ -233,9 +289,18 @@ class TimelineDataManager: ObservableObject {
         labels: [FullLabelWithGroup],
         position: CGPoint? = nil,
         mapFieldId: String? = nil,
+        mapPositions: [StampMapPosition]? = nil,
         timeEvents: [String]? = nil
     ) {
         let selectedEvents = timeEvents ?? Array(TagLibraryManager.shared.selectedTimeEvents)
+        var addedStampID: UUID? = nil
+        // Итоговый набор позиций: приоритет у массива (мультикарта), иначе одиночная точка.
+        let resolvedMapPositions: [StampMapPosition]? = {
+            if let mapPositions, !mapPositions.isEmpty { return mapPositions }
+            if let position { return [StampMapPosition(mapFieldId: mapFieldId, position: position)] }
+            return nil
+        }()
+        let hasAnyPosition = !(resolvedMapPositions?.isEmpty ?? true)
 
         if MarkupMode.current == .standard {
             guard let lineID = selectedLineID,
@@ -250,12 +315,12 @@ class TimelineDataManager: ObservableObject {
                 label: name,
                 labels: labels,
                 timeEvents: selectedEvents,
-                position: position,
-                isActiveForMapView: position != nil,
-                mapFieldId: mapFieldId
+                isActiveForMapView: hasAnyPosition,
+                mapPositions: resolvedMapPositions
             )
             lines[idx].stamps.append(stamp)
             lastAddedStampID = stamp.id
+            addedStampID = stamp.id
 
         } else {
             if let tag = TagLibraryManager.shared.findTagById(tagRefs.first?.id ?? "") {
@@ -271,19 +336,24 @@ class TimelineDataManager: ObservableObject {
                         label: name,
                         labels: labels,
                         timeEvents: selectedEvents,
-                        position: position,
-                        isActiveForMapView: position != nil,
-                        mapFieldId: mapFieldId
+                        isActiveForMapView: hasAnyPosition,
+                        mapPositions: resolvedMapPositions
                     )
                     lines[idx].stamps.append(stamp)
                     lastAddedStampID = stamp.id
+                    addedStampID = stamp.id
                 }
             }
         }
-        
+
         updateTimelines()
-        
+
         NotificationCenter.default.post(name: .stampCountsChanged, object: nil)
+
+        // Авто-экспорт клипа добавленного тега в папку — только при включённом флаге (см. ClipAutoSaveManager).
+        if let addedStampID {
+            ClipAutoSaveManager.shared.autoSaveStampIfConfigured(stampID: addedStampID)
+        }
     }
     
     func updateStampLabels(lineID: UUID, stampID: UUID, newLabels: [FullLabelWithGroup]) {
@@ -293,6 +363,16 @@ class TimelineDataManager: ObservableObject {
         updateTimelines()
     }
     
+    /// Ставит тегу-штампу позицию на конкретной карте (инлайн-карта в раскладке связок).
+    /// Помечаем штамп активным для карты — иначе он не попадёт в визуализацию.
+    func updateStampPosition(lineID: UUID, stampID: UUID, position: CGPoint, mapFieldId: String) {
+        guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
+        guard let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }
+        lines[lineIndex].stamps[stampIndex].setPosition(position, forFieldId: mapFieldId)
+        lines[lineIndex].stamps[stampIndex].isActiveForMapView = true
+        updateTimelines()
+    }
+
     func updateStampTimeEvents(lineID: UUID, stampID: UUID, newEvents: [String]) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
         guard let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }

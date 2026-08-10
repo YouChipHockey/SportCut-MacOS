@@ -73,6 +73,11 @@ class ProjectExportManager {
             let jsonData = try encoder.encode(projectData)
             try jsonData.write(to: bundleDir.appendingPathComponent("\(folderName).youchip"))
 
+            // Sportcode-совместимый XML в тот же пакет (для сторонних инструментов). Не критичен —
+            // если не записался, основной экспорт (.youchip + видео) всё равно продолжается.
+            let sportcodeXML = SportcodeXMLProjectExporter.makeXML(timelines: projectData.timelines)
+            try? sportcodeXML.write(to: bundleDir.appendingPathComponent("\(folderName).xml"))
+
             // Видео: сначала пробуем жёсткую ссылку (без копии), иначе копируем.
             let videoDest = bundleDir.appendingPathComponent(videoURL.lastPathComponent)
             if (try? fm.linkItem(at: videoURL, to: videoDest)) == nil {
@@ -230,7 +235,13 @@ class ProjectExportManager {
     
     private func presentSportcutJSONImportPanel(completion: @escaping (ProjectImportModel?) -> Void) {
         let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [UTType.json]
+        // .youchip — это JSON-разметка проекта (расширение из бандла экспорта). Разрешаем оба.
+        var allowedTypes: [UTType] = [.json]
+        if let youchip = UTType(filenameExtension: "youchip") {
+            allowedTypes.append(youchip)
+        }
+        openPanel.allowedContentTypes = allowedTypes
+        openPanel.allowsOtherFileTypes = true
         openPanel.title = ^String.Titles.projectImportTitle
         openPanel.message = ^String.Titles.selectProjectFileForImport
         openPanel.allowsMultipleSelection = false

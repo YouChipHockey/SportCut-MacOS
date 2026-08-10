@@ -21,11 +21,17 @@ struct FullControlView: View {
     @ObservedObject var hotkeyManager = HotKeyManager.shared
     @StateObject var exportHelper = ExportHelper()
     @ObservedObject var sportCutSessionManager = SportCutSessionManager.shared
+    @ObservedObject var clipAutoSaveManager = ClipAutoSaveManager.shared
 
     /// Effective video duration - uses live stream duration when in live mode, otherwise AVPlayer duration.
     private var effectiveVideoDuration: Double {
         return max(1.0, videoManager.timelineDuration)
     }
+
+    /// Верхняя полоса над линейкой таймлайна, куда выносятся «головы» меток
+    /// рисунков (синие карандаши). Линейка, дорожки и плейхед сдвигаются вниз на
+    /// эту величину, поэтому голова метки оказывается выше плейхеда и её видно/можно нажать.
+    private let markerHeadBand: CGFloat = 22
     
     @State private var markupMode: MarkupMode = MarkupMode.current
     @State private var showMarkupModeToggle = false
@@ -37,6 +43,8 @@ struct FullControlView: View {
     @State private var showFieldMapVisualizationPicker = false
     @State private var editingStampLineID: UUID?
     @State private var editingStampID: UUID?
+    /// Id перетаскиваемого таймлайна — для живого reorder при наведении (а не только при точном дропе).
+    @State private var draggingLineID: UUID?
     @State private var timelineScale: CGFloat = 1.0
     // Effective scale at the time of the last zoom, so a new zoom can be
     // anchored on the playhead (see handleZoomChanged).
@@ -44,6 +52,15 @@ struct FullControlView: View {
     @GestureState private var magnifyScale: CGFloat = 1.0
     @State private var keyEventMonitor: Any?
     @State private var tagEdgePosition: CGFloat? = nil
+    /// Ширина правой колонки таймлайнов, измеряется фоновым `GeometryReader` (а не оборачивающим),
+    /// чтобы контент сохранял свою реальную высоту — иначе вертикальный скролл не долистывает до
+    /// конца при уменьшении окна (обёртка-GeometryReader в ScrollView отдаёт высоту вьюпорта).
+    @State private var timelineRightColumnWidth: CGFloat = 0
+    /// Стартовая высота окна (запоминается один раз) и текущая — для костыля: при уменьшении окна
+    /// добавляем внизу списка пустоту, равную тому, насколько окно уменьшилось, чтобы всегда
+    /// долистывалось до конца.
+    @State private var standardWindowHeight: CGFloat = 0
+    @State private var currentWindowHeight: CGFloat = 0
     @StateObject private var timelineScrollController = TimelineScrollController()
     @StateObject private var playheadDragController = PlayheadEdgeScrollController()
     
@@ -71,13 +88,36 @@ struct FullControlView: View {
         return VideoFilesManager.shared.files.first(where: { $0.videoData.id == videoId })
     }
     
+    /// Реально ли сейчас редактируется текстовое поле (по firstResponder окна, а не по
+    /// разделяемому флагу). Флаг `isAnyTextFieldFocused` может «залипнуть» в false из-за гонок
+    /// при переключении между полями — тогда Backspace съедался как «удалить тег». Проверка
+    /// firstResponder всегда отражает актуальное состояние AppKit.
+    static func isEditingTextInFocusedField() -> Bool {
+        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+        if responder is NSTextField { return true }
+        if let textView = responder as? NSTextView { return textView.isFieldEditor }
+        return false
+    }
+
     private func setupKeyboardShortcuts() {
+        // Идемпотентность: если монитор уже поставлен (повторный onAppear), сначала снимаем
+        // старый — иначе мониторы копятся и клавиатура «затупливает» после долгой работы.
+        if let existing = keyEventMonitor {
+            NSEvent.removeMonitor(existing)
+            keyEventMonitor = nil
+        }
         keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if focusManager.isAnyTextFieldFocused {
+            if focusManager.isAnyTextFieldFocused || FullControlView.isEditingTextInFocusedField() {
                 return event
             }
-            
+
             switch event.keyCode {
+            case 48:
+                // Tab — прыжок к следующему тегу на таймлайне; ⇧Tab — к предыдущему.
+                // (⌘Tab macOS перехватывает под переключатель приложений, поэтому «назад» на Shift.)
+                let backward = event.modifierFlags.contains(.shift)
+                jumpBetweenStamps(forward: !backward)
+                return nil
             case 53:
                 // Esc cancels the "merge timelines" selection; otherwise pass through
                 // so it still reaches sheets' cancel actions.
@@ -106,7 +146,83 @@ struct FullControlView: View {
             }
         }
     }
-    
+
+    /// Прыжок между тегами (штампами) на таймлайне. Вперёд/назад в рамках активного таймлайна;
+    /// после последнего штампа — первый штамп следующего таймлайна (и симметрично назад).
+    /// Активный таймлайн определяется выбранным штампом → иначе выбранным таймлайном → иначе первым.
+    private func jumpBetweenStamps(forward: Bool) {
+        let lines = timelineData.lines
+        guard !lines.isEmpty else { return }
+
+        func sorted(_ line: TimelineLine) -> [TimelineStamp] {
+            line.stamps.sorted { $0.timeStartSeconds < $1.timeStartSeconds }
+        }
+
+        // Активный таймлайн + текущий штамп.
+        var activeLineIndex = 0
+        var currentStampID = timelineData.selectedStampID
+        if let sid = currentStampID,
+           let li = lines.firstIndex(where: { $0.stamps.contains(where: { $0.id == sid }) }) {
+            activeLineIndex = li
+        } else if let selLine = timelineData.selectedLineID,
+                  let li = lines.firstIndex(where: { $0.id == selLine }) {
+            activeLineIndex = li
+            currentStampID = nil
+        } else {
+            currentStampID = nil
+        }
+
+        let currentTime = videoManager.currentTime
+        let activeStamps = sorted(lines[activeLineIndex])
+        let currentIndex = currentStampID.flatMap { sid in activeStamps.firstIndex(where: { $0.id == sid }) }
+
+        func play(_ line: TimelineLine, _ stamp: TimelineStamp) {
+            timelineData.selectLine(line.id)
+            timelineData.selectStamp(stampID: stamp.id)
+            videoManager.seek(to: stamp.timeStartSeconds, resumePlaybackAfterSeek: true)
+        }
+
+        if forward {
+            let nextIndex: Int
+            if let ci = currentIndex {
+                nextIndex = ci + 1
+            } else {
+                nextIndex = activeStamps.firstIndex(where: { $0.timeStartSeconds > currentTime + 0.05 }) ?? activeStamps.count
+            }
+            if nextIndex < activeStamps.count {
+                play(lines[activeLineIndex], activeStamps[nextIndex])
+                return
+            }
+            // Конец таймлайна → первый штамп следующего непустого таймлайна (с переносом в начало).
+            for offset in 1...lines.count {
+                let li = (activeLineIndex + offset) % lines.count
+                if let first = sorted(lines[li]).first {
+                    play(lines[li], first)
+                    return
+                }
+            }
+        } else {
+            let prevIndex: Int
+            if let ci = currentIndex {
+                prevIndex = ci - 1
+            } else {
+                prevIndex = activeStamps.lastIndex(where: { $0.timeStartSeconds < currentTime - 0.05 }) ?? -1
+            }
+            if prevIndex >= 0 {
+                play(lines[activeLineIndex], activeStamps[prevIndex])
+                return
+            }
+            // Начало таймлайна → последний штамп предыдущего непустого таймлайна.
+            for offset in 1...lines.count {
+                let li = (activeLineIndex - offset + lines.count) % lines.count
+                if let last = sorted(lines[li]).last {
+                    play(lines[li], last)
+                    return
+                }
+            }
+        }
+    }
+
     @State private var selectedExportType: CutsExportType?
     @State private var showExportModeSheet: Bool = false
     @State private var showTagSelectionSheet: Bool = false
@@ -176,6 +292,7 @@ struct FullControlView: View {
                     }
                     .scrollIndicators(.hidden)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(alignment: .top) { pinnedTimelineHeaderOverlay }
                     .background(
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color.gray.opacity(0.1))
@@ -198,14 +315,9 @@ struct FullControlView: View {
                             .onEnded { value in
                                 let newScale = timelineScale * value
                                 let duration = effectiveVideoDuration
-                                let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
-                                if potentialInterval >= 0.5 {
-                                    timelineScale = max(1.0, newScale)
-                                } else {
-                                    let baseInterval = 5.0
-                                    let maxScale = baseInterval / 0.5
-                                    timelineScale = maxScale
-                                }
+                                // Ограничиваем зум так, чтобы деления не стали мельче ~0.5с.
+                                let maxScale = max(1.0, duration / 10.0)
+                                timelineScale = min(max(1.0, newScale), maxScale)
                             }
                     )
                     .disabled(isEditorModeActive || isScreenshotDisplayActive)
@@ -217,6 +329,7 @@ struct FullControlView: View {
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(alignment: .top) { pinnedTimelineHeaderOverlay }
                     .background(
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color.gray.opacity(0.1))
@@ -239,14 +352,9 @@ struct FullControlView: View {
                             .onEnded { value in
                                 let newScale = timelineScale * value
                                 let duration = effectiveVideoDuration
-                                let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
-                                if potentialInterval >= 0.5 {
-                                    timelineScale = max(1.0, newScale)
-                                } else {
-                                    let baseInterval = 5.0
-                                    let maxScale = baseInterval / 0.5
-                                    timelineScale = maxScale
-                                }
+                                // Ограничиваем зум так, чтобы деления не стали мельче ~0.5с.
+                                let maxScale = max(1.0, duration / 10.0)
+                                timelineScale = min(max(1.0, newScale), maxScale)
                             }
                     )
                     .disabled(isEditorModeActive || isScreenshotDisplayActive)
@@ -258,11 +366,27 @@ struct FullControlView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    private func calculateTimeGridInterval(scale: CGFloat, totalDuration: Double) -> Double {
-        let baseCount = 20 * scale
-        let baseInterval = totalDuration / baseCount
-        
-        return max(0.5, baseInterval)
+    /// Шаг подписей на шкале времени, подстроенный под текущую ширину таймлайна.
+    /// Держим минимум ~72pt между подписями и округляем шаг до «круглого»
+    /// значения (5с, 10с, 30с, 1мин…), чтобы деления не слипались и читались.
+    private func calculateTimeGridInterval(gridWidth: CGFloat, totalDuration: Double) -> Double {
+        guard totalDuration > 0, gridWidth > 0 else { return max(0.5, totalDuration) }
+
+        let minLabelSpacing: CGFloat = 72
+        let maxLabels = max(1.0, Double(gridWidth / minLabelSpacing))
+        let rawInterval = totalDuration / maxLabels
+
+        return niceTimeInterval(atLeast: rawInterval)
+    }
+
+    /// Ближайшее сверху «круглое» значение времени для шага делений.
+    private func niceTimeInterval(atLeast raw: Double) -> Double {
+        let steps: [Double] = [0.5, 1, 2, 5, 10, 15, 20, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200]
+        for step in steps where step >= raw {
+            return step
+        }
+        // За пределами таблицы округляем вверх до целых часов.
+        return max(3600, (raw / 3600).rounded(.up) * 3600)
     }
 
     private var sportCutBulkSelectionBar: some View {
@@ -318,10 +442,12 @@ struct FullControlView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
-    private func timelineScrollView(geo: GeometryProxy, effectiveScale: CGFloat, duration: Double, popupInfo: String?, popupLocation: CGPoint?) -> some View {
-        let interval = calculateTimeGridInterval(scale: effectiveScale, totalDuration: duration)
-        let gridWidth = geo.size.width * max(effectiveScale, 1.0)
-        
+    private func timelineScrollView(width: CGFloat, effectiveScale: CGFloat, duration: Double, popupInfo: String?, popupLocation: CGPoint?) -> some View {
+        let gridWidth = width * max(effectiveScale, 1.0)
+        // Шаг подписей считаем от реальной пиксельной ширины, а не только от зума,
+        // иначе при сужении окна метки слипаются в кучу.
+        let interval = calculateTimeGridInterval(gridWidth: gridWidth, totalDuration: duration)
+
         return ScrollView(.horizontal) {
             HStack(spacing: 0) {
                 timelineZStackContent(
@@ -466,14 +592,183 @@ struct FullControlView: View {
     }
     
     @ViewBuilder
+    private func timelineNameRows() -> some View {
+        ForEach(timelineData.lines) { line in
+            if markupMode == .standard {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(line.name)
+                            .font(.system(size: 14, weight: .medium))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .minimumScaleFactor(0.6)
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(lineNameFill(line))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(lineNameStroke(line), lineWidth: lineNameStrokeWidth(line))
+                            )
+                    }
+
+                    Spacer(minLength: 0)
+
+                    HStack(spacing: 4) {
+                        Button(action: {
+                            timelineData.selectLine(line.id)
+                            showEditNameSheet = true
+                        }) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.blue)
+                                .padding(3)
+                                .background(Circle().fill(Color.blue.opacity(0.1)))
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .help(^String.Titles.editTimelineName)
+
+                        Button(action: {
+                            TimelineDataManager.shared.removeLine(lineID: line.id)
+                        }) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.red)
+                                .padding(3)
+                                .background(Circle().fill(Color.red.opacity(0.1)))
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .help(^String.Titles.timelineButtonDeleteTimeline)
+                    }
+                }
+                .padding(.leading, 5)
+                .frame(width: 195, height: 30, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if timelineData.isMergeSelectionActive {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            timelineData.toggleMergeSelection(line.id)
+                        }
+                        return
+                    }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        let commandDown = NSEvent.modifierFlags.contains(.command)
+                        if commandDown {
+                            timelineData.selectAllSportCutExportStamps(in: line.id)
+                        } else {
+                            timelineData.selectLine(line.id)
+                        }
+                    }
+                }
+                .contextMenu {
+                    Button(^String.Titles.editName) {
+                        timelineData.selectLine(line.id)
+                        showEditNameSheet = true
+                    }
+                    Button(^String.Titles.timelineButtonDeleteTimeline) {
+                        TimelineDataManager.shared.removeLine(lineID: line.id)
+                    }
+                }
+                .onDrag {
+                    draggingLineID = line.id
+                    return NSItemProvider(object: line.id.uuidString as NSString)
+                }
+                .onDrop(of: [.text], delegate: TimelineDropDelegate(
+                    currentLine: line,
+                    timelineData: timelineData,
+                    draggingLineID: $draggingLineID
+                ))
+                .id("name-\(line.id)")
+            } else {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(line.name)
+                            .font(.system(size: 14, weight: .medium))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .minimumScaleFactor(0.6)
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(lineNameFill(line))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(lineNameStroke(line), lineWidth: lineNameStrokeWidth(line))
+                            )
+                    }
+
+                    Spacer(minLength: 0)
+
+                    HStack(spacing: 4) {
+                        Button(action: {
+                            TimelineDataManager.shared.removeLine(lineID: line.id)
+                        }) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.red)
+                                .padding(3)
+                                .background(Circle().fill(Color.red.opacity(0.1)))
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .help(^String.Titles.timelineButtonDeleteTimeline)
+                    }
+                }
+                .padding(.leading, 5)
+                .frame(width: 195, height: 30, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if timelineData.isMergeSelectionActive {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            timelineData.toggleMergeSelection(line.id)
+                        }
+                        return
+                    }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        let commandDown = NSEvent.modifierFlags.contains(.command)
+                        if commandDown {
+                            timelineData.selectAllSportCutExportStamps(in: line.id)
+                        } else {
+                            timelineData.selectLine(line.id)
+                        }
+                    }
+                }
+                .contextMenu {
+                    Button(^String.Titles.timelineButtonDeleteTimeline) {
+                        TimelineDataManager.shared.removeLine(lineID: line.id)
+                    }
+                }
+                .onDrag {
+                    draggingLineID = line.id
+                    return NSItemProvider(object: line.id.uuidString as NSString)
+                }
+                .onDrop(of: [.text], delegate: TimelineDropDelegate(
+                    currentLine: line,
+                    timelineData: timelineData,
+                    draggingLineID: $draggingLineID
+                ))
+                .id("name-\(line.id)")
+            }
+        }
+    }
+
+    @ViewBuilder
     private func timelineZStackContent(duration: Double, interval: Double, gridWidth: CGFloat, effectiveScale: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             TimeGridView(
+                // Мелкие линии сетки идут в 5 раз чаще подписей, поэтому каждая
+                // 5-я (жирная) линия попадает ровно под подпись времени.
                 duration: duration,
-                interval: interval,
+                interval: interval / 5,
                 width: gridWidth,
                 height: 30 * CGFloat(timelineData.lines.count + 1)
             )
+            .padding(.top, markerHeadBand)
             
             VStack(spacing: 0) {
                 TimelineTimestampsHeaderView(
@@ -489,7 +784,7 @@ struct FullControlView: View {
                 ) { time in
                     videoManager.seek(to: time)
                 }
-                
+
                 ForEach(timelineData.lines) { line in
                     TimelineLineView(
                         videoManager: VideoPlayerManager.shared,
@@ -521,16 +816,11 @@ struct FullControlView: View {
                     .frame(height: 30)
                     .id("timeline-\(line.id)")
                 }
-                
+
             }
             .padding(.bottom, 15) // for scroll indicator to not overlap timelines
-            
-            ScreenshotMarkersView(
-                duration: duration,
-                gridWidth: gridWidth,
-                totalHeight: 30 * CGFloat(timelineData.lines.count + 1)
-            )
-            
+            .padding(.top, markerHeadBand)
+
             // timeOffsetToPixels is passed to TimelinePlayheadView so that
             // FullControlView does NOT read any @Published property of
             // playheadDragController in its own body — only TimelinePlayheadView
@@ -545,7 +835,11 @@ struct FullControlView: View {
                 duration: duration,
                 isResizingTag: videoManager.isResizingTag
             )
-            
+            .padding(.top, markerHeadBand)
+
+            // Метки рисунков («головы» — синие карандаши) вынесены в закреплённую сверху шапку
+            // (`PinnedTimelineRulerView`), чтобы оставались кликабельны при вертикальном скролле.
+
             TimelineMouseTracker(
                 duration: duration,
                 gridWidth: gridWidth,
@@ -559,6 +853,7 @@ struct FullControlView: View {
                     )
                 }
             )
+            .padding(.top, markerHeadBand)
             .allowsHitTesting(false)
         }
         .frame(width: gridWidth)
@@ -579,7 +874,14 @@ struct FullControlView: View {
     private func timelineContent(proxy: ScrollViewProxy) -> some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
+                // Пустая полоса сверху под «головы» меток рисунков в правой части —
+                // чтобы левый столбец с названиями оставался выровнен с линейкой и дорожками.
+                Color.clear
+                    .frame(width: 195, height: markerHeadBand)
                 ZStack(alignment: .leading) {
+                    // Кнопки-бар (углового контрола) вынесен в закреплённую сверху шапку
+                    // (`pinnedTimelineHeaderOverlay`) — здесь остаётся только пустая полоса для
+                    // выравнивания строк дорожек. Полоса скроллится и прячется под закреплённой шапкой.
                     LinearGradient(
                         gradient: Gradient(colors: [
                             Color.gray.opacity(0.05),
@@ -593,193 +895,10 @@ struct FullControlView: View {
                         RoundedRectangle(cornerRadius: 0)
                             .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
                     )
-                    
-                    timelineTableCornerControls()
-                        .frame(width: 195, height: 30, alignment: .leading)
                 }
                 .id("header-row")
                 
-                ForEach(timelineData.lines) { line in
-                    if markupMode == .standard {
-                        HStack(spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(line.name)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                    .minimumScaleFactor(0.6)
-                                    .foregroundColor(.primary)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(lineNameFill(line))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .stroke(lineNameStroke(line), lineWidth: lineNameStrokeWidth(line))
-                                    )
-                            }
-                            
-                            Spacer(minLength: 0)
-                            
-                            HStack(spacing: 4) {
-                                Button(action: {
-                                    timelineData.selectLine(line.id)
-                                    showEditNameSheet = true
-                                }) {
-                                    Image(systemName: "pencil")
-                                        .font(.system(size: 9, weight: .medium))
-                                        .foregroundColor(.blue)
-                                        .padding(3)
-                                        .background(
-                                            Circle()
-                                                .fill(Color.blue.opacity(0.1))
-                                        )
-                                }
-                                .buttonStyle(BorderlessButtonStyle())
-                                .help(^String.Titles.editTimelineName)
-                                
-                                Button(action: {
-                                    let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
-                                    TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
-                                    if isSelectedLine {
-                                        TimelineDataManager.shared.selectedLineID = nil
-                                    }
-                                    TimelineDataManager.shared.updateTimelines()
-                                }) {
-                                    Image(systemName: "trash")
-                                        .font(.system(size: 9, weight: .medium))
-                                        .foregroundColor(.red)
-                                        .padding(3)
-                                        .background(
-                                            Circle()
-                                                .fill(Color.red.opacity(0.1))
-                                        )
-                                }
-                                .buttonStyle(BorderlessButtonStyle())
-                                .help(^String.Titles.timelineButtonDeleteTimeline)
-                            }
-                        }
-                        .padding(.leading, 5)
-                        .frame(width: 195, height: 30, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if timelineData.isMergeSelectionActive {
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    timelineData.toggleMergeSelection(line.id)
-                                }
-                                return
-                            }
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                let commandDown = NSEvent.modifierFlags.contains(.command)
-                                if commandDown {
-                                    timelineData.selectAllSportCutExportStamps(in: line.id)
-                                } else {
-                                    timelineData.selectLine(line.id)
-                                }
-                            }
-                        }
-                        .contextMenu {
-                            Button(^String.Titles.editName) {
-                                timelineData.selectLine(line.id)
-                                showEditNameSheet = true
-                            }
-                            Button(^String.Titles.timelineButtonDeleteTimeline) {
-                                let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
-                                TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
-                                if isSelectedLine {
-                                    TimelineDataManager.shared.selectedLineID = nil
-                                }
-                                TimelineDataManager.shared.updateTimelines()
-                            }
-                        }
-                        .onDrag {
-                            return NSItemProvider(object: line.id.uuidString as NSString)
-                        }
-                        .onDrop(of: [.text], delegate: TimelineDropDelegate(
-                            currentLine: line,
-                            timelineData: timelineData
-                        ))
-                        .id("name-\(line.id)")
-                    } else {
-                        HStack(spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(line.name)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                    .minimumScaleFactor(0.6)
-                                    .foregroundColor(.primary)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(lineNameFill(line))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .stroke(lineNameStroke(line), lineWidth: lineNameStrokeWidth(line))
-                                    )
-                            }
-                            
-                            Spacer(minLength: 0)
-
-                            HStack(spacing: 4) {
-                                Button(action: {
-                                    let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
-                                    TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
-                                    if isSelectedLine {
-                                        TimelineDataManager.shared.selectedLineID = nil
-                                    }
-                                    TimelineDataManager.shared.updateTimelines()
-                                }) {
-                                    Image(systemName: "trash")
-                                        .font(.system(size: 9, weight: .medium))
-                                        .foregroundColor(.red)
-                                        .padding(3)
-                                        .background(
-                                            Circle()
-                                                .fill(Color.red.opacity(0.1))
-                                        )
-                                }
-                                .buttonStyle(BorderlessButtonStyle())
-                                .help(^String.Titles.timelineButtonDeleteTimeline)
-                            }
-                        }
-                        .padding(.leading, 5)
-                        .frame(width: 195, height: 30, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                let commandDown = NSEvent.modifierFlags.contains(.command)
-                                if commandDown {
-                                    timelineData.selectAllSportCutExportStamps(in: line.id)
-                                } else {
-                                    timelineData.selectLine(line.id)
-                                }
-                            }
-                        }
-                        .contextMenu {
-                            Button(^String.Titles.timelineButtonDeleteTimeline) {
-                                let isSelectedLine = (TimelineDataManager.shared.selectedLineID == line.id)
-                                TimelineDataManager.shared.lines.removeAll { $0.id == line.id }
-                                if isSelectedLine {
-                                    TimelineDataManager.shared.selectedLineID = nil
-                                }
-                                TimelineDataManager.shared.updateTimelines()
-                            }
-                        }
-                        .onDrag {
-                            return NSItemProvider(object: line.id.uuidString as NSString)
-                        }
-                        .onDrop(of: [.text], delegate: TimelineDropDelegate(
-                            currentLine: line,
-                            timelineData: timelineData
-                        ))
-                        .id("name-\(line.id)")
-                    }
-                }
+                timelineNameRows()
             }
             .frame(width: 195)
             .padding(.trailing, 5)
@@ -789,15 +908,27 @@ struct FullControlView: View {
                     .fill(Color.gray.opacity(0.05))
             )
             
-            GeometryReader { geo in
-                timelineScrollView(
-                    geo: geo,
-                    effectiveScale: timelineScale * magnifyScale,
-                    duration: effectiveVideoDuration,
-                    popupInfo: nil,
-                    popupLocation: nil
-                )
-            }
+            // Ширину меряем ФОНОВЫМ GeometryReader (не оборачивающим), чтобы у контента осталась
+            // его реальная высота и вертикальный скролл долистывал до конца при любом размере окна.
+            timelineScrollView(
+                width: timelineRightColumnWidth,
+                effectiveScale: timelineScale * magnifyScale,
+                duration: effectiveVideoDuration,
+                popupInfo: nil,
+                popupLocation: nil
+            )
+            // Горизонтальный ScrollView иначе «жадный» по высоте (тянется на весь вьюпорт и режет
+            // контент) — fixedSize по вертикали заставляет взять реальную высоту контента, тогда
+            // вертикальный скролл долистывает до конца при любом размере окна.
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(
+                GeometryReader { g in
+                    Color.clear
+                        .onAppear { timelineRightColumnWidth = g.size.width }
+                        .onChange(of: g.size.width) { timelineRightColumnWidth = $0 }
+                }
+            )
             .sheet(isPresented: $showAiReportSheet) {
                 AiReportSheet(onSubmit: { teamName, opponentName, venue, matchDate in
                     generateAndDownloadAiReport(teamName: teamName,
@@ -826,8 +957,17 @@ struct FullControlView: View {
                 }
             }
         }
+        // Костыль: при уменьшении окна добавляем внизу списка пустоту, равную тому, насколько окно
+        // стало меньше стартового — чтобы скролл всегда долистывался до последней дорожки.
+        .padding(.bottom, extraScrollBottomPadding)
     }
-    
+
+    /// Насколько окно уменьшилось относительно стартового размера (0, если больше/равно).
+    private var extraScrollBottomPadding: CGFloat {
+        guard standardWindowHeight > 0, currentWindowHeight > 0 else { return 0 }
+        return max(0, standardWindowHeight - currentWindowHeight)
+    }
+
     func generateAndDownloadAiReport(teamName: String, opponentName: String, venue: String, matchDate: String) {
         let fullLines = transformToFullTimelineLines()
         
@@ -1069,22 +1209,73 @@ struct FullControlView: View {
     }
     
     @ViewBuilder
+    /// Закреплённая сверху шапка таймлайнов: бар-кнопки (слева) + линейка времени с треугольником
+    /// плейхеда (справа). Всегда статична сверху — вертикально скроллятся только дорожки под ней.
+    /// Непрозрачный фон перекрывает уехавшую под неё исходную полосу.
+    private var pinnedTimelineHeaderOverlay: some View {
+        GeometryReader { geo in
+            let rightWidth = max(1, geo.size.width - 200) // 195 (столбец имён) + 5 (padding)
+            let effectiveScale = timelineScale * magnifyScale
+            let gridWidth = rightWidth * max(effectiveScale, 1.0)
+            let interval = calculateTimeGridInterval(gridWidth: gridWidth, totalDuration: effectiveVideoDuration)
+
+            HStack(spacing: 0) {
+                // Слева — бар-кнопки (единственный экземпляр; из скроллящегося тела убран).
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: markerHeadBand)
+                    ZStack(alignment: .leading) {
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.gray.opacity(0.05), Color.gray.opacity(0.02)]),
+                            startPoint: .top, endPoint: .bottom
+                        )
+                        .frame(width: 195, height: 30, alignment: .leading)
+                        .overlay(RoundedRectangle(cornerRadius: 0).stroke(Color.gray.opacity(0.2), lineWidth: 0.5))
+
+                        timelineTableCornerControls()
+                            .frame(width: 195, height: 30, alignment: .leading)
+                    }
+                }
+                .frame(width: 195)
+                .padding(.trailing, 5)
+
+                // Справа — линейка времени, синхронная горизонтальному скроллу дорожек.
+                PinnedTimelineRulerView(
+                    controller: timelineScrollController,
+                    videoManager: videoManager,
+                    duration: effectiveVideoDuration,
+                    gridWidth: gridWidth,
+                    interval: interval,
+                    viewportWidth: rightWidth,
+                    band: markerHeadBand,
+                    markersTotalHeight: 30 * CGFloat(timelineData.lines.count + 1)
+                )
+            }
+            .frame(width: geo.size.width, height: markerHeadBand + 30, alignment: .topLeading)
+            .background(Color(NSColor.windowBackgroundColor))
+        }
+        .frame(height: markerHeadBand + 30)
+        .allowsHitTesting(!isEditorModeActive && !isScreenshotDisplayActive)
+    }
+
     private func timelineTableCornerControls() -> some View {
         HStack(spacing: 3) {
             if timelineData.isMergeSelectionActive {
                 mergeSelectionBar()
             }
-            if !timelineData.isMergeSelectionActive, markupMode == .standard {
-                Button {
-                    showAddLineSheet = true
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.green)
+            if !timelineData.isMergeSelectionActive {
+                if markupMode == .standard {
+                    Button {
+                        showAddLineSheet = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .help(^String.Titles.fullControlButtonAddTimeline)
                 }
-                .buttonStyle(.plain)
-                .help(^String.Titles.fullControlButtonAddTimeline)
 
+                // Объединение таймлайнов доступно в обоих режимах разметки.
                 Button {
                     timelineData.beginMergeSelection()
                 } label: {
@@ -1159,27 +1350,18 @@ struct FullControlView: View {
     @ViewBuilder
     private func zoomPopoverContent() -> some View {
         HStack(spacing: 8) {
-            Button {
-                timelineScale = max(1.0, timelineScale - 0.5)
-            } label: {
-                Image(systemName: "minus.magnifyingglass")
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .buttonStyle(.plain)
-            .help(^String.Titles.fullControlButtonTimelineZoomOut)
+            Image(systemName: "minus.magnifyingglass")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
 
+            // Ползунок зумит вокруг плейхеда (см. handleZoomChanged), а не вокруг курсора.
             Slider(value: $timelineScale, in: 1.0...10.0)
                 .controlSize(.small)
-                .frame(width: 140)
+                .frame(width: 180)
 
-            Button {
-                timelineScale = min(10.0, timelineScale + 0.5)
-            } label: {
-                Image(systemName: "plus.magnifyingglass")
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .buttonStyle(.plain)
-            .help(^String.Titles.fullControlButtonTimelineZoomIn)
+            Image(systemName: "plus.magnifyingglass")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
 
             Text(String(format: "%.1fx", timelineScale))
                 .font(.system(size: 10, weight: .medium))
@@ -1486,6 +1668,10 @@ struct FullControlView: View {
 
             timelineFilterMenuButton
 
+            clipAutoSaveButton
+
+            clipAutoExportToggle
+
             Text(stampHoverInlineInfo ?? AttributedString(" "))
                 .font(.system(size: 13, weight: .regular))
                 .foregroundColor(.secondary)
@@ -1543,6 +1729,94 @@ struct FullControlView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
+    /// Имя папки автосейва для подписи на кнопке: если длиннее 15 символов — сокращаем
+    /// по центру («пап…ка»), оставляя последние 2 символа. Итог — 15 знаков.
+    private var truncatedFolderName: String {
+        let name = clipAutoSaveManager.folderName ?? ""
+        guard name.count > 15 else { return name }
+        return String(name.prefix(12)) + "…" + String(name.suffix(2))
+    }
+
+    /// Индикатор папки автосохранения клипов (Cmd+S).
+    /// Зелёная с именем папки — папка настроена; красная с надписью — надо выбрать.
+    @ViewBuilder
+    private var clipAutoSaveButton: some View {
+        let configured = clipAutoSaveManager.isFolderConfigured
+        Menu {
+            if configured {
+                if let name = clipAutoSaveManager.folderName {
+                    Text(String(format: ^String.Titles.clipAutoSaveCurrentFolder, name))
+                }
+                Button(^String.Titles.clipAutoSaveChangeFolder) {
+                    clipAutoSaveManager.pickFolder()
+                }
+                Button(^String.Titles.clipAutoSaveResetFolder, role: .destructive) {
+                    clipAutoSaveManager.resetFolder()
+                }
+            } else {
+                Button(^String.Titles.clipAutoSavePickFolder) {
+                    clipAutoSaveManager.pickFolder()
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: configured ? "folder.fill.badge.checkmark" : "folder.badge.questionmark")
+                    .font(.system(size: 12, weight: .medium))
+                if configured {
+                    Text(truncatedFolderName)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                } else {
+                    Text(^String.Titles.clipAutoSaveNotConfiguredBadge)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                }
+            }
+            .foregroundColor(configured ? .green : .red)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill((configured ? Color.green : Color.red).opacity(0.12))
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(configured
+              ? String(format: ^String.Titles.clipAutoSaveConfiguredHelp, clipAutoSaveManager.folderName ?? "")
+              : ^String.Titles.clipAutoSaveNotConfiguredMessage)
+        .onAppear {
+            clipAutoSaveManager.refreshFolderState()
+        }
+    }
+
+    /// Флаг авто-экспорта клипа на каждый добавленный тег — рядом с кнопкой папки автосейва.
+    @ViewBuilder
+    private var clipAutoExportToggle: some View {
+        let on = clipAutoSaveManager.isAutoExportEnabled
+        Button {
+            clipAutoSaveManager.setAutoExportEnabled(!on)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: on ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 12, weight: .medium))
+                Text(^String.Titles.clipAutoExportBadge)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundColor(on ? .accentColor : .secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill((on ? Color.accentColor : Color.gray).opacity(0.12))
+            )
+        }
+        .buttonStyle(.plain)
+        .help(^String.Titles.clipAutoExportBadge)
+    }
+
     private var timelineFilterMenuButton: some View {
         Menu {
             Button(^String.Titles.viewingSortReset) {
@@ -1707,6 +1981,14 @@ struct FullControlView: View {
             .padding(.horizontal)
             .padding(.top, 12)
             .frame(minWidth: 800, minHeight: 300)
+            .onAppear {
+                if standardWindowHeight == 0 { standardWindowHeight = geo.size.height }
+                currentWindowHeight = geo.size.height
+            }
+            .onChange(of: geo.size.height) { newHeight in
+                if standardWindowHeight == 0 { standardWindowHeight = newHeight }
+                currentWindowHeight = newHeight
+            }
             .overlay {
                 if isExporting {
                     VStack(spacing: 16) {
@@ -2364,44 +2646,46 @@ struct MultiLabelSelectionSheetView: View {
 struct TimelineDropDelegate: DropDelegate {
     let currentLine: TimelineLine
     let timelineData: TimelineDataManager
-    
+    /// Id перетаскиваемого таймлайна (устанавливается в `.onDrag`).
+    @Binding var draggingLineID: UUID?
+
+    /// Разрешаем «перемещение» — иначе dropEntered может не срабатывать и не будет живого reorder.
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    /// Живой reorder: как только курсор с перетаскиваемым таймлайном заходит на другой — меняем порядок.
+    /// Это работает и когда дроп приходится «между» элементами, а не строго на объект.
+    func dropEntered(info: DropInfo) {
+        guard let dragged = draggingLineID, dragged != currentLine.id else { return }
+        reorderTimelines(draggedID: dragged, targetID: currentLine.id)
+    }
+
     func performDrop(info: DropInfo) -> Bool {
-        guard let itemProvider = info.itemProviders(for: [.text]).first else {
-            return false
-        }
-        
-        itemProvider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { (item, error) in
-            if let data = item as? Data,
-               let draggedLineIDString = String(data: data, encoding: .utf8),
-               let draggedLineID = UUID(uuidString: draggedLineIDString),
-               draggedLineID != currentLine.id {
-                
-                DispatchQueue.main.async {
-                    reorderTimelines(draggedID: draggedLineID, targetID: currentLine.id)
-                }
-            }
-        }
-        
+        // Порядок уже изменён вживую в dropEntered — здесь фиксируем и сохраняем.
+        draggingLineID = nil
+        timelineData.updateTimelines()
         return true
     }
-    
-    func dropEntered(info: DropInfo) {
-    }
-    
-    func dropExited(info: DropInfo) {
-    }
-    
+
+    func dropExited(info: DropInfo) {}
+
     private func reorderTimelines(draggedID: UUID, targetID: UUID) {
         guard let draggedIndex = timelineData.lines.firstIndex(where: { $0.id == draggedID }),
               let targetIndex = timelineData.lines.firstIndex(where: { $0.id == targetID }) else {
             return
         }
-        
+
         let draggedLine = timelineData.lines.remove(at: draggedIndex)
-        let newTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex
+        // При движении вниз обычно вставляем перед целью, но если цель — последняя строка,
+        // разрешаем встать в самый низ (иначе последнюю позицию не получить).
+        let newTargetIndex: Int
+        if draggedIndex < targetIndex {
+            newTargetIndex = (targetIndex == timelineData.lines.count) ? targetIndex : targetIndex - 1
+        } else {
+            newTargetIndex = targetIndex
+        }
         timelineData.lines.insert(draggedLine, at: newTargetIndex)
-        // Сохраняем новый порядок таймлайнов на диск (иначе сбрасывается при перезагрузке).
-        timelineData.updateTimelines()
     }
 }
 
@@ -2653,6 +2937,12 @@ struct TimelineMouseTracker: NSViewRepresentable {
                 // Длина клипа
                 add(sep + formatTimeStringCompact(stamp.duration))
 
+                // Комментарий (если есть)
+                if let comment = stamp.comment?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !comment.isEmpty {
+                    add(sep + comment)
+                }
+
                 onStampUpdate?(info, nil)
             } else {
                 onStampUpdate?(nil, nil)
@@ -2692,7 +2982,10 @@ struct ScreenshotMarkersView: View {
     let duration: Double
     let gridWidth: CGFloat
     let totalHeight: CGFloat
-    
+    /// На сколько поднять «голову» метки (синий карандаш) над линейкой, чтобы её
+    /// не перекрывал плейхед. Стебель метки при этом остаётся на своём месте.
+    var headLift: CGFloat = 0
+
     @ObservedObject var screenshotsManager = ScreenshotsMetadataManager.shared
     @ObservedObject var videoManager = VideoPlayerManager.shared
     @ObservedObject var timelineData = TimelineDataManager.shared
@@ -2783,10 +3076,19 @@ struct ScreenshotMarkersView: View {
     }
     
     private func screenshotMarker(for screenshot: ScreenshotMetadata) -> some View {
-        let xPosition = duration > 0 ? (screenshot.videoTime / duration) * gridWidth - 7 : 0
+        // Клампим влево: у начала длинного видео маркер (кружок) иначе уезжает в отрицательную
+        // координату и прячется под левым столбцом с названиями таймлайнов — по нему нельзя кликнуть.
+        let rawX = duration > 0 ? (screenshot.videoTime / duration) * gridWidth - 7 : 0
+        let xPosition = max(rawX, 1)
         let hasRelatedTags = !screenshot.relatedStampIds.isEmpty
         
-        return VStack(spacing: 0) {
+        // Стебель метки идёт по дорожкам, а «голова» (карандаш) поднята на headLift
+        // в верхнюю полосу — там её не перекрывает плейхед и по ней можно кликнуть.
+        return ZStack(alignment: .top) {
+            Rectangle()
+                .fill(hasRelatedTags ? Color.blue.opacity(0.5) : Color.gray.opacity(0.5))
+                .frame(width: 2, height: totalHeight)
+
             Button(action: {
                 videoManager.seek(to: screenshot.videoTime)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -2794,17 +3096,21 @@ struct ScreenshotMarkersView: View {
                 }
             }) {
                 Image(systemName: hasRelatedTags ? "pencil.circle.fill" : "pencil.circle")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(hasRelatedTags ? Color.blue.opacity(0.7) : Color.gray.opacity(0.6))
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(hasRelatedTags ? Color.blue.opacity(0.9) : Color.gray.opacity(0.7))
+                    .background(
+                        Circle()
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .padding(1)
+                    )
             }
             .buttonStyle(PlainButtonStyle())
             .help(String.Titles.fullControlScreenshotGoToHelp.format(formatTime(screenshot.videoTime)))
-            .padding(.bottom, 2)
             .contextMenu {
                 Button(^String.Titles.fullControlEdit) {
                     openScreenshotInEditor(screenshot)
                 }
-                
+
                 let availableStamps = getAvailableStampsForScreenshot(screenshot)
                 if !availableStamps.isEmpty {
                     Button(^String.Titles.fullControlEditBoundTags) {
@@ -2812,7 +3118,7 @@ struct ScreenshotMarkersView: View {
                         showScreenshotTagEditor = true
                     }
                 }
-                
+
                 Button(^String.Titles.deleteButtonTitle) {
                     deleteScreenshot(screenshot)
                 }
@@ -2830,10 +3136,7 @@ struct ScreenshotMarkersView: View {
                     hoveredScreenshot = nil
                 }
             }
-            
-            Rectangle()
-                .fill(hasRelatedTags ? Color.blue.opacity(0.5) : Color.gray.opacity(0.5))
-                .frame(width: 2, height: totalHeight)
+            .offset(y: -headLift)
         }
         .offset(x: xPosition - 1)
     }
@@ -3171,7 +3474,7 @@ struct UnlinkedScreenshotPopupView: View {
 }
 
 public extension ToolbarContent {
-    
+
     func disableGlassEffect() -> some ToolbarContent {
         if #available(macOS 26.0, *) {
             return sharedBackgroundVisibility(.hidden)
@@ -3180,3 +3483,4 @@ public extension ToolbarContent {
         }
     }
 }
+

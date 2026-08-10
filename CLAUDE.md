@@ -16,11 +16,47 @@ open Youchip-Stat.xcworkspace
 
 Build and run from Xcode (Cmd+B / Cmd+R). There are no automated tests.
 
+**Verify a change compiles from the CLI** (use this after edits — do not rely on
+SourceKit diagnostics, they are often spurious):
+
+```bash
+xcodebuild -workspace Youchip-Stat.xcworkspace -scheme Youchip-Stat -configuration Debug build CODE_SIGNING_ALLOWED=NO -quiet
+```
+
+Success = `** BUILD SUCCEEDED **`; read failures by grepping the output for `error:`.
+
+> **Do NOT run the build yourself** — it is slow and token-heavy. The user builds and
+> reports back whether it's OK. Write code carefully to compile; rely on the user's report
+> (and treat SourceKit diagnostics as often-spurious, per the note above).
+
 **Key build requirements:**
 - macOS 12.0+ deployment target
 - Xcode 13+
 - OpenCV dylibs are embedded from `/OpenCv/` directory — these are pre-built and shouldn't be modified
 - Code signing required for the embedded dylibs
+
+## Knowledge Base (vault/)
+
+Work **inline** — a single session, no subagent team (spawning agents is slow and
+token-heavy for this project). Instead the repo carries a rich, file-based knowledge
+base (an Obsidian vault) so one session can act fast with minimal re-exploration:
+**read the relevant vault notes before non-trivial work, and keep them up to date.**
+
+**Vault** — `vault/` (open as an Obsidian vault). See `vault/README.md`.
+- `vault/knowledge/architecture.md` — the codebase map: entry point, patterns, the
+  singletons/managers index, persistence, inter-module communication. Read this first.
+- `vault/knowledge/modules/` — one note per module (key files, its managers, gotchas).
+- `vault/knowledge/conventions/` — code style, localization.
+- `vault/decisions/` — ADRs (why non-obvious decisions were made).
+- `vault/tasks/` — lightweight task history (`backlog/` → `in-progress/` → `done/`).
+
+**Loop:** read the module note + `architecture.md` → implement → build (`xcodebuild`,
+above) → record any lasting, non-obvious lesson back into `vault/knowledge/`.
+
+**History log (rule):** After finishing any task, **prepend** an entry to
+`vault/HISTORY.md` (newest on top) with: date, task title, what was requested, what was
+done, and how it was fixed (files/approach). One concise entry per task — this is the
+running project history.
 
 ## Architecture
 

@@ -221,6 +221,7 @@
 "LayoutAnalyticsPng" = "標記_分析.png";  // ^String.Titles.layoutAnalyticsPng
 "LayoutAnalytics" = "標記分析";  // ^String.Titles.layoutAnalytics
 "SelectMapPositionForTag" = "為標籤選擇地圖位置:";  // ^String.Titles.selectMapPositionForTag
+"FieldMapMarkAllHint" = "在每張地圖上標記一個點以繼續";  // ^String.Titles.fieldMapMarkAllHint
 "TagLibrary" = "標籤庫";  // ^String.Titles.tagLibrary
 "FieldMapVisualizationSettings" = "場地地圖視覺化設定";  // ^String.Titles.fieldMapVisualizationSettings
 "EditScreenshot" = "編輯截圖";  // ^String.Titles.editScreenshot
@@ -399,6 +400,9 @@
 "SubscriptionActive" = "您有有效訂閱";  // ^String.Titles.subscriptionActive
 "VideoUploadLimit" = "您還可以上傳 %d 個視頻，共 %d 個";  // ^String.Titles.videoUploadLimit
 "VideoUploadLimitReached" = "視頻上傳限制已到。請登入以上傳更多檔案。";  // ^String.Titles.videoUploadLimitReached
+"ViewingSessionsLimit" = "觀看：剩餘 %d / %d";
+"ViewingLimitReachedTitle" = "觀看模式次數已用完";
+"ViewingLimitReachedMessage" = "沒有有效授權，無法建立新的觀看專案或向現有專案加入來源。請啟用授權以取消限制。";
 "RenewLicense" = "續費授權";  // ^String.Titles.renewLicense
 "MidDuration" = "平均持續時間";  // ^String.Titles.midDuration
 "AIReports" = "報告";
@@ -484,7 +488,7 @@
 "Show" = "顯示"; // ^String.Titles.show
 "SelectFormation" = "選擇陣型"; // ^String.Titles.selectFormation
 "NoAvailableFormations" = "無可用陣型"; // ^String.Titles.noAvailableFormations
-"players" = "球員"; // ^String.Titles.players
+"Players" = "球員"; // ^String.Titles.players
 "GlowColor" = "發光顏色:"; // ^String.Titles.glowColor
 "Radius" = "半徑:"; // ^String.Titles.radius
 "LineColor" = "線條顏色:"; // ^String.Titles.lineColor
@@ -524,6 +528,13 @@
 "AppearanceSystem" = "跟隨系統";
 "AppearanceLight" = "淺色";
 "AppearanceDark" = "深色";
+"LanguageTitle" = "介面語言";
+"LanguageAuto" = "跟隨系統";
+"SettingsTitle" = "設定";
+"SettingsExportSection" = "剪輯匯出";
+"SettingsExportWatermark" = "儲存剪輯時疊加浮水印（標籤名稱、標記）";
+"SettingsExportWatermarkHint" = "與匯出視窗選項相同的疊加層；透過 Cmd+S / Opt+Cmd+S 儲存時套用";
+"SettingsMenuItem" = "設定…";
 "Playlists" = "播放清單"; // ^String.Titles.playlists
 "Load" = "載入"; // ^String.Titles.load
 "CurrentUnsaved" = "當前（未儲存）"; // ^String.Titles.currentUnsaved
@@ -625,7 +636,7 @@
 "ProjectImportChooseFormatTitle" = "匯入專案";
 "ProjectImportChooseFormatMessage" = "選擇檔案類型：YouChip 專案（JSON）或 Sportcode / Angels / Wyscout 標註（XML）。";
 "ProjectImportSportcutFormat" = "YouChip Sportcut 專案（JSON）";
-"ProjectImportSportcodeXmlFormat" = "Sportscode / Angels / Wyscout（XML）";
+"ProjectImportSportcodeXmlFormat" = "SportCut / Sportscode / Angels / Wyscout（XML）";
 "ProjectImportNacsportXmlFormat" = "Nacsport（XML）";
 "ProjectImportDartfishXmlFormat" = "Dartfish（XML）";
 "SelectSportcodeXmlForImport" = "選擇包含事件的 XML 檔案（ALL_INSTANCES）";
@@ -1002,6 +1013,8 @@
 "MomentEventsPrefix" = "事件：%@";
 "MomentLabelsPrefix" = "標註：%@";
 "MomentWindowTitlePrefix" = "時刻：%@";
+"MomentClipNotFullyRecorded" = "片段尚未錄製完整——標籤的一部分還未進入緩衝。";
+"MomentRefreshClip" = "重新整理";
 
 // ReviewVideo
 "ReviewLoadingRecording" = "載入錄像...";
@@ -1020,6 +1033,8 @@
 // VideoPlayer
 "VideoHistoryToggle" = "歷史";
 "VideoHistoryHelp" = "顯示或隱藏視頻操作歷史";
+"VideoLockWindowsToggle" = "鎖定視窗";
+"VideoLockWindowsHelp" = "啟用後，標註視窗會記住目前佈局，並在每次開啟時按此佈局顯示";
 "VideoBroadcastPauseHelp" = "暫停直播";
 "VideoBroadcastResumeHelp" = "繼續直播";
 "VideoBroadcastStopHelp" = "停止直播並切換到普通標註模式";
@@ -1106,6 +1121,7 @@
 "KeyBindingsTapSourceHint" = "步驟 1：點選畫布上的來源按鈕";
 "KeyBindingsTapTargetHint" = "步驟 2：點選畫布上的目標按鈕";
 "KeyBindingsButtonAllBindings" = "此按鈕的所有繫結";
+"KeyBindingsDeleteAllForButton" = "刪除此按鈕的所有繫結";
 "CanvasEditTabParameters" = "參數";
 "CanvasEditTabAppearance" = "外觀";
 "CanvasEditName" = "名稱";
@@ -1178,3 +1194,184 @@
 "SportCutSlideAddLogo" = "新增標誌";
 "SportCutSlideDone" = "完成";
 "SportCutSlideSave" = "儲存";
+
+"CollectionDuplicateTo" = "複製到";
+"CollectionSelectedGroupsCountFormat" = "已選分組：%d";
+"CollectionClearSelection" = "取消選擇";
+"CollectionNoOtherCollections" = "沒有其他合集";
+"CollectionMultiSelectHint" = "⌘+點擊可選擇多個分組";
+"CollectionStandardReadOnly" = "唯讀";
+"CollectionCreateCopy" = "建立副本";
+"CollectionStandardOpenReadOnly" = "開啟（唯讀）";
+
+"VideosAddMenuTitle" = "新增";
+"VideosAddFromFile" = "從檔案";
+"VideosImportMenuTitle" = "匯入";
+"LicenseActive" = "授權已啟用";
+
+"SportCutSlideAddText" = "文字";
+"SportCutSlideAddImage" = "圖片";
+"SportCutSlideSelectHint" = "在畫布上選擇一個元素進行編輯。";
+"SportCutSlideTextElement" = "文字圖層";
+"SportCutSlideImageElement" = "圖片";
+"SportCutSlideFont" = "字體";
+"SportCutSlideFontSystem" = "系統";
+"SportCutSlideBold" = "粗體";
+"SportCutSlideReplaceImage" = "替換圖片";
+"SportCutSlideNewText" = "新文字";
+
+"ExportErrorNothingProduced" = "無法匯出任何片段。請確認影片可用。";
+"ExportErrorFailedGeneric" = "匯出失敗。";
+
+"KeyBindingsResetAll" = "全部重設";
+"KeyBindingsResetBindingsOnly" = "僅連結";
+
+// Heat Map
+"HeatMapLegendLow" = "較少";
+"HeatMapLegendHigh" = "較多";
+"HeatMapControlRadius" = "半徑";
+"HeatMapControlIntensity" = "對比度";
+"HeatMapControlShowMarkers" = "顯示標記";
+
+// Project Merge
+"MergeProjectsButton" = "合併";
+"MergeProjectsExitSelection" = "退出選擇";
+"MergeProjectsHelp" = "將多個專案合併為一個";
+"MergeProjectsSelectedCount" = "已選擇：%d";
+"MergeProjectsSelectionHint" = "點擊專案，數字表示合併順序";
+"MergeProjectsTitle" = "合併專案";
+"MergeProjectsSubtitle" = "影片依序接合，每個專案的標記會按前面影片的總長度順延。";
+"MergeProjectsNameLabel" = "新專案名稱";
+"MergeProjectsOrderLabel" = "合併順序";
+"MergeProjectsMergeLinesTitle" = "合併同名軌道";
+"MergeProjectsMergeLinesOn" = "同名軌道將合併為一條軌道。";
+"MergeProjectsMergeLinesOff" = "每條軌道會加上所屬專案的名稱，互不混合。";
+"MergeProjectsMergeLinesHint" = "發現了同名軌道。勾選的將合併為一條，其餘保持獨立（帶專案名稱）。";
+"MergeProjectsStartButton" = "合併";
+"MergeProjectsSavePanelTitle" = "儲存合併後的影片";
+"MergeProjectsSavePanelMessage" = "選擇合併影片的儲存位置";
+"MergeProjectsKeepOpenHint" = "操作完成前請勿關閉此視窗。";
+"MergeProjectsDefaultName" = "合併專案";
+"MergeStatusPreparing" = "準備中…";
+"MergeStatusExporting" = "正在接合影片…";
+"MergeStatusFinishing" = "正在建立專案…";
+"MergeErrorNotEnoughProjects" = "請至少選擇兩個專案。";
+"MergeErrorVideoUnavailable" = "專案「%@」的影片無法使用。";
+"MergeErrorNoVideoTrack" = "專案「%@」沒有影片軌道。";
+"MergeErrorComposition" = "無法產生合併影片。";
+"MergeErrorExport" = "無法匯出合併後的影片。";
+"MergeErrorCancelled" = "合併已取消。";
+"MergeErrorProjectCreation" = "無法建立新專案。";
+
+// Clip Auto-Save
+"ClipAutoSaveNotConfiguredBadge" = "未設定自動儲存資料夾";
+"ClipAutoSaveNotConfiguredTitle" = "未選擇自動儲存資料夾";
+"ClipAutoSaveNotConfiguredMessage" = "請選擇用於自動儲存剪輯（Cmd+S）的資料夾後重試。";
+"ClipAutoSavePickFolder" = "選擇資料夾…";
+"ClipAutoSaveChangeFolder" = "變更資料夾…";
+"ClipAutoSaveResetFolder" = "重設資料夾";
+"ClipAutoSaveCurrentFolder" = "資料夾：%@";
+"ClipAutoSaveConfiguredHelp" = "剪輯自動儲存：%@";
+"ClipAutoSavePickPrompt" = "選擇";
+"ClipAutoSavePickTitle" = "剪輯自動儲存資料夾";
+"ClipAutoSaveInProgress" = "正在儲存剪輯…";
+"ClipAutoSaveSuccess" = "剪輯已儲存：%@";
+"ClipAutoSaveErrorTitle" = "剪輯自動儲存";
+"ClipAutoSaveNoStampTitle" = "未選擇標籤";
+"ClipAutoSaveNoStampMessage" = "請在時間軸上選擇要儲存剪輯的標籤。";
+"ClipAutoSaveNoVideoMessage" = "目前影片無法使用。";
+"ClipAutoSaveBadRangeMessage" = "剪輯範圍無效。";
+"ClipAutoSaveExportFailedMessage" = "無法儲存剪輯。";
+"ClipAutoSaveNoSelectedClips" = "沒有選取的剪輯。";
+"ClipAutoSaveMergedInProgress" = "正在儲存合集…";
+"ClipAutoSaveMergedSuccess" = "合集已儲存：%@";
+"ClipAutoSaveMergedPrefix" = "合集";
+
+// Club Logo Watermark
+"ClubLogoTitle" = "俱樂部標誌";
+"ClubLogoHint" = "拖曳標誌並從角落調整大小。位置將用於匯出。";
+"ClubLogoChoose" = "選擇圖片";
+"ClubLogoReplace" = "替換圖片";
+"ClubLogoNotSet" = "未設定標誌";
+"ClubLogoMenuItem" = "俱樂部標誌";
+"ExportShowClubLogo" = "加入俱樂部標誌";
+"ExportClubLogoNotConfigured" = "未設定標誌 — 請在設定中設定";
+
+// Image Editor
+"MainTabEditor" = "編輯器";
+"EditorImages" = "圖片編輯器";
+"EditorAddImage" = "新增圖片";
+"EditorNewProject" = "新增專案";
+"EditorNoProjects" = "尚無專案";
+"EditorChooseImage" = "選擇圖片";
+"Back" = "返回";
+"Download" = "下載";
+"Open" = "開啟";
+"EditorImagesTool" = "圖片";
+"CollectionPasteGroups" = "貼上群組";
+
+"CollectionsCopySuffix" = "（副本）";
+
+"KeyBindingsMapZoneHint" = "Click the map zone to drop a point and set a position on the tag";
+
+"KeyBindingsAddMap" = "Add map";
+
+"KeyBindingsAddMapFromDisk" = "From file…";
+
+"KeyBindingsLoadedMaps" = "Loaded maps";
+
+"KeyBindingsExportSelected" = "Export selection";
+
+"KeyBindingsExportAll" = "Export all";
+
+"KeyBindingsExportPart" = "Export part";
+
+"KeyBindingsExportChoosePart" = "Choose what to export";
+
+"FreeLayoutBackgroundImage" = "Background image";
+
+"FreeLayoutChooseImage" = "Choose image";
+
+"FreeLayoutReplaceImage" = "Replace image";
+
+"ClipAutoExportBadge" = "自動匯出片段";
+
+// --- Added to match EN key coverage (Collections menu, KeyBindings, Video download from URL) ---
+"AddVideoFromURL" = "從網址新增";
+"CheckPermissions" = "檢查權限";
+"CollectionTypeKeyBindings" = "快速鍵";
+"CollectionTypeKeyBindingsDescription" = "在畫布上自由佈局標籤並綁定快速鍵。";
+"CollectionTypePickerHint" = "類型僅在建立時選擇，之後無法變更。";
+"CollectionTypePickerTitle" = "合集類型";
+"CollectionTypeStandard" = "標準";
+"CollectionTypeStandardDescription" = "標籤在標註庫中按群組顯示。";
+"CollectionsDeleteConfirmFormat" = "確定要刪除合集“%@”嗎？";
+"CollectionsMenuButton" = "合集";
+"CollectionsMenuEmpty" = "尚無自訂合集";
+"CollectionsMenuSubtitle" = "管理你的自訂標籤合集";
+"CollectionsMenuTitle" = "合集選單";
+"DownloadButtonTitle" = "下載";
+"DownloadVideoFromURL" = "從網址下載影片";
+"DownloadVideoFromURLDescription" = "貼上影片網址，選擇下載的畫質和格式";
+"DownloadingVideo" = "正在下載影片…";
+"DownloadsFolderAccessDescription" = "應用程式需要存取「下載」資料夾以儲存影片";
+"DownloadsFolderAccessGranted" = "已取得「下載」資料夾存取權限";
+"DownloadsFolderAccessRequired" = "需要「下載」資料夾存取權限";
+"EnterVideoURL" = "貼上影片網址";
+"FetchFormats" = "取得資訊";
+"FetchingVideoInfo" = "正在取得影片資訊…";
+"GrantAccessButtonTitle" = "授予存取權限";
+"KeyBindingsAddTimeEventHint" = "向畫布新增時間事件：";
+"KeyBindingsCanvasTimeEventsCount" = "時間事件：%d";
+"KeyBindingsNoTimeEvents" = "合集中沒有時間事件";
+"OpenSystemSettings" = "開啟系統設定";
+"SelectDownloadsFolderMessage" = "儲存影片需要存取「下載」資料夾。請在下一個對話框中選擇「下載」資料夾。";
+"SelectQuality" = "選擇畫質";
+"TryAgain" = "重試";
+"UseServerVideoName" = "使用伺服器的影片名稱";
+"UseServerVideoNameDescription" = "略過球隊/比分輸入，使用伺服器的影片名稱";
+"VideoDownloaded" = "影片下載成功";
+"VideoDownloadedDescription" = "影片已儲存至「下載」資料夾。繼續將其新增到你的專案";
+"VideoFormat" = "影片格式";
+"VideoTitle" = "影片標題";
+"VideoURL" = "影片網址";

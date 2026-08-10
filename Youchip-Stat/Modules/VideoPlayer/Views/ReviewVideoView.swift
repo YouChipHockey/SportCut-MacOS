@@ -20,8 +20,10 @@ struct ReviewVideoView: View {
                 Color.black.ignoresSafeArea()
 
                 if let player = videoManager.reviewPlayer {
-                    VideoPlayer(player: player)
-                        .ignoresSafeArea()
+                    ZoomableVideoPlayerView(player: player) {
+                        VideoPlayer(player: player)
+                    }
+                    .ignoresSafeArea()
                 } else {
                     VStack(spacing: 12) {
                         ProgressView()

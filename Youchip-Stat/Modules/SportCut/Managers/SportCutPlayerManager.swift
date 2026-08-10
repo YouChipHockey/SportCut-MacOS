@@ -16,7 +16,7 @@ enum SportCutPlaylistPlaybackKind {
 }
 
 class SportCutPlayerManager: ObservableObject {
-    @Published var player: AVPlayer = AVPlayer()
+    @Published var player: AVPlayer = AVPlayer().applyDebugMuteIfNeeded()
     @Published var isPlaying: Bool = false
     @Published var currentTime: Double = 0
     @Published var videoDuration: Double = 0
@@ -763,18 +763,21 @@ class SportCutPlayerManager: ObservableObject {
         for event in events {
             let ev = resolvedAgainstSession(event)
 
-            // Титульный слайд — отдельное видео без аудио. Автономный клип (кэш) — уже обрезанный файл целиком.
-            let cachedClipURL: URL? = ev.isSlide ? nil : sessionID.flatMap { SportCutClipCache.cachedClipURL(sessionID: $0, event: ev) }
+            // Титульный слайд — отдельное видео без аудио.
+            // Пока оригинал доступен — играем из источника (учитываются правки start/duration);
+            // если оригинал удалён/проект убран из сессии — берём автономный клип из кэша (обрезанный файл целиком).
+            let sourceURL: URL? = ev.isSlide ? nil : sources.first(where: { $0.id == ev.sourceID })?.resolveVideoURL()
+            let cachedClipURL: URL? = (ev.isSlide || sourceURL != nil)
+                ? nil
+                : sessionID.flatMap { SportCutClipCache.cachedClipURL(sessionID: $0, event: ev) }
             let isCachedClip = cachedClipURL != nil
             let treatAsWholeFile = ev.isSlide || isCachedClip
 
             let resolvedURL: URL?
             if ev.isSlide {
                 resolvedURL = ev.slideID.flatMap { slideVideoURLs[$0] }
-            } else if let cachedClipURL {
-                resolvedURL = cachedClipURL
             } else {
-                resolvedURL = sources.first(where: { $0.id == ev.sourceID })?.resolveVideoURL()
+                resolvedURL = sourceURL ?? cachedClipURL
             }
             guard let url = resolvedURL else { continue }
 
@@ -950,6 +953,41 @@ class SportCutPlayerManager: ObservableObject {
         return (0, 0)
     }
 
+    /// Доля проигранного ТОЛЬКО по клипам (без учёта титульных слайдов) для плейхеда линии плейлиста
+    /// в режиме фильма. Пока идёт слайд-сегмент, плейхед стоит на границе клипов, а не «убегает» вперёд —
+    /// так же, как он стоит на месте во время показа картинки/рисунка.
+    func filmClipPlayheadFraction() -> Double? {
+        guard playlistPlaybackKind == .singleFilm,
+              !filmSegmentStartSeconds.isEmpty,
+              filmSegmentStartSeconds.count == filmSegmentDurationSeconds.count,
+              filmSegmentStartSeconds.count == playlistEvents.count else { return nil }
+
+        let t = player.currentTime().seconds
+        guard t.isFinite, t >= 0 else { return nil }
+
+        var clipTotal = 0.0
+        for (i, ev) in playlistEvents.enumerated() where !ev.isSlide {
+            clipTotal += filmSegmentDurationSeconds[i]
+        }
+        guard clipTotal > 0 else { return nil }
+
+        var clipElapsed = 0.0
+        for (i, ev) in playlistEvents.enumerated() {
+            let segStart = filmSegmentStartSeconds[i]
+            let segEnd = segStart + filmSegmentDurationSeconds[i]
+            if t >= segEnd {
+                if !ev.isSlide { clipElapsed += filmSegmentDurationSeconds[i] }
+                continue
+            }
+            // t внутри или до этого сегмента — учитываем частично только для клипа, слайд стоит на границе.
+            if t >= segStart, !ev.isSlide {
+                clipElapsed += (t - segStart)
+            }
+            break
+        }
+        return min(max(clipElapsed / clipTotal, 0), 1)
+    }
+
     /// Maps `player.currentTime` to local seconds inside the active clip. During playlist edge-resize preview
     /// the item is the **raw source file**, so time is absolute on that file — not film-global composition time.
     private func clipLocalTimeFromPlayerSeconds(_ globalPlayerSeconds: Double) -> Double {
@@ -988,16 +1026,13 @@ class SportCutPlayerManager: ObservableObject {
         currentEvent = event
         shownDrawingNames.removeAll()
 
-        // Автономный клип из кэша (исходное видео могло быть удалено) — уже обрезанный файл целиком.
-        let cachedClipURL = sessionID.flatMap { SportCutClipCache.cachedClipURL(sessionID: $0, event: event) }
+        // Пока исходное видео доступно — играем из него (учитываются правки start/duration).
+        // Если оригинал удалён/проект убран из сессии — берём автономный клип из кэша (обрезанный файл целиком).
+        let sourceURL = sources.first(where: { $0.id == event.sourceID })?.resolveVideoURL()
+        let cachedClipURL = sourceURL == nil ? sessionID.flatMap { SportCutClipCache.cachedClipURL(sessionID: $0, event: event) } : nil
         let isCachedClip = cachedClipURL != nil
 
-        let resolvedURL: URL?
-        if let cachedClipURL {
-            resolvedURL = cachedClipURL
-        } else {
-            resolvedURL = sources.first(where: { $0.id == event.sourceID })?.resolveVideoURL()
-        }
+        let resolvedURL: URL? = sourceURL ?? cachedClipURL
         guard let url = resolvedURL else {
             advanceToNextEvent()
             return
@@ -1328,8 +1363,37 @@ class SportCutPlayerManager: ObservableObject {
         drawingCheckTimer = nil
     }
 
+    /// Кэш метаданных скриншотов-рисунков из ОРИГИНАЛЬНОЙ разметки (по projectID источника).
+    private var markupScreenshotsCache: [String: [ScreenshotMetadata]] = [:]
+
+    private func screenshotsFolder(forProjectID projectID: String) -> URL? {
+        VideoFilesManager.shared.files.first(where: { $0.videoData.id == projectID })?.screenshotsFolder
+    }
+
+    /// Скриншоты-рисунки из оригинальной разметки проекта (кэшируются на время сессии).
+    private func markupScreenshots(forProjectID projectID: String) -> [ScreenshotMetadata] {
+        if let cached = markupScreenshotsCache[projectID] { return cached }
+        guard let folder = screenshotsFolder(forProjectID: projectID) else {
+            markupScreenshotsCache[projectID] = []
+            return []
+        }
+        var result: [ScreenshotMetadata] = []
+        if let urls = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) {
+            for url in urls where url.pathExtension.lowercased() == "json" {
+                if let data = try? Data(contentsOf: url),
+                   let meta = try? JSONDecoder().decode(ScreenshotMetadata.self, from: data) {
+                    result.append(meta)
+                }
+            }
+        }
+        markupScreenshotsCache[projectID] = result
+        return result
+    }
+
     private func checkForDrawingAtCurrentTime() {
-        guard !isEditorMode, !isShowingDrawing, currentPlaylistID != nil else { return }
+        // Работает и для плейлистов, и для одиночного проигрывания эпизода из таблицы (playEvent),
+        // где currentPlaylistID == nil — рисунки из оригинальной разметки должны показываться и там.
+        guard !isEditorMode, !isShowingDrawing, isPlaying else { return }
         guard let sessionID = sessionID else { return }
         guard let event = currentEvent else { return }
 
@@ -1340,34 +1404,54 @@ class SportCutPlayerManager: ObservableObject {
         // compareTime = локальное время внутри текущего клипа (с учётом overrides)
         let compareTime = clipLocalTimeFromPlayerSeconds(globalT)
 
-        let drawings = currentEventDrawings()
-        guard !drawings.isEmpty else { return }
-
-        // Пересчёт: drawing.videoTime — локальное время в ОРИГИНАЛЬНОМ клипе.
-        // Нужно перевести в локальное время EFFECTIVE клипа.
         let originalStart = event.startTime
         let effectiveStart = playlistStartOverrides[event.hiddenKey] ?? event.startTime
         let effectiveDuration = playlistDurationOverrides[event.hiddenKey] ?? event.duration
+        let effectiveEnd = effectiveStart + effectiveDuration
 
-        guard let matched = drawings.first(where: { drawing in
-            // Абсолютное время рисунка на исходном видео
-            let absDrawingTime = originalStart + drawing.videoTime
-            // Проверяем что рисунок попадает в effective границы клипа
-            let effectiveEnd = effectiveStart + effectiveDuration
-            guard absDrawingTime >= effectiveStart && absDrawingTime <= effectiveEnd else { return false }
-            // Локальное время рисунка в effective клипе
-            let effectiveLocalTime = absDrawingTime - effectiveStart
-            return abs(effectiveLocalTime - compareTime) < 0.15 && !shownDrawingNames.contains(drawing.imageName)
+        // Кандидат = картинка + её АБСОЛЮТНОЕ время на исходном видео.
+        struct DrawingCandidate { let name: String; let absTime: Double; let url: URL }
+        var candidates: [DrawingCandidate] = []
+
+        // 1) Рисунки, добавленные к клипу в плейлисте (в папке сессии). drawing.videoTime — локально в клипе.
+        let sessionFolder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
+        for drawing in currentEventDrawings() {
+            candidates.append(DrawingCandidate(
+                name: drawing.imageName,
+                absTime: originalStart + drawing.videoTime,
+                url: sessionFolder.appendingPathComponent(drawing.imageName)
+            ))
+        }
+
+        // 2) Рисунки из ОРИГИНАЛЬНОЙ разметки: скриншоты проекта, привязанные к этому штампу.
+        //    meta.videoTime — абсолютное время на исходном видео.
+        if let source = sources.first(where: { $0.id == event.sourceID }),
+           let projectID = source.projectID,
+           let folder = screenshotsFolder(forProjectID: projectID) {
+            for meta in markupScreenshots(forProjectID: projectID) where meta.relatedStampIds.contains(event.stampID) {
+                let imageFile = meta.screenshotName.hasSuffix(".png") ? meta.screenshotName : "\(meta.screenshotName).png"
+                candidates.append(DrawingCandidate(
+                    name: imageFile,
+                    absTime: meta.videoTime,
+                    url: folder.appendingPathComponent(imageFile)
+                ))
+            }
+        }
+
+        guard !candidates.isEmpty else { return }
+
+        guard let matched = candidates.first(where: { candidate in
+            guard candidate.absTime >= effectiveStart, candidate.absTime <= effectiveEnd else { return false }
+            let effectiveLocalTime = candidate.absTime - effectiveStart
+            return abs(effectiveLocalTime - compareTime) < 0.15 && !shownDrawingNames.contains(candidate.name)
         }) else { return }
 
-        let folder = SportCutPlayerManager.drawingsFolder(sessionID: sessionID)
-        let imgURL = folder.appendingPathComponent(matched.imageName)
-        guard let nsImage = NSImage(contentsOf: imgURL) else { return }
+        guard let nsImage = NSImage(contentsOf: matched.url) else { return }
 
         pause()
         displayedDrawingImage = nsImage
         isShowingDrawing = true
-        shownDrawingNames.insert(matched.imageName)
+        shownDrawingNames.insert(matched.name)
     }
 
     func deleteDrawing(_ drawing: SportCutEventDrawing, event: SportCutEvent? = nil, playlistID: UUID? = nil) {

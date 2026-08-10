@@ -26,7 +26,19 @@ struct Tag: Identifiable, Codable, Equatable {
     var mapEnabled: Bool?
     var isInterval: Bool?
     /// Id карты (PlayField), которую использует этот тег при разметке. nil = первая карта коллекции (обратная совместимость).
+    /// Оставлено для совместимости со старыми коллекциями; актуальный список — в `mapFieldIds`.
     var mapFieldId: String? = nil
+    /// Ids карт (PlayField), на которых нужно отметить точку для этого тега. Пусто/nil —
+    /// используется `mapFieldId`, а если и он пуст — первая карта коллекции.
+    var mapFieldIds: [String]? = nil
+
+    /// Эффективный список карт тега: сперва `mapFieldIds`, затем одиночный `mapFieldId`.
+    /// Пустой список означает «первая карта коллекции» (обратная совместимость).
+    var resolvedMapFieldIds: [String] {
+        if let ids = mapFieldIds, !ids.isEmpty { return ids }
+        if let single = mapFieldId, !single.isEmpty { return [single] }
+        return []
+    }
 }
 
 extension Tag {
@@ -68,9 +80,26 @@ struct NamesData: Codable {
     var names: [String]
 }
 
+struct LanguageCollectionItem: Codable {
+    /// Уникальное имя папки/ресурса коллекции (напр. "Football_fr"), по нему грузятся JSON.
+    let folder: String
+    /// Отображаемое имя на языке коллекции (напр. «Football»).
+    let name: String
+}
+
 struct LanguageCollection: Codable {
     let language: String
-    let names: [String]
+    /// Старый формат: имя папки == отображаемому имени.
+    let names: [String]?
+    /// Новый формат: папка и отображаемое имя разделены (чтобы имена папок не конфликтовали).
+    let items: [LanguageCollectionItem]?
+
+    /// Нормализованный список (folder, name) независимо от формата файла.
+    var resolvedItems: [LanguageCollectionItem] {
+        if let items { return items }
+        if let names { return names.map { LanguageCollectionItem(folder: $0, name: $0) } }
+        return []
+    }
 }
 
 struct LanguageCollectionsData: Codable {
@@ -98,11 +127,26 @@ struct LabelGroupData: Codable, Identifiable, Hashable {
 }
 
 extension Array where Element == LabelGroupData {
-    
+
     var sortedByName: [LabelGroupData] {
         sorted(by: { $0.name < $1.name })
     }
-    
+
+}
+
+extension LabelGroupData {
+    /// true, если у группы «настоящее» имя: непустое и не равное её id.
+    /// Синтетические группы (реконструированные для импортированных видео без коллекции)
+    /// именуются своим id — такие не показываются в фильтре как отдельные группы.
+    var isNameResolved: Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed != id
+    }
+
+    /// Имя для подписей (таблица/экспорт/вотермарка): обобщённое «Лейблы», если имя не резолвится.
+    var labelGroupDisplayName: String {
+        isNameResolved ? name : (^String.Titles.sportCutLabels)
+    }
 }
 
 struct LabelGroupsData: Codable {

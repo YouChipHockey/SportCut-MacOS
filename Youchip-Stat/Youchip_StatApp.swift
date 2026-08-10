@@ -15,6 +15,7 @@ struct Youchip_StatApp: App {
     
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var authManager = AuthManager()
+    @StateObject private var languageManager = LanguageManager.shared
     @State private var showTimeManipulationAlert = false
     @State private var showVersionOutdatedAlert = false
     @State private var ivanBlockEnabled = false
@@ -30,6 +31,8 @@ struct Youchip_StatApp: App {
             } else {
                 ContentView()
                     .environmentObject(authManager)
+                    .environmentObject(languageManager)
+                    .id(languageManager.refreshToken)
                     .onAppear {
                         if authManager.timeManipulationDetected {
                             showTimeManipulationAlert = true
@@ -171,24 +174,28 @@ struct Youchip_StatApp: App {
 enum MainTab: String, CaseIterable {
     case markup
     case viewing
-    
+    case editor
+
     var title: String {
         switch self {
         case .markup: return ^String.Titles.mainTabMarkup
         case .viewing: return ^String.Titles.mainTabViewing
+        case .editor: return ^String.Titles.mainTabEditor
         }
     }
-    
+
     var icon: String {
         switch self {
         case .markup: return "pencil.and.ruler"
         case .viewing: return "play.rectangle.on.rectangle"
+        case .editor: return "photo.artframe"
         }
     }
 }
 
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var languageManager: LanguageManager
     @State private var selectedTab: MainTab = .markup
     @AppStorage(AppSetupManager.appearanceKey) private var appearanceRaw: String = AppSetupManager.currentAppearanceMode().rawValue
 
@@ -214,10 +221,40 @@ struct ContentView: View {
                     .environmentObject(authManager)
             case .viewing:
                 SportCutListView()
+            case .editor:
+                ImageEditorHomeView()
             }
         }
     }
     
+    /// Коллекции доступны из верхней строки на любой вкладке (разметка / просмотр / редактор),
+    /// поэтому доступ к ним всегда виден, а не спрятан внутри вкладки «Разметка».
+    private var collectionsButton: some View {
+        Button(action: {
+            WindowsManager.shared.openCollectionsMenuWindow()
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "folder")
+                    .font(.system(size: 13))
+                Text(^String.Titles.collectionsMenuButton)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundColor(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .help(^String.Titles.collectionsMenuButton)
+    }
+
     private var appearanceMenu: some View {
         Menu {
             ForEach(AppAppearanceMode.allCases) { mode in
@@ -244,6 +281,44 @@ struct ContentView: View {
         .help(^String.Titles.appearanceTitle)
     }
 
+    private var languageMenu: some View {
+        Menu {
+            Button {
+                languageManager.apply(nil)
+            } label: {
+                HStack {
+                    Text(^String.Titles.languageAuto)
+                    if languageManager.current == nil {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+
+            Divider()
+
+            ForEach(AppLanguage.allCases) { lang in
+                Button {
+                    languageManager.apply(lang)
+                } label: {
+                    HStack {
+                        Text(lang.nativeName)
+                        if languageManager.current == lang {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "globe")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(^String.Titles.languageTitle)
+    }
+
     private var appearanceIcon: String {
         switch AppAppearanceMode(rawValue: appearanceRaw) ?? .dark {
         case .system: return "circle.lefthalf.filled"
@@ -262,23 +337,47 @@ struct ContentView: View {
 
     private var mainTabBar: some View {
         HStack(spacing: 0) {
-            ForEach(MainTab.allCases, id: \.self) { tab in
-                Button(action: { selectedTab = tab }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 14))
-                        Text(tab.title)
-                            .font(.system(size: 14, weight: .medium))
+            HStack(spacing: 2) {
+                ForEach(MainTab.allCases, id: \.self) { tab in
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.15)) { selectedTab = tab }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 13))
+                            Text(tab.title)
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .foregroundColor(selectedTab == tab ? .white : .secondary)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(selectedTab == tab ? Color.accentColor : Color.clear)
+                        )
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(selectedTab == tab ? Color.blue : Color.clear)
-                    .foregroundColor(selectedTab == tab ? .white : .primary)
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
             }
+            .padding(3)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+                    )
+            )
+            .padding(.leading, 12)
+            .padding(.vertical, 8)
 
             Spacer()
+
+            collectionsButton
+                .padding(.trailing, 12)
+
+            languageMenu
+                .padding(.trailing, 12)
 
             appearanceMenu
                 .padding(.trailing, 12)

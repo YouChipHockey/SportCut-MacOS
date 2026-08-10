@@ -40,6 +40,10 @@ struct KeyBindingArrowLinesOverlay: View {
     /// Когда задан — рисуются только связки, входящие в эту кнопку или исходящие из неё.
     var focusedSourceKey: String? = nil
 
+    /// Тема окна — чтобы «белые» highlight-стрелки красить в чёрный в светлой теме.
+    /// (Динамический NSColor внутри Canvas разрешается по фиксированному appearance и не адаптируется.)
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Canvas { ctx, size in
             let grouped = KeyBindingArrowGeometry.groupedBindings(layout)
@@ -77,12 +81,17 @@ struct KeyBindingArrowLinesOverlay: View {
         !group.isEmpty && group.allSatisfy { $0.type == .exclusive }
     }
 
+    /// «Белая» стрелка highlight-связки: в светлой теме белый не виден, поэтому красим в чёрный.
+    private var highlightArrowColor: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
     /// Цвет стрелки по типу связки.
     private func arrowColor(for type: KeyBindingType?) -> Color {
         switch type {
         case .activation:          return Color(red: 0.00, green: 0.45, blue: 0.16) // тёмно-зелёный
         case .deactivation:        return .red                                       // красный
-        case .highlight:           return .white                                     // белый
+        case .highlight:           return highlightArrowColor                         // белый в тёмной теме, чёрный в светлой
         case .exclusive:           return .orange                                    // оранжевый
         case .intervalInversion:   return .purple                                    // фиолетовый
         case .visibility:          return Color(red: 0.60, green: 0.85, blue: 0.30)  // салатовый

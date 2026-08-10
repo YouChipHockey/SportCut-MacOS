@@ -23,9 +23,16 @@ struct TimelinePlayheadView: View {
     let isResizingTag: Bool
 
     private let hitWidth: CGFloat = 16
+    /// Высота зоны захвата, когда зажат Cmd — только верхняя «ручка»-треугольник. Ниже (по стеблю)
+    /// клики проходят сквозь плейхед к тегам, чтобы стебель не мешал выбирать теги Cmd+ЛКМ.
+    /// Без Cmd плейхед тянется по всей высоте (как раньше).
+    private let grabHitHeight: CGFloat = 22
     @State private var lastScrubVideoPreviewAt = Date.distantPast
     private let scrubVideoPreviewMinInterval: TimeInterval = 0.033
     @State private var wasPlayingBeforePlayheadDrag = false
+    /// Зажат ли сейчас Cmd (для мультивыбора тегов). Отслеживается монитором `.flagsChanged`.
+    @State private var isCommandHeld = false
+    @State private var flagsMonitor: Any?
 
     // The position at which the playhead (stem tip) is drawn.
     // Stamp-edge drag takes priority, then interactive playhead drag (clamped
@@ -40,20 +47,48 @@ struct TimelinePlayheadView: View {
     }
 
     var body: some View {
-        Color.clear
+        // Визуал плейхеда (треугольник + стебель) кликов НЕ перехватывает — иначе стебель по всей
+        // высоте мешает выбирать теги. Перетаскивание/курсор — только на верхней зоне-«ручке».
+        PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
             .frame(width: hitWidth)
-            .overlay(
-                PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
+            .allowsHitTesting(false)
+            .overlay(alignment: .top) {
+                // Зажат Cmd → зона захвата только у треугольника (стебель пропускает клики к тегам).
+                // Cmd не зажат → плейхед тянется по всей высоте, как раньше.
+                Color.clear
                     .frame(width: hitWidth)
-            )
-            .contentShape(Rectangle())
-            .offset(x: displayX - (hitWidth / 2 - 1))
-            .onHover { isHovering in
-                NSCursor.setHiddenUntilMouseMoves(false)
-                if isHovering { NSCursor.openHand.set() } else { NSCursor.arrow.set() }
+                    .frame(maxHeight: isCommandHeld ? grabHitHeight : .infinity, alignment: .top)
+                    .contentShape(Rectangle())
+                    .onHover { isHovering in
+                        NSCursor.setHiddenUntilMouseMoves(false)
+                        if isHovering { NSCursor.openHand.set() } else { NSCursor.arrow.set() }
+                    }
+                    .gesture(playheadDragGesture)
             }
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineSpace"))
+            .offset(x: displayX - (hitWidth / 2 - 1))
+            .onAppear { installCommandMonitor() }
+            .onDisappear { removeCommandMonitor() }
+    }
+
+    private func installCommandMonitor() {
+        guard flagsMonitor == nil else { return }
+        isCommandHeld = NSEvent.modifierFlags.contains(.command)
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            let held = event.modifierFlags.contains(.command)
+            DispatchQueue.main.async { isCommandHeld = held }
+            return event
+        }
+    }
+
+    private func removeCommandMonitor() {
+        if let m = flagsMonitor {
+            NSEvent.removeMonitor(m)
+            flagsMonitor = nil
+        }
+    }
+
+    private var playheadDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineSpace"))
                     .onChanged { value in
                         guard tagEdgePosition == nil, !isResizingTag else { return }
                         scrollController.stopAutoScrollFollow()
@@ -95,7 +130,6 @@ struct TimelinePlayheadView: View {
                         lastScrubVideoPreviewAt = .distantPast
                         VideoPlayerManager.shared.seek(to: time, resumePlaybackAfterSeek: resume)
                     }
-            )
     }
 
 }

@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		4AB1CFD7C1E27E3D0B523A6A /* Pods_Youchip_Stat.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6BBA2F9F6901345D52F5F70 /* Pods_Youchip_Stat.framework */; };
 		AA00000130000001AAAAAAAA /* TimelineMigrationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000030000001AAAAAAAA /* TimelineMigrationManager.swift */; };
+		AA00000130000002AAAAAAAA /* LanguageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000030000002AAAAAAAA /* LanguageManager.swift */; };
+		AA00000130000003AAAAAAAA /* AppSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000030000003AAAAAAAA /* AppSettingsStore.swift */; };
 		AABB0001F0000000000003 /* HaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = AABB0001F0000000000002 /* HaishinKit */; };
 		BF37EEBC2F4F65A70048E583 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF37EEBB2F4F659F0048E583 /* AppConfig.swift */; };
 		BF6715C02EF6E69700A71E47 /* NSAttributedString+Convenience.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */; };
@@ -86,6 +88,8 @@
 		23DAB237503920889C6C4438 /* Pods-Youchip-Stat.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.debug.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.debug.xcconfig"; sourceTree = "<group>"; };
 		2EA66B918FEF070C401BD61D /* Pods-Youchip-Stat.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Youchip-Stat.release.xcconfig"; path = "Target Support Files/Pods-Youchip-Stat/Pods-Youchip-Stat.release.xcconfig"; sourceTree = "<group>"; };
 		AA00000030000001AAAAAAAA /* TimelineMigrationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineMigrationManager.swift; sourceTree = "<group>"; };
+		AA00000030000002AAAAAAAA /* LanguageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageManager.swift; sourceTree = "<group>"; };
+		AA00000030000003AAAAAAAA /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
 		BF37EEBB2F4F659F0048E583 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		BF6715BF2EF6E68A00A71E47 /* NSAttributedString+Convenience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSAttributedString+Convenience.swift"; sourceTree = "<group>"; };
 		BFDA33492EEDBD9100358696 /* URLConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLConstants.swift; sourceTree = "<group>"; };
@@ -177,11 +181,6 @@
 			path = Modules;
 			sourceTree = "<group>";
 		};
-		DDFB1A352DE510CF00175D97 /* web/dist */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = web/dist;
-			sourceTree = SOURCE_ROOT;
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -224,6 +223,8 @@
 				BFE847232F3CFAD8005458F4 /* CollectionsBookmarksManager.swift */,
 				BFE8416C2F3CD7CF005458F4 /* CollectionsBackupManager.swift */,
 				AA00000030000001AAAAAAAA /* TimelineMigrationManager.swift */,
+				AA00000030000002AAAAAAAA /* LanguageManager.swift */,
+				AA00000030000003AAAAAAAA /* AppSettingsStore.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -278,7 +279,6 @@
 		DD32C2622D74A00C0052B5C6 /* Youchip-Stat */ = {
 			isa = PBXGroup;
 			children = (
-				DDFB1A352DE510CF00175D97 /* web/dist */,
 				DD32C2612D74A00C0052B5C6 /* Youchip_StatApp.swift */,
 				DD32C28A2D74A1180052B5C6 /* AppDelegate.swift */,
 				DD32C2672D74A0110052B5C6 /* Common */,
@@ -416,7 +416,6 @@
 			fileSystemSynchronizedGroups = (
 				DD8971AA2E420A6A00DD2AB8 /* BaseCollections */,
 				DDAAF3732EE820000037060D /* Modules */,
-				DDFB1A352DE510CF00175D97 /* web/dist */,
 			);
 			name = "Youchip-Stat";
 			packageProductDependencies = (
@@ -608,6 +607,8 @@
 				BFDA334A2EEDBD9E00358696 /* URLConstants.swift in Sources */,
 				BFE84FBC2F3FA95C005458F4 /* InMemoryStorageManager.swift in Sources */,
 				AA00000130000001AAAAAAAA /* TimelineMigrationManager.swift in Sources */,
+				AA00000130000002AAAAAAAA /* LanguageManager.swift in Sources */,
+				AA00000130000003AAAAAAAA /* AppSettingsStore.swift in Sources */,
 				BF37EEBC2F4F65A70048E583 /* AppConfig.swift in Sources */,
 				BFE8375C2F3C670A005458F4 /* OrphanedTimelinesManager.swift in Sources */,
 				BFE8375D2F3C670A005458F4 /* OrphanedTimelinesRecoveryView.swift in Sources */,
@@ -909,8 +910,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/HaishinKit/HaishinKit.swift";
 			requirement = {
-				kind = upToNextMinorVersion;
-				minimumVersion = 2.0.0;
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.2.5;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

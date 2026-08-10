@@ -143,29 +143,31 @@ struct SportCutMainView: View {
 
     /// Вертикальный разделитель между панелью плейлистов и плеером — тянется по горизонтали.
     private func playlistResizeHandle(maxWidth: CGFloat) -> some View {
-        ZStack {
-            Rectangle()
-                .fill(Color(NSColor.separatorColor))
-                .frame(width: 1)
-            Color.clear
-                .frame(width: 10)
-                .contentShape(Rectangle())
-        }
-        .frame(width: 10)
-        .onHover { hovering in
-            if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
-        }
-        .gesture(
-            // Глобальная система координат: перемещение считается от экрана, а не от самого
-            // разделителя (который двигается при ресайзе) — иначе получается рывками.
-            DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                .onChanged { value in
-                    if dragStartLeftWidth == nil { dragStartLeftWidth = leftPanelWidth }
-                    let base = dragStartLeftWidth ?? leftPanelWidth
-                    leftPanelWidth = min(max(base + value.translation.width, minLeftPanelWidth), maxWidth)
-                }
-                .onEnded { _ in dragStartLeftWidth = nil }
-        )
+        // Занимает в раскладке узкую полосу (видимая линия), но зона захвата шире и
+        // вынесена поверх плеера (overlay + zIndex), чтобы видео не перехватывало ресайз.
+        Rectangle()
+            .fill(Color(NSColor.separatorColor))
+            .frame(width: 1)
+            .overlay(
+                Color.clear
+                    .frame(width: 22)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in
+                        if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
+                    }
+                    .gesture(
+                        // Глобальная система координат: перемещение считается от экрана, а не от самого
+                        // разделителя (который двигается при ресайзе) — иначе получается рывками.
+                        DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                            .onChanged { value in
+                                if dragStartLeftWidth == nil { dragStartLeftWidth = leftPanelWidth }
+                                let base = dragStartLeftWidth ?? leftPanelWidth
+                                leftPanelWidth = min(max(base + value.translation.width, minLeftPanelWidth), maxWidth)
+                            }
+                            .onEnded { _ in dragStartLeftWidth = nil }
+                    )
+            )
+            .zIndex(1)
     }
 
     /// Горизонтальный разделитель между верхней областью (плеер/плейлисты) и таймлайном — тянется по вертикали.

@@ -11,6 +11,8 @@ struct VideoMarkupHistoryItem: Identifiable, Equatable {
     let isSaved: Bool
     /// Hex цвета тега для точки в списке истории (например из `Tag.color`).
     let tagColorHex: String?
+    /// Имя тега — чтобы убрать запись из истории при удалении тега.
+    let tagName: String?
 }
 
 struct VideoMarkupRecordingItem: Identifiable, Equatable {
@@ -57,13 +59,24 @@ final class VideoMarkupActivityBanner: ObservableObject {
         activeRecordings.removeAll { $0.tagName == tagName }
         let savedText = String.Titles.videoMarkupToastIntervalSaved.format(tagName)
         showTransientToast(savedText, addToHistory: false)
-        appendToHistory(text: savedText, isSaved: true, tagColorHex: tagColorHex)
+        appendToHistory(text: savedText, isSaved: true, tagColorHex: tagColorHex, tagName: tagName)
     }
-    
+
     func notifyInstantTagAdded(tagName: String, tagColorHex: String? = nil) {
         let text = String.Titles.videoMarkupToastTagAdded.format(tagName)
         showTransientToast(text, addToHistory: false)
-        appendToHistory(text: text, isSaved: true, tagColorHex: tagColorHex)
+        appendToHistory(text: text, isSaved: true, tagColorHex: tagColorHex, tagName: tagName)
+    }
+
+    /// Убирает из истории ОДНУ запись удалённого тега (по имени) — самую свежую.
+    /// Одному удалённому штампу соответствует одна запись в истории, поэтому
+    /// стираем только один экземпляр, а не все записи этого тега.
+    func removeFromHistory(tagName: String) {
+        let trimmed = tagName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if let idx = historyItems.firstIndex(where: { $0.tagName == trimmed }) {
+            historyItems.remove(at: idx)
+        }
     }
     
     func setHistoryEnabled(_ enabled: Bool) {
@@ -80,6 +93,11 @@ final class VideoMarkupActivityBanner: ObservableObject {
         activeRecordings.removeAll()
     }
     
+    /// Показать короткое уведомление (например, об автосохранении клипа) без записи в историю тегов.
+    func showInfoToast(_ text: String) {
+        showTransientToast(text, addToHistory: false)
+    }
+
     private func showTransientToast(_ text: String, addToHistory: Bool) {
         cancelToastHide()
         toastText = text
@@ -101,8 +119,8 @@ final class VideoMarkupActivityBanner: ObservableObject {
         hideToastTask = nil
     }
 
-    private func appendToHistory(text: String, isSaved: Bool, tagColorHex: String? = nil) {
-        let item = VideoMarkupHistoryItem(text: text, isSaved: isSaved, tagColorHex: tagColorHex)
+    private func appendToHistory(text: String, isSaved: Bool, tagColorHex: String? = nil, tagName: String? = nil) {
+        let item = VideoMarkupHistoryItem(text: text, isSaved: isSaved, tagColorHex: tagColorHex, tagName: tagName)
         historyItems.insert(item, at: 0)
         if historyItems.count > 12 {
             historyItems.removeLast(historyItems.count - 12)

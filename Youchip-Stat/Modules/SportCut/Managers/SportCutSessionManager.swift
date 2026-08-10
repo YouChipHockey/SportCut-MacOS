@@ -29,6 +29,9 @@ class SportCutSessionManager: ObservableObject {
     // MARK: - CRUD
 
     func createSession(name: String) -> SportCutSession {
+        // Создание сессии просмотра расходует 1 лимит (при неактивной лицензии). Вызывающая сторона
+        // обязана заранее проверить `LicenseLimitsManager.shared.canCreateViewingSession`.
+        LicenseLimitsManager.shared.consumeViewingSessionIfNeeded()
         let session = SportCutSession(name: name)
         sessions.append(session)
         saveSessions()
@@ -40,9 +43,11 @@ class SportCutSessionManager: ObservableObject {
         if currentSession?.id == session.id {
             currentSession = nil
         }
+        // Внутренняя папка сохранённых клипов сессии больше не нужна.
+        SportCutClipCache.removeAllClips(sessionID: session.id)
         saveSessions()
     }
-    
+
     func updateSession(_ session: SportCutSession) {
         guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { return }
         // Must replace the whole array: subscript assignment does not reliably
@@ -54,6 +59,10 @@ class SportCutSessionManager: ObservableObject {
             currentSession = session
         }
         saveSessions()
+        // Клипы плейлистов сохраняются автоматически (чтобы играли даже без оригинала),
+        // а осиротевшие (после удаления плейлиста/группы/эпизода) — удаляются.
+        SportCutClipCache.autoCacheIfNeeded(session: session)
+        SportCutClipCache.pruneOrphanedClips(for: session)
     }
     
     // MARK: - Source management
@@ -93,7 +102,7 @@ class SportCutSessionManager: ObservableObject {
     /// Builds a tag/label library snapshot for a SportCut source, augmenting the current
     /// global pool with synthetic entries derived from the timeline stamps themselves.
     ///
-    /// Markup imported from other tools (Nacsport / Sportscode XML, etc.) may reference
+    /// Markup imported from other tools (Nacsport / SportCut / Sportscode XML, etc.) may reference
     /// tags and labels whose collection was never installed locally. Those entities are
     /// still fully described inline on each stamp (`stamp.label`, `stamp.labels`), so we
     /// reconstruct them here. This is purely additive: anything already present in the
@@ -114,8 +123,6 @@ class SportCutSessionManager: ObservableObject {
         var tagOrder = tags.map(\.id)
         var labelOrder = labels.map(\.id)
         var labelGroupOrder = labelGroups.map(\.id)
-
-        let fallbackLabelGroupName = ^String.Titles.sportCutLabels
 
         for line in timelines {
             for stamp in line.stamps {
@@ -153,7 +160,10 @@ class SportCutSessionManager: ObservableObject {
                             labelGroupsById[gid] = group
                         }
                     } else {
-                        labelGroupsById[gid] = LabelGroupData(id: gid, name: fallbackLabelGroupName, lables: [lbl.id])
+                        // Имя настоящей группы неизвестно (импорт без коллекции) — именуем группу
+                        // её id, чтобы фильтр (hasResolvedName) не показывал её как отдельную «Лейблы».
+                        // В подписях таблицы/экспорта/вотермарки используется labelGroupDisplayName.
+                        labelGroupsById[gid] = LabelGroupData(id: gid, name: gid, lables: [lbl.id])
                         labelGroupOrder.append(gid)
                     }
                 }

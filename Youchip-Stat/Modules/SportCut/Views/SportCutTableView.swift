@@ -15,8 +15,6 @@ struct SportCutTableView: View {
 
     @ObservedObject var sessionManager = SportCutSessionManager.shared
     @State private var sortMode: SportCutTableSortMode = .startTimeAsc
-    /// Stamp IDs (across all project sources) that have a drawing attached in the original markup.
-    @State private var stampsWithDrawings: Set<UUID> = []
     @State private var showCSVExport = false
 
     private enum SportCutTableSortMode: String, CaseIterable {
@@ -109,7 +107,7 @@ struct SportCutTableView: View {
             tagName: { id in sources.compactMap { $0.findTag(byID: id) }.first?.name ?? id },
             labelName: { id in sources.compactMap { $0.findLabel(byID: id) }.first?.name ?? id },
             labelGroupName: { id in
-                sources.compactMap { src in src.labelGroups.first { $0.lables.contains(id) } }.first?.name ?? "Лейблы"
+                sources.compactMap { src in src.labelGroups.first { $0.lables.contains(id) } }.first?.labelGroupDisplayName ?? (^String.Titles.sportCutLabels)
             },
             eventName: { id in sources.compactMap { $0.timeEvents.first { $0.id == id } }.first?.name ?? id }
         )
@@ -195,46 +193,12 @@ struct SportCutTableView: View {
                                 row: row,
                                 playerManager: playerManager,
                                 sessionID: sessionID,
-                                hasDrawing: stampsWithDrawings.contains(row.stamp.id),
                                 bulkSelectedStampIDs: $bulkSelectedStampIDs
                             )
                         }
                     }
                 }
             }
-        }
-        .onAppear { loadDrawingMarkers() }
-        .onChange(of: sessionID) { _ in loadDrawingMarkers() }
-        .onChange(of: session?.sources.count ?? 0) { _ in loadDrawingMarkers() }
-    }
-
-    /// Loads, per project source, the set of stamp IDs that have a drawing attached in the
-    /// original markup. Markup drawings are stored as per-project screenshot metadata JSONs
-    /// (each with `relatedStampIds`); the SportCut table can span several projects, so we
-    /// index all of them here rather than relying on the single-project shared manager.
-    private func loadDrawingMarkers() {
-        guard let session = session else { return }
-        let folders: [URL] = session.sources.compactMap { source in
-            guard let projectID = source.projectID,
-                  let file = VideoFilesManager.shared.files.first(where: { $0.videoData.id == projectID }) else { return nil }
-            return file.screenshotsFolder
-        }
-        guard !folders.isEmpty else {
-            stampsWithDrawings = []
-            return
-        }
-        DispatchQueue.global(qos: .userInitiated).async {
-            var result: Set<UUID> = []
-            let fm = FileManager.default
-            for folder in folders {
-                guard let urls = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { continue }
-                for url in urls where url.pathExtension.lowercased() == "json" {
-                    guard let data = try? Data(contentsOf: url),
-                          let meta = try? JSONDecoder().decode(ScreenshotMetadata.self, from: data) else { continue }
-                    result.formUnion(meta.relatedStampIds)
-                }
-            }
-            DispatchQueue.main.async { self.stampsWithDrawings = result }
         }
     }
     
@@ -256,9 +220,6 @@ struct SportCutTableView: View {
             Divider().frame(height: 20)
             
             headerCell(^String.Titles.sportCutDurationColumn, width: 60)
-            Divider().frame(height: 20)
-
-            headerCell(^String.Titles.sportCutDrawingColumn, width: 60)
             Divider().frame(height: 20)
 
             headerCell(^String.Titles.sportCutLabelsColumn)
@@ -335,7 +296,6 @@ struct SportCutTableRowView: View {
     let row: SportCutEventRow
     @ObservedObject var playerManager: SportCutPlayerManager
     let sessionID: UUID
-    let hasDrawing: Bool
     @Binding var bulkSelectedStampIDs: Set<UUID>
 
     @ObservedObject var sessionManager = SportCutSessionManager.shared
@@ -408,22 +368,6 @@ struct SportCutTableRowView: View {
                 .foregroundColor(.secondary)
                 .frame(width: 60, alignment: .leading)
                 .padding(.horizontal, 6)
-            Divider().frame(height: 20)
-
-            Group {
-                if hasDrawing {
-                    Image(systemName: "scribble.variable")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.blue)
-                        .help(^String.Titles.sportCutDrawingColumn)
-                } else {
-                    Text("—")
-                        .font(.system(size: 10))
-                        .foregroundColor(.gray)
-                }
-            }
-            .frame(width: 60, alignment: .center)
-            .padding(.horizontal, 6)
             Divider().frame(height: 20)
 
             HStack(spacing: 4) {

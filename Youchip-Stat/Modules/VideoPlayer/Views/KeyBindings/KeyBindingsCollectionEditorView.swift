@@ -21,6 +21,7 @@ struct KeyBindingsCollectionEditorView: View {
     @State private var isEditingCollectionName = false
     /// Элемент, редактируемый в отдельном окне (двойной клик по кнопке в раскладке).
     @State private var elementToEdit: PendingCanvasEdit?
+    @State private var showExportSheet = false
 
     init() {
         let manager = CustomCollectionManager()
@@ -47,7 +48,8 @@ struct KeyBindingsCollectionEditorView: View {
             collectionId: manager.collectionID,
             tags: manager.tags,
             labels: manager.labels,
-            timeEvents: manager.timeEvents
+            timeEvents: manager.timeEvents,
+            playFields: manager.playFields
         )
         _layout = State(initialValue: stored ?? TagFreeLayoutStorage.makeDefaultLayout(for: manager.tags))
     }
@@ -85,8 +87,12 @@ struct KeyBindingsCollectionEditorView: View {
                         tags: collectionManager.tags,
                         labels: collectionManager.labels,
                         timeEvents: collectionManager.timeEvents,
+                        playFields: collectionManager.playFields,
                         pane: .settings,
-                        showsModePicker: false
+                        showsModePicker: false,
+                        onSetTagsColor: setTagsColor,
+                        onDuplicateElement: duplicateElement,
+                        onCreatePlayFieldFromURL: createPlayFieldFromURL
                     )
                     .frame(width: 340)
                 }
@@ -98,6 +104,7 @@ struct KeyBindingsCollectionEditorView: View {
         .onChange(of: collectionManager.tags) { _ in normalizeLayoutFromManager() }
         .onChange(of: collectionManager.labels) { _ in normalizeLayoutFromManager() }
         .onChange(of: collectionManager.timeEvents) { _ in normalizeLayoutFromManager() }
+        .onChange(of: collectionManager.playFields.map { $0.id }) { _ in normalizeLayoutFromManager() }
         .onDisappear {
             NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
         }
@@ -108,6 +115,10 @@ struct KeyBindingsCollectionEditorView: View {
                 target: target,
                 onDismiss: { elementToEdit = nil }
             )
+        }
+        .sheet(isPresented: $showExportSheet) {
+            CollectionExportSheet(collectionManager: collectionManager, layout: layout,
+                                  onDone: { showExportSheet = false })
         }
     }
 
@@ -137,11 +148,21 @@ struct KeyBindingsCollectionEditorView: View {
             }
             .buttonStyle(.bordered)
 
-            Button(^String.Titles.sportCutReset) {
-                layout = TagFreeLayoutStorage.makeDefaultLayout(for: collectionManager.tags)
-                layoutSession.resetSelection()
+            Menu {
+                Button(^String.Titles.keyBindingsResetBindingsOnly) {
+                    // Только связки — кнопки (их расположение) остаются на месте.
+                    layout.bindings.removeAll()
+                    layoutSession.resetSelection()
+                }
+                Button(^String.Titles.keyBindingsResetAll, role: .destructive) {
+                    layout = TagFreeLayoutStorage.makeDefaultLayout(for: collectionManager.tags)
+                    layoutSession.resetSelection()
+                }
+            } label: {
+                Text(^String.Titles.sportCutReset)
             }
-            .buttonStyle(.bordered)
+            .menuStyle(.borderlessButton)
+            .fixedSize()
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -174,9 +195,14 @@ struct KeyBindingsCollectionEditorView: View {
                 tags: collectionManager.tags,
                 labels: collectionManager.labels,
                 timeEvents: collectionManager.timeEvents,
+                playFields: collectionManager.playFields,
                 pane: .canvas,
                 showsModePicker: true,
-                onEditElement: requestElementEdit
+                onEditElement: requestElementEdit,
+                onSetTagsColor: setTagsColor,
+                onDuplicateElement: duplicateElement,
+                onCreatePlayFieldFromURL: createPlayFieldFromURL,
+                onExportSelected: { ids in _ = collectionManager.exportSelectedCanvasItems(ids, layout: layout) }
             )
         }
     }
@@ -193,8 +219,60 @@ struct KeyBindingsCollectionEditorView: View {
             layout,
             tags: collectionManager.tags,
             labels: collectionManager.labels,
-            timeEvents: collectionManager.timeEvents
+            timeEvents: collectionManager.timeEvents,
+            playFields: collectionManager.playFields
         )
+    }
+
+    /// Батч-смена цвета самих тегов (для выделенных кнопок-тегов на холсте).
+    private func setTagsColor(_ tagIds: [String], hex: String) {
+        for tagId in tagIds {
+            guard let tag = collectionManager.tags.first(where: { $0.id == tagId }) else { continue }
+            _ = collectionManager.updateTag(
+                id: tag.id, primaryID: tag.primaryID, name: tag.name, description: tag.description,
+                color: hex, defaultTimeBefore: tag.defaultTimeBefore, defaultTimeAfter: tag.defaultTimeAfter,
+                labelGroupIDs: tag.lablesGroup, hotkey: tag.hotkey, labelHotkeys: tag.labelHotkeys ?? [:],
+                isInterval: tag.isInterval ?? false, mapEnabled: tag.mapEnabled ?? false
+            )
+        }
+    }
+
+    /// Дублирует сущность (тег/лейбл/событие) в коллекции — для копипаста кнопок холста.
+    /// Имя копии = «Оригинал (копия)». Возвращает id новой сущности.
+    private func duplicateElement(kind: CanvasButtonKind, sourceElementId: String) -> String? {
+        let suffix = " " + (^String.Titles.collectionsCopySuffix)
+        switch kind {
+        case .tag:
+            guard let tag = collectionManager.tags.first(where: { $0.id == sourceElementId }) else { return nil }
+            let groupId = collectionManager.tagGroups.first(where: { $0.tags.contains(tag.id) })?.id
+                ?? collectionManager.tagGroups.first?.id ?? ""
+            let new = collectionManager.createTag(
+                name: tag.name + suffix, description: tag.description, color: tag.color,
+                defaultTimeBefore: tag.defaultTimeBefore, defaultTimeAfter: tag.defaultTimeAfter,
+                inGroup: groupId, hotkey: nil, isInterval: tag.isInterval ?? false
+            )
+            return new.id
+        case .label:
+            guard let label = collectionManager.labels.first(where: { $0.id == sourceElementId }) else { return nil }
+            let groupId = collectionManager.labelGroups.first(where: { $0.lables.contains(label.id) })?.id
+                ?? collectionManager.labelGroups.first?.id ?? ""
+            let new = collectionManager.createLabel(name: label.name + suffix, description: label.description, inGroup: groupId)
+            return new.id
+        case .timeEvent:
+            guard let event = collectionManager.timeEvents.first(where: { $0.id == sourceElementId }) else { return nil }
+            let new = collectionManager.createTimeEvent(name: event.name + suffix)
+            return new.id
+        case .map:
+            // Карты (изображения) не дублируем при копипасте кнопок.
+            return nil
+        }
+    }
+
+    /// Создаёт PlayField из файла (перетаскивание карты из Finder на холст).
+    private func createPlayFieldFromURL(_ url: URL) -> PlayField? {
+        guard let id = collectionManager.addFieldImage(from: url) else { return nil }
+        normalizeLayoutFromManager()
+        return collectionManager.playFields.first(where: { $0.id == id })
     }
 
     private func saveAll() {
@@ -210,8 +288,86 @@ struct KeyBindingsCollectionEditorView: View {
     }
 
     private func exportCollection() {
-        if let url = collectionManager.exportCollection() {
-            print("Collection exported to: \(url.path)")
+        showExportSheet = true
+    }
+}
+
+/// Диалог экспорта: всё или часть (галочками) с сохранением связок/позиций для попавших в экспорт.
+struct CollectionExportSheet: View {
+    @ObservedObject var collectionManager: CustomCollectionManager
+    let layout: TagFreeLayout
+    var onDone: () -> Void
+
+    @State private var partial = false
+    @State private var checkedTags: Set<String> = []
+    @State private var checkedLabels: Set<String> = []
+    @State private var checkedEvents: Set<String> = []
+    @State private var checkedMaps: Set<String> = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(^String.Titles.exportCollectionTitle).font(.headline)
+                Spacer()
+            }.padding()
+            Divider()
+
+            Picker("", selection: $partial) {
+                Text(^String.Titles.keyBindingsExportAll).tag(false)
+                Text(^String.Titles.keyBindingsExportPart).tag(true)
+            }
+            .pickerStyle(.segmented)
+            .padding()
+
+            if partial {
+                Text(^String.Titles.keyBindingsExportChoosePart)
+                    .font(.caption).foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        checkSection(^String.Titles.tags, items: collectionManager.tags.map { ($0.id, $0.name) }, checked: $checkedTags)
+                        checkSection(^String.Titles.labels, items: collectionManager.labels.map { ($0.id, $0.name) }, checked: $checkedLabels)
+                        checkSection(^String.Titles.commonEvents, items: collectionManager.timeEvents.map { ($0.id, $0.name) }, checked: $checkedEvents)
+                        if !collectionManager.playFields.isEmpty {
+                            checkSection(^String.Titles.keyBindingsLoadedMaps, items: collectionManager.playFields.map { ($0.id, $0.name) }, checked: $checkedMaps)
+                        }
+                    }.padding()
+                }.frame(maxHeight: 380)
+            }
+
+            Divider()
+            HStack {
+                Button(^String.Titles.collectionsButtonCancel) { onDone() }
+                Spacer()
+                Button(^String.Titles.fieldMapButtonExport) {
+                    if partial {
+                        _ = collectionManager.exportFiltered(tagIds: checkedTags, labelIds: checkedLabels,
+                                                             eventIds: checkedEvents, mapIds: checkedMaps, layout: layout)
+                    } else {
+                        _ = collectionManager.exportCollection()
+                    }
+                    onDone()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(partial && checkedTags.isEmpty && checkedLabels.isEmpty && checkedEvents.isEmpty && checkedMaps.isEmpty)
+            }.padding()
+        }
+        .frame(width: 460)
+    }
+
+    private func checkSection(_ title: String, items: [(String, String)], checked: Binding<Set<String>>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !items.isEmpty {
+                Text(title).font(.subheadline).fontWeight(.semibold)
+                ForEach(items, id: \.0) { id, name in
+                    Toggle(isOn: Binding(
+                        get: { checked.wrappedValue.contains(id) },
+                        set: { on in if on { checked.wrappedValue.insert(id) } else { checked.wrappedValue.remove(id) } }
+                    )) {
+                        Text(name.isEmpty ? id : name).font(.caption)
+                    }
+                }
+            }
         }
     }
 }

@@ -81,21 +81,9 @@ struct KeyCaptureView: NSViewRepresentable {
         
         override func flagsChanged(with event: NSEvent) {
             guard isCapturing?.wrappedValue == true else { return }
-            let newFlags = event.modifierFlags
-            let isKeyDown = newFlags.contains(lastFlags)
-            lastFlags = newFlags
-            let modifiers = getModifierFlags(newFlags)
-            
-            if !isKeyDown && !modifiers.isEmpty {
-                let keyRepresentation = modifiers.joined(separator: "+")
-                if !keyRepresentation.isEmpty {
-                    keyString?.wrappedValue = keyRepresentation
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        self.isCapturing?.wrappedValue = false
-                    }
-                }
-            }
+            // Хоткей ДОЛЖЕН содержать обычную клавишу. Голые модификаторы (⌘, ⌥, ⇧, ⌃) и их
+            // сочетания (например ⌘+⌥) назначать нельзя — просто ждём нажатия настоящей клавиши в keyDown.
+            lastFlags = event.modifierFlags
         }
         
         private func getModifierFlags(_ flags: NSEvent.ModifierFlags) -> [String] {

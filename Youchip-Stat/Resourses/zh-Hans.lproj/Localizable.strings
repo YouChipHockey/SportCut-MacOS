@@ -221,6 +221,7 @@
 "LayoutAnalyticsPng" = "标记_分析.png";  // ^String.Titles.layoutAnalyticsPng
 "LayoutAnalytics" = "标记分析";  // ^String.Titles.layoutAnalytics
 "SelectMapPositionForTag" = "为标签选择地图位置:";  // ^String.Titles.selectMapPositionForTag
+"FieldMapMarkAllHint" = "在每张地图上标记一个点以继续";  // ^String.Titles.fieldMapMarkAllHint
 "TagLibrary" = "标签库";  // ^String.Titles.tagLibrary
 "FieldMapVisualizationSettings" = "场地地图可视化设置";  // ^String.Titles.fieldMapVisualizationSettings
 "EditScreenshot" = "编辑截图";  // ^String.Titles.editScreenshot
@@ -399,6 +400,9 @@
 "SubscriptionActive" = "您有有效订阅";  // ^String.Titles.subscriptionActive
 "VideoUploadLimit" = "您还可以上传 %d 个视频，共 %d 个";  // ^String.Titles.videoUploadLimit
 "VideoUploadLimitReached" = "视频上传限制已到。请登录以上传更多文件。";  // ^String.Titles.videoUploadLimitReached
+"ViewingSessionsLimit" = "观看：剩余 %d / %d";
+"ViewingLimitReachedTitle" = "观看模式次数已用完";
+"ViewingLimitReachedMessage" = "没有有效许可证，无法创建新的观看项目或向现有项目添加来源。请激活许可证以取消限制。";
 "RenewLicense" = "续费许可证";  // ^String.Titles.renewLicense
 "MidDuration" = "平均持续时间";  // ^String.Titles.midDuration
 "AIReports" = "报告";
@@ -484,7 +488,7 @@
 "Show" = "显示"; // ^String.Titles.show
 "SelectFormation" = "选择阵型"; // ^String.Titles.selectFormation
 "NoAvailableFormations" = "无可用阵型"; // ^String.Titles.noAvailableFormations
-"players" = "球员"; // ^String.Titles.players
+"Players" = "球员"; // ^String.Titles.players
 "GlowColor" = "发光颜色:"; // ^String.Titles.glowColor
 "Radius" = "半径:"; // ^String.Titles.radius
 "LineColor" = "线条颜色:"; // ^String.Titles.lineColor
@@ -524,6 +528,13 @@
 "AppearanceSystem" = "跟随系统";
 "AppearanceLight" = "浅色";
 "AppearanceDark" = "深色";
+"LanguageTitle" = "界面语言";
+"LanguageAuto" = "跟随系统";
+"SettingsTitle" = "设置";
+"SettingsExportSection" = "剪辑导出";
+"SettingsExportWatermark" = "保存剪辑时叠加水印（标签名称、标记）";
+"SettingsExportWatermarkHint" = "与导出窗口选项相同的叠加层；通过 Cmd+S / Opt+Cmd+S 保存时应用";
+"SettingsMenuItem" = "设置…";
 "Playlists" = "播放列表"; // ^String.Titles.playlists
 "Load" = "加载"; // ^String.Titles.load
 "CurrentUnsaved" = "当前（未保存）"; // ^String.Titles.currentUnsaved
@@ -625,7 +636,7 @@
 "ProjectImportChooseFormatTitle" = "导入项目";
 "ProjectImportChooseFormatMessage" = "选择文件类型：YouChip 项目（JSON）或 Sportcode / Angels / Wyscout 标注（XML）。";
 "ProjectImportSportcutFormat" = "YouChip Sportcut 项目（JSON）";
-"ProjectImportSportcodeXmlFormat" = "Sportscode / Angels / Wyscout（XML）";
+"ProjectImportSportcodeXmlFormat" = "SportCut / Sportscode / Angels / Wyscout（XML）";
 "ProjectImportNacsportXmlFormat" = "Nacsport（XML）";
 "ProjectImportDartfishXmlFormat" = "Dartfish（XML）";
 "SelectSportcodeXmlForImport" = "选择包含事件的 XML 文件（ALL_INSTANCES）";
@@ -1002,6 +1013,8 @@
 "MomentEventsPrefix" = "事件：%@";
 "MomentLabelsPrefix" = "标注：%@";
 "MomentWindowTitlePrefix" = "时刻：%@";
+"MomentClipNotFullyRecorded" = "片段尚未录制完整——标签的一部分还未进入缓冲。";
+"MomentRefreshClip" = "刷新";
 
 // ReviewVideo
 "ReviewLoadingRecording" = "加载录像...";
@@ -1020,6 +1033,8 @@
 // VideoPlayer
 "VideoHistoryToggle" = "历史";
 "VideoHistoryHelp" = "显示或隐藏视频操作历史";
+"VideoLockWindowsToggle" = "锁定窗口";
+"VideoLockWindowsHelp" = "启用后，标注窗口会记住当前布局，并在每次打开时按此布局显示";
 "VideoBroadcastPauseHelp" = "暂停直播";
 "VideoBroadcastResumeHelp" = "继续直播";
 "VideoBroadcastStopHelp" = "停止直播并切换到普通标注模式";
@@ -1106,6 +1121,7 @@
 "KeyBindingsTapSourceHint" = "步骤 1：点击画布上的源按钮";
 "KeyBindingsTapTargetHint" = "步骤 2：点击画布上的目标按钮";
 "KeyBindingsButtonAllBindings" = "此按钮的所有绑定";
+"KeyBindingsDeleteAllForButton" = "删除此按钮的所有绑定";
 "CanvasEditTabParameters" = "参数";
 "CanvasEditTabAppearance" = "外观";
 "CanvasEditName" = "名称";
@@ -1178,3 +1194,184 @@
 "SportCutSlideAddLogo" = "添加标志";
 "SportCutSlideDone" = "完成";
 "SportCutSlideSave" = "保存";
+
+"CollectionDuplicateTo" = "复制到";
+"CollectionSelectedGroupsCountFormat" = "已选分组：%d";
+"CollectionClearSelection" = "取消选择";
+"CollectionNoOtherCollections" = "没有其他合集";
+"CollectionMultiSelectHint" = "⌘+点击可选择多个分组";
+"CollectionStandardReadOnly" = "只读";
+"CollectionCreateCopy" = "创建副本";
+"CollectionStandardOpenReadOnly" = "打开（只读）";
+
+"VideosAddMenuTitle" = "添加";
+"VideosAddFromFile" = "从文件";
+"VideosImportMenuTitle" = "导入";
+"LicenseActive" = "许可证已激活";
+
+"SportCutSlideAddText" = "文字";
+"SportCutSlideAddImage" = "图片";
+"SportCutSlideSelectHint" = "在画布上选择一个元素进行编辑。";
+"SportCutSlideTextElement" = "文字图层";
+"SportCutSlideImageElement" = "图片";
+"SportCutSlideFont" = "字体";
+"SportCutSlideFontSystem" = "系统";
+"SportCutSlideBold" = "加粗";
+"SportCutSlideReplaceImage" = "替换图片";
+"SportCutSlideNewText" = "新文字";
+
+"ExportErrorNothingProduced" = "无法导出任何片段。请确认视频可用。";
+"ExportErrorFailedGeneric" = "导出失败。";
+
+"KeyBindingsResetAll" = "全部重置";
+"KeyBindingsResetBindingsOnly" = "仅连接";
+
+// Heat Map
+"HeatMapLegendLow" = "较少";
+"HeatMapLegendHigh" = "较多";
+"HeatMapControlRadius" = "半径";
+"HeatMapControlIntensity" = "对比度";
+"HeatMapControlShowMarkers" = "显示标记";
+
+// Project Merge
+"MergeProjectsButton" = "合并";
+"MergeProjectsExitSelection" = "退出选择";
+"MergeProjectsHelp" = "将多个项目合并为一个";
+"MergeProjectsSelectedCount" = "已选择：%d";
+"MergeProjectsSelectionHint" = "点击项目，数字表示合并顺序";
+"MergeProjectsTitle" = "合并项目";
+"MergeProjectsSubtitle" = "视频依次拼接，每个项目的标注会按前面视频的总时长顺延。";
+"MergeProjectsNameLabel" = "新项目名称";
+"MergeProjectsOrderLabel" = "合并顺序";
+"MergeProjectsMergeLinesTitle" = "合并同名轨道";
+"MergeProjectsMergeLinesOn" = "同名轨道将合并为一条轨道。";
+"MergeProjectsMergeLinesOff" = "每条轨道会加上所属项目的名称，互不混合。";
+"MergeProjectsMergeLinesHint" = "发现了同名轨道。勾选的将合并为一条，其余保持独立（带项目名称）。";
+"MergeProjectsStartButton" = "合并";
+"MergeProjectsSavePanelTitle" = "保存合并后的视频";
+"MergeProjectsSavePanelMessage" = "选择合并视频的保存位置";
+"MergeProjectsKeepOpenHint" = "操作完成前请勿关闭此窗口。";
+"MergeProjectsDefaultName" = "合并项目";
+"MergeStatusPreparing" = "准备中…";
+"MergeStatusExporting" = "正在拼接视频…";
+"MergeStatusFinishing" = "正在生成项目…";
+"MergeErrorNotEnoughProjects" = "请至少选择两个项目。";
+"MergeErrorVideoUnavailable" = "项目“%@”的视频不可用。";
+"MergeErrorNoVideoTrack" = "项目“%@”没有视频轨道。";
+"MergeErrorComposition" = "无法生成合并视频。";
+"MergeErrorExport" = "无法导出合并后的视频。";
+"MergeErrorCancelled" = "合并已取消。";
+"MergeErrorProjectCreation" = "无法创建新项目。";
+
+// Clip Auto-Save
+"ClipAutoSaveNotConfiguredBadge" = "未设置自动保存文件夹";
+"ClipAutoSaveNotConfiguredTitle" = "未选择自动保存文件夹";
+"ClipAutoSaveNotConfiguredMessage" = "请选择用于自动保存剪辑（Cmd+S）的文件夹后重试。";
+"ClipAutoSavePickFolder" = "选择文件夹…";
+"ClipAutoSaveChangeFolder" = "更改文件夹…";
+"ClipAutoSaveResetFolder" = "重置文件夹";
+"ClipAutoSaveCurrentFolder" = "文件夹：%@";
+"ClipAutoSaveConfiguredHelp" = "剪辑自动保存：%@";
+"ClipAutoSavePickPrompt" = "选择";
+"ClipAutoSavePickTitle" = "剪辑自动保存文件夹";
+"ClipAutoSaveInProgress" = "正在保存剪辑…";
+"ClipAutoSaveSuccess" = "剪辑已保存：%@";
+"ClipAutoSaveErrorTitle" = "剪辑自动保存";
+"ClipAutoSaveNoStampTitle" = "未选择标签";
+"ClipAutoSaveNoStampMessage" = "请在时间轴上选择要保存剪辑的标签。";
+"ClipAutoSaveNoVideoMessage" = "当前视频不可用。";
+"ClipAutoSaveBadRangeMessage" = "剪辑范围无效。";
+"ClipAutoSaveExportFailedMessage" = "无法保存剪辑。";
+"ClipAutoSaveNoSelectedClips" = "没有选中的剪辑。";
+"ClipAutoSaveMergedInProgress" = "正在保存合集…";
+"ClipAutoSaveMergedSuccess" = "合集已保存：%@";
+"ClipAutoSaveMergedPrefix" = "合集";
+
+// Club Logo Watermark
+"ClubLogoTitle" = "俱乐部标志";
+"ClubLogoHint" = "拖动标志并从角部调整大小。位置将用于导出。";
+"ClubLogoChoose" = "选择图片";
+"ClubLogoReplace" = "替换图片";
+"ClubLogoNotSet" = "未设置标志";
+"ClubLogoMenuItem" = "俱乐部标志";
+"ExportShowClubLogo" = "添加俱乐部标志";
+"ExportClubLogoNotConfigured" = "未配置标志 — 请在设置中设定";
+
+// Image Editor
+"MainTabEditor" = "编辑器";
+"EditorImages" = "图片编辑器";
+"EditorAddImage" = "添加图片";
+"EditorNewProject" = "新建项目";
+"EditorNoProjects" = "暂无项目";
+"EditorChooseImage" = "选择图片";
+"Back" = "返回";
+"Download" = "下载";
+"Open" = "打开";
+"EditorImagesTool" = "图片";
+"CollectionPasteGroups" = "粘贴分组";
+
+"CollectionsCopySuffix" = "（副本）";
+
+"KeyBindingsMapZoneHint" = "Click the map zone to drop a point and set a position on the tag";
+
+"KeyBindingsAddMap" = "Add map";
+
+"KeyBindingsAddMapFromDisk" = "From file…";
+
+"KeyBindingsLoadedMaps" = "Loaded maps";
+
+"KeyBindingsExportSelected" = "Export selection";
+
+"KeyBindingsExportAll" = "Export all";
+
+"KeyBindingsExportPart" = "Export part";
+
+"KeyBindingsExportChoosePart" = "Choose what to export";
+
+"FreeLayoutBackgroundImage" = "Background image";
+
+"FreeLayoutChooseImage" = "Choose image";
+
+"FreeLayoutReplaceImage" = "Replace image";
+
+"ClipAutoExportBadge" = "自动导出片段";
+
+// --- Added to match EN key coverage (Collections menu, KeyBindings, Video download from URL) ---
+"AddVideoFromURL" = "从网址添加";
+"CheckPermissions" = "检查权限";
+"CollectionTypeKeyBindings" = "快捷键";
+"CollectionTypeKeyBindingsDescription" = "在画布上自由布局标签并绑定快捷键。";
+"CollectionTypePickerHint" = "类型仅在创建时选择，之后无法更改。";
+"CollectionTypePickerTitle" = "合集类型";
+"CollectionTypeStandard" = "标准";
+"CollectionTypeStandardDescription" = "标签在标注库中按组显示。";
+"CollectionsDeleteConfirmFormat" = "确定要删除合集“%@”吗？";
+"CollectionsMenuButton" = "合集";
+"CollectionsMenuEmpty" = "暂无自定义合集";
+"CollectionsMenuSubtitle" = "管理你的自定义标签合集";
+"CollectionsMenuTitle" = "合集菜单";
+"DownloadButtonTitle" = "下载";
+"DownloadVideoFromURL" = "从网址下载视频";
+"DownloadVideoFromURLDescription" = "粘贴视频网址，选择下载的画质和格式";
+"DownloadingVideo" = "正在下载视频…";
+"DownloadsFolderAccessDescription" = "应用需要访问“下载”文件夹以保存视频";
+"DownloadsFolderAccessGranted" = "已获得“下载”文件夹访问权限";
+"DownloadsFolderAccessRequired" = "需要“下载”文件夹访问权限";
+"EnterVideoURL" = "粘贴视频网址";
+"FetchFormats" = "获取信息";
+"FetchingVideoInfo" = "正在获取视频信息…";
+"GrantAccessButtonTitle" = "授予访问权限";
+"KeyBindingsAddTimeEventHint" = "向画布添加时间事件：";
+"KeyBindingsCanvasTimeEventsCount" = "时间事件：%d";
+"KeyBindingsNoTimeEvents" = "合集中没有时间事件";
+"OpenSystemSettings" = "打开系统设置";
+"SelectDownloadsFolderMessage" = "保存视频需要访问“下载”文件夹。请在下一个对话框中选择“下载”文件夹。";
+"SelectQuality" = "选择画质";
+"TryAgain" = "重试";
+"UseServerVideoName" = "使用服务器的视频名称";
+"UseServerVideoNameDescription" = "跳过球队/比分输入，使用服务器的视频名称";
+"VideoDownloaded" = "视频下载成功";
+"VideoDownloadedDescription" = "视频已保存到“下载”文件夹。继续将其添加到你的项目";
+"VideoFormat" = "视频格式";
+"VideoTitle" = "视频标题";
+"VideoURL" = "视频网址";

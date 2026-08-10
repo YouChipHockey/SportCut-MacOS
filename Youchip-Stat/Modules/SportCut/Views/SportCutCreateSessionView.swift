@@ -14,6 +14,7 @@ struct SportCutCreateSessionView: View {
     @State private var selectedProjects: [FilesFile] = []
     @State private var selectedVideoURLs: [URL] = []
     @State private var showProjectPicker = false
+    @State private var showLimitAlert = false
     private var filesManager: VideoFilesManager { VideoFilesManager.shared }
     
     private var availableFiles: [FilesFile] {
@@ -231,6 +232,11 @@ struct SportCutCreateSessionView: View {
                 onCancel: { showProjectPicker = false }
             )
         }
+        .alert(^String.Titles.viewingLimitReachedTitle, isPresented: $showLimitAlert) {
+            Button(^String.Titles.alertsOkTitle, role: .cancel) { }
+        } message: {
+            Text(^String.Titles.viewingLimitReachedMessage)
+        }
     }
     
     private func addVideoFiles() {
@@ -251,6 +257,11 @@ struct SportCutCreateSessionView: View {
     }
     
     private func createSession() {
+        // Лимит режима просмотра: без активной лицензии нельзя создавать новые сессии сверх лимита.
+        guard LicenseLimitsManager.shared.canCreateViewingSession else {
+            showLimitAlert = true
+            return
+        }
         let name = sessionName.isEmpty ? String.Titles.sportCutSessionPrefix.format(Date().formatted(.dateTime.day().month().hour().minute())) : sessionName
         var session = SportCutSessionManager.shared.createSession(name: name)
         
@@ -276,7 +287,9 @@ struct ProjectPickerSheet: View {
     let availableFiles: [FilesFile]
     let onAdd: ([FilesFile]) -> Void
     let onCancel: () -> Void
-    @State private var selectedBookmarks: Set<Data> = []
+    // Выбор ведём по уникальному id проекта, а НЕ по bookmark: у разных проектов
+    // с одним и тем же видеофайлом bookmark совпадает, и по нему выделялись сразу все.
+    @State private var selectedProjectIDs: Set<String> = []
     
     var body: some View {
         VStack(spacing: 0) {
@@ -302,7 +315,7 @@ struct ProjectPickerSheet: View {
                 ScrollView {
                     LazyVStack(spacing: 4) {
                         ForEach(availableFiles, id: \.videoData.id) { file in
-                            let isSelected = selectedBookmarks.contains(file.videoData.bookmark)
+                            let isSelected = selectedProjectIDs.contains(file.videoData.id)
                             HStack {
                                 Image(systemName: isSelected ? "checkmark.square.fill" : "square")
                                     .foregroundColor(isSelected ? .blue : .gray)
@@ -325,9 +338,9 @@ struct ProjectPickerSheet: View {
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 if isSelected {
-                                    selectedBookmarks.remove(file.videoData.bookmark)
+                                    selectedProjectIDs.remove(file.videoData.id)
                                 } else {
-                                    selectedBookmarks.insert(file.videoData.bookmark)
+                                    selectedProjectIDs.insert(file.videoData.id)
                                 }
                             }
                         }
@@ -344,13 +357,13 @@ struct ProjectPickerSheet: View {
                 
                 Spacer()
                 
-                Button(String.Titles.sportCutAddCount.format(selectedBookmarks.count)) {
-                    let selected = availableFiles.filter { selectedBookmarks.contains($0.videoData.bookmark) }
+                Button(String.Titles.sportCutAddCount.format(selectedProjectIDs.count)) {
+                    let selected = availableFiles.filter { selectedProjectIDs.contains($0.videoData.id) }
                     onAdd(selected)
                 }
                 .buttonStyle(PlainButtonStyle())
                 .foregroundColor(.blue)
-                .disabled(selectedBookmarks.isEmpty)
+                .disabled(selectedProjectIDs.isEmpty)
                 .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, 16)

@@ -88,7 +88,14 @@ class CustomCollectionManager: ObservableObject {
               let targetIndex = array.firstIndex(where: { id($0) == targetID }),
               draggedIndex != targetIndex else { return }
         let item = array.remove(at: draggedIndex)
-        let newIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex
+        // При движении вниз обычно вставляем перед целью (targetIndex - 1), но если цель —
+        // последний элемент, разрешаем встать в самый конец (иначе низ недостижим).
+        let newIndex: Int
+        if draggedIndex < targetIndex {
+            newIndex = (targetIndex == array.count) ? targetIndex : targetIndex - 1
+        } else {
+            newIndex = targetIndex
+        }
         array.insert(item, at: newIndex)
     }
 
@@ -254,7 +261,7 @@ class CustomCollectionManager: ObservableObject {
     
     func createTagGroup(name: String) -> TagGroup {
         let newGroup = TagGroup(id: UUID().uuidString, name: name, tags: [])
-        tagGroups.append(newGroup)
+        tagGroups.insert(newGroup, at: 0) // новая группа — вверху списка
         return newGroup
     }
     
@@ -404,7 +411,7 @@ class CustomCollectionManager: ObservableObject {
     
     func createLabelGroup(name: String) -> LabelGroupData {
         let newGroup = LabelGroupData(id: UUID().uuidString, name: name, lables: [])
-        labelGroups.append(newGroup)
+        labelGroups.insert(newGroup, at: 0) // новая группа — вверху списка
         attachLabelGroupToAllTags(newGroup.id)
         if isKeyBindingsMode {
             objectWillChange.send()
@@ -694,7 +701,8 @@ class CustomCollectionManager: ObservableObject {
                 labelHotkeys: newLabelHotkeys,
                 mapEnabled: t.mapEnabled,
                 isInterval: t.isInterval,
-                mapFieldId: t.mapFieldId.flatMap { playFieldIdMap[$0] }
+                mapFieldId: t.mapFieldId.flatMap { playFieldIdMap[$0] },
+                mapFieldIds: t.resolvedMapFieldIds.compactMap { playFieldIdMap[$0] }
             )
         }
         // Группы тегов
@@ -733,7 +741,8 @@ class CustomCollectionManager: ObservableObject {
                 labelHotkeys: tags[index].labelHotkeys,
                 mapEnabled: mapEnabled,
                 isInterval: tags[index].isInterval,
-                mapFieldId: mapEnabled ? tags[index].mapFieldId : nil
+                mapFieldId: mapEnabled ? tags[index].mapFieldId : nil,
+                mapFieldIds: mapEnabled ? tags[index].mapFieldIds : nil
             )
 
             tags[index] = updatedTag
@@ -743,13 +752,38 @@ class CustomCollectionManager: ObservableObject {
         return false
     }
 
-    /// Назначает тегу конкретную карту (PlayField) для разметки.
+    /// Назначает тегу конкретную карту (PlayField) для разметки (одиночный выбор, legacy).
     @discardableResult
     func updateTagMapField(id: String, mapFieldId: String?) -> Bool {
         guard let index = tags.firstIndex(where: { $0.id == id }) else { return false }
         tags[index].mapFieldId = mapFieldId
         objectWillChange.send()
         return true
+    }
+
+    /// Назначает тегу набор карт (PlayField) для разметки. При разметке точку нужно
+    /// поставить на каждой карте — на каждую создаётся отдельный штамп.
+    @discardableResult
+    func updateTagMapFields(id: String, mapFieldIds: [String]) -> Bool {
+        guard let index = tags.firstIndex(where: { $0.id == id }) else { return false }
+        tags[index].mapFieldIds = mapFieldIds.isEmpty ? nil : mapFieldIds
+        // Держим legacy-поле согласованным: первая карта из набора.
+        tags[index].mapFieldId = mapFieldIds.first
+        objectWillChange.send()
+        return true
+    }
+
+    /// Добавляет/убирает карту из набора карт тега (multi-select).
+    @discardableResult
+    func toggleTagMapField(id: String, mapFieldId: String) -> Bool {
+        guard let index = tags.firstIndex(where: { $0.id == id }) else { return false }
+        var ids = tags[index].resolvedMapFieldIds
+        if let pos = ids.firstIndex(of: mapFieldId) {
+            ids.remove(at: pos)
+        } else {
+            ids.append(mapFieldId)
+        }
+        return updateTagMapFields(id: id, mapFieldIds: ids)
     }
     
     func savePlayFieldForCollection() -> Bool {
@@ -948,11 +982,22 @@ class CustomCollectionManager: ObservableObject {
 
         playFields.remove(at: idx)
 
-        // Снимаем привязку к удалённой карте у тегов.
-        for i in tags.indices where tags[i].mapFieldId == id {
-            tags[i].mapFieldId = nil
-            if playFields.isEmpty {
-                tags[i].mapEnabled = false
+        // Снимаем привязку к удалённой карте у тегов (и из одиночного поля, и из набора).
+        for i in tags.indices {
+            var touched = false
+            if tags[i].mapFieldId == id {
+                tags[i].mapFieldId = nil
+                touched = true
+            }
+            if let ids = tags[i].mapFieldIds, ids.contains(id) {
+                let filtered = ids.filter { $0 != id }
+                tags[i].mapFieldIds = filtered.isEmpty ? nil : filtered
+                touched = true
+            }
+            if touched {
+                // Держим legacy-поле согласованным с набором.
+                if tags[i].mapFieldId == nil { tags[i].mapFieldId = tags[i].mapFieldIds?.first }
+                if playFields.isEmpty { tags[i].mapEnabled = false }
             }
         }
 
@@ -1035,8 +1080,8 @@ class CustomCollectionManager: ObservableObject {
             id: UUID().uuidString,
             name: name
         )
-        
-        timeEvents.append(newEvent)
+
+        timeEvents.insert(newEvent, at: 0) // новое событие — вверху списка
         return newEvent
     }
     
@@ -1196,30 +1241,89 @@ class CustomCollectionManager: ObservableObject {
     }
     
     func exportCollection() -> URL? {
-        let exportData = SportcutCollectionExport(collectionManager: self)
-        
+        writeExport(SportcutCollectionExport(collectionManager: self), suggestedName: collectionName)
+    }
+
+    /// Частичный экспорт по выбранным на холсте элементам ("kind:elementId").
+    func exportSelectedCanvasItems(_ selectedItemIds: Set<String>, layout: TagFreeLayout?) -> URL? {
+        var tagIds = Set<String>(), labelIds = Set<String>(), eventIds = Set<String>(), mapIds = Set<String>()
+        for key in selectedItemIds {
+            let parts = key.split(separator: ":", maxSplits: 1)
+            guard parts.count == 2 else { continue }
+            let id = String(parts[1])
+            switch String(parts[0]) {
+            case CanvasButtonKind.tag.rawValue: tagIds.insert(id)
+            case CanvasButtonKind.label.rawValue: labelIds.insert(id)
+            case CanvasButtonKind.timeEvent.rawValue: eventIds.insert(id)
+            case CanvasButtonKind.map.rawValue: mapIds.insert(id)
+            default: break
+            }
+        }
+        return exportFiltered(tagIds: tagIds, labelIds: labelIds, eventIds: eventIds, mapIds: mapIds, layout: layout)
+    }
+
+    /// Экспорт части коллекции: только выбранные сущности, их группы (с отфильтрованными членами),
+    /// связки МЕЖДУ выбранными и раскладка (позиции) выбранных.
+    func exportFiltered(tagIds: Set<String>, labelIds: Set<String>, eventIds: Set<String>,
+                        mapIds: Set<String>, layout: TagFreeLayout?) -> URL? {
+        let fTags = tags.filter { tagIds.contains($0.id) }
+        let fTagGroups = tagGroups.compactMap { g -> TagGroup? in
+            let m = g.tags.filter { tagIds.contains($0) }
+            return m.isEmpty ? nil : TagGroup(id: g.id, name: g.name, tags: m)
+        }
+        let fLabels = labels.filter { labelIds.contains($0.id) }
+        let fLabelGroups = labelGroups.compactMap { g -> LabelGroupData? in
+            let m = g.lables.filter { labelIds.contains($0) }
+            return m.isEmpty ? nil : LabelGroupData(id: g.id, name: g.name, lables: m)
+        }
+        let fEvents = timeEvents.filter { eventIds.contains($0.id) }
+        let fPlayFields = playFields.filter { mapIds.contains($0.id) }
+
+        var fLayout: TagFreeLayout? = nil
+        if tagLibraryDisplayMode == .free, let layout = layout {
+            let keys = Set(
+                tagIds.map { "\(CanvasButtonKind.tag.rawValue):\($0)" }
+                + labelIds.map { "\(CanvasButtonKind.label.rawValue):\($0)" }
+                + eventIds.map { "\(CanvasButtonKind.timeEvent.rawValue):\($0)" }
+                + mapIds.map { "\(CanvasButtonKind.map.rawValue):\($0)" }
+            )
+            let items = layout.items.filter { keys.contains($0.id) }
+            // Связку сохраняем только если ОБА её конца попали в экспорт.
+            let bindings = layout.bindings.filter { keys.contains($0.sourceButtonKey) && keys.contains($0.targetButtonKey) }
+            fLayout = TagFreeLayout(canvasWidth: layout.canvasWidth, canvasHeight: layout.canvasHeight, items: items, bindings: bindings)
+        }
+
+        let export = SportcutCollectionExport(
+            collectionName: collectionName,
+            tagGroups: fTagGroups, tags: fTags,
+            labelGroups: fLabelGroups, labels: fLabels,
+            timeEvents: fEvents, playFields: fPlayFields,
+            displayMode: tagLibraryDisplayMode.rawValue,
+            freeLayout: fLayout
+        )
+        return writeExport(export, suggestedName: "\(collectionName)-part")
+    }
+
+    private func writeExport(_ export: SportcutCollectionExport, suggestedName: String) -> URL? {
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
             encoder.dateEncodingStrategy = .iso8601
-            
-            let jsonData = try encoder.encode(exportData)
-            
+            let jsonData = try encoder.encode(export)
+
             let savePanel = NSSavePanel()
             savePanel.allowedContentTypes = [.json]
-            savePanel.nameFieldStringValue = "\(collectionName).sportcutCollection"
+            savePanel.nameFieldStringValue = "\(suggestedName).sportcutCollection"
             savePanel.title = ^String.Titles.exportCollectionTitle
             savePanel.message = ^String.Titles.selectCollectionSaveLocation
-            
+
             if savePanel.runModal() == .OK, let url = savePanel.url {
                 try jsonData.write(to: url)
                 return url
             }
-            
         } catch {
             print(error)
         }
-        
         return nil
     }
 }

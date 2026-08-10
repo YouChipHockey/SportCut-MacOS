@@ -373,10 +373,14 @@ struct SportCutPlaylistsView: View {
 
     private func movePlaylist(_ playlistID: UUID, toGroupIndex: Int) {
         guard var session = session else { return }
+        // Если переносим сейчас играющий плейлист — корректно останавливаем воспроизведение,
+        // иначе плеер продолжает крутить клипы с «повисшими» ссылками на старую группу (артефакты).
+        if playerManager.currentPlaylistID == playlistID {
+            playerManager.stopPlayback()
+        }
         sessionManager.movePlaylist(in: &session, playlistID: playlistID, toGroupIndex: toGroupIndex)
         if selectedPlaylistID == playlistID {
             selectedPlaylistID = nil
-            playerManager.currentPlaylistID = nil
         }
     }
 
@@ -557,6 +561,7 @@ struct SportCutPlaylistCardView: View {
     @State private var dragOverIndex: Int?
     @State private var commentEditorState: EventCommentEditorState?
     @State private var showSlidesManager = false
+    @State private var showMoveToGroupSheet = false
     
     private var cardBG: Color {
         if cardDropTargeted { return Color.blue.opacity(0.15) }
@@ -638,6 +643,17 @@ struct SportCutPlaylistCardView: View {
         .sheet(isPresented: $showSlidesManager) {
             SportCutSlidesManagerSheet(sessionID: sessionID, playlistID: playlist.id) {
                 showSlidesManager = false
+            }
+        }
+        .sheet(isPresented: $showMoveToGroupSheet) {
+            SportCutGroupPickerSheet(
+                title: ^String.Titles.sportCutMoveToGroup,
+                groups: otherGroups
+            ) { groupIndex in
+                onMoveToGroup(groupIndex)
+                showMoveToGroupSheet = false
+            } onCancel: {
+                showMoveToGroupSheet = false
             }
         }
     }
@@ -763,7 +779,8 @@ struct SportCutPlaylistCardView: View {
                         if let px = miniTimelinePlayheadX(totalWidth: w) {
                             PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 10, compact: true)
                                 .frame(width: 12, height: 14)
-                                .offset(x: px - 6)
+                                // Сдвиг вправо на половину ширины: в начале плейхед не «уезжает» левее старта.
+                                .offset(x: px)
                                 .allowsHitTesting(false)
                                 .transaction { $0.animation = nil }
                         }
@@ -796,6 +813,11 @@ struct SportCutPlaylistCardView: View {
         guard totalDur > 0 else { return nil }
 
         if playerManager.playlistPlaybackKind == .singleFilm {
+            // Слайды вставлены в фильм как сегменты, но в линии плейлиста их нет — поэтому маппим
+            // глобальное время фильма на прогресс ТОЛЬКО по клипам (слайд = стоп на границе).
+            if let clipFraction = playerManager.filmClipPlayheadFraction() {
+                return CGFloat(clipFraction) * totalWidth
+            }
             // t is the global film time; map it directly across the full mini-timeline width
             let fraction = min(max(t / totalDur, 0), 1)
             return CGFloat(fraction) * totalWidth
@@ -1002,10 +1024,8 @@ struct SportCutPlaylistCardView: View {
         Button(^String.Titles.sportCutMoveDown) { onMoveDown() }
             .disabled(!canMoveDown)
         if !otherGroups.isEmpty {
-            Menu(^String.Titles.sportCutMoveToGroup) {
-                ForEach(otherGroups, id: \.index) { group in
-                    Button(group.name) { onMoveToGroup(group.index) }
-                }
+            Button(^String.Titles.sportCutMoveToGroup) {
+                showMoveToGroupSheet = true
             }
         }
         Divider()
@@ -1413,6 +1433,7 @@ struct SportCutEventCommentSheet: View {
         .onAppear {
             text = initialComment
             HotKeyManager.shared.isEnabled = false
+            if let existing = keyMonitor { NSEvent.removeMonitor(existing); keyMonitor = nil }
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 guard event.keyCode == 36 else { return event }
                 if event.modifierFlags.contains(.shift) { return event }
@@ -1573,5 +1594,47 @@ struct SportCutNameInputSheet: View {
         }
         .padding(20)
         .frame(width: 350, height: 150)
+    }
+}
+
+/// Лист выбора группы для переноса плейлиста. Заменяет вложенное `Menu`,
+/// которое не раскрывалось во время воспроизведения из-за частых перерисовок
+/// карточки плейлиста.
+struct SportCutGroupPickerSheet: View {
+    let title: String
+    let groups: [(index: Int, name: String)]
+    let onSelect: (Int) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(title)
+                .font(.headline)
+
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(groups, id: \.index) { group in
+                        Button(action: { onSelect(group.index) }) {
+                            Text(group.name)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+            .frame(maxHeight: 240)
+
+            HStack {
+                Button(^String.Titles.cancelButtonTitle) { onCancel() }
+                    .buttonStyle(PlainButtonStyle())
+                Spacer()
+            }
+        }
+        .padding(20)
+        .frame(width: 320, height: 360)
     }
 }

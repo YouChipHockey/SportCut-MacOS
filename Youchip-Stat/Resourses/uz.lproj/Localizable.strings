@@ -221,6 +221,7 @@
 "LayoutAnalyticsPng" = "Belgilash_Tahlili.png";  // ^String.Titles.layoutAnalyticsPng
 "LayoutAnalytics" = "Belgilash tahlili";  // ^String.Titles.layoutAnalytics
 "SelectMapPositionForTag" = "Teg uchun xaritadagi pozitsiyani tanlang:";  // ^String.Titles.selectMapPositionForTag
+"FieldMapMarkAllHint" = "Davom etish uchun har bir xaritada nuqta qo'ying";  // ^String.Titles.fieldMapMarkAllHint
 "TagLibrary" = "Teg kutubxonasi";  // ^String.Titles.tagLibrary
 "FieldMapVisualizationSettings" = "Maydon xaritasi vizualizatsiya sozlamalari";  // ^String.Titles.fieldMapVisualizationSettings
 "EditScreenshot" = "Skrinshotni tahrirlash";  // ^String.Titles.editScreenshot
@@ -399,6 +400,9 @@
 "SubscriptionActive" = "Sizda faol obuna mavjud";  // ^String.Titles.subscriptionActive
 "VideoUploadLimit" = "Siz %d dan %d ta video yuklashingiz mumkin";  // ^String.Titles.videoUploadLimit
 "VideoUploadLimitReached" = "Video yuklash chegarasiga yetildi. Ko'proq fayl yuklash uchun tizimga kiring.";  // ^String.Titles.videoUploadLimitReached
+"ViewingSessionsLimit" = "Ko'rish: %d / %d";
+"ViewingLimitReachedTitle" = "Ko'rish rejimi chegarasi tugadi";
+"ViewingLimitReachedMessage" = "Faol litsenziyasiz yangi ko'rish loyihalarini yaratib va mavjudlariga manba qo'shib bo'lmaydi. Cheklovni olib tashlash uchun litsenziyani faollashtiring.";
 "RenewLicense" = "Litsenziyani yangilash";  // ^String.Titles.renewLicense
 "MidDuration" = "O'rtacha davomiylik";  // ^String.Titles.midDuration
 "AIReports" = "Hisobot";
@@ -484,7 +488,7 @@
 "Show" = "Ko'rsatish"; // ^String.Titles.show
 "SelectFormation" = "Formatsiyani tanlang"; // ^String.Titles.selectFormation
 "NoAvailableFormations" = "Mavjud formatsiyalar yo'q"; // ^String.Titles.noAvailableFormations
-"players" = "o'yinchilar"; // ^String.Titles.players
+"Players" = "o'yinchilar"; // ^String.Titles.players
 "GlowColor" = "Porlash rangi:"; // ^String.Titles.glowColor
 "Radius" = "Radius:"; // ^String.Titles.radius
 "LineColor" = "Chiziq rangi:"; // ^String.Titles.lineColor
@@ -524,6 +528,13 @@
 "AppearanceSystem" = "Tizim bo`yicha";
 "AppearanceLight" = "Yorug`";
 "AppearanceDark" = "Qorong`i";
+"LanguageTitle" = "Interfeys tili";
+"LanguageAuto" = "Tizim bo`yicha";
+"SettingsTitle" = "Sozlamalar";
+"SettingsExportSection" = "Kliplarni eksport qilish";
+"SettingsExportWatermark" = "Kliplarni suv belgisi bilan saqlash (teg nomi, teglar)";
+"SettingsExportWatermarkHint" = "Eksport oynasidagi bayroq bilan bir xil qatlam; Cmd+S / Opt+Cmd+S orqali saqlashda qo'yiladi";
+"SettingsMenuItem" = "Sozlamalar…";
 "Playlists" = "Pleylistlar"; // ^String.Titles.playlists
 "Load" = "Yuklash"; // ^String.Titles.load
 "CurrentUnsaved" = "Joriy (saqlanmagan)"; // ^String.Titles.currentUnsaved
@@ -625,7 +636,7 @@
 "ProjectImportChooseFormatTitle" = "Loyihani import qilish";
 "ProjectImportChooseFormatMessage" = "Fayl turini tanlang: YouChip loyihasi (JSON) yoki Sportcode / Angels / Wyscout XML.";
 "ProjectImportSportcutFormat" = "YouChip Sportcut loyihasi (JSON)";
-"ProjectImportSportcodeXmlFormat" = "Sportscode / Angels / Wyscout (XML)";
+"ProjectImportSportcodeXmlFormat" = "SportCut / Sportscode / Angels / Wyscout (XML)";
 "ProjectImportNacsportXmlFormat" = "Nacsport (XML)";
 "ProjectImportDartfishXmlFormat" = "Dartfish (XML)";
 "SelectSportcodeXmlForImport" = "Voqealar bilan XML faylni tanlang (ALL_INSTANCES)";
@@ -1002,6 +1013,8 @@
 "MomentEventsPrefix" = "Voqealar: %@";
 "MomentLabelsPrefix" = "Yorliqlar: %@";
 "MomentWindowTitlePrefix" = "Moment: %@";
+"MomentClipNotFullyRecorded" = "Klip hali to'liq yozilmagan — tegning bir qismi buferga tushmagan.";
+"MomentRefreshClip" = "Yangilash";
 
 // ReviewVideo
 "ReviewLoadingRecording" = "Yozuv yuklanmoqda...";
@@ -1020,6 +1033,8 @@
 // VideoPlayer
 "VideoHistoryToggle" = "Tarix";
 "VideoHistoryHelp" = "Videodagi harakatlar tarixini ko'rsatish yoki yashirish";
+"VideoLockWindowsToggle" = "Oynalarni qulflash";
+"VideoLockWindowsHelp" = "Yoqilganda, belgilash oynalari joriy joylashuvni eslab qoladi va har safar shunday ochiladi";
 "VideoBroadcastPauseHelp" = "Translyatsiyani to'xtatish";
 "VideoBroadcastResumeHelp" = "Translyatsiyani davom ettirish";
 "VideoBroadcastStopHelp" = "Translyatsiyani tugatish va oddiy belgilash rejimiga o'tish";
@@ -1106,6 +1121,7 @@
 "KeyBindingsTapSourceHint" = "1-qadam: tuvalda manba tugmasini bosing";
 "KeyBindingsTapTargetHint" = "2-qadam: tuvalda maqsad tugmasini bosing";
 "KeyBindingsButtonAllBindings" = "Ushbu tugmaning barcha bogʻlanishlari";
+"KeyBindingsDeleteAllForButton" = "Tugmaning barcha bogʻlanishlarini oʻchirish";
 "CanvasEditTabParameters" = "Parametrlar";
 "CanvasEditTabAppearance" = "Koʻrinishi";
 "CanvasEditName" = "Nomi";
@@ -1178,3 +1194,184 @@
 "SportCutSlideAddLogo" = "Logotip qo'shish";
 "SportCutSlideDone" = "Tayyor";
 "SportCutSlideSave" = "Saqlash";
+
+"CollectionDuplicateTo" = "Nusxalash";
+"CollectionSelectedGroupsCountFormat" = "Tanlangan guruhlar: %d";
+"CollectionClearSelection" = "Tanlovni bekor qilish";
+"CollectionNoOtherCollections" = "Boshqa to‘plamlar yo‘q";
+"CollectionMultiSelectHint" = "⌘+bosish — bir nechta guruhni tanlash";
+"CollectionStandardReadOnly" = "Faqat ko‘rish";
+"CollectionCreateCopy" = "Nusxa yaratish";
+"CollectionStandardOpenReadOnly" = "Ochish (faqat ko‘rish)";
+
+"VideosAddMenuTitle" = "Qo‘shish";
+"VideosAddFromFile" = "Fayldan";
+"VideosImportMenuTitle" = "Import";
+"LicenseActive" = "Litsenziya faol";
+
+"SportCutSlideAddText" = "Matn";
+"SportCutSlideAddImage" = "Rasm";
+"SportCutSlideSelectHint" = "Tahrirlash uchun holstdagi elementni tanlang.";
+"SportCutSlideTextElement" = "Matn qatlami";
+"SportCutSlideImageElement" = "Rasm";
+"SportCutSlideFont" = "Shrift";
+"SportCutSlideFontSystem" = "Tizim";
+"SportCutSlideBold" = "Qalin";
+"SportCutSlideReplaceImage" = "Rasmni almashtirish";
+"SportCutSlideNewText" = "Yangi matn";
+
+"ExportErrorNothingProduced" = "Hech qanday klip eksport qilinmadi. Videolar mavjudligini tekshiring.";
+"ExportErrorFailedGeneric" = "Eksport bajarilmadi.";
+
+"KeyBindingsResetAll" = "Hammasini tiklash";
+"KeyBindingsResetBindingsOnly" = "Faqat bog‘lanishlar";
+
+// Heat Map
+"HeatMapLegendLow" = "Kamroq";
+"HeatMapLegendHigh" = "Ko'proq";
+"HeatMapControlRadius" = "Radius";
+"HeatMapControlIntensity" = "Kontrast";
+"HeatMapControlShowMarkers" = "Belgilarni ko'rsatish";
+
+// Project Merge
+"MergeProjectsButton" = "Birlashtirish";
+"MergeProjectsExitSelection" = "Tanlovdan chiqish";
+"MergeProjectsHelp" = "Bir nechta loyihani bittaga birlashtirish";
+"MergeProjectsSelectedCount" = "Tanlangan: %d";
+"MergeProjectsSelectionHint" = "Loyihalarni bosing — raqam birlashtirish tartibini ko'rsatadi";
+"MergeProjectsTitle" = "Loyihalarni birlashtirish";
+"MergeProjectsSubtitle" = "Videolar ketma-ket ulanadi; har bir keyingi loyiha belgilari oldingilarining davomiyligiga suriladi.";
+"MergeProjectsNameLabel" = "Yangi loyiha nomi";
+"MergeProjectsOrderLabel" = "Birlashtirish tartibi";
+"MergeProjectsMergeLinesTitle" = "Bir xil nomli yo'laklarni birlashtirish";
+"MergeProjectsMergeLinesOn" = "Bir xil nomli yo'laklar bitta umumiy yo'lakka aylanadi.";
+"MergeProjectsMergeLinesOff" = "Har bir yo'lakka loyiha nomi qo'shiladi, hech narsa aralashmaydi.";
+"MergeProjectsMergeLinesHint" = "Bir xil nomli yo'laklar topildi. Belgilanganlari bittaga birlashtiriladi; qolganlari alohida qoladi (loyiha nomi bilan).";
+"MergeProjectsStartButton" = "Birlashtirish";
+"MergeProjectsSavePanelTitle" = "Birlashtirilgan videoni saqlash";
+"MergeProjectsSavePanelMessage" = "Ulangan video faylni qayerga saqlashni tanlang";
+"MergeProjectsKeepOpenHint" = "Amal tugaguncha bu oynani yopmang.";
+"MergeProjectsDefaultName" = "Birlashtirilgan loyiha";
+"MergeStatusPreparing" = "Tayyorlanmoqda…";
+"MergeStatusExporting" = "Video ulanmoqda…";
+"MergeStatusFinishing" = "Loyiha yig'ilmoqda…";
+"MergeErrorNotEnoughProjects" = "Kamida ikkita loyihani tanlang.";
+"MergeErrorVideoUnavailable" = "«%@» loyihasining videosi mavjud emas.";
+"MergeErrorNoVideoTrack" = "«%@» loyihasida video yo'lak yo'q.";
+"MergeErrorComposition" = "Umumiy videoni yig'ib bo'lmadi.";
+"MergeErrorExport" = "Birlashtirilgan videoni eksport qilib bo'lmadi.";
+"MergeErrorCancelled" = "Birlashtirish bekor qilindi.";
+"MergeErrorProjectCreation" = "Yangi loyiha yaratib bo'lmadi.";
+
+// Clip Auto-Save
+"ClipAutoSaveNotConfiguredBadge" = "Avtosaqlash papkasi sozlanmagan";
+"ClipAutoSaveNotConfiguredTitle" = "Avtosaqlash papkasi tanlanmagan";
+"ClipAutoSaveNotConfiguredMessage" = "Kliplarni avtosaqlash (Cmd+S) uchun papka tanlang va qayta urinib ko'ring.";
+"ClipAutoSavePickFolder" = "Papka tanlash…";
+"ClipAutoSaveChangeFolder" = "Papkani o'zgartirish…";
+"ClipAutoSaveResetFolder" = "Papkani tiklash";
+"ClipAutoSaveCurrentFolder" = "Papka: %@";
+"ClipAutoSaveConfiguredHelp" = "Kliplarni avtosaqlash: %@";
+"ClipAutoSavePickPrompt" = "Tanlash";
+"ClipAutoSavePickTitle" = "Kliplarni avtosaqlash papkasi";
+"ClipAutoSaveInProgress" = "Klip saqlanmoqda…";
+"ClipAutoSaveSuccess" = "Klip saqlandi: %@";
+"ClipAutoSaveErrorTitle" = "Klipni avtosaqlash";
+"ClipAutoSaveNoStampTitle" = "Teg tanlanmagan";
+"ClipAutoSaveNoStampMessage" = "Vaqt chizig'ida saqlamoqchi bo'lgan tegingizni tanlang.";
+"ClipAutoSaveNoVideoMessage" = "Joriy video mavjud emas.";
+"ClipAutoSaveBadRangeMessage" = "Klip diapazoni noto'g'ri.";
+"ClipAutoSaveExportFailedMessage" = "Klipni saqlab bo'lmadi.";
+"ClipAutoSaveNoSelectedClips" = "Tanlangan kliplar yo'q.";
+"ClipAutoSaveMergedInProgress" = "To'plam saqlanmoqda…";
+"ClipAutoSaveMergedSuccess" = "To'plam saqlandi: %@";
+"ClipAutoSaveMergedPrefix" = "To'plam";
+
+// Club Logo Watermark
+"ClubLogoTitle" = "Klub logotipi";
+"ClubLogoHint" = "Logotipni suring va burchagidan o'lchamini o'zgartiring. Joylashuv eksport uchun saqlanadi.";
+"ClubLogoChoose" = "Rasm tanlash";
+"ClubLogoReplace" = "Rasmni almashtirish";
+"ClubLogoNotSet" = "Logotip belgilanmagan";
+"ClubLogoMenuItem" = "Klub logotipi";
+"ExportShowClubLogo" = "Klub logotipini qo'shish";
+"ExportClubLogoNotConfigured" = "Logotip sozlanmagan — uni sozlamalarda belgilang";
+
+// Image Editor
+"MainTabEditor" = "Muharrir";
+"EditorImages" = "Rasm muharriri";
+"EditorAddImage" = "Rasm qo'shish";
+"EditorNewProject" = "Yangi loyiha";
+"EditorNoProjects" = "Hozircha loyihalar yo'q";
+"EditorChooseImage" = "Rasm tanlash";
+"Back" = "Orqaga";
+"Download" = "Yuklab olish";
+"Open" = "Ochish";
+"EditorImagesTool" = "Rasmlar";
+"CollectionPasteGroups" = "Guruhlarni joylash";
+
+"CollectionsCopySuffix" = "(nusxa)";
+
+"KeyBindingsMapZoneHint" = "Click the map zone to drop a point and set a position on the tag";
+
+"KeyBindingsAddMap" = "Add map";
+
+"KeyBindingsAddMapFromDisk" = "From file…";
+
+"KeyBindingsLoadedMaps" = "Loaded maps";
+
+"KeyBindingsExportSelected" = "Export selection";
+
+"KeyBindingsExportAll" = "Export all";
+
+"KeyBindingsExportPart" = "Export part";
+
+"KeyBindingsExportChoosePart" = "Choose what to export";
+
+"FreeLayoutBackgroundImage" = "Background image";
+
+"FreeLayoutChooseImage" = "Choose image";
+
+"FreeLayoutReplaceImage" = "Replace image";
+
+"ClipAutoExportBadge" = "Kliplarni avto-eksport";
+
+// --- Added to match EN key coverage (Collections menu, KeyBindings, Video download from URL) ---
+"AddVideoFromURL" = "URL orqali qo'shish";
+"CheckPermissions" = "Ruxsatlarni tekshirish";
+"CollectionTypeKeyBindings" = "Klavish bog'lanishlari";
+"CollectionTypeKeyBindingsDescription" = "Kanvasda teglarni erkin joylashtirish va klavish bog'lanishlari.";
+"CollectionTypePickerHint" = "Tur faqat yaratishda tanlanadi va keyin o'zgartirib bo'lmaydi.";
+"CollectionTypePickerTitle" = "To'plam turi";
+"CollectionTypeStandard" = "Standart";
+"CollectionTypeStandardDescription" = "Teglar razmetka kutubxonasida guruhlarda ko'rsatiladi.";
+"CollectionsDeleteConfirmFormat" = "\"%@\" to'plamini o'chirishga ishonchingiz komilmi?";
+"CollectionsMenuButton" = "To'plamlar";
+"CollectionsMenuEmpty" = "Hozircha maxsus to'plamlar yo'q";
+"CollectionsMenuSubtitle" = "Maxsus teg to'plamlaringizni boshqaring";
+"CollectionsMenuTitle" = "To'plamlar menyusi";
+"DownloadButtonTitle" = "Yuklab olish";
+"DownloadVideoFromURL" = "URL orqali videoni yuklab olish";
+"DownloadVideoFromURLDescription" = "Video URL manzilini joylashtiring, yuklab olish uchun sifat va formatni tanlang";
+"DownloadingVideo" = "Video yuklab olinmoqda...";
+"DownloadsFolderAccessDescription" = "Videolarni saqlash uchun ilovaga Yuklab olishlar jildiga ruxsat kerak";
+"DownloadsFolderAccessGranted" = "Yuklab olishlar jildiga ruxsat berildi";
+"DownloadsFolderAccessRequired" = "Yuklab olishlar jildiga ruxsat talab qilinadi";
+"EnterVideoURL" = "Video URL manzilini joylashtiring";
+"FetchFormats" = "Ma'lumotni olish";
+"FetchingVideoInfo" = "Video ma'lumoti olinmoqda...";
+"GrantAccessButtonTitle" = "Ruxsat berish";
+"KeyBindingsAddTimeEventHint" = "Kanvasga vaqt hodisasini qo'shing:";
+"KeyBindingsCanvasTimeEventsCount" = "Vaqt hodisalari: %d";
+"KeyBindingsNoTimeEvents" = "To'plamda vaqt hodisalari yo'q";
+"OpenSystemSettings" = "Tizim sozlamalarini ochish";
+"SelectDownloadsFolderMessage" = "Videolarni saqlash uchun Yuklab olishlar jildiga ruxsat kerak. Iltimos, keyingi oynada Yuklab olishlar jildini tanlang.";
+"SelectQuality" = "Sifatni tanlang";
+"TryAgain" = "Qayta urinish";
+"UseServerVideoName" = "Serverdagi video nomidan foydalanish";
+"UseServerVideoNameDescription" = "Jamoa/hisob kiritishni o'tkazib yuborib, serverdagi video nomidan foydalanish";
+"VideoDownloaded" = "Video muvaffaqiyatli yuklab olindi";
+"VideoDownloadedDescription" = "Video Yuklab olishlar jildiga saqlandi. Uni loyihangizga qo'shish uchun davom eting";
+"VideoFormat" = "Video formati";
+"VideoTitle" = "Video sarlavhasi";
+"VideoURL" = "Video URL";

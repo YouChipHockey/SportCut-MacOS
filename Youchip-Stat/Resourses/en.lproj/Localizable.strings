@@ -221,6 +221,7 @@
 "LayoutAnalyticsPng" = "Markup_Analytics.png";  // ^String.Titles.layoutAnalyticsPng
 "LayoutAnalytics" = "Markup Analytics";  // ^String.Titles.layoutAnalytics
 "SelectMapPositionForTag" = "Select position on map for tag:";  // ^String.Titles.selectMapPositionForTag
+"FieldMapMarkAllHint" = "Mark a point on every map to continue";  // ^String.Titles.fieldMapMarkAllHint
 "TagLibrary" = "Tag Library";  // ^String.Titles.tagLibrary
 "FieldMapVisualizationSettings" = "Field map visualization settings";  // ^String.Titles.fieldMapVisualizationSettings
 "EditScreenshot" = "Edit Screenshot";  // ^String.Titles.editScreenshot
@@ -411,6 +412,9 @@
 "SubscriptionActive" = "You have an active subscription";  // ^String.Titles.subscriptionActive
 "VideoUploadLimit" = "You can upload %d more videos out of %d";  // ^String.Titles.videoUploadLimit
 "VideoUploadLimitReached" = "Video upload limit reached. Sign in to upload more files.";  // ^String.Titles.videoUploadLimitReached
+"ViewingSessionsLimit" = "Viewing: %d of %d left";
+"ViewingLimitReachedTitle" = "Viewing mode limit reached";
+"ViewingLimitReachedMessage" = "Without an active license you can't create new viewing projects or add sources to existing ones. Activate a license to remove the limit.";
 "RenewLicense" = "Renew License";  // ^String.Titles.renewLicense
 "MidDuration" = "Average duration";  // ^String.Titles.midDuration
 "AIReports" = "Report";
@@ -496,7 +500,7 @@
 "Show" = "Show"; // ^String.Titles.show
 "SelectFormation" = "Select formation for"; // ^String.Titles.selectFormation
 "NoAvailableFormations" = "No available formations for"; // ^String.Titles.noAvailableFormations
-"players" = "players"; // ^String.Titles.players
+"Players" = "players"; // ^String.Titles.players
 "GlowColor" = "Glow color:"; // ^String.Titles.glowColor
 "Radius" = "Radius:"; // ^String.Titles.radius
 "LineColor" = "Line color:"; // ^String.Titles.lineColor
@@ -536,6 +540,13 @@
 "AppearanceSystem" = "System";
 "AppearanceLight" = "Light";
 "AppearanceDark" = "Dark";
+"LanguageTitle" = "Interface language";
+"LanguageAuto" = "System";
+"SettingsTitle" = "Settings";
+"SettingsExportSection" = "Clip export";
+"SettingsExportWatermark" = "Save clips with watermark (tag name, labels)";
+"SettingsExportWatermarkHint" = "The same overlay as the export dialog flag; applied when saving via Cmd+S / Opt+Cmd+S";
+"SettingsMenuItem" = "Settings…";
 "Playlists" = "Playlists"; // ^String.Titles.playlists
 "Load" = "Load"; // ^String.Titles.load
 "CurrentUnsaved" = "Current (unsaved)"; // ^String.Titles.currentUnsaved
@@ -636,8 +647,8 @@
 "SelectProjectFileForImport" = "Select project file to import"; // ^String.Titles.selectProjectFileForImport
 "ProjectImportChooseFormatTitle" = "Import project";
 "ProjectImportChooseFormatMessage" = "Choose which kind of project file you are importing.";
-"ProjectImportSportcutFormat" = "YouChip Sportcut (JSON)";
-"ProjectImportSportcodeXmlFormat" = "Sportscode / Angels / Wyscout (XML)";
+"ProjectImportSportcutFormat" = "YouChip Sportcut (.youchip)";
+"ProjectImportSportcodeXmlFormat" = "SportCut / Sportscode / Angels / Wyscout (XML)";
 "ProjectImportNacsportXmlFormat" = "Nacsport (XML)";
 "ProjectImportDartfishXmlFormat" = "Dartfish (XML)";
 "SelectSportcodeXmlForImport" = "Select an XML file with events (ALL_INSTANCES)";
@@ -1040,6 +1051,8 @@
 "MomentEventsPrefix" = "Events: %@";
 "MomentLabelsPrefix" = "Labels: %@";
 "MomentWindowTitlePrefix" = "Moment: %@";
+"MomentClipNotFullyRecorded" = "Clip isn't fully recorded yet — part of the tag isn't in the buffer.";
+"MomentRefreshClip" = "Refresh";
 
 // ReviewVideo
 "ReviewLoadingRecording" = "Loading recording...";
@@ -1058,6 +1071,8 @@
 // VideoPlayer
 "VideoHistoryToggle" = "History";
 "VideoHistoryHelp" = "Show or hide action history on the video";
+"VideoLockWindowsToggle" = "Lock windows";
+"VideoLockWindowsHelp" = "When enabled, the markup windows remember their current layout and open in it every time";
 "VideoBroadcastPauseHelp" = "Pause broadcast";
 "VideoBroadcastResumeHelp" = "Resume broadcast";
 "VideoBroadcastStopHelp" = "Stop broadcast and switch to normal markup mode";
@@ -1144,6 +1159,7 @@
 "KeyBindingsTapSourceHint" = "Step 1: tap a source button on the canvas";
 "KeyBindingsTapTargetHint" = "Step 2: tap a target button on the canvas";
 "KeyBindingsButtonAllBindings" = "All bindings of this button";
+"KeyBindingsDeleteAllForButton" = "Delete all bindings of this button";
 "CanvasEditTabParameters" = "Parameters";
 "CanvasEditTabAppearance" = "Appearance";
 "CanvasEditName" = "Name";
@@ -1219,3 +1235,142 @@
 "SportCutSlideAddLogo" = "Add logo";
 "SportCutSlideDone" = "Done";
 "SportCutSlideSave" = "Save";
+
+"CollectionDuplicateTo" = "Duplicate to";
+"CollectionSelectedGroupsCountFormat" = "Selected groups: %d";
+"CollectionClearSelection" = "Clear selection";
+"CollectionNoOtherCollections" = "No other collections";
+"CollectionMultiSelectHint" = "⌘-click to select multiple groups";
+"CollectionStandardReadOnly" = "Read-only";
+"CollectionCreateCopy" = "Create a copy";
+"CollectionStandardOpenReadOnly" = "Open (read-only)";
+
+"VideosAddMenuTitle" = "Add";
+"VideosAddFromFile" = "From file";
+"VideosImportMenuTitle" = "Import";
+"LicenseActive" = "License active";
+
+"SportCutSlideAddText" = "Text";
+"SportCutSlideAddImage" = "Image";
+"SportCutSlideSelectHint" = "Select an element on the canvas to edit it.";
+"SportCutSlideTextElement" = "Text layer";
+"SportCutSlideImageElement" = "Image";
+"SportCutSlideFont" = "Font";
+"SportCutSlideFontSystem" = "System";
+"SportCutSlideBold" = "Bold";
+"SportCutSlideReplaceImage" = "Replace image";
+"SportCutSlideNewText" = "New text";
+
+"ExportErrorNothingProduced" = "No clips could be exported. Make sure the videos are available.";
+"ExportErrorFailedGeneric" = "Export failed.";
+
+"KeyBindingsResetAll" = "Reset all";
+"KeyBindingsResetBindingsOnly" = "Bindings only";
+
+// Heat Map
+"HeatMapLegendLow" = "Lower";
+"HeatMapLegendHigh" = "Higher";
+"HeatMapControlRadius" = "Radius";
+"HeatMapControlIntensity" = "Contrast";
+"HeatMapControlShowMarkers" = "Show markers";
+
+// Project Merge
+"MergeProjectsButton" = "Merge";
+"MergeProjectsExitSelection" = "Exit selection";
+"MergeProjectsHelp" = "Merge several projects into one";
+"MergeProjectsSelectedCount" = "Selected: %d";
+"MergeProjectsSelectionHint" = "Click projects — the number shows the merge order";
+"MergeProjectsTitle" = "Merge projects";
+"MergeProjectsSubtitle" = "Videos are joined one after another; each next project's markup shifts by the total duration of the previous ones.";
+"MergeProjectsNameLabel" = "New project name";
+"MergeProjectsOrderLabel" = "Merge order";
+"MergeProjectsMergeLinesTitle" = "Merge lines with the same name";
+"MergeProjectsMergeLinesOn" = "Lines with matching names become a single shared line.";
+"MergeProjectsMergeLinesOff" = "Each line gets its project name added, nothing is mixed.";
+"MergeProjectsMergeLinesHint" = "Timelines with the same name were found. Checked ones are merged into one; the rest stay separate (prefixed with the project name).";
+"MergeProjectsStartButton" = "Merge";
+"MergeProjectsSavePanelTitle" = "Save merged video";
+"MergeProjectsSavePanelMessage" = "Choose where to save the joined video file";
+"MergeProjectsKeepOpenHint" = "Keep this window open until the operation finishes.";
+"MergeProjectsDefaultName" = "Merged project";
+"MergeStatusPreparing" = "Preparing…";
+"MergeStatusExporting" = "Joining video…";
+"MergeStatusFinishing" = "Building project…";
+"MergeErrorNotEnoughProjects" = "Select at least two projects.";
+"MergeErrorVideoUnavailable" = "Video of project “%@” is unavailable.";
+"MergeErrorNoVideoTrack" = "Project “%@” has no video track.";
+"MergeErrorComposition" = "Could not build the combined video.";
+"MergeErrorExport" = "Could not export the merged video.";
+"MergeErrorCancelled" = "Merge cancelled.";
+"MergeErrorProjectCreation" = "Could not create the new project.";
+
+// Clip Auto-Save
+"ClipAutoSaveNotConfiguredBadge" = "Auto-save folder not set";
+"ClipAutoSaveNotConfiguredTitle" = "Auto-save folder not selected";
+"ClipAutoSaveNotConfiguredMessage" = "Choose a folder for clip auto-save (Cmd+S), then try again.";
+"ClipAutoSavePickFolder" = "Choose folder…";
+"ClipAutoSaveChangeFolder" = "Change folder…";
+"ClipAutoSaveResetFolder" = "Reset folder";
+"ClipAutoSaveCurrentFolder" = "Folder: %@";
+"ClipAutoSaveConfiguredHelp" = "Clip auto-save: %@";
+"ClipAutoSavePickPrompt" = "Choose";
+"ClipAutoSavePickTitle" = "Clip auto-save folder";
+"ClipAutoSaveInProgress" = "Saving clip…";
+"ClipAutoSaveSuccess" = "Clip saved: %@";
+"ClipAutoSaveErrorTitle" = "Clip auto-save";
+"ClipAutoSaveNoStampTitle" = "No tag selected";
+"ClipAutoSaveNoStampMessage" = "Select a tag on the timeline whose clip you want to save.";
+"ClipAutoSaveNoVideoMessage" = "Current video is unavailable.";
+"ClipAutoSaveBadRangeMessage" = "Invalid clip range.";
+"ClipAutoSaveExportFailedMessage" = "Could not save the clip.";
+"ClipAutoSaveNoSelectedClips" = "No selected clips.";
+"ClipAutoSaveMergedInProgress" = "Saving compilation…";
+"ClipAutoSaveMergedSuccess" = "Compilation saved: %@";
+"ClipAutoSaveMergedPrefix" = "Compilation";
+
+// Club Logo Watermark
+"ClubLogoTitle" = "Club logo";
+"ClubLogoHint" = "Drag the logo and resize it by the corner. The position is saved for export.";
+"ClubLogoChoose" = "Choose image";
+"ClubLogoReplace" = "Replace image";
+"ClubLogoNotSet" = "Logo not set";
+"ClubLogoMenuItem" = "Club logo";
+"ExportShowClubLogo" = "Add club logo";
+"ExportClubLogoNotConfigured" = "Logo not configured — set it in settings";
+
+// Image Editor
+"MainTabEditor" = "Editor";
+"EditorImages" = "Image editor";
+"EditorAddImage" = "Add image";
+"EditorNewProject" = "New project";
+"EditorNoProjects" = "No projects yet";
+"EditorChooseImage" = "Choose image";
+"Back" = "Back";
+"Download" = "Download";
+"Open" = "Open";
+"EditorImagesTool" = "Images";
+"CollectionPasteGroups" = "Paste groups";
+
+"KeyBindingsMapZoneHint" = "Click the map zone to drop a point and set a position on the tag";
+
+"KeyBindingsAddMap" = "Add map";
+
+"KeyBindingsAddMapFromDisk" = "From file…";
+
+"KeyBindingsLoadedMaps" = "Loaded maps";
+
+"KeyBindingsExportSelected" = "Export selection";
+
+"KeyBindingsExportAll" = "Export all";
+
+"KeyBindingsExportPart" = "Export part";
+
+"KeyBindingsExportChoosePart" = "Choose what to export";
+
+"FreeLayoutBackgroundImage" = "Background image";
+
+"FreeLayoutChooseImage" = "Choose image";
+
+"FreeLayoutReplaceImage" = "Replace image";
+
+"ClipAutoExportBadge" = "Auto-export clips";

@@ -30,6 +30,7 @@ class AppSetupManager {
     static let appearanceKey = "appAppearanceMode"
 
     class func setup() {
+        LanguageManager.shared.setupAtLaunch()
         TimelineMigrationManager.shared.migrateIfNeeded()
         DataSyncManager.shared.synchronizeOnAppLaunch()
         FirebaseApp.configure()
@@ -59,7 +60,17 @@ class AppSetupManager {
         let mainMenu = NSMenuItem(title: ^String.Titles.rootYouChipTitle, action: nil, keyEquivalent: "")
         application.menu?.addItem(mainMenu)
         application.menu?.setSubmenu(NSMenu(), for: mainMenu)
-        
+
+        // «Настройки…» (⌘,) — открывает единый экран настроек. Цель — nil, чтобы событие
+        // прошло по responder chain до AppDelegate (он может быть ещё не назначен на момент сборки меню).
+        let settingsItem = NSMenuItem(title: ^String.Titles.settingsMenuItem,
+                                      action: #selector(AppDelegate.openSettings),
+                                      keyEquivalent: ",")
+        settingsItem.target = nil
+        mainMenu.submenu?.addItem(settingsItem)
+
+        mainMenu.submenu?.addItem(.separator())
+
         let quitItem = NSMenuItem(title: ^String.Titles.macQuitAppTitle, action: nil, keyEquivalent: "q")
         quitItem.target = application
         quitItem.action = #selector(application.terminate)

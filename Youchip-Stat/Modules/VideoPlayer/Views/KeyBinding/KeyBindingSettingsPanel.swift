@@ -17,6 +17,7 @@ struct KeyBindingSettingsPanel: View {
     let tags: [Tag]
     let labels: [Label]
     let timeEvents: [TimeEvent]
+    var playFields: [PlayField] = []
     /// Ключ выбранной группы стрелок (source → target).
     let selectedGroupKey: KeyBindingGroupKey?
     /// Составной ключ сфокусированной кнопки ("kind:id"). Когда задан — показываются все её связки.
@@ -210,6 +211,15 @@ struct KeyBindingSettingsPanel: View {
                         .font(.caption2).foregroundColor(.secondary)
                 }
                 Spacer()
+                // Удалить сразу ВСЕ связки этой кнопки (исходящие + входящие).
+                if !(outgoing.isEmpty && incoming.isEmpty) {
+                    Button(role: .destructive, action: { deleteAllBindings(forButtonKey: sourceKey) }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .help(^String.Titles.keyBindingsDeleteAllForButton)
+                }
                 Button(action: onDeselect) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
@@ -358,6 +368,17 @@ struct KeyBindingSettingsPanel: View {
                     Text("+\(Int(delay))s")
                         .font(.caption2)
                         .foregroundColor(.secondary)
+                }
+                // Кнопка удаления прямо в свёрнутой строке — не нужно раскрывать связку,
+                // чтобы её удалить (в раскрытом виде удаление есть в деталке).
+                if collapsible && !isExpanded {
+                    Button(role: .destructive, action: { deleteBinding(binding) }) {
+                        Image(systemName: "trash")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .help(^String.Titles.keyBindingsDelete)
                 }
             }
             .padding(.vertical, 6)
@@ -572,6 +593,12 @@ struct KeyBindingSettingsPanel: View {
         layout.bindings.removeAll { $0.id == binding.id }
     }
 
+    /// Удаляет все связки кнопки — где она источник ИЛИ цель (исходящие + входящие).
+    private func deleteAllBindings(forButtonKey key: String) {
+        layout.bindings.removeAll { $0.sourceButtonKey == key || $0.targetButtonKey == key }
+        expandedBindingIds = []
+    }
+
     private func duplicateBinding(_ binding: KeyBinding) {
         let dupes = KeyBindingClipboard.duplicate([binding])
         layout.bindings.append(contentsOf: dupes)
@@ -597,6 +624,8 @@ struct KeyBindingSettingsPanel: View {
             return labels.first(where: { $0.id == elementId })?.name ?? elementId
         case .timeEvent:
             return timeEvents.first(where: { $0.id == elementId })?.name ?? elementId
+        case .map:
+            return playFields.first(where: { $0.id == elementId })?.name ?? elementId
         }
     }
 

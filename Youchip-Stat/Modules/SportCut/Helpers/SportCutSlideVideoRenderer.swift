@@ -29,6 +29,15 @@ enum SportCutSlideVideoRenderer {
         hasher.combine(slide.textColorHex)
         hasher.combine(slide.textSize)
         hasher.combine(slide.imageData)
+        for el in slide.elements {
+            hasher.combine(el.kind)
+            hasher.combine(el.centerX); hasher.combine(el.centerY)
+            hasher.combine(el.width); hasher.combine(el.height)
+            hasher.combine(el.text); hasher.combine(el.fontName)
+            hasher.combine(el.fontSize); hasher.combine(el.colorHex)
+            hasher.combine(el.bold); hasher.combine(el.alignment)
+            hasher.combine(el.imageData)
+        }
         return String(UInt(bitPattern: hasher.finalize()))
     }
 

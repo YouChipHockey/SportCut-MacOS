@@ -69,7 +69,8 @@ class WindowsManager: NSObject, NSWindowDelegate {
     
     private var collectionWindowDelegate: CollectionWindowDelegate?
     private var collectionsMenuWindow: NSWindow?
-    
+    private var settingsWindow: NSWindow?
+
     override init() {
         super.init()
         NotificationCenter.default.addObserver(
@@ -849,7 +850,21 @@ class WindowsManager: NSObject, NSWindowDelegate {
         controller.showWindow(nil)
         controller.window?.center()
     }
-    
+
+    /// Открывает окно разметки тега на НЕСКОЛЬКИХ картах (стопкой) — точку ставим на каждой.
+    /// Аналог showFieldMapSelection для >1 карты. Живёт в том же слоте fieldMapWindow (одновременно
+    /// открыта одна карта); закрытие — через fieldMapWindowDidClose(). Фрейм окна (во всю высоту
+    /// экрана) задаёт сам контроллер, поэтому center() тут не вызываем.
+    func showMultiFieldMapSelection(tag: Tag, items: [FieldMapSelectionItem], lockWindows: Bool = true, onSave: @escaping ([String: CGPoint]) -> Void) {
+        let controller = FieldMapMultiSelectionWindowController(tag: tag, items: items, onSave: onSave)
+        fieldMapWindow = controller
+        fieldMapLockedMainWindows = lockWindows
+        if lockWindows {
+            lockMainWindows(true)
+        }
+        controller.showWindow(nil)
+    }
+
     func lockMainWindows(_ locked: Bool) {
         isWindowsLocked = locked
         tagLibraryWindow?.window?.ignoresMouseEvents = locked
@@ -862,7 +877,27 @@ class WindowsManager: NSObject, NSWindowDelegate {
         fieldMapLockedMainWindows = false
         fieldMapWindow = nil
     }
-    
+
+    /// Открывает единый экран настроек (язык, тема, экспорт/вотермарка, логотип клуба).
+    /// Вызывается пунктом главного меню «Настройки…» (⌘,, через AppDelegate.openSettings)
+    /// и меню-шестерёнкой в VideosView. Окно переиспользуется (не пересоздаётся, если уже открыто).
+    func openSettingsWindow() {
+        if let window = settingsWindow, window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        let hostingController = NSHostingController(rootView: SettingsView())
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = ^String.Titles.settingsTitle
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.setContentSize(NSSize(width: 640, height: 640))
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        settingsWindow = window
+        window.makeKeyAndOrderFront(nil)
+    }
+
     /// Возвращает true, если ключевое окно — таймлайн (control) или библиотека тегов (tag library). Используется для пробела = play/pause.
     func isControlOrTagLibraryWindowKey() -> Bool {
         guard let keyWindow = NSApplication.shared.keyWindow else { return false }

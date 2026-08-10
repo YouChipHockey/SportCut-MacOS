@@ -11,7 +11,7 @@ class MomentViewerWindowController: NSWindowController, NSWindowDelegate {
     
     private let session: MomentViewerSession
     
-    init(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String, lineID: UUID? = nil, stampID: UUID? = nil) {
+    init(asset: AVAsset, startTime: Double, duration: Double, tagName: String, lineName: String, lineID: UUID? = nil, stampID: UUID? = nil, allowsRefresh: Bool = false, assetProvider: ((@escaping (AVAsset?) -> Void) -> Void)? = nil) {
         let assetSeconds = CMTimeGetSeconds(asset.duration)
         let session = MomentViewerSession(
             asset: asset,
@@ -21,7 +21,9 @@ class MomentViewerWindowController: NSWindowController, NSWindowDelegate {
             tagName: tagName,
             lineName: lineName,
             lineID: lineID,
-            stampID: stampID
+            stampID: stampID,
+            allowsRefresh: allowsRefresh,
+            assetProvider: assetProvider
         )
         self.session = session
         

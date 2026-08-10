@@ -138,6 +138,33 @@ class EditorDrawingState: ObservableObject {
     @Published var isCreatingShape: Bool = false
     @Published var currentShapeType: ShapeType? = nil
     @Published var pendingShape: EditorShape? = nil
+
+    // Images state (инструмент «Картинки» самостоятельного редактора)
+    @Published var images: [EditorImageObject] = []
+    @Published var selectedImageId: UUID? = nil
+
+    /// Добавляет картинку по центру холста, вписывая её в ~40% ширины с сохранением пропорций.
+    func addImageObject(fileName: String, image: NSImage) {
+        let canvas = viewSize == .zero ? CGSize(width: 800, height: 600) : viewSize
+        let maxW = canvas.width * 0.4
+        let aspect = image.size.width > 0 ? image.size.height / image.size.width : 1
+        let w = min(maxW, image.size.width > 0 ? image.size.width : maxW)
+        let h = w * aspect
+        let obj = EditorImageObject(
+            fileName: fileName,
+            image: image,
+            position: CGPoint(x: canvas.width / 2, y: canvas.height / 2),
+            size: CGSize(width: w, height: h)
+        )
+        images.append(obj)
+        selectedImageId = obj.id
+    }
+
+    func deleteSelectedImage() {
+        guard let id = selectedImageId else { return }
+        images.removeAll { $0.id == id }
+        selectedImageId = nil
+    }
     
     // TextBox state
     @Published var isCreatingTextBox: Bool = false
@@ -266,6 +293,13 @@ class EditorDrawingState: ObservableObject {
             pendingTextBox.position = CGPoint(x: pendingTextBox.position.x * scaleX, y: pendingTextBox.position.y * scaleY)
             pendingTextBox.size = CGSize(width: pendingTextBox.size.width * scaleX, height: pendingTextBox.size.height * scaleY)
             self.pendingTextBox = pendingTextBox
+        }
+
+        images = images.map { obj in
+            var newObj = obj
+            newObj.position = CGPoint(x: obj.position.x * scaleX, y: obj.position.y * scaleY)
+            newObj.size = CGSize(width: obj.size.width * scaleX, height: obj.size.height * scaleY)
+            return newObj
         }
 
         initialViewSize = newSize
@@ -454,6 +488,8 @@ class EditorDrawingState: ObservableObject {
         isAddingPointToTelestration = false
         shapes.removeAll()
         selectedShapeId = nil
+        images.removeAll()
+        selectedImageId = nil
         initialViewSize = .zero
         viewSize = .zero
     }
@@ -489,7 +525,7 @@ class EditorDrawingState: ObservableObject {
     }
     
     var hasDrawing: Bool {
-        return !completedPaths.isEmpty || !currentPath.points.isEmpty || !telestrationObjects.isEmpty || !shapes.isEmpty || !textBoxes.isEmpty || pendingTextBox != nil
+        return !completedPaths.isEmpty || !currentPath.points.isEmpty || !telestrationObjects.isEmpty || !shapes.isEmpty || !textBoxes.isEmpty || pendingTextBox != nil || !images.isEmpty
     }
     
     // MARK: - Telestration Methods
@@ -1308,6 +1344,30 @@ enum EditorTool {
     case telestration
     case shapes
     case textBox
+    /// Только в самостоятельном «Редакторе картинок»: добавление своих картинок как объектов.
+    case image
+}
+
+/// Пользовательская картинка на холсте (ведёт себя как фигура: двигается, крутится, меняет размер).
+/// Геометрия — во view-координатах (как у EditorShape); масштабируется при ресайзе окна.
+struct EditorImageObject: Identifiable {
+    let id: UUID
+    /// Имя файла картинки внутри папки проекта (для сохранения/загрузки).
+    var fileName: String
+    /// Загруженная картинка (runtime, не сериализуется).
+    var image: NSImage?
+    var position: CGPoint
+    var size: CGSize
+    var rotation: CGFloat = 0.0
+
+    init(id: UUID = UUID(), fileName: String, image: NSImage?, position: CGPoint, size: CGSize, rotation: CGFloat = 0) {
+        self.id = id
+        self.fileName = fileName
+        self.image = image
+        self.position = position
+        self.size = size
+        self.rotation = rotation
+    }
 }
 
 enum ShapeType: String, CaseIterable {
@@ -1459,8 +1519,19 @@ struct EditorStateSnapshot: Codable {
     var shapes: [SnapshotShape] = []
     var textBoxes: [SnapshotTextBox] = []
     var telestrationObjects: [SnapshotTelestration] = []
+    var images: [SnapshotImage] = []
     var currentToolRaw: String? = nil // "pencil", "arrow", "cursor", etc.
-    
+
+    struct SnapshotImage: Codable {
+        var id: UUID
+        var fileName: String
+        var positionX: Double
+        var positionY: Double
+        var sizeWidth: Double
+        var sizeHeight: Double
+        var rotation: Double
+    }
+
     struct SnapshotPath: Codable {
         var points: [[Double]] // [[x,y], ...]
         var colorHex: String
@@ -1518,6 +1589,35 @@ struct EditorStateSnapshot: Codable {
         var strokeWidth: Double
     }
     
+    init(viewSizeWidth: Double, viewSizeHeight: Double, completedPaths: [SnapshotPath] = [], shapes: [SnapshotShape] = [], textBoxes: [SnapshotTextBox] = [], telestrationObjects: [SnapshotTelestration] = [], images: [SnapshotImage] = [], currentToolRaw: String? = nil) {
+        self.viewSizeWidth = viewSizeWidth
+        self.viewSizeHeight = viewSizeHeight
+        self.completedPaths = completedPaths
+        self.shapes = shapes
+        self.textBoxes = textBoxes
+        self.telestrationObjects = telestrationObjects
+        self.images = images
+        self.currentToolRaw = currentToolRaw
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case viewSizeWidth, viewSizeHeight, completedPaths, shapes, textBoxes, telestrationObjects, images, currentToolRaw
+    }
+
+    // Обратная совместимость: старые снапшоты без поля `images` (и любого другого)
+    // не должны падать при декодировании.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        viewSizeWidth = try c.decodeIfPresent(Double.self, forKey: .viewSizeWidth) ?? 0
+        viewSizeHeight = try c.decodeIfPresent(Double.self, forKey: .viewSizeHeight) ?? 0
+        completedPaths = try c.decodeIfPresent([SnapshotPath].self, forKey: .completedPaths) ?? []
+        shapes = try c.decodeIfPresent([SnapshotShape].self, forKey: .shapes) ?? []
+        textBoxes = try c.decodeIfPresent([SnapshotTextBox].self, forKey: .textBoxes) ?? []
+        telestrationObjects = try c.decodeIfPresent([SnapshotTelestration].self, forKey: .telestrationObjects) ?? []
+        images = try c.decodeIfPresent([SnapshotImage].self, forKey: .images) ?? []
+        currentToolRaw = try c.decodeIfPresent(String.self, forKey: .currentToolRaw)
+    }
+
     static func from(drawingState: EditorDrawingState) -> EditorStateSnapshot {
         func hex(_ color: Color) -> String {
             if color == Color.clear { return "clear" }
@@ -1605,6 +1705,19 @@ struct EditorStateSnapshot: Codable {
             ))
         }
         
+        var imgs: [SnapshotImage] = []
+        for o in drawingState.images {
+            imgs.append(SnapshotImage(
+                id: o.id,
+                fileName: o.fileName,
+                positionX: Double(o.position.x),
+                positionY: Double(o.position.y),
+                sizeWidth: Double(o.size.width),
+                sizeHeight: Double(o.size.height),
+                rotation: Double(o.rotation)
+            ))
+        }
+
         let toolRaw: String? = {
             switch drawingState.currentTool {
             case .cursor: return "cursor"
@@ -1614,9 +1727,10 @@ struct EditorStateSnapshot: Codable {
             case .telestration: return "telestration"
             case .shapes: return "shapes"
             case .textBox: return "textBox"
+            case .image: return "image"
             }
         }()
-        
+
         return EditorStateSnapshot(
             viewSizeWidth: Double(drawingState.viewSize.width),
             viewSizeHeight: Double(drawingState.viewSize.height),
@@ -1624,6 +1738,7 @@ struct EditorStateSnapshot: Codable {
             shapes: shapes,
             textBoxes: boxes,
             telestrationObjects: tels,
+            images: imgs,
             currentToolRaw: toolRaw
         )
     }
@@ -1711,13 +1826,26 @@ struct EditorStateSnapshot: Codable {
             drawingState.telestrationObjects.append(obj)
         }
         
+        for im in images {
+            // NSImage подгружается отдельно менеджером проекта из папки проекта по fileName.
+            let obj = EditorImageObject(
+                id: im.id,
+                fileName: im.fileName,
+                image: nil,
+                position: CGPoint(x: im.positionX, y: im.positionY),
+                size: CGSize(width: im.sizeWidth, height: im.sizeHeight),
+                rotation: CGFloat(im.rotation)
+            )
+            drawingState.images.append(obj)
+        }
+
         if viewSizeWidth > 0 && viewSizeHeight > 0 {
             drawingState.viewSize = CGSize(width: viewSizeWidth, height: viewSizeHeight)
             if drawingState.initialViewSize == .zero {
                 drawingState.initialViewSize = drawingState.viewSize
             }
         }
-        
+
         if let raw = currentToolRaw {
             switch raw {
             case "cursor": drawingState.currentTool = .cursor
@@ -1727,6 +1855,7 @@ struct EditorStateSnapshot: Codable {
             case "telestration": drawingState.currentTool = .telestration
             case "shapes": drawingState.currentTool = .shapes
             case "textBox": drawingState.currentTool = .textBox
+            case "image": drawingState.currentTool = .image
             default: drawingState.currentTool = .pencil
             }
         }

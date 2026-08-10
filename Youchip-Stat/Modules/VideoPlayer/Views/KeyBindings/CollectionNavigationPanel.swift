@@ -59,9 +59,78 @@ struct CollectionNavigationPanel: View {
     @State private var newTimeEventName = ""
     @State private var timeEventPendingDelete: TimeEvent?
     @State private var showLabelHotkeyConflictAlert = false
+    /// Множественный выбор групп для дублирования в другую коллекцию.
+    @State private var selectedTagGroupIDs: Set<String> = []
+    @State private var selectedLabelGroupIDs: Set<String> = []
+    /// Inline-редактирование имени прямо в левом столбце (как у лейблов) — вместо модальных окон.
+    @State private var editingGroupID: String?
+    @State private var editingGroupNameText = ""
+    @State private var editingEventID: String?
+    @State private var editingEventNameText = ""
+    @State private var tagGroupPendingDelete: TagGroup?
+    @State private var labelGroupPendingDelete: LabelGroupData?
 
     var body: some View {
         contentWithHotkeyAlert
+    }
+
+    // MARK: - Множественный выбор групп / дублирование в другую коллекцию
+
+    private var duplicationTargets: [CollectionInfo] {
+        CollectionsBookmarksManager.shared.loadCollections()
+            .filter { $0.id != collectionManager.collectionID }
+    }
+
+    private var tagGroupSelectionChips: [GroupDuplicationBar.Chip] {
+        collectionManager.tagGroups
+            .filter { selectedTagGroupIDs.contains($0.id) }
+            .map { GroupDuplicationBar.Chip(id: $0.id, name: $0.name) }
+    }
+
+    private var labelGroupSelectionChips: [GroupDuplicationBar.Chip] {
+        collectionManager.labelGroups
+            .filter { selectedLabelGroupIDs.contains($0.id) }
+            .map { GroupDuplicationBar.Chip(id: $0.id, name: $0.name) }
+    }
+
+    private func toggleTagGroupSelection(_ id: String) {
+        if selectedTagGroupIDs.contains(id) { selectedTagGroupIDs.remove(id) }
+        else { selectedTagGroupIDs.insert(id) }
+    }
+
+    private func toggleLabelGroupSelection(_ id: String) {
+        if selectedLabelGroupIDs.contains(id) { selectedLabelGroupIDs.remove(id) }
+        else { selectedLabelGroupIDs.insert(id) }
+    }
+
+    private func tagsForGroup(_ groupID: String) -> [Tag] {
+        guard let group = collectionManager.tagGroups.first(where: { $0.id == groupID }) else { return [] }
+        let byID = Dictionary(collectionManager.tags.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return group.tags.compactMap { byID[$0] }
+    }
+
+    private func labelsForGroup(_ groupID: String) -> [Label] {
+        guard let group = collectionManager.labelGroups.first(where: { $0.id == groupID }) else { return [] }
+        let byID = Dictionary(collectionManager.labels.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return group.lables.compactMap { byID[$0] }
+    }
+
+    private func duplicateSelectedTagGroups(to targetID: String) {
+        let payloads = collectionManager.tagGroups
+            .filter { selectedTagGroupIDs.contains($0.id) }
+            .map { GroupDuplicationService.TagGroupPayload(group: $0, tags: tagsForGroup($0.id)) }
+        guard !payloads.isEmpty else { return }
+        GroupDuplicationService.duplicate(tagGroups: payloads, labelGroups: [], intoCollectionID: targetID)
+        selectedTagGroupIDs.removeAll()
+    }
+
+    private func duplicateSelectedLabelGroups(to targetID: String) {
+        let payloads = collectionManager.labelGroups
+            .filter { selectedLabelGroupIDs.contains($0.id) }
+            .map { GroupDuplicationService.LabelGroupPayload(group: $0, labels: labelsForGroup($0.id)) }
+        guard !payloads.isEmpty else { return }
+        GroupDuplicationService.duplicate(tagGroups: [], labelGroups: payloads, intoCollectionID: targetID)
+        selectedLabelGroupIDs.removeAll()
     }
 
     private var mainContent: some View {
@@ -104,21 +173,8 @@ struct CollectionNavigationPanel: View {
                     onDismiss: { tagToEdit = nil }
                 )
             }
-            .sheet(isPresented: $showAddTimeEventSheet) {
-                addTimeEventSheet
-            }
-            .sheet(isPresented: $showCreateTagGroupSheet) {
-                createGroupSheet(title: ^String.Titles.addTagGroup) { name in
-                    let group = collectionManager.createTagGroup(name: name)
-                    expandedTagGroups.insert(group.id)
-                }
-            }
-            .sheet(isPresented: $showCreateLabelGroupSheet) {
-                createGroupSheet(title: ^String.Titles.addLabelGroup) { name in
-                    let group = collectionManager.createLabelGroup(name: name)
-                    expandedLabelGroups.insert(group.id)
-                }
-            }
+            // Группы тегов/лейблов и события создаются inline в левом столбце (как лейблы),
+            // модальные окна убраны.
     }
 
     private var contentWithDeleteAlerts: some View {
@@ -163,6 +219,46 @@ struct CollectionNavigationPanel: View {
             } message: {
                 Text(^String.Titles.keyBindingsDeleteEventMessage)
             }
+            .alert(^String.Titles.deleteButtonTitle, isPresented: showTagGroupDeleteAlertBinding) {
+                Button(^String.Titles.deleteButtonTitle, role: .destructive) {
+                    if let group = tagGroupPendingDelete {
+                        collectionManager.deleteTagGroup(id: group.id)
+                        tagGroupPendingDelete = nil
+                    }
+                }
+                Button(^String.Titles.collectionsButtonCancel, role: .cancel) {
+                    tagGroupPendingDelete = nil
+                }
+            } message: {
+                Text(^String.Titles.alertsAreYouSure)
+            }
+            .alert(^String.Titles.deleteButtonTitle, isPresented: showLabelGroupDeleteAlertBinding) {
+                Button(^String.Titles.deleteButtonTitle, role: .destructive) {
+                    if let group = labelGroupPendingDelete {
+                        collectionManager.deleteLabelGroup(id: group.id)
+                        labelGroupPendingDelete = nil
+                    }
+                }
+                Button(^String.Titles.collectionsButtonCancel, role: .cancel) {
+                    labelGroupPendingDelete = nil
+                }
+            } message: {
+                Text(^String.Titles.alertsAreYouSure)
+            }
+    }
+
+    private var showTagGroupDeleteAlertBinding: Binding<Bool> {
+        Binding(
+            get: { tagGroupPendingDelete != nil },
+            set: { if !$0 { tagGroupPendingDelete = nil } }
+        )
+    }
+
+    private var showLabelGroupDeleteAlertBinding: Binding<Bool> {
+        Binding(
+            get: { labelGroupPendingDelete != nil },
+            set: { if !$0 { labelGroupPendingDelete = nil } }
+        )
     }
 
     private var contentWithHotkeyAlert: some View {
@@ -254,6 +350,8 @@ struct CollectionNavigationPanel: View {
                         RoundedRectangle(cornerRadius: 8)
                             .fill(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
                     )
+                    // Кликабельна вся зона кнопки, а не только текст/иконка (прозрачный фон иначе не ловит тап).
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -276,7 +374,7 @@ struct CollectionNavigationPanel: View {
 
     private var tagsTabContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button(action: { showCreateTagGroupSheet = true }) {
+            Button(action: { addInlineTagGroup() }) {
                 HStack {
                     Image(systemName: "plus.circle.fill")
                     Text(^String.Titles.keyBindingsCreateGroup)
@@ -285,6 +383,17 @@ struct CollectionNavigationPanel: View {
             }
             .buttonStyle(.plain)
             .foregroundColor(.blue)
+
+            if !selectedTagGroupIDs.isEmpty {
+                GroupDuplicationBar(
+                    chips: tagGroupSelectionChips,
+                    targets: duplicationTargets,
+                    accent: .blue,
+                    onRemoveChip: { selectedTagGroupIDs.remove($0) },
+                    onClear: { selectedTagGroupIDs.removeAll() },
+                    onDuplicate: { duplicateSelectedTagGroups(to: $0) }
+                )
+            }
 
             if collectionManager.tagGroups.isEmpty {
                 Text(^String.Titles.keyBindingsNoTagGroups)
@@ -320,11 +429,62 @@ struct CollectionNavigationPanel: View {
                         .padding(.top, 8)
                     },
                     label: {
-                        Text(group.name)
-                            .font(.subheadline.weight(.semibold))
+                        groupSelectableLabel(
+                            groupID: group.id,
+                            name: group.name,
+                            isSelected: selectedTagGroupIDs.contains(group.id),
+                            accent: .blue,
+                            onRename: { collectionManager.renameTagGroup(id: group.id, newName: $0) },
+                            onDelete: { tagGroupPendingDelete = group },
+                            toggle: { toggleTagGroupSelection(group.id) }
+                        )
                     }
                 )
             }
+        }
+    }
+
+    /// Заголовок группы с чекбоксом множественного выбора (для дублирования в другую коллекцию).
+    private func groupSelectableLabel(groupID: String, name: String, isSelected: Bool, accent: Color, onRename: @escaping (String) -> Void, onDelete: @escaping () -> Void, toggle: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
+            Button(action: toggle) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.caption)
+                    .foregroundColor(isSelected ? accent : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help(^String.Titles.collectionMultiSelectHint)
+
+            if editingGroupID == groupID {
+                // Inline-ввод имени прямо в списке (как у лейблов). Enter — сохранить.
+                AutoFocusTextField(
+                    text: $editingGroupNameText,
+                    placeholder: ^String.Titles.groupNameLabel,
+                    onSubmit: {
+                        onRename(editingGroupNameText.trimmingCharacters(in: .whitespacesAndNewlines))
+                        editingGroupID = nil
+                    }
+                )
+                .textFieldStyle(.roundedBorder)
+            } else {
+                Text(name.isEmpty ? ^String.Titles.groupNameLabel : name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(isSelected ? accent : .primary)
+                    .onTapGesture(count: 2) {
+                        editingGroupID = groupID
+                        editingGroupNameText = name
+                    }
+            }
+
+            Spacer(minLength: 4)
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+            .buttonStyle(.plain)
+            .help(^String.Titles.deleteButtonTitle)
         }
     }
 
@@ -378,39 +538,52 @@ struct CollectionNavigationPanel: View {
     }
 
     private func hotkeyField(for tag: Tag) -> some View {
-        ZStack {
-            Button(action: {
-                capturingHotkeyTagID = tag.id
-            }) {
-                Text(tag.hotkey ?? ^String.Titles.assign)
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(NSColor.controlBackgroundColor))
-                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.3)))
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(capturingHotkeyTagID == tag.id)
+        HStack(spacing: 4) {
+            ZStack {
+                Button(action: {
+                    capturingHotkeyTagID = tag.id
+                }) {
+                    Text(tag.hotkey ?? ^String.Titles.assign)
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.3)))
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(capturingHotkeyTagID == tag.id)
 
-            if capturingHotkeyTagID == tag.id {
-                KeyCaptureView(
-                    keyString: Binding(
-                        get: { tag.hotkey },
-                        set: { newValue in
-                            applyTagHotkey(tag: tag, hotkey: newValue)
-                            capturingHotkeyTagID = nil
-                        }
-                    ),
-                    isCapturing: Binding(
-                        get: { capturingHotkeyTagID == tag.id },
-                        set: { if !$0 { capturingHotkeyTagID = nil } }
+                if capturingHotkeyTagID == tag.id {
+                    KeyCaptureView(
+                        keyString: Binding(
+                            get: { tag.hotkey },
+                            set: { newValue in
+                                applyTagHotkey(tag: tag, hotkey: newValue)
+                                capturingHotkeyTagID = nil
+                            }
+                        ),
+                        isCapturing: Binding(
+                            get: { capturingHotkeyTagID == tag.id },
+                            set: { if !$0 { capturingHotkeyTagID = nil } }
+                        )
                     )
-                )
-                .allowsHitTesting(false)
+                    .allowsHitTesting(false)
+                }
+            }
+
+            // Сброс хоткея — виден только когда он задан и мы не в режиме захвата.
+            if let hk = tag.hotkey, !hk.isEmpty, capturingHotkeyTagID != tag.id {
+                Button(action: { applyTagHotkey(tag: tag, hotkey: nil) }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.reset)
             }
         }
     }
@@ -442,7 +615,7 @@ struct CollectionNavigationPanel: View {
 
     private var labelsTabContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button(action: { showCreateLabelGroupSheet = true }) {
+            Button(action: { addInlineLabelGroup() }) {
                 HStack {
                     Image(systemName: "plus.circle.fill")
                     Text(^String.Titles.keyBindingsCreateGroup)
@@ -451,6 +624,17 @@ struct CollectionNavigationPanel: View {
             }
             .buttonStyle(.plain)
             .foregroundColor(.green)
+
+            if !selectedLabelGroupIDs.isEmpty {
+                GroupDuplicationBar(
+                    chips: labelGroupSelectionChips,
+                    targets: duplicationTargets,
+                    accent: .green,
+                    onRemoveChip: { selectedLabelGroupIDs.remove($0) },
+                    onClear: { selectedLabelGroupIDs.removeAll() },
+                    onDuplicate: { duplicateSelectedLabelGroups(to: $0) }
+                )
+            }
 
             ForEach(collectionManager.labelGroups) { group in
                 DisclosureGroup(
@@ -480,8 +664,15 @@ struct CollectionNavigationPanel: View {
                         .padding(.top, 8)
                     },
                     label: {
-                        Text(group.name)
-                            .font(.subheadline.weight(.semibold))
+                        groupSelectableLabel(
+                            groupID: group.id,
+                            name: group.name,
+                            isSelected: selectedLabelGroupIDs.contains(group.id),
+                            accent: .green,
+                            onRename: { collectionManager.renameLabelGroup(id: group.id, newName: $0) },
+                            onDelete: { labelGroupPendingDelete = group },
+                            toggle: { toggleLabelGroupSelection(group.id) }
+                        )
                     }
                 )
             }
@@ -543,11 +734,33 @@ struct CollectionNavigationPanel: View {
         editingLabelName = ""
     }
 
+    /// Создаёт группу/событие СРАЗУ с пустым именем и открывает inline-поле для ввода имени
+    /// прямо в левом столбце (как при создании лейбла), вместо модального окна.
+    private func addInlineTagGroup() {
+        let group = collectionManager.createTagGroup(name: "")
+        expandedTagGroups.insert(group.id)
+        editingGroupID = group.id
+        editingGroupNameText = ""
+    }
+
+    private func addInlineLabelGroup() {
+        let group = collectionManager.createLabelGroup(name: "")
+        expandedLabelGroups.insert(group.id)
+        editingGroupID = group.id
+        editingGroupNameText = ""
+    }
+
+    private func addInlineTimeEvent() {
+        let event = collectionManager.createTimeEvent(name: "")
+        editingEventID = event.id
+        editingEventNameText = ""
+    }
+
     // MARK: - Events tab
 
     private var eventsTabContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button(action: { showAddTimeEventSheet = true }) {
+            Button(action: { addInlineTimeEvent() }) {
                 HStack {
                     Image(systemName: "plus.circle.fill")
                     Text(^String.Titles.collectionsDialogAddTimeEvent)
@@ -579,10 +792,27 @@ struct CollectionNavigationPanel: View {
         HStack {
             Image(systemName: "clock")
                 .foregroundColor(.orange)
-            Text(event.name)
-                .font(.subheadline)
+            if editingEventID == event.id {
+                // Inline-ввод имени прямо в строке (как у лейблов). Enter — сохранить.
+                AutoFocusTextField(
+                    text: $editingEventNameText,
+                    placeholder: ^String.Titles.eventName,
+                    onSubmit: {
+                        collectionManager.renameTimeEvent(id: event.id, newName: editingEventNameText.trimmingCharacters(in: .whitespacesAndNewlines))
+                        editingEventID = nil
+                    }
+                )
+                .textFieldStyle(.roundedBorder)
+            } else {
+                Text(event.name.isEmpty ? ^String.Titles.eventName : event.name)
+                    .font(.subheadline)
+                    .onTapGesture(count: 2) {
+                        editingEventID = event.id
+                        editingEventNameText = event.name
+                    }
+            }
             Spacer()
-            Button(action: { selectedTimeEventID = event.id; newTimeEventName = event.name }) {
+            Button(action: { editingEventID = event.id; editingEventNameText = event.name }) {
                 Image(systemName: "pencil")
             }
             .buttonStyle(.plain)
@@ -636,7 +866,10 @@ struct CollectionNavigationPanel: View {
                 Button(^String.Titles.collectionsButtonAdd) {
                     let name = newTimeEventName.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !name.isEmpty {
-                        _ = collectionManager.createTimeEvent(name: name)
+                        // Сразу кладём новое событие на холст (как это делают лейблы),
+                        // иначе оно есть в списке, но не появляется на канвасе.
+                        let event = collectionManager.createTimeEvent(name: name)
+                        TagFreeLayoutStorage.addTimeEventToLayout(&layout, event: event)
                     }
                     showAddTimeEventSheet = false
                     newTimeEventName = ""

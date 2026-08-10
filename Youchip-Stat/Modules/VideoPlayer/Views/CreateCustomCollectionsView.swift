@@ -29,33 +29,27 @@ enum CollectionReorderKind: String {
 struct CollectionReorderDropDelegate: DropDelegate {
     let kind: CollectionReorderKind
     let targetID: String
+    /// Id перетаскиваемого элемента (устанавливается в `.onDrag`).
+    @Binding var draggingID: String?
     let onReorder: (_ draggedID: String, _ targetID: String) -> Void
 
     static func payload(kind: CollectionReorderKind, id: String) -> String {
         "\(kind.rawValue)|\(id)"
     }
 
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    /// Живой reorder при наведении — работает и когда бросаешь «между» элементами, а не строго на объект.
+    /// Кросс-списочные дропы безопасны: onReorder не найдёт чужой id в своём списке и ничего не сделает.
+    func dropEntered(info: DropInfo) {
+        guard let dragged = draggingID, dragged != targetID else { return }
+        onReorder(dragged, targetID)
+    }
+
     func performDrop(info: DropInfo) -> Bool {
-        guard let provider = info.itemProviders(for: [.text]).first else { return false }
-        provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
-            let raw: String?
-            if let data = item as? Data {
-                raw = String(data: data, encoding: .utf8)
-            } else if let string = item as? NSString {
-                raw = string as String
-            } else {
-                raw = nil
-            }
-            guard let raw else { return }
-            let parts = raw.split(separator: "|", maxSplits: 1).map(String.init)
-            // Ignore drops coming from a different list (e.g. a tag onto a label group).
-            guard parts.count == 2, parts[0] == kind.rawValue else { return }
-            let draggedID = parts[1]
-            guard draggedID != targetID else { return }
-            DispatchQueue.main.async {
-                onReorder(draggedID, targetID)
-            }
-        }
+        draggingID = nil
         return true
     }
 }
@@ -124,8 +118,70 @@ struct AutoFocusTextField: NSViewRepresentable {
     }
 }
 
+/// NSTextField, который НАДЁЖНО вызывает `onSubmit` по Enter в SwiftUI `.sheet`:
+/// через `target`/`action` (Return в однострочном поле шлёт action напрямую) плюс
+/// `insertNewline:` как подстраховку. Coordinator обновляет `parent` на каждом рендере,
+/// поэтому `onSubmit`/`text` всегда актуальны (в отличие от захвата в makeCoordinator).
+struct EnterSubmitTextField: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String = ""
+    var autoFocus: Bool = true
+    let onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> NSTextField {
+        let tf = NSTextField()
+        tf.placeholderString = placeholder
+        tf.isBordered = false
+        tf.drawsBackground = false
+        tf.focusRingType = .none
+        tf.usesSingleLineMode = true
+        tf.cell?.wraps = false
+        tf.cell?.isScrollable = true
+        tf.delegate = context.coordinator
+        tf.target = context.coordinator
+        tf.action = #selector(Coordinator.submit(_:))
+        return tf
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        context.coordinator.parent = self
+        if nsView.stringValue != text { nsView.stringValue = text }
+        if autoFocus, !context.coordinator.didFocus {
+            context.coordinator.didFocus = true
+            DispatchQueue.main.async { nsView.window?.makeFirstResponder(nsView) }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: EnterSubmitTextField
+        var didFocus = false
+        init(_ parent: EnterSubmitTextField) { self.parent = parent }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let tf = obj.object as? NSTextField else { return }
+            parent.text = tf.stringValue
+        }
+
+        @objc func submit(_ sender: NSTextField) {
+            parent.text = sender.stringValue
+            parent.onSubmit()
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                parent.text = control.stringValue
+                parent.onSubmit()
+                return true
+            }
+            return false
+        }
+    }
+}
+
 struct CreateCustomCollectionsView: View {
-    
+
     @StateObject private var collectionManager: CustomCollectionManager
     @ObservedObject private var groupClipboard = CollectionGroupClipboard.shared
     @State private var viewMode: ViewMode = .tagGroups
@@ -142,10 +198,23 @@ struct CreateCustomCollectionsView: View {
     @State private var newGroupName = ""
     @State private var selectedTagGroupID: String?
     @State private var selectedLabelGroupID: String?
+    /// Множественный выбор групп (⌘+клик) для дублирования в другую коллекцию.
+    @State private var selectedTagGroupIDs: Set<String> = []
+    @State private var selectedLabelGroupIDs: Set<String> = []
+    /// Кратковременная подсветка «только что скопировано». Живёт отдельно от буфера
+    /// (буфер держит контент для вставки в другую коллекцию, а вспышка гаснет сама).
+    @State private var flashTagGroupIDs: Set<String> = []
+    @State private var flashLabelGroupIDs: Set<String> = []
+    /// Id перетаскиваемого элемента для живого reorder (drag-and-drop списков в редакторе).
+    @State private var draggingReorderID: String?
     @State private var selectedTagID: String?
     @State private var selectedLabelID: String?
     @State private var selectedTimeEventID: String?
     @State private var isEditingTimeEvent = false
+    /// Inline-добавление прямо в списке слева (как переименование) вместо модального окна.
+    @State private var isAddingTagGroup = false
+    @State private var isAddingLabelGroup = false
+    @State private var isAddingTimeEvent = false
     @State private var tagFormData = TagFormData()
     @State private var newLabelName = ""
     @State private var newLabelDescription = ""
@@ -330,6 +399,9 @@ struct CreateCustomCollectionsView: View {
             selectedTimeEventID = elementId
             selectedTagID = nil
             selectedLabelID = nil
+        case .map:
+            // Карты редактируются в настройках карты, отдельного элемента-редактора нет.
+            break
         }
     }
 
@@ -560,40 +632,64 @@ struct CreateCustomCollectionsView: View {
             ForEach(filteredTagGroups) { group in
                 tagGroupRowView(group: group)
                     .onDrag {
-                        NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .tagGroup, id: group.id) as NSString)
+                        draggingReorderID = group.id
+                        return NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .tagGroup, id: group.id) as NSString)
                     }
-                    .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .tagGroup, targetID: group.id) { draggedID, targetID in
+                    .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .tagGroup, targetID: group.id, draggingID: $draggingReorderID) { draggedID, targetID in
                         collectionManager.reorderTagGroups(draggedID: draggedID, targetID: targetID)
                     })
             }
 
             addTagGroupButton
         } header: {
-            HStack {
-                Image(systemName: "tag.fill")
-                    .foregroundColor(.blue)
-                Text(^String.Titles.tagGroups)
-                    .font(.headline)
-                Spacer()
-                if let payload = groupClipboard.tagGroupPayload {
-                    Button {
-                        collectionManager.pasteTagGroup(payload.group, tags: payload.tags)
-                        _ = collectionManager.saveCollectionToFiles()
-                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
-                    } label: {
-                        Image(systemName: "doc.on.clipboard")
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Image(systemName: "tag.fill")
+                        .foregroundColor(.blue)
+                    Text(^String.Titles.tagGroups)
+                        .font(.headline)
+                    Spacer()
+                    if groupClipboard.hasTagGroups {
+                        Button {
+                            for item in groupClipboard.tagGroups {
+                                collectionManager.pasteTagGroup(item.group, tags: item.tags)
+                            }
+                            _ = collectionManager.saveCollectionToFiles()
+                            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "doc.on.clipboard")
+                                if groupClipboard.tagGroups.count > 1 {
+                                    Text("\(groupClipboard.tagGroups.count)").font(.caption2)
+                                }
+                            }
                             .foregroundColor(.blue)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help(groupClipboard.tagGroups.count == 1
+                              ? "\(^String.Titles.collectionPasteGroup) «\(groupClipboard.tagGroups[0].group.name)»"
+                              : ^String.Titles.collectionPasteGroups)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("\(^String.Titles.collectionPasteGroup) «\(payload.group.name)»")
+                    Text("\(collectionManager.tagGroups.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(10)
                 }
-                Text("\(collectionManager.tagGroups.count)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(10)
+
+                if !selectedTagGroupIDs.isEmpty {
+                    GroupDuplicationBar(
+                        chips: tagGroupSelectionChips,
+                        targets: duplicationTargets,
+                        accent: .blue,
+                        onRemoveChip: { selectedTagGroupIDs.remove($0) },
+                        onClear: { selectedTagGroupIDs.removeAll() },
+                        onDuplicate: { duplicateSelectedTagGroups(to: $0) },
+                        onCopy: { copySelectedTagGroups() }
+                    )
+                }
             }
             .padding(.vertical, 4)
         }
@@ -604,9 +700,10 @@ struct CreateCustomCollectionsView: View {
             ForEach(filteredTimeEvents) { event in
                 timeEventRowView(event: event)
                     .onDrag {
-                        NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .timeEvent, id: event.id) as NSString)
+                        draggingReorderID = event.id
+                        return NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .timeEvent, id: event.id) as NSString)
                     }
-                    .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .timeEvent, targetID: event.id) { draggedID, targetID in
+                    .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .timeEvent, targetID: event.id, draggingID: $draggingReorderID) { draggedID, targetID in
                         collectionManager.reorderTimeEvents(draggedID: draggedID, targetID: targetID)
                     })
             }
@@ -721,29 +818,51 @@ struct CreateCustomCollectionsView: View {
         }
     }
     
+    @ViewBuilder
     var addTimeEventButton: some View {
-        Button(action: {
-            newTimeEventName = ""
-            showAddTimeEventSheet = true
-        }) {
-            HStack {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.orange)
-                Text(^String.Titles.addEvent)
-                    .foregroundColor(.orange)
-            }
+        if isAddingTimeEvent {
+            AutoFocusTextField(text: $newTimeEventName, placeholder: ^String.Titles.title, onSubmit: {
+                let name = newTimeEventName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty {
+                    collectionManager.createTimeEvent(name: name)
+                    _ = collectionManager.saveCollectionToFiles()
+                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                }
+                newTimeEventName = ""
+                isAddingTimeEvent = false
+            })
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.orange.opacity(0.1))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.5), lineWidth: 1))
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-            )
+        } else {
+            Button(action: {
+                newTimeEventName = ""
+                isAddingTimeEvent = true
+            }) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.orange)
+                    Text(^String.Titles.addEvent)
+                        .foregroundColor(.orange)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.orange.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
         }
-        .buttonStyle(PlainButtonStyle())
     }
     
     func tagGroupRowView(group: TagGroup) -> some View {
@@ -804,6 +923,7 @@ struct CreateCustomCollectionsView: View {
 
                     Button(action: {
                         groupClipboard.copy(tagGroup: group, tags: getTagsForGroup(groupID: group.id))
+                        flashCopiedTagGroups([group.id])
                     }) {
                         Image(systemName: "doc.on.doc")
                             .foregroundColor(.blue)
@@ -834,16 +954,21 @@ struct CreateCustomCollectionsView: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(selectedTagGroupID == group.id ? Color.blue.opacity(0.1) : Color.clear)
+                .fill(tagGroupRowBackground(group.id))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(selectedTagGroupID == group.id ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
+                .stroke(tagGroupRowBorder(group.id), lineWidth: selectedTagGroupIDs.contains(group.id) ? 1.5 : 1)
         )
         .contentShape(Rectangle())
         .onTapGesture {
+            if NSEvent.modifierFlags.contains(.command) {
+                toggleTagGroupSelection(group.id)
+                return
+            }
             if !isEditingGroupName {
                 withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTagGroupIDs.removeAll()
                     selectedTagGroupID = group.id
                     selectedLabelGroupID = nil
                     selectedTagID = nil
@@ -853,30 +978,66 @@ struct CreateCustomCollectionsView: View {
             }
         }
     }
-    
+
+    private func tagGroupRowBackground(_ id: String) -> Color {
+        if flashTagGroupIDs.contains(id) { return Color.purple.opacity(0.14) }
+        if selectedTagGroupIDs.contains(id) { return Color.blue.opacity(0.18) }
+        if selectedTagGroupID == id { return Color.blue.opacity(0.1) }
+        return Color.clear
+    }
+
+    private func tagGroupRowBorder(_ id: String) -> Color {
+        if flashTagGroupIDs.contains(id) { return Color.purple.opacity(0.7) }
+        if selectedTagGroupIDs.contains(id) { return Color.blue.opacity(0.6) }
+        if selectedTagGroupID == id { return Color.blue.opacity(0.3) }
+        return Color.clear
+    }
+
+    @ViewBuilder
     var addTagGroupButton: some View {
-        Button(action: {
-            newGroupName = ""
-            showAddTagGroupSheet = true
-        }) {
-            HStack {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.blue)
-                Text(^String.Titles.addGroup)
-                    .foregroundColor(.blue)
-            }
+        if isAddingTagGroup {
+            AutoFocusTextField(text: $newGroupName, placeholder: ^String.Titles.groupName, onSubmit: {
+                let name = newGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty {
+                    _ = collectionManager.createTagGroup(name: name)
+                    _ = collectionManager.saveCollectionToFiles()
+                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                }
+                newGroupName = ""
+                isAddingTagGroup = false
+            })
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.blue.opacity(0.1))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.5), lineWidth: 1))
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-            )
+        } else {
+            Button(action: {
+                newGroupName = ""
+                isAddingTagGroup = true
+            }) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.blue)
+                    Text(^String.Titles.addGroup)
+                        .foregroundColor(.blue)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.blue.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
         }
-        .buttonStyle(PlainButtonStyle())
     }
     
     func tagsInGroupSection(groupID: String) -> some View {
@@ -889,9 +1050,10 @@ struct CreateCustomCollectionsView: View {
                     ForEach(filteredTags) { tag in
                         tagRowView(tag: tag)
                             .onDrag {
-                                NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .tag, id: tag.id) as NSString)
+                                draggingReorderID = tag.id
+                                return NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .tag, id: tag.id) as NSString)
                             }
-                            .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .tag, targetID: tag.id) { draggedID, targetID in
+                            .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .tag, targetID: tag.id, draggingID: $draggingReorderID) { draggedID, targetID in
                                 collectionManager.reorderTags(inGroup: groupID, draggedID: draggedID, targetID: targetID)
                             })
                     }
@@ -1015,7 +1177,101 @@ struct CreateCustomCollectionsView: View {
         let byID = Dictionary(collectionManager.tags.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return group.tags.compactMap { byID[$0] }
     }
-    
+
+    // MARK: - Множественный выбор групп / дублирование в другую коллекцию
+
+    /// Коллекции-приёмники для дублирования — все, кроме текущей открытой.
+    var duplicationTargets: [CollectionInfo] {
+        CollectionsBookmarksManager.shared.loadCollections()
+            .filter { $0.id != collectionManager.collectionID }
+    }
+
+    var tagGroupSelectionChips: [GroupDuplicationBar.Chip] {
+        collectionManager.tagGroups
+            .filter { selectedTagGroupIDs.contains($0.id) }
+            .map { GroupDuplicationBar.Chip(id: $0.id, name: $0.name) }
+    }
+
+    var labelGroupSelectionChips: [GroupDuplicationBar.Chip] {
+        collectionManager.labelGroups
+            .filter { selectedLabelGroupIDs.contains($0.id) }
+            .map { GroupDuplicationBar.Chip(id: $0.id, name: $0.name) }
+    }
+
+    func toggleTagGroupSelection(_ id: String) {
+        if selectedTagGroupIDs.contains(id) {
+            selectedTagGroupIDs.remove(id)
+        } else {
+            selectedTagGroupIDs.insert(id)
+        }
+    }
+
+    func toggleLabelGroupSelection(_ id: String) {
+        if selectedLabelGroupIDs.contains(id) {
+            selectedLabelGroupIDs.remove(id)
+        } else {
+            selectedLabelGroupIDs.insert(id)
+        }
+    }
+
+    func duplicateSelectedTagGroups(to targetID: String) {
+        let payloads = collectionManager.tagGroups
+            .filter { selectedTagGroupIDs.contains($0.id) }
+            .map { GroupDuplicationService.TagGroupPayload(group: $0, tags: getTagsForGroup(groupID: $0.id)) }
+        guard !payloads.isEmpty else { return }
+        GroupDuplicationService.duplicate(tagGroups: payloads, labelGroups: [], intoCollectionID: targetID)
+        selectedTagGroupIDs.removeAll()
+    }
+
+    func duplicateSelectedLabelGroups(to targetID: String) {
+        let payloads = collectionManager.labelGroups
+            .filter { selectedLabelGroupIDs.contains($0.id) }
+            .map { GroupDuplicationService.LabelGroupPayload(group: $0, labels: getLabelsForGroup(groupID: $0.id)) }
+        guard !payloads.isEmpty else { return }
+        GroupDuplicationService.duplicate(tagGroups: [], labelGroups: payloads, intoCollectionID: targetID)
+        selectedLabelGroupIDs.removeAll()
+    }
+
+    /// Копирует выбранные группы тегов в буфер (для вставки в другую коллекцию).
+    func copySelectedTagGroups() {
+        let groups = collectionManager.tagGroups
+            .filter { selectedTagGroupIDs.contains($0.id) }
+            .map { (group: $0, tags: getTagsForGroup(groupID: $0.id)) }
+        guard !groups.isEmpty else { return }
+        groupClipboard.copy(tagGroups: groups)
+        flashCopiedTagGroups(Set(groups.map { $0.group.id }))
+    }
+
+    /// Копирует выбранные группы лейблов в буфер.
+    func copySelectedLabelGroups() {
+        let groups = collectionManager.labelGroups
+            .filter { selectedLabelGroupIDs.contains($0.id) }
+            .map { (group: $0, labels: getLabelsForGroup(groupID: $0.id)) }
+        guard !groups.isEmpty else { return }
+        groupClipboard.copy(labelGroups: groups)
+        flashCopiedLabelGroups(Set(groups.map { $0.group.id }))
+    }
+
+    /// Зажигает подсветку скопированных групп тегов и плавно гасит её через момент.
+    private func flashCopiedTagGroups(_ ids: Set<String>) {
+        withAnimation(.easeInOut(duration: 0.2)) { flashTagGroupIDs = ids }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            withAnimation(.easeInOut(duration: 0.5)) {
+                flashTagGroupIDs.subtract(ids)
+            }
+        }
+    }
+
+    /// Зажигает подсветку скопированных групп лейблов и плавно гасит её через момент.
+    private func flashCopiedLabelGroups(_ ids: Set<String>) {
+        withAnimation(.easeInOut(duration: 0.2)) { flashLabelGroupIDs = ids }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            withAnimation(.easeInOut(duration: 0.5)) {
+                flashLabelGroupIDs.subtract(ids)
+            }
+        }
+    }
+
     func tagRowView(tag: Tag) -> some View {
         HStack {
             Circle()
@@ -1152,40 +1408,64 @@ struct CreateCustomCollectionsView: View {
             ForEach(filteredLabelGroups) { group in
                 labelGroupRowView(group: group)
                     .onDrag {
-                        NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .labelGroup, id: group.id) as NSString)
+                        draggingReorderID = group.id
+                        return NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .labelGroup, id: group.id) as NSString)
                     }
-                    .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .labelGroup, targetID: group.id) { draggedID, targetID in
+                    .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .labelGroup, targetID: group.id, draggingID: $draggingReorderID) { draggedID, targetID in
                         collectionManager.reorderLabelGroups(draggedID: draggedID, targetID: targetID)
                     })
             }
 
             addLabelGroupButton
         } header: {
-            HStack {
-                Image(systemName: "label.fill")
-                    .foregroundColor(.green)
-                Text(^String.Titles.labelGroups)
-                    .font(.headline)
-                Spacer()
-                if let payload = groupClipboard.labelGroupPayload {
-                    Button {
-                        collectionManager.pasteLabelGroup(payload.group, labels: payload.labels)
-                        _ = collectionManager.saveCollectionToFiles()
-                        NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
-                    } label: {
-                        Image(systemName: "doc.on.clipboard")
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Image(systemName: "label.fill")
+                        .foregroundColor(.green)
+                    Text(^String.Titles.labelGroups)
+                        .font(.headline)
+                    Spacer()
+                    if groupClipboard.hasLabelGroups {
+                        Button {
+                            for item in groupClipboard.labelGroups {
+                                collectionManager.pasteLabelGroup(item.group, labels: item.labels)
+                            }
+                            _ = collectionManager.saveCollectionToFiles()
+                            NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "doc.on.clipboard")
+                                if groupClipboard.labelGroups.count > 1 {
+                                    Text("\(groupClipboard.labelGroups.count)").font(.caption2)
+                                }
+                            }
                             .foregroundColor(.green)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help(groupClipboard.labelGroups.count == 1
+                              ? "\(^String.Titles.collectionPasteGroup) «\(groupClipboard.labelGroups[0].group.name)»"
+                              : ^String.Titles.collectionPasteGroups)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("\(^String.Titles.collectionPasteGroup) «\(payload.group.name)»")
+                    Text("\(collectionManager.labelGroups.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(10)
                 }
-                Text("\(collectionManager.labelGroups.count)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.green.opacity(0.1))
-                    .cornerRadius(10)
+
+                if !selectedLabelGroupIDs.isEmpty {
+                    GroupDuplicationBar(
+                        chips: labelGroupSelectionChips,
+                        targets: duplicationTargets,
+                        accent: .green,
+                        onRemoveChip: { selectedLabelGroupIDs.remove($0) },
+                        onClear: { selectedLabelGroupIDs.removeAll() },
+                        onDuplicate: { duplicateSelectedLabelGroups(to: $0) },
+                        onCopy: { copySelectedLabelGroups() }
+                    )
+                }
             }
             .padding(.vertical, 4)
         }
@@ -1249,6 +1529,7 @@ struct CreateCustomCollectionsView: View {
 
                     Button(action: {
                         groupClipboard.copy(labelGroup: group, labels: getLabelsForGroup(groupID: group.id))
+                        flashCopiedLabelGroups([group.id])
                     }) {
                         Image(systemName: "doc.on.doc")
                             .foregroundColor(.green)
@@ -1279,16 +1560,21 @@ struct CreateCustomCollectionsView: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(selectedLabelGroupID == group.id ? Color.green.opacity(0.1) : Color.clear)
+                .fill(labelGroupRowBackground(group.id))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(selectedLabelGroupID == group.id ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
+                .stroke(labelGroupRowBorder(group.id), lineWidth: selectedLabelGroupIDs.contains(group.id) ? 1.5 : 1)
         )
         .contentShape(Rectangle())
         .onTapGesture {
+            if NSEvent.modifierFlags.contains(.command) {
+                toggleLabelGroupSelection(group.id)
+                return
+            }
             if !isEditingGroupName {
                 withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedLabelGroupIDs.removeAll()
                     selectedLabelGroupID = group.id
                     selectedTagGroupID = nil
                     selectedTagID = nil
@@ -1298,30 +1584,66 @@ struct CreateCustomCollectionsView: View {
             }
         }
     }
-    
+
+    private func labelGroupRowBackground(_ id: String) -> Color {
+        if flashLabelGroupIDs.contains(id) { return Color.purple.opacity(0.14) }
+        if selectedLabelGroupIDs.contains(id) { return Color.green.opacity(0.18) }
+        if selectedLabelGroupID == id { return Color.green.opacity(0.1) }
+        return Color.clear
+    }
+
+    private func labelGroupRowBorder(_ id: String) -> Color {
+        if flashLabelGroupIDs.contains(id) { return Color.purple.opacity(0.7) }
+        if selectedLabelGroupIDs.contains(id) { return Color.green.opacity(0.6) }
+        if selectedLabelGroupID == id { return Color.green.opacity(0.3) }
+        return Color.clear
+    }
+
+    @ViewBuilder
     var addLabelGroupButton: some View {
-        Button(action: {
-            newGroupName = ""
-            showAddLabelGroupSheet = true
-        }) {
-            HStack {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.green)
-                Text(^String.Titles.addGroup)
-                    .foregroundColor(.green)
-            }
+        if isAddingLabelGroup {
+            AutoFocusTextField(text: $newGroupName, placeholder: ^String.Titles.groupName, onSubmit: {
+                let name = newGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty {
+                    _ = collectionManager.createLabelGroup(name: name)
+                    _ = collectionManager.saveCollectionToFiles()
+                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                }
+                newGroupName = ""
+                isAddingLabelGroup = false
+            })
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.green.opacity(0.1))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.5), lineWidth: 1))
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.green.opacity(0.3), lineWidth: 1)
-            )
+        } else {
+            Button(action: {
+                newGroupName = ""
+                isAddingLabelGroup = true
+            }) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.green)
+                    Text(^String.Titles.addGroup)
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.green.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
         }
-        .buttonStyle(PlainButtonStyle())
     }
     
     func labelsInGroupSection(groupID: String) -> some View {
@@ -1334,9 +1656,10 @@ struct CreateCustomCollectionsView: View {
                     ForEach(filteredLabels) { label in
                         labelRowView(label: label)
                             .onDrag {
-                                NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .label, id: label.id) as NSString)
+                                draggingReorderID = label.id
+                                return NSItemProvider(object: CollectionReorderDropDelegate.payload(kind: .label, id: label.id) as NSString)
                             }
-                            .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .label, targetID: label.id) { draggedID, targetID in
+                            .onDrop(of: [.text], delegate: CollectionReorderDropDelegate(kind: .label, targetID: label.id, draggingID: $draggingReorderID) { draggedID, targetID in
                                 collectionManager.reorderLabels(inGroup: groupID, draggedID: draggedID, targetID: targetID)
                             })
                     }
@@ -1505,36 +1828,41 @@ struct CreateCustomCollectionsView: View {
         }
     }
     
+    @ViewBuilder
     var detailView: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                if viewMode == .fieldMap {
-                    fieldMapDetailView
-                } else if let tagID = selectedTagID,
-                          let tag = collectionManager.tags.first(where: { $0.id == tagID })
-                {
-                    tagDetailView(tag: tag)
+        if viewMode == .fieldMap {
+            // Единый редактор карт (поддерживает несколько картинок) — как в редакторе связок клавиш.
+            CollectionFieldMapEditorView(collectionManager: collectionManager)
+                .background(Color(NSColor.windowBackgroundColor))
+        } else {
+            ScrollView {
+                VStack(spacing: 0) {
+                    if let tagID = selectedTagID,
+                       let tag = collectionManager.tags.first(where: { $0.id == tagID })
+                    {
+                        tagDetailView(tag: tag)
+                    }
+                    else if let labelID = selectedLabelID,
+                            let label = collectionManager.labels.first(where: { $0.id == labelID })
+                    {
+                        labelDetailView(label: label)
+                    }
+                    else if let timeEventID = selectedTimeEventID,
+                            let event = collectionManager.timeEvents.first(where: { $0.id == timeEventID })
+                    {
+                        timeEventDetailView(event: event)
+                    }
+                    else if selectedTagGroupID != nil || selectedLabelGroupID != nil {
+                        emptyStateView
+                    }
+                    else {
+                        welcomeView
+                    }
                 }
-                else if let labelID = selectedLabelID,
-                        let label = collectionManager.labels.first(where: { $0.id == labelID })
-                {
-                    labelDetailView(label: label)
-                }
-                else if let timeEventID = selectedTimeEventID,
-                        let event = collectionManager.timeEvents.first(where: { $0.id == timeEventID })
-                {
-                    timeEventDetailView(event: event)
-                }
-                else if selectedTagGroupID != nil || selectedLabelGroupID != nil {
-                    emptyStateView
-                }
-                else {
-                    welcomeView
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(NSColor.windowBackgroundColor))
         }
-        .background(Color(NSColor.windowBackgroundColor))
     }
     
     var emptyStateView: some View {
@@ -2869,13 +3197,20 @@ struct CreateCustomCollectionsView: View {
                     .multilineTextAlignment(.center)
             }
             .padding(.top, 20)
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text(^String.Titles.groupNameLabel)
                     .font(.headline)
                     .foregroundColor(.primary)
-                
-                FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
+
+                EnterSubmitTextField(text: $newGroupName, placeholder: ^String.Titles.groupName, onSubmit: {
+                    guard !newGroupName.isEmpty else { return }
+                    let _ = collectionManager.createTagGroup(name: newGroupName)
+                    _ = collectionManager.saveCollectionToFiles()
+                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    newGroupName = ""
+                    withAnimation(.easeInOut(duration: 0.2)) { showAddTagGroupSheet = false }
+                })
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
@@ -2897,6 +3232,7 @@ struct CreateCustomCollectionsView: View {
                         newGroupName = ""
                     }
                 }
+                .keyboardShortcut(.escape)
                 .buttonStyle(SecondaryButtonStyle())
                 
                 Button(^String.Titles.collectionsButtonAdd) {
@@ -2938,13 +3274,20 @@ struct CreateCustomCollectionsView: View {
                     .multilineTextAlignment(.center)
             }
             .padding(.top, 20)
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text(^String.Titles.groupNameLabel)
                     .font(.headline)
                     .foregroundColor(.primary)
-                
-                FocusAwareTextField(text: $newGroupName, placeholder: ^String.Titles.groupName)
+
+                EnterSubmitTextField(text: $newGroupName, placeholder: ^String.Titles.groupName, onSubmit: {
+                    guard !newGroupName.isEmpty else { return }
+                    let _ = collectionManager.createLabelGroup(name: newGroupName)
+                    _ = collectionManager.saveCollectionToFiles()
+                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                    newGroupName = ""
+                    withAnimation(.easeInOut(duration: 0.2)) { showAddLabelGroupSheet = false }
+                })
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
@@ -3451,16 +3794,24 @@ struct CreateCustomCollectionsView: View {
                                     .fontWeight(.medium)
                                     .foregroundColor(.secondary)
                                 
-                                FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title)
+                                FocusAwareTextField(text: $newLabelName, placeholder: ^String.Titles.title, onSubmit: {
+                                    guard !newLabelName.isEmpty, let groupID = selectedLabelGroupID else { return }
+                                    collectionManager.createLabel(name: newLabelName, description: newLabelDescription, inGroup: groupID)
+                                    _ = collectionManager.saveCollectionToFiles()
+                                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                                    newLabelName = ""
+                                    newLabelDescription = ""
+                                    showAddLabelSheet = false
+                                })
                                     .textFieldStyle(ModernNewTextFieldStyle())
                             }
-                            
+
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(^String.Titles.description)
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                                     .foregroundColor(.secondary)
-                                
+
                                 TextEditor(text: $newLabelDescription)
                                     .frame(minHeight: 80)
                                     .padding(12)
@@ -3586,10 +3937,17 @@ struct CreateCustomCollectionsView: View {
                                     .fontWeight(.medium)
                                     .foregroundColor(.secondary)
                                 
-                                FocusAwareTextField(text: $newTimeEventName, placeholder: ^String.Titles.title)
+                                EnterSubmitTextField(text: $newTimeEventName, placeholder: ^String.Titles.title, onSubmit: {
+                                    guard !newTimeEventName.isEmpty else { return }
+                                    collectionManager.createTimeEvent(name: newTimeEventName)
+                                    _ = collectionManager.saveCollectionToFiles()
+                                    NotificationCenter.default.post(name: .collectionDataChanged, object: nil)
+                                    newTimeEventName = ""
+                                    showAddTimeEventSheet = false
+                                })
                                     .textFieldStyle(ModernNewTextFieldStyle())
                             }
-                            
+
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(^String.Titles.informationLabel)
                                     .font(.subheadline)

@@ -180,6 +180,33 @@ extension String {
         case fullControlMergeTimelinesHint
         case collectionCopyGroup
         case collectionPasteGroup
+        case collectionPasteGroups
+        case collectionDuplicateTo
+        case collectionSelectedGroupsCountFormat
+        case collectionClearSelection
+        case collectionNoOtherCollections
+        case collectionMultiSelectHint
+        case collectionStandardReadOnly
+        case collectionCreateCopy
+        case collectionStandardOpenReadOnly
+        case videosAddMenuTitle
+        case videosAddFromFile
+        case videosImportMenuTitle
+        case licenseActive
+        case sportCutSlideAddText
+        case sportCutSlideAddImage
+        case sportCutSlideSelectHint
+        case sportCutSlideTextElement
+        case sportCutSlideImageElement
+        case sportCutSlideFont
+        case sportCutSlideFontSystem
+        case sportCutSlideBold
+        case sportCutSlideReplaceImage
+        case sportCutSlideNewText
+        case exportErrorNothingProduced
+        case exportErrorFailedGeneric
+        case keyBindingsResetAll
+        case keyBindingsResetBindingsOnly
         case fullControlButtonTimelineZoomIn
         case fullControlButtonTimelineZoomOut
         case fullControlExportErrorStampNotFound
@@ -233,6 +260,7 @@ extension String {
         case layoutAnalyticsPng
         case layoutAnalytics
         case selectMapPositionForTag
+        case fieldMapMarkAllHint
         case tagLibrary
         case fieldMapVisualizationSettings
         case editScreenshot
@@ -418,6 +446,9 @@ extension String {
         case subscriptionActive
         case videoUploadLimit
         case videoUploadLimitReached
+        case viewingSessionsLimit
+        case viewingLimitReachedTitle
+        case viewingLimitReachedMessage
         case renewLicense
         case midDuration
         case aIReports
@@ -546,6 +577,13 @@ extension String {
         case appearanceSystem
         case appearanceLight
         case appearanceDark
+        case languageTitle
+        case languageAuto
+        case settingsTitle
+        case settingsExportSection
+        case settingsExportWatermark
+        case settingsExportWatermarkHint
+        case settingsMenuItem
         case playlists
         case load
         case currentUnsaved
@@ -782,7 +820,8 @@ extension String {
         case editorAddPointModeHelp
         case copy
         case paste
-        
+        case collectionsCopySuffix
+
         // Editor shape names (ShapeType.displayName)
         case editorShapeTriangle
         case editorShapeSquare
@@ -1087,6 +1126,8 @@ extension String {
         case momentEventsPrefix
         case momentLabelsPrefix
         case momentWindowTitlePrefix
+        case momentClipNotFullyRecorded
+        case momentRefreshClip
 
         // ReviewVideo
         case reviewLoadingRecording
@@ -1105,6 +1146,8 @@ extension String {
         // VideoPlayer
         case videoHistoryToggle
         case videoHistoryHelp
+        case videoLockWindowsToggle
+        case videoLockWindowsHelp
         case videoBroadcastPauseHelp
         case videoBroadcastResumeHelp
         case videoBroadcastStopHelp
@@ -1146,6 +1189,9 @@ extension String {
         case freeLayoutStrokeDashed
         case freeLayoutSectionText
         case freeLayoutShowLabel
+        case freeLayoutBackgroundImage
+        case freeLayoutChooseImage
+        case freeLayoutReplaceImage
         case freeLayoutFontSize
         case freeLayoutSectionGeometry
         case freeLayoutCornerRadius
@@ -1186,11 +1232,20 @@ extension String {
         case keyBindingsPressKey
         case keyBindingsRemoveFromCanvas
         case keyBindingsReturnToCanvas
+        case keyBindingsMapZoneHint
+        case keyBindingsAddMap
+        case keyBindingsAddMapFromDisk
+        case keyBindingsLoadedMaps
+        case keyBindingsExportSelected
+        case keyBindingsExportAll
+        case keyBindingsExportPart
+        case keyBindingsExportChoosePart
         case keyBindingsVisibilitySection
         case keyBindingsItemVisible
         case keyBindingsTapSourceHint
         case keyBindingsTapTargetHint
         case keyBindingsButtonAllBindings
+        case keyBindingsDeleteAllForButton
         case keyBindingsShowConnectionsToggle
         case keyBindingsShowConnectionsHint
         case canvasEditTabParameters
@@ -1245,6 +1300,90 @@ extension String {
 
         // Version Alert
         case versionOutdatedMessage
+
+        // Project Merge
+        case mergeProjectsButton
+        case mergeProjectsExitSelection
+        case mergeProjectsHelp
+        case mergeProjectsSelectedCount
+        case mergeProjectsSelectionHint
+        case mergeProjectsTitle
+        case mergeProjectsSubtitle
+        case mergeProjectsNameLabel
+        case mergeProjectsOrderLabel
+        case mergeProjectsMergeLinesTitle
+        case mergeProjectsMergeLinesOn
+        case mergeProjectsMergeLinesOff
+        case mergeProjectsMergeLinesHint
+        case mergeProjectsStartButton
+        case mergeProjectsSavePanelTitle
+        case mergeProjectsSavePanelMessage
+        case mergeProjectsKeepOpenHint
+        case mergeProjectsDefaultName
+        case mergeStatusPreparing
+        case mergeStatusExporting
+        case mergeStatusFinishing
+        case mergeErrorNotEnoughProjects
+        case mergeErrorVideoUnavailable
+        case mergeErrorNoVideoTrack
+        case mergeErrorComposition
+        case mergeErrorExport
+        case mergeErrorCancelled
+        case mergeErrorProjectCreation
+
+        // Image Editor
+        case mainTabEditor
+        case editorImages
+        case editorImagesTool
+        case editorAddImage
+        case editorNewProject
+        case editorNoProjects
+        case editorChooseImage
+        case back
+        case download
+        case open
+
+        // Club Logo Watermark
+        case clubLogoTitle
+        case clubLogoHint
+        case clubLogoChoose
+        case clubLogoReplace
+        case clubLogoNotSet
+        case clubLogoMenuItem
+        case exportShowClubLogo
+        case exportClubLogoNotConfigured
+
+        // Clip Auto-Save (Cmd+S)
+        case clipAutoSaveNotConfiguredBadge
+        case clipAutoSaveNotConfiguredTitle
+        case clipAutoSaveNotConfiguredMessage
+        case clipAutoSavePickFolder
+        case clipAutoSaveChangeFolder
+        case clipAutoSaveResetFolder
+        case clipAutoSaveCurrentFolder
+        case clipAutoSaveConfiguredHelp
+        case clipAutoSavePickPrompt
+        case clipAutoSavePickTitle
+        case clipAutoExportBadge
+        case clipAutoSaveInProgress
+        case clipAutoSaveSuccess
+        case clipAutoSaveErrorTitle
+        case clipAutoSaveNoStampTitle
+        case clipAutoSaveNoStampMessage
+        case clipAutoSaveNoVideoMessage
+        case clipAutoSaveBadRangeMessage
+        case clipAutoSaveExportFailedMessage
+        case clipAutoSaveNoSelectedClips
+        case clipAutoSaveMergedInProgress
+        case clipAutoSaveMergedSuccess
+        case clipAutoSaveMergedPrefix
+
+        // Heat Map
+        case heatMapLegendLow
+        case heatMapLegendHigh
+        case heatMapControlRadius
+        case heatMapControlIntensity
+        case heatMapControlShowMarkers
     }
     
 }

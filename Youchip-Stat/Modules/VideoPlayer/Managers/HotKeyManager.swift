@@ -234,6 +234,32 @@ class HotKeyManager: ObservableObject {
                 }
                 return nil
             }
+            // Opt+Cmd+S в окне разметки — сохранение выделенных клипов одним склеенным фильмом.
+            if event.keyCode == 1 /* S */,
+               event.modifierFlags.contains(.command),
+               event.modifierFlags.contains(.option),
+               !event.modifierFlags.contains(.control),
+               ActiveWindowManager.shared.isMarkerWindowActive(),
+               self.isEnabled,
+               !self.blockedSheetActive,
+               !self.isEditingTextBox,
+               !FocusStateManager.shared.isAnyTextFieldFocused {
+                ClipAutoSaveManager.shared.saveMergedSelectedClips()
+                return nil
+            }
+            // Cmd+S в окне разметки — быстрое сохранение клипа выбранного тега в папку автосохранения.
+            if event.keyCode == 1 /* S */,
+               event.modifierFlags.contains(.command),
+               !event.modifierFlags.contains(.option),
+               !event.modifierFlags.contains(.control),
+               ActiveWindowManager.shared.isMarkerWindowActive(),
+               self.isEnabled,
+               !self.blockedSheetActive,
+               !self.isEditingTextBox,
+               !FocusStateManager.shared.isAnyTextFieldFocused {
+                ClipAutoSaveManager.shared.saveSelectedStampClip()
+                return nil
+            }
             // Пробел = play/pause: окно видео / таймлайна / библиотеки тегов или окно «Пересмотр» (key window, не кэш уведомлений).
             if event.keyCode == 49,
                ActiveWindowManager.shared.isMarkerWindowActive() || WindowsManager.shared.isReviewWindowKey(),
@@ -361,7 +387,7 @@ class HotKeyManager: ObservableObject {
     
     /// Комбинации, зарезервированные под системные хоткеи приложения (редактор). Их нельзя назначать тегам.
     /// Стрелки/пробел/Enter/Esc отсекаются отдельно (они превращаются в "key-<code>").
-    static let reservedHotkeys: Set<String> = ["cmd+c", "cmd+v", "cmd+z"]
+    static let reservedHotkeys: Set<String> = ["cmd+c", "cmd+v", "cmd+z", "cmd+a", "cmd+x", "cmd+s"]
 
     /// true, если строка хоткея конфликтует с системными сочетаниями приложения и не должна назначаться тегу/лейблу.
     static func isReservedHotkey(_ hotkey: String) -> Bool {

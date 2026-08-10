@@ -53,6 +53,7 @@ struct TimelineLineView: View {
 
     // MARK: - comment sheet
     @State private var commentEditingStamp: TimelineStamp? = nil
+    @State private var sessionPickerStamp: TimelineStamp? = nil
     
     enum ResizeEdge {
         case left
@@ -81,7 +82,7 @@ struct TimelineLineView: View {
     var body: some View {
         GeometryReader { geometry in
             let totalDuration = max(1, videoManager.timelineDuration)
-            
+
             HStack(alignment: .top, spacing: 0) {
                 ZStack(alignment: .topLeading) {
                     LinearGradient(
@@ -131,6 +132,17 @@ struct TimelineLineView: View {
                 }
             }
         }
+        .sheet(item: $sessionPickerStamp) { stamp in
+            SportCutSessionPickerSheet(
+                title: ^String.Titles.viewingToExistingSession,
+                sessions: SportCutSessionManager.shared.sessions
+            ) { sessionID in
+                WindowsManager.shared.appendStampsToSportCutSession(pairs: [(line, stamp)], sessionID: sessionID)
+                sessionPickerStamp = nil
+            } onCancel: {
+                sessionPickerStamp = nil
+            }
+        }
     }
 
     
@@ -140,9 +152,9 @@ struct TimelineLineView: View {
         let currentStartTime = isResizing && resizingEdge == .left ? dragStartTime : stamp.timeStartSeconds
         let currentEndTime = isResizing && resizingEdge == .right ? dragStartTime : stamp.timeFinishSeconds
         let currentDuration = currentEndTime - currentStartTime
-        
+
         let isDragging = draggingStampID == stamp.id
-        
+
         let currentLineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }) ?? 0
         let maxYOffset = CGFloat(timelineData.lines.count - 1 - currentLineIndex) * lineHeight
         let minYOffset = -1 * CGFloat(currentLineIndex) * lineHeight
@@ -549,14 +561,9 @@ struct TimelineLineView: View {
         Button(^String.Titles.viewingNewSession) {
             WindowsManager.shared.openSportCutFromTimelineStamps([(line, stamp)], forceNewSession: true)
         }
-        let existingSessions = SportCutSessionManager.shared.sessions
-        if !existingSessions.isEmpty {
-            Menu(^String.Titles.viewingToExistingSession) {
-                ForEach(existingSessions, id: \.id) { sess in
-                    Button(sess.name) {
-                        WindowsManager.shared.appendStampsToSportCutSession(pairs: [(line, stamp)], sessionID: sess.id)
-                    }
-                }
+        if !SportCutSessionManager.shared.sessions.isEmpty {
+            Button(^String.Titles.viewingToExistingSession) {
+                sessionPickerStamp = stamp
             }
         }
 
@@ -624,10 +631,11 @@ struct TimelineLineView: View {
             label: stamp.label,
             labels: stamp.labels,
             timeEvents: stamp.timeEvents,
-            position: stamp.position,
-            comment: stamp.comment
+            isActiveForMapView: stamp.isActiveForMapView,
+            comment: stamp.comment,
+            mapPositions: stamp.mapPositions
         )
-        
+
         timelineData.lines[destLineIndex].stamps.append(newStamp)
         timelineData.lines[sourceLineIndex].stamps.remove(at: stampIndex)
         timelineData.updateTimelines()
@@ -663,5 +671,47 @@ struct EdgeResizeHandle: View {
             )
             .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
             .contentShape(Rectangle())
+    }
+}
+
+/// Лист выбора существующей сессии просмотра (SportCut). Заменяет вложенное
+/// `Menu`, которое не раскрывалось во время воспроизведения из-за частых
+/// перерисовок таймлайна.
+struct SportCutSessionPickerSheet: View {
+    let title: String
+    let sessions: [SportCutSession]
+    let onSelect: (UUID) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(title)
+                .font(.headline)
+
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(sessions, id: \.id) { session in
+                        Button(action: { onSelect(session.id) }) {
+                            Text(session.name)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+            .frame(maxHeight: 240)
+
+            HStack {
+                Button(^String.Titles.cancelButtonTitle) { onCancel() }
+                    .buttonStyle(PlainButtonStyle())
+                Spacer()
+            }
+        }
+        .padding(20)
+        .frame(width: 320, height: 360)
     }
 }

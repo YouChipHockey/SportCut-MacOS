@@ -34,7 +34,11 @@ struct ExportModeSelectionSheet: View {
                 Toggle(^String.Titles.exportAddTagAndLabels, isOn: $watermarkOptions.showTagAndLabels)
                 Toggle(^String.Titles.exportAddComment, isOn: $watermarkOptions.showComment)
             }
-            
+
+            Divider()
+
+            clubLogoToggle
+
             Divider()
             
             HStack(spacing: 20) {
@@ -55,7 +59,23 @@ struct ExportModeSelectionSheet: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding()
-        .frame(width: 380, height: 360)
+        .frame(width: 380, height: 410)
     }
-    
+
+    /// Тумблер логотипа клуба — независим от текстового вотермарка.
+    /// Доступен только если логотип задан в настройках.
+    @ViewBuilder
+    private var clubLogoToggle: some View {
+        let hasLogo = ClubLogoWatermarkManager.shared.hasLogo
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(^String.Titles.exportShowClubLogo, isOn: $watermarkOptions.showClubLogo)
+                .disabled(!hasLogo)
+            if !hasLogo {
+                Text(^String.Titles.exportClubLogoNotConfigured)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
 }

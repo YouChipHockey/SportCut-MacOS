@@ -53,7 +53,10 @@ struct PendingCanvasEdit: Equatable, Identifiable {
 
 final class TagFreeLayoutEditorSession: ObservableObject {
     @Published var editorMode: TagFreeLayoutEditorMode = .layout
+    /// «Основной» выбранный элемент — под него показываются ручки resize/rotate и панель справа.
     @Published var selectedItemId: String? = nil
+    /// Все выбранные элементы (мультивыбор через Shift+ЛКМ). Двигаются вместе.
+    @Published var selectedItemIds: Set<String> = []
     @Published var bindingSourceId: String? = nil
     @Published var selectedGroupKey: KeyBindingGroupKey? = nil
     /// Группы связок, подсвечиваемые на холсте (раскрытые в деталке кнопки справа).
@@ -64,6 +67,7 @@ final class TagFreeLayoutEditorSession: ObservableObject {
 
     func resetSelection() {
         selectedItemId = nil
+        selectedItemIds = []
         bindingSourceId = nil
         selectedGroupKey = nil
         highlightedGroupKeys = []
@@ -80,26 +84,63 @@ struct TagFreeLayoutEditorContent: View {
     let tags: [Tag]
     let labels: [Label]
     let timeEvents: [TimeEvent]
+    var playFields: [PlayField] = []
     var pane: TagFreeLayoutEditorPane = .full
     var showsModePicker: Bool = true
     /// Панель настроек растягивается по ширине (иначе фиксированные 340pt).
     var settingsPaneFillsWidth: Bool = false
     /// Двойной клик по элементу холста — открыть редактирование самого тега/лейбла/события.
     var onEditElement: ((CanvasButtonKind, String) -> Void)? = nil
+    /// Батч-изменение цвета самих выделенных тегов («цвет кнопки»). nil — недоступно.
+    var onSetTagsColor: ((_ tagIds: [String], _ hex: String) -> Void)? = nil
+    /// Дублирует сущность (тег/лейбл/событие) в коллекции для копипаста кнопок.
+    /// Возвращает elementId новой сущности или nil, если недоступно.
+    var onDuplicateElement: ((_ kind: CanvasButtonKind, _ sourceElementId: String) -> String?)? = nil
+    /// Создаёт PlayField из файла (перетаскивание карты из Finder / выбор файла). nil — недоступно.
+    var onCreatePlayFieldFromURL: ((_ url: URL) -> PlayField?)? = nil
+    /// Экспорт выделенной части коллекции (набор ключей "kind:elementId"). nil — недоступно.
+    var onExportSelected: ((_ selectedItemIds: Set<String>) -> Void)? = nil
 
     // Layout-mode drag / resize / rotate
     @State private var draggingItemId: String? = nil
     @State private var resizingItemId: String? = nil
     @State private var rotatingItemId: String? = nil
     @State private var dragStartCenter: CGPoint = .zero
+    /// Стартовые центры всех перетаскиваемых элементов при групповом перемещении.
+    @State private var dragStartCenters: [String: CGPoint] = [:]
+    /// Замороженный охват контента на время трансформации — чтобы «бесконечный» холст
+    /// не переразмечался под курсором и элемент шёл ровно 1:1 за мышью.
+    @State private var frozenContentRect: CGRect? = nil
     @State private var resizeStartSize: CGSize = .zero
     @State private var rotateStartAngle: Double = 0
+    /// Групповой ресайз/поворот: стартовые размеры/центры/повороты выделенных и центр группы.
+    @State private var groupResizeStartSizes: [String: CGSize] = [:]
+    @State private var groupResizeStartCenters: [String: CGPoint] = [:]
+    @State private var groupResizeCentroid: CGPoint = .zero
+    @State private var resizeStartBBoxWidth: CGFloat = 1
+    @State private var groupRotateStartRotations: [String: Double] = [:]
+    @State private var groupRotateStartCenters: [String: CGPoint] = [:]
+    /// Рамка выделения (rubber-band) в пиксельных координатах холста.
+    @State private var marqueeStart: CGPoint? = nil
+    @State private var marqueeCurrent: CGPoint? = nil
 
     // Зум холста (как в Figma/Miro): пользовательский масштаб (пинч), панорама — нативным скроллом.
     @State private var canvasZoom: CGFloat = 1.0
     @State private var canvasZoomBase: CGFloat = 1.0
     @State private var didInitialFit = false
-    private let canvasZoomRange: ClosedRange<CGFloat> = 0.2...3.0
+    // Ручной pan+zoom (без ScrollView) — чтобы зум к курсору был атомарным, без «прыжка».
+    @State private var viewportSize: CGSize = .zero
+    @State private var hoverInViewport: CGPoint? = nil
+    @State private var panOffset: CGSize = .zero
+    @State private var scrollMonitor: Any? = nil
+    // Автопанорама к только что созданному элементу (тег/лейбл/событие/карта). Новые элементы
+    // кладутся ПОД существующими и оказываются за краем — камеру двигаем так, чтобы новый был по центру.
+    @State private var lastKnownItemIds: Set<String> = []
+    /// Взводится с задержкой после появления — чтобы стартовая нормализация/загрузка раскладки
+    /// (может добавить элементы сразу) не дёргала камеру. Реагируем только на действия пользователя.
+    @State private var autoCenterArmed = false
+    // Нижняя граница уменьшена ~×3 — можно отдалять холст заметно дальше.
+    private let canvasZoomRange: ClosedRange<CGFloat> = 0.067...3.0
 
     // Мелкий шаг сетки: теги в свободном режиме всегда выравниваются по нему,
     // чтобы в библиотеке тегов раскладка не «расползалась».
@@ -149,15 +190,19 @@ struct TagFreeLayoutEditorContent: View {
                     // «Бесконечный» холст: виртуальная зона = охват контента + большие поля со всех сторон.
                     // Масштаб НЕ авто-подгоняется — это пользовательский зум (пинч); панорама — нативным скроллом.
                     // При вытаскивании элементов за край зона расширяется (как доска в Miro/Figma).
-                    let content = layout.contentRect()
+                    // Во время перетаскивания/ресайза используем замороженный охват — иначе
+                    // холст переразмечается под курсором и движение выходит не 1:1.
+                    let content = frozenContentRect
+                        ?? layout.contentRect()
                         ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight)
+                    // Доска = контент + большой симметричный запас (infiniteMargin) со всех сторон.
                     let virtual = content.insetBy(dx: -infiniteMargin, dy: -infiniteMargin)
                     let origin = CGPoint(x: virtual.minX, y: virtual.minY)
                     let scale = canvasZoom
                     let canvasPixelWidth = virtual.width * scale
                     let canvasPixelHeight = virtual.height * scale
 
-                    ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                    ZStack(alignment: .topLeading) {
                         ZStack(alignment: .topLeading) {
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(Color(NSColor.controlBackgroundColor))
@@ -190,35 +235,162 @@ struct TagFreeLayoutEditorContent: View {
                             }
                         }
                         .frame(width: canvasPixelWidth, height: canvasPixelHeight)
-                        .padding(16)
-                        .frame(minWidth: availableWidth, minHeight: max(canvasPixelHeight + 32, availableHeight), alignment: .center)
+                        .offset(x: panOffset.width, y: panOffset.height)
                     }
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+                    .clipped()
+                    .contentShape(Rectangle())
                     .background(Color(NSColor.windowBackgroundColor))
-                    // Пинч-зум (трекпад). Панорама — нативным двухпальцевым скроллом ScrollView.
+                    .modifier(HoverTracker { p in hoverInViewport = p })
+                    .onChange(of: geo.size) { viewportSize = $0 }
+                    // Пинч-зум к курсору (атомарно масштаб+смещение — без прыжка).
                     .simultaneousGesture(
                         MagnificationGesture()
                             .onChanged { value in
-                                let z = canvasZoomBase * value
-                                canvasZoom = min(canvasZoomRange.upperBound, max(canvasZoomRange.lowerBound, z))
+                                zoomAround(canvasZoomBase * value,
+                                           viewportPoint: hoverInViewport ?? CGPoint(x: geo.size.width / 2, y: geo.size.height / 2))
                             }
                             .onEnded { _ in canvasZoomBase = canvasZoom }
                     )
+                    .onChange(of: layout.items.map(\.id)) { ids in
+                        handleItemsChange(ids)
+                    }
                     .onAppear {
-                        // Один раз вписываем КОНТЕНТ в видимую область (но не увеличиваем больше 100%).
+                        viewportSize = geo.size
+                        installScrollMonitor()
+                        // Базовый набор элементов — чтобы стартовые добавления не считались «новыми».
+                        lastKnownItemIds = Set(layout.items.map(\.id))
+                        // Взводим автопанораму чуть позже, когда стартовая нормализация уже отработала.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { autoCenterArmed = true }
+                        // Один раз вписываем КОНТЕНТ и центрируем холст на объектах.
                         guard !didInitialFit else { return }
                         didInitialFit = true
                         let fit = min(availableWidth / max(content.width, 1), availableHeight / max(content.height, 1))
-                        canvasZoom = min(1.0, max(canvasZoomRange.lowerBound, fit))
-                        canvasZoomBase = canvasZoom
+                        let z = min(1.0, max(canvasZoomRange.lowerBound, fit))
+                        canvasZoom = z; canvasZoomBase = z
+                        panOffset = CGSize(
+                            width: geo.size.width / 2 - (content.midX - origin.x) * z,
+                            height: geo.size.height / 2 - (content.midY - origin.y) * z
+                        )
                     }
+                    .onDisappear { removeScrollMonitor() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)
+        // Перетаскивание карты-картинки из Finder прямо на холст.
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in handleMapDrop(providers) }
+        // Ползунок масштаба холста.
+        .overlay(alignment: .bottom) { zoomControl }
+    }
+
+    private var zoomControl: some View {
+        HStack(spacing: 8) {
+            Button(action: { setZoom(canvasZoom - 0.1) }) {
+                Image(systemName: "minus.magnifyingglass")
+            }.buttonStyle(.plain)
+            Slider(
+                value: Binding(get: { Double(canvasZoom) }, set: { setZoom(CGFloat($0)) }),
+                in: Double(canvasZoomRange.lowerBound)...Double(canvasZoomRange.upperBound)
+            )
+            .frame(width: 160)
+            Button(action: { setZoom(canvasZoom + 0.1) }) {
+                Image(systemName: "plus.magnifyingglass")
+            }.buttonStyle(.plain)
+            Text("\(Int(canvasZoom * 100))%")
+                .font(.caption).monospacedDigit().frame(width: 44, alignment: .trailing)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(Capsule().fill(Color(NSColor.windowBackgroundColor).opacity(0.95)))
+        .overlay(Capsule().stroke(Color.gray.opacity(0.2)))
+        .padding(.bottom, 12)
+    }
+
+    /// Слайдер/кнопки масштаба — зумим вокруг центра вьюпорта (курсор в этот момент на контроле).
+    private func setZoom(_ value: CGFloat) {
+        zoomAround(value, viewportPoint: CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2))
+        canvasZoomBase = canvasZoom
+    }
+
+    /// Масштабирует холст, удерживая заданную точку вьюпорта на месте (атомарно: масштаб + смещение).
+    private func zoomAround(_ newScale: CGFloat, viewportPoint vp: CGPoint) {
+        let clamped = min(canvasZoomRange.upperBound, max(canvasZoomRange.lowerBound, newScale))
+        let old = canvasZoom
+        guard old > 0 else { canvasZoom = clamped; return }
+        let ratio = clamped / old
+        panOffset = CGSize(
+            width: vp.x - (vp.x - panOffset.width) * ratio,
+            height: vp.y - (vp.y - panOffset.height) * ratio
+        )
+        canvasZoom = clamped
+    }
+
+    /// Реакция на изменение набора элементов раскладки: если пользователь добавил ОДИН новый
+    /// элемент — плавно двигаем камеру так, чтобы он оказался по центру вьюпорта.
+    private func handleItemsChange(_ currentIdsArray: [String]) {
+        let current = Set(currentIdsArray)
+        let added = current.subtracting(lastKnownItemIds)
+        lastKnownItemIds = current
+        // Только для панелей, реально рисующих холст (в панели настроек камеры нет).
+        guard pane != .settings, autoCenterArmed else { return }
+        // Реагируем лишь на одиночное добавление (массовые — импорт/нормализация — пропускаем).
+        guard added.count == 1, let newId = currentIdsArray.last(where: { added.contains($0) }) else { return }
+        // Даём раскладке применить изменение (contentRect включит новый элемент), затем центрируем.
+        DispatchQueue.main.async { centerCameraOnItem(id: newId) }
+    }
+
+    /// Двигает камеру (только панорама, зум не меняем), чтобы элемент с данным id был по центру.
+    private func centerCameraOnItem(id: String) {
+        guard viewportSize.width > 0, viewportSize.height > 0,
+              let item = layout.items.first(where: { $0.id == id }) else { return }
+        // origin считаем так же, как в canvasArea: контент + симметричные поля infiniteMargin.
+        let content = layout.contentRect()
+            ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight)
+        let virtual = content.insetBy(dx: -infiniteMargin, dy: -infiniteMargin)
+        let origin = CGPoint(x: virtual.minX, y: virtual.minY)
+        let scale = canvasZoom
+        let target = CGSize(
+            width: viewportSize.width / 2 - (item.center.x - origin.x) * scale,
+            height: viewportSize.height / 2 - (item.center.y - origin.y) * scale
+        )
+        withAnimation(.easeInOut(duration: 0.25)) {
+            panOffset = target
+        }
+    }
+
+    /// Панорама холста двухпальцевым скроллом (когда курсор над холстом).
+    private func installScrollMonitor() {
+        guard scrollMonitor == nil else { return }
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            guard hoverInViewport != nil else { return event }
+            panOffset.width += event.scrollingDeltaX
+            panOffset.height += event.scrollingDeltaY
+            return nil
+        }
+    }
+
+    private func removeScrollMonitor() {
+        if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
+    }
+
+    /// Обрабатывает перетаскивание файла-изображения на холст → создаёт карту и кладёт её.
+    private func handleMapDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard session.editorMode == .layout, let create = onCreatePlayFieldFromURL,
+              let provider = providers.first else { return false }
+        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+            guard let url, ["png", "jpg", "jpeg", "tiff", "heic"].contains(url.pathExtension.lowercased()) else { return }
+            DispatchQueue.main.async {
+                if let field = create(url) {
+                    TagFreeLayoutStorage.addMapToLayout(&layout, field: field)
+                }
+            }
+        }
+        return true
     }
 
     /// Поля «бесконечного» холста редактора со всех сторон (в координатах раскладки).
+    /// Большой запас пустого места вокруг объектов; в библиотеке тегов эта зона обрезается.
     /// При вытаскивании элементов за этот запас зона расширяется по контенту.
-    private let infiniteMargin: CGFloat = 600
+    private let infiniteMargin: CGFloat = 6000
 
     // MARK: - Arrow overlays
 
@@ -305,19 +477,86 @@ struct TagFreeLayoutEditorContent: View {
                 .onTapGesture {
                     if session.editorMode == .layout {
                         session.selectedItemId = nil
+                        session.selectedItemIds = []
                     } else {
                         session.bindingSourceId = nil
                         session.selectedGroupKey = nil
                     }
                 }
+                // Rubber-band выделение: тянем ЛКМ по пустому холсту (только в режиме раскладки).
+                .gesture(marqueeGesture(scale: scale, origin: origin))
+
+            // Перетаскивание за любую точку внутри рамки выделения (ПОД кнопками — чтобы
+            // Shift/Cmd+ЛКМ по кнопкам проходили насквозь к ним и добавляли в выбор).
+            if session.editorMode == .layout, marqueePixelRect == nil, let bbox = selectionBBoxCanvas {
+                selectionMoveSurface(bbox: bbox, scale: scale, origin: origin)
+            }
 
             ForEach(layout.items) { item in
                 itemView(item: item, scale: scale)
                     .position(x: (item.center.x - origin.x) * scale, y: (item.center.y - origin.y) * scale)
             }
+
+            // Общий bounding box выделения с ручками размера/поворота (поверх кнопок).
+            if session.editorMode == .layout, marqueePixelRect == nil, let bbox = selectionBBoxCanvas {
+                selectionHandlesOverlay(bbox: bbox, scale: scale, origin: origin,
+                                        canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+            }
+
+            // Визуальная рамка выделения поверх кнопок.
+            if let rect = marqueePixelRect {
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.12))
+                    .overlay(Rectangle().stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                    .frame(width: rect.width, height: rect.height)
+                    .offset(x: rect.minX, y: rect.minY)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(width: canvasPixelWidth, height: canvasPixelHeight, alignment: .topLeading)
         .coordinateSpace(name: "canvas")
+    }
+
+    /// Прямоугольник рамки выделения в пиксельных координатах холста (для отрисовки).
+    private var marqueePixelRect: CGRect? {
+        guard let s = marqueeStart, let c = marqueeCurrent else { return nil }
+        return CGRect(x: min(s.x, c.x), y: min(s.y, c.y),
+                      width: abs(s.x - c.x), height: abs(s.y - c.y))
+    }
+
+    /// Rubber-band: тянем по пустому холсту → выделяем пересекаемые кнопки.
+    private func marqueeGesture(scale: CGFloat, origin: CGPoint) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named("canvas"))
+            .onChanged { value in
+                guard session.editorMode == .layout else { return }
+                if marqueeStart == nil { marqueeStart = value.startLocation }
+                marqueeCurrent = value.location
+                selectItemsInMarquee(scale: scale, origin: origin)
+            }
+            .onEnded { _ in
+                marqueeStart = nil
+                marqueeCurrent = nil
+            }
+    }
+
+    /// Выделяет элементы, чьи прямоугольники пересекаются с рамкой (в координатах виртуального холста).
+    private func selectItemsInMarquee(scale: CGFloat, origin: CGPoint) {
+        guard let px = marqueePixelRect else { return }
+        // Переводим пиксельную рамку в координаты виртуального холста.
+        let virtualRect = CGRect(
+            x: origin.x + px.minX / scale,
+            y: origin.y + px.minY / scale,
+            width: px.width / scale,
+            height: px.height / scale
+        )
+        let hit = layout.items.filter { item in
+            let frame = CGRect(x: item.center.x - item.size.width / 2,
+                               y: item.center.y - item.size.height / 2,
+                               width: item.size.width, height: item.size.height)
+            return frame.intersects(virtualRect)
+        }
+        session.selectedItemIds = Set(hit.map { $0.id })
+        session.selectedItemId = hit.first?.id
     }
 
     // MARK: - Bindings mode banner
@@ -356,6 +595,8 @@ struct TagFreeLayoutEditorContent: View {
     private func itemView(item: TagFreeLayoutItem, scale: CGFloat) -> some View {
         let itemKey = item.id
         let isSelected = session.selectedItemId == itemKey
+        // Входит ли элемент в мультивыбор — по нему подсвечиваем все выбранные, не только основной.
+        let isInSelection = session.selectedItemIds.contains(itemKey) || isSelected
 
         // Determine display name
         let displayName: String = {
@@ -363,6 +604,7 @@ struct TagFreeLayoutEditorContent: View {
             case .tag:       return tags.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             case .label:     return labels.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             case .timeEvent: return timeEvents.first(where: { $0.id == item.elementId })?.name ?? item.elementId
+            case .map:       return playFields.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             }
         }()
 
@@ -376,6 +618,8 @@ struct TagFreeLayoutEditorContent: View {
             case .tag:
                 let hex = tags.first(where: { $0.id == item.elementId })?.color ?? "808080"
                 return Color(hex: hex).opacity(item.fillOpacity)
+            case .map:
+                return Color(NSColor.controlBackgroundColor).opacity(0.4)
             }
         }()
 
@@ -383,8 +627,8 @@ struct TagFreeLayoutEditorContent: View {
         let cr = item.cornerRadius * scale
         let strokeCol = item.strokeColor.map { Color(hex: $0) } ?? Color.black.opacity(0.3)
         let strokeStyle = StrokeStyle(
-            lineWidth: (isSelected ? 2 : item.strokeWidth) * scale,
-            dash: (isSelected ? true : item.strokeDashed) ? [4 * scale, 3 * scale] : []
+            lineWidth: (isInSelection ? 2 : item.strokeWidth) * scale,
+            dash: (isInSelection ? true : item.strokeDashed) ? [4 * scale, 3 * scale] : []
         )
         let textCol = item.textColor.map { Color(hex: $0) } ?? Color.white
         let swiftWeight: Font.Weight = {
@@ -395,14 +639,32 @@ struct TagFreeLayoutEditorContent: View {
 
         // In bindings mode: highlight source/selected state
         let isBindingSource = session.editorMode == .bindings && session.bindingSourceId == itemKey
-        let strokeOverride: Color = isBindingSource ? .orange : (isSelected ? .accentColor : strokeCol)
+        let strokeOverride: Color = isBindingSource ? .orange : (isInSelection ? .accentColor : strokeCol)
 
         ZStack {
             TagFreeShapeView(shape: item.shape, cornerRadius: cr)
                 .fill(fillColor)
+                // Фон-картинка (карта — по PlayField; тег/лейбл — по своему bookmark).
                 .overlay(
                     Group {
-                        if item.showLabel {
+                        if item.kind == .map, let field = playFields.first(where: { $0.id == item.elementId }),
+                           let img = PlayFieldImageCache.shared.image(for: field) {
+                            Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                                .frame(width: viewSize.width, height: viewSize.height)
+                                .clipShape(TagFreeShapeView(shape: item.shape, cornerRadius: cr))
+                        } else if item.kind == .map {
+                            Image(systemName: "map").font(.system(size: 24 * scale)).foregroundColor(.secondary)
+                        } else if let bm = item.backgroundImageBookmark, let img = PlayFieldImageCache.shared.image(forBookmark: bm) {
+                            Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                                .frame(width: viewSize.width, height: viewSize.height)
+                                .clipShape(TagFreeShapeView(shape: item.shape, cornerRadius: cr))
+                        }
+                    }
+                )
+                // Подпись поверх — только если включена.
+                .overlay(
+                    Group {
+                        if item.kind != .map, item.showLabel {
                             Text(displayName)
                                 .font(.system(size: item.fontSize * scale, weight: swiftWeight))
                                 .foregroundColor(textCol)
@@ -419,11 +681,11 @@ struct TagFreeLayoutEditorContent: View {
                 )
 
             // Kind indicator (small icon in corner)
-            if item.kind == .label || item.kind == .timeEvent {
+            if item.kind == .label || item.kind == .timeEvent || item.kind == .map {
                 VStack {
                     HStack {
                         Spacer()
-                        Image(systemName: item.kind == .label ? "textformat" : "clock")
+                        Image(systemName: item.kind == .label ? "textformat" : (item.kind == .map ? "map" : "clock"))
                             .font(.system(size: 8 * scale, weight: .bold))
                             .foregroundColor(textCol.opacity(0.7))
                             .padding(3 * scale)
@@ -465,37 +727,36 @@ struct TagFreeLayoutEditorContent: View {
         .gesture(
             DragGesture(minimumDistance: 1, coordinateSpace: .named("canvas"))
                 .onChanged { value in
-                    guard session.editorMode == .layout, isSelected else { return }
+                    guard session.editorMode == .layout, isInSelection else { return }
                     if draggingItemId == nil {
                         draggingItemId = item.id
-                        dragStartCenter = item.center
+                        frozenContentRect = layout.contentRect()
+                        // Двигаем всю выделенную группу (или один элемент, если он одиночный).
+                        let moveIds: Set<String> = session.selectedItemIds.contains(item.id)
+                            ? session.selectedItemIds
+                            : [item.id]
+                        dragStartCenters = Dictionary(uniqueKeysWithValues:
+                            layout.items.filter { moveIds.contains($0.id) }.map { ($0.id, $0.center) }
+                        )
                     }
                     guard draggingItemId == item.id else { return }
-                    var newX = dragStartCenter.x + value.translation.width / scale
-                    var newY = dragStartCenter.y + value.translation.height / scale
-                    // Привязка к сетке всегда включена — позиции тегов кратны gridStep.
-                    newX = (newX / gridStep).rounded() * gridStep
-                    newY = (newY / gridStep).rounded() * gridStep
+                    // Двигаем 1:1 за курсором (без привязки к сетке) — относительные позиции сохраняются.
+                    let dx = value.translation.width / scale
+                    let dy = value.translation.height / scale
                     // Холст бесконечный — без ограничения границами (можно вытаскивать в любую сторону).
-                    updateItem(id: item.id) { m in
-                        m.center = CGPoint(x: newX, y: newY)
+                    for (id, start) in dragStartCenters {
+                        updateItem(id: id) { m in
+                            m.center = CGPoint(x: start.x + dx, y: start.y + dy)
+                        }
                     }
                 }
-                .onEnded { _ in draggingItemId = nil }
+                .onEnded { _ in
+                    draggingItemId = nil
+                    dragStartCenters = [:]
+                    frozenContentRect = nil
+                }
         )
-        // Resize/rotate handles only in layout mode
-        .overlay(
-            session.editorMode == .layout && isSelected
-            ? AnyView(resizeHandle(item: item, scale: scale)
-                        .offset(x: viewSize.width / 2 - 10, y: viewSize.height / 2 - 10))
-            : AnyView(EmptyView())
-        )
-        .overlay(
-            session.editorMode == .layout && isSelected
-            ? AnyView(rotationHandle(item: item, scale: scale)
-                        .offset(x: viewSize.width / 2 - 10, y: -viewSize.height / 2 + 10))
-            : AnyView(EmptyView())
-        )
+        // Ручки размера/поворота рисуются один раз на общем bounding box выделения (см. selectionHandlesOverlay).
         .contextMenu { itemContextMenu(item: item) }
     }
 
@@ -503,7 +764,29 @@ struct TagFreeLayoutEditorContent: View {
 
     private func handleItemTap(item: TagFreeLayoutItem) {
         if session.editorMode == .layout {
-            session.selectedItemId = session.selectedItemId == item.id ? nil : item.id
+            let flags = NSEvent.modifierFlags
+            let multiSelect = flags.contains(.command) || flags.contains(.shift)
+            if multiSelect {
+                // Command/Shift+ЛКМ — добавить/убрать элемент из мультивыбора.
+                if session.selectedItemIds.contains(item.id) {
+                    session.selectedItemIds.remove(item.id)
+                    if session.selectedItemId == item.id {
+                        session.selectedItemId = session.selectedItemIds.first
+                    }
+                } else {
+                    session.selectedItemIds.insert(item.id)
+                    session.selectedItemId = item.id
+                }
+            } else {
+                // Обычный клик — одиночный выбор (повторный по тому же снимает выделение).
+                if session.selectedItemId == item.id && session.selectedItemIds.count <= 1 {
+                    session.selectedItemId = nil
+                    session.selectedItemIds = []
+                } else {
+                    session.selectedItemId = item.id
+                    session.selectedItemIds = [item.id]
+                }
+            }
             return
         }
         // Bindings mode
@@ -555,7 +838,28 @@ struct TagFreeLayoutEditorContent: View {
             }
         } else {
             // Layout mode
-            if item.kind == .label || item.kind == .timeEvent {
+            Button(^String.Titles.keyBindingsCopyAll) {
+                // Если элемент вне выделения — копируем его одного.
+                if !session.selectedItemIds.contains(item.id) {
+                    session.selectedItemIds = [item.id]
+                    session.selectedItemId = item.id
+                }
+                copySelectedButtons()
+            }
+            if onDuplicateElement != nil, CanvasButtonClipboard.shared.hasContent {
+                Button(^String.Titles.keyBindingsPaste) { pasteButtons() }
+            }
+            if let onExport = onExportSelected {
+                Divider()
+                Button(^String.Titles.keyBindingsExportSelected) {
+                    if !session.selectedItemIds.contains(item.id) {
+                        session.selectedItemIds = [item.id]
+                        session.selectedItemId = item.id
+                    }
+                    onExport(session.selectedItemIds)
+                }
+            }
+            if item.kind == .label || item.kind == .timeEvent || item.kind == .map {
                 Button(^String.Titles.keyBindingsRemoveFromCanvas) {
                     removePaletteItem(item: item)
                 }
@@ -568,53 +872,228 @@ struct TagFreeLayoutEditorContent: View {
         // Remove bindings involving this item
         layout.bindings.removeAll { $0.sourceButtonKey == item.id || $0.targetButtonKey == item.id }
         if session.selectedItemId == item.id { session.selectedItemId = nil }
+        session.selectedItemIds.remove(item.id)
     }
 
     // MARK: - Handles
 
-    private func rotationHandle(item: TagFreeLayoutItem, scale: CGFloat) -> some View {
-        Circle()
-            .fill(Color.white)
-            .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
-            .frame(width: 20, height: 20)
+    /// Общий bounding box выделения в координатах виртуального холста — с учётом поворота
+    /// каждого элемента (AABB по повёрнутым углам), чтобы рамка следовала за повёрнутыми кнопками.
+    private var selectionBBoxCanvas: CGRect? {
+        let sel = layout.items.filter { session.selectedItemIds.contains($0.id) }
+        guard !sel.isEmpty else { return nil }
+        var minX = CGFloat.greatestFiniteMagnitude, minY = CGFloat.greatestFiniteMagnitude
+        var maxX = -CGFloat.greatestFiniteMagnitude, maxY = -CGFloat.greatestFiniteMagnitude
+        for item in sel {
+            let rad = item.rotation * .pi / 180
+            let c = cos(rad), s = sin(rad)
+            let hw = item.size.width / 2, hh = item.size.height / 2
+            for (sx, sy) in [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)] {
+                let x = item.center.x + sx * c - sy * s
+                let y = item.center.y + sx * s + sy * c
+                minX = min(minX, x); minY = min(minY, y); maxX = max(maxX, x); maxY = max(maxY, y)
+            }
+        }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    /// Прозрачная поверхность внутри рамки выделения (ПОД кнопками): перетаскивание за
+    /// любую её точку двигает всю группу. Кнопки сверху — поэтому Shift/Cmd+ЛКМ по ним проходят к ним.
+    private func selectionMoveSurface(bbox: CGRect, scale: CGFloat, origin: CGPoint) -> some View {
+        let w = bbox.width * scale
+        let h = bbox.height * scale
+        let cx = (bbox.midX - origin.x) * scale
+        let cy = (bbox.midY - origin.y) * scale
+        return Rectangle()
+            .fill(Color.clear)
+            .contentShape(Rectangle())
+            .frame(width: w, height: h)
+            .position(x: cx, y: cy)
             .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .named("canvas"))
+                DragGesture(minimumDistance: 2, coordinateSpace: .named("canvas"))
                     .onChanged { value in
-                        if rotatingItemId == nil { rotatingItemId = item.id; rotateStartAngle = item.rotation }
-                        guard rotatingItemId == item.id else { return }
-                        updateItem(id: item.id) { $0.rotation = rotateStartAngle + Double(value.translation.width / scale) }
+                        guard session.editorMode == .layout else { return }
+                        if draggingItemId == nil {
+                            draggingItemId = "selection-move"
+                            frozenContentRect = layout.contentRect()
+                            let ids = session.selectedItemIds
+                            dragStartCenters = Dictionary(uniqueKeysWithValues:
+                                layout.items.filter { ids.contains($0.id) }.map { ($0.id, $0.center) })
+                        }
+                        guard draggingItemId == "selection-move" else { return }
+                        // 1:1 за курсором, без привязки к сетке.
+                        let dx = value.translation.width / scale
+                        let dy = value.translation.height / scale
+                        for (id, start) in dragStartCenters {
+                            updateItem(id: id) { $0.center = CGPoint(x: start.x + dx, y: start.y + dy) }
+                        }
                     }
-                    .onEnded { _ in rotatingItemId = nil }
+                    .onEnded { _ in draggingItemId = nil; dragStartCenters = [:]; frozenContentRect = nil }
             )
     }
 
-    private func resizeHandle(item: TagFreeLayoutItem, scale: CGFloat) -> some View {
+    /// Рамка выделения + ручки размера (квадрат) и поворота (круг) на общем bounding box.
+    /// Ручки фиксированного экранного размера и вынесены ЗА рамку — не перекрывают элементы
+    /// и не слипаются при отдалении холста.
+    private func selectionHandlesOverlay(bbox: CGRect, scale: CGFloat, origin: CGPoint,
+                                         canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
+        let px = CGRect(x: (bbox.minX - origin.x) * scale, y: (bbox.minY - origin.y) * scale,
+                        width: bbox.width * scale, height: bbox.height * scale)
+        let handle: CGFloat = 18
+        let gap: CGFloat = 10
+        return ZStack(alignment: .topLeading) {
+            Rectangle()
+                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                .frame(width: px.width, height: px.height)
+                .offset(x: px.minX, y: px.minY)
+                .allowsHitTesting(false)
+
+            // Поворот (круг) — над правым-верхним углом.
+            selectionRotateHandle(scale: scale)
+                .frame(width: handle, height: handle)
+                .offset(x: px.maxX + gap, y: px.minY - gap - handle)
+
+            // Размер (квадрат) — под правым-нижним углом.
+            selectionResizeHandle(bbox: bbox, scale: scale)
+                .frame(width: handle, height: handle)
+                .offset(x: px.maxX + gap, y: px.maxY + gap)
+        }
+        .frame(width: canvasPixelWidth, height: canvasPixelHeight, alignment: .topLeading)
+    }
+
+    private func selectionResizeHandle(bbox: CGRect, scale: CGFloat) -> some View {
         Rectangle()
             .fill(Color.white)
             .overlay(Rectangle().stroke(Color.accentColor, lineWidth: 2))
-            .frame(width: 20, height: 20)
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .named("canvas"))
                     .onChanged { value in
-                        if resizingItemId == nil { resizingItemId = item.id; resizeStartSize = item.size }
-                        guard resizingItemId == item.id else { return }
+                        let ids = session.selectedItemIds
+                        if resizingItemId == nil {
+                            resizingItemId = "selection"
+                            frozenContentRect = layout.contentRect()
+                            beginSelectionResize(groupIds: ids, bbox: bbox)
+                        }
+                        guard resizingItemId == "selection" else { return }
                         let dw = value.translation.width / scale
                         let dh = value.translation.height / scale
-                        updateItem(id: item.id) { m in
-                            let minSize: CGFloat = 40
-                            var nw = max(minSize, resizeStartSize.width + dw)
-                            var nh = max(minSize, resizeStartSize.height + dh)
-                            if m.aspectRatioLocked, resizeStartSize.height > 0 {
-                                let ratio = resizeStartSize.width / resizeStartSize.height
-                                let avg = (dw + dh) / 2
-                                nw = max(minSize, resizeStartSize.width + avg)
-                                nh = max(minSize, nw / ratio)
-                            }
-                            m.size = CGSize(width: nw, height: nh)
+                        if ids.count > 1 {
+                            applyGroupResizeFactor(dw: dw)
+                        } else if let id = ids.first {
+                            applySingleResize(id: id, dw: dw, dh: dh)
                         }
                     }
-                    .onEnded { _ in resizingItemId = nil }
+                    .onEnded { _ in
+                        resizingItemId = nil
+                        groupResizeStartSizes = [:]
+                        groupResizeStartCenters = [:]
+                        frozenContentRect = nil
+                    }
             )
+    }
+
+    private func selectionRotateHandle(scale: CGFloat) -> some View {
+        Circle()
+            .fill(Color.white)
+            .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .named("canvas"))
+                    .onChanged { value in
+                        let ids = session.selectedItemIds
+                        if rotatingItemId == nil {
+                            rotatingItemId = "selection"
+                            frozenContentRect = layout.contentRect()
+                            beginSelectionRotate(groupIds: ids)
+                        }
+                        guard rotatingItemId == "selection" else { return }
+                        let deltaDeg = Double(value.translation.width / scale)
+                        if ids.count > 1 {
+                            applyGroupRotate(deltaDeg: deltaDeg)
+                        } else if let id = ids.first {
+                            updateItem(id: id) { $0.rotation = (groupRotateStartRotations[id] ?? 0) + deltaDeg }
+                        }
+                    }
+                    .onEnded { _ in
+                        rotatingItemId = nil
+                        groupRotateStartRotations = [:]
+                        groupRotateStartCenters = [:]
+                        frozenContentRect = nil
+                    }
+            )
+    }
+
+    // MARK: - Selection resize/rotate math
+
+    private func beginSelectionResize(groupIds: Set<String>, bbox: CGRect) {
+        let sel = layout.items.filter { groupIds.contains($0.id) }
+        groupResizeStartSizes = Dictionary(uniqueKeysWithValues: sel.map { ($0.id, $0.size) })
+        groupResizeStartCenters = Dictionary(uniqueKeysWithValues: sel.map { ($0.id, $0.center) })
+        groupResizeCentroid = CGPoint(x: bbox.midX, y: bbox.midY)
+        resizeStartBBoxWidth = max(bbox.width, 1)
+        resizeStartSize = sel.first?.size ?? .zero
+    }
+
+    /// Групповой ресайз: масштабирует все выделенные одним коэффициентом (от ширины bounding box).
+    private func applyGroupResizeFactor(dw: CGFloat) {
+        let minSize: CGFloat = 40
+        var factor = max(0.1, (resizeStartBBoxWidth + dw) / resizeStartBBoxWidth)
+        let smallest = groupResizeStartSizes.values.map { min($0.width, $0.height) }.min() ?? minSize
+        if smallest * factor < minSize { factor = minSize / smallest }
+        for (id, startSize) in groupResizeStartSizes {
+            guard let startCenter = groupResizeStartCenters[id] else { continue }
+            updateItem(id: id) { m in
+                m.size = CGSize(width: startSize.width * factor, height: startSize.height * factor)
+                m.center = CGPoint(
+                    x: groupResizeCentroid.x + (startCenter.x - groupResizeCentroid.x) * factor,
+                    y: groupResizeCentroid.y + (startCenter.y - groupResizeCentroid.y) * factor
+                )
+            }
+        }
+    }
+
+    /// Одиночный ресайз: независимо по ширине/высоте (с учётом фиксации пропорций).
+    private func applySingleResize(id: String, dw: CGFloat, dh: CGFloat) {
+        updateItem(id: id) { m in
+            let minSize: CGFloat = 40
+            var nw = max(minSize, resizeStartSize.width + dw)
+            var nh = max(minSize, resizeStartSize.height + dh)
+            if m.aspectRatioLocked, resizeStartSize.height > 0 {
+                let ratio = resizeStartSize.width / resizeStartSize.height
+                let avg = (dw + dh) / 2
+                nw = max(minSize, resizeStartSize.width + avg)
+                nh = max(minSize, nw / ratio)
+            }
+            m.size = CGSize(width: nw, height: nh)
+        }
+    }
+
+    private func beginSelectionRotate(groupIds: Set<String>) {
+        let sel = layout.items.filter { groupIds.contains($0.id) }
+        groupRotateStartRotations = Dictionary(uniqueKeysWithValues: sel.map { ($0.id, $0.rotation) })
+        groupRotateStartCenters = Dictionary(uniqueKeysWithValues: sel.map { ($0.id, $0.center) })
+        let minX = sel.map { $0.center.x - $0.size.width / 2 }.min() ?? 0
+        let minY = sel.map { $0.center.y - $0.size.height / 2 }.min() ?? 0
+        let maxX = sel.map { $0.center.x + $0.size.width / 2 }.max() ?? 0
+        let maxY = sel.map { $0.center.y + $0.size.height / 2 }.max() ?? 0
+        groupResizeCentroid = CGPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2)
+    }
+
+    /// Групповой поворот: каждый элемент вращается вокруг центра группы (орбита + собственный поворот).
+    private func applyGroupRotate(deltaDeg: Double) {
+        let rad = deltaDeg * .pi / 180
+        let cosA = cos(rad), sinA = sin(rad)
+        for (id, startRot) in groupRotateStartRotations {
+            guard let sc = groupRotateStartCenters[id] else { continue }
+            let dx = sc.x - groupResizeCentroid.x
+            let dy = sc.y - groupResizeCentroid.y
+            updateItem(id: id) { m in
+                m.rotation = startRot + deltaDeg
+                m.center = CGPoint(
+                    x: groupResizeCentroid.x + dx * cosA - dy * sinA,
+                    y: groupResizeCentroid.y + dx * sinA + dy * cosA
+                )
+            }
+        }
     }
 
     // MARK: - Right panel
@@ -627,6 +1106,7 @@ struct TagFreeLayoutEditorContent: View {
                 tags: tags,
                 labels: labels,
                 timeEvents: timeEvents,
+                playFields: playFields,
                 selectedGroupKey: session.selectedGroupKey,
                 focusedSourceKey: session.bindingSourceId,
                 onAddLabel: addLabelToCanvas,
@@ -644,9 +1124,13 @@ struct TagFreeLayoutEditorContent: View {
     private var layoutModeSettingsPanel: some View {
         ScrollView {
             VStack(spacing: 0) {
-                if let itemId = session.selectedItemId,
+                if session.selectedItemIds.count > 1, let kind = homogeneousSelectedKind {
+                    batchItemSettings(kind: kind)
+                } else if let itemId = session.selectedItemId,
                    let index = layout.items.firstIndex(where: { $0.id == itemId }) {
                     selectedItemSettings(index: index)
+                } else if session.selectedItemIds.count > 1 {
+                    mixedSelectionNote
                 } else {
                     canvasSettings
                 }
@@ -660,6 +1144,29 @@ struct TagFreeLayoutEditorContent: View {
         .background(Color(NSColor.windowBackgroundColor))
     }
 
+    /// Единый вид (kind) выделенных элементов, если он одинаков у всех; иначе nil.
+    private var homogeneousSelectedKind: CanvasButtonKind? {
+        let kinds = Set(layout.items.filter { session.selectedItemIds.contains($0.id) }.map { $0.kind })
+        return kinds.count == 1 ? kinds.first : nil
+    }
+
+    /// Смешанное выделение (теги + лейблы) — батч-настройки внешнего вида недоступны.
+    private var mixedSelectionNote: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("\(session.selectedItemIds.count)").font(.headline)
+                Text(^String.Titles.freeLayoutSelectElement).font(.caption).foregroundColor(.secondary)
+                Spacer()
+                Button(action: { session.selectedItemId = nil; session.selectedItemIds = [] }) {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                }.buttonStyle(.plain)
+            }
+            .padding(.top, 4)
+            Divider()
+            copyPasteButtons
+        }
+    }
+
     // MARK: - Canvas settings
 
     private var canvasSettings: some View {
@@ -667,8 +1174,268 @@ struct TagFreeLayoutEditorContent: View {
             Text(^String.Titles.freeLayoutCanvasSettings).font(.headline).padding(.top, 4)
             Divider()
             Toggle(^String.Titles.freeLayoutShowGrid, isOn: $session.showGrid)
+
+            if onCreatePlayFieldFromURL != nil || !playFields.isEmpty {
+                Divider()
+                sectionHeader(^String.Titles.keyBindingsAddMap)
+                Menu {
+                    if onCreatePlayFieldFromURL != nil {
+                        Button(^String.Titles.keyBindingsAddMapFromDisk) { pickMapFromDisk() }
+                    }
+                    if !playFields.isEmpty {
+                        Divider()
+                        Text(^String.Titles.keyBindingsLoadedMaps)
+                        ForEach(playFields) { field in
+                            Button(field.name) { addMapToCanvas(field) }
+                        }
+                    }
+                } label: {
+                    SwiftUI.Label(^String.Titles.keyBindingsAddMap, systemImage: "map").font(.caption)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+
             Text(^String.Titles.freeLayoutSelectElement)
                 .font(.caption).foregroundColor(.secondary).padding(.top, 8)
+        }
+    }
+
+    /// Выбор картинки-фона для кнопки через диалог.
+    private func pickBackgroundImage(binding: Binding<TagFreeLayoutItem>) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.png, .jpeg, .tiff, .image]
+        guard panel.runModal() == .OK, let url = panel.url, let bookmark = url.makeBookmark() else { return }
+        binding.backgroundImageBookmark.wrappedValue = bookmark
+    }
+
+    /// Выбор файла-карты через диалог и добавление её на холст.
+    private func pickMapFromDisk() {
+        guard let create = onCreatePlayFieldFromURL else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.png, .jpeg, .tiff, .image]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if let field = create(url) {
+            TagFreeLayoutStorage.addMapToLayout(&layout, field: field)
+        }
+    }
+
+    // MARK: - Batch settings (несколько выделенных кнопок одного вида)
+
+    /// Значение поля из первичной выделенной кнопки (для отображения в батч-контролах).
+    private func batchValue<T>(_ keyPath: KeyPath<TagFreeLayoutItem, T>, default def: T) -> T {
+        if let id = session.selectedItemId, let item = layout.items.first(where: { $0.id == id }) {
+            return item[keyPath: keyPath]
+        }
+        return layout.items.first(where: { session.selectedItemIds.contains($0.id) })?[keyPath: keyPath] ?? def
+    }
+
+    /// Применяет изменение ко ВСЕМ выделенным кнопкам.
+    private func updateSelectedItems(_ update: (inout TagFreeLayoutItem) -> Void) {
+        for i in layout.items.indices where session.selectedItemIds.contains(layout.items[i].id) {
+            var item = layout.items[i]; update(&item); layout.items[i] = item
+        }
+    }
+
+    /// Batch-биндинг поля кнопки: читает из первичной, пишет во все выделенные.
+    private func batchBinding<T>(_ keyPath: WritableKeyPath<TagFreeLayoutItem, T>, default def: T) -> Binding<T> {
+        Binding(
+            get: { batchValue(keyPath, default: def) },
+            set: { newValue in updateSelectedItems { $0[keyPath: keyPath] = newValue } }
+        )
+    }
+
+    private func batchItemSettings(kind: CanvasButtonKind) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: itemIcon(for: kind)).foregroundColor(.secondary).frame(width: 14)
+                Text("\(session.selectedItemIds.count) \(kind == .tag ? ^String.Titles.tags : (kind == .label ? ^String.Titles.labels : ^String.Titles.commonEvents))")
+                    .font(.headline).lineLimit(1)
+                Spacer()
+                Button(action: { session.selectedItemId = nil; session.selectedItemIds = [] }) {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                }.buttonStyle(.plain)
+            }
+            .padding(.top, 4)
+
+            Divider()
+            copyPasteButtons
+
+            Divider()
+            sectionHeader(^String.Titles.keyBindingsVisibilitySection)
+            Toggle(^String.Titles.keyBindingsItemVisible,
+                   isOn: batchBinding(\.isVisible, default: true)).font(.caption)
+
+            // Цвет самой кнопки-тега (меняет цвет тега в коллекции). Для лейблов недоступно.
+            if kind == .tag, onSetTagsColor != nil {
+                Divider()
+                sectionHeader(^String.Titles.freeLayoutSectionFill)
+                HStack {
+                    Text(^String.Titles.color).font(.caption)
+                    Spacer()
+                    ColorPicker("", selection: Binding(
+                        get: {
+                            let hex = tags.first(where: { $0.id == primarySelectedElementId })?.color ?? "808080"
+                            return Color(hex: hex)
+                        },
+                        set: { newColor in
+                            let hex = newColor.toHex() ?? "808080"
+                            onSetTagsColor?(selectedTagElementIds, hex)
+                        }
+                    )).frame(width: 40, height: 24)
+                }
+            }
+
+            Divider()
+            sectionHeader(^String.Titles.freeLayoutSectionShape)
+            batchShapeGrid
+
+            Divider()
+            sectionHeader(^String.Titles.freeLayoutSectionFill)
+            HStack {
+                Text(^String.Titles.freeLayoutOpacity).font(.caption)
+                Spacer()
+                Text("\(Int(batchValue(\.fillOpacity, default: 1) * 100))%").font(.caption).foregroundColor(.secondary)
+            }
+            Slider(value: batchBinding(\.fillOpacity, default: 1), in: 0...1, step: 0.05)
+
+            Divider()
+            sectionHeader(^String.Titles.freeLayoutSectionStroke)
+            HStack {
+                Text(^String.Titles.freeLayoutColor).font(.caption)
+                Spacer()
+                ColorPicker("", selection: Binding(
+                    get: { batchValue(\.strokeColor, default: nil).map { Color(hex: $0) } ?? Color.black.opacity(0.3) },
+                    set: { c in updateSelectedItems { $0.strokeColor = c.toHex() ?? "000000" } }
+                )).frame(width: 40, height: 24)
+            }
+            HStack {
+                Text(^String.Titles.freeLayoutThickness).font(.caption)
+                Spacer()
+                Text("\(Int(batchValue(\.strokeWidth, default: 1)))pt").font(.caption).foregroundColor(.secondary)
+                Stepper("", value: batchBinding(\.strokeWidth, default: 1), in: 0...10, step: 1).labelsHidden()
+            }
+            HStack(spacing: 4) {
+                strokeStyleButton(label: ^String.Titles.freeLayoutStrokeSolid, dashed: false, binding: batchBinding(\.strokeDashed, default: false))
+                strokeStyleButton(label: ^String.Titles.freeLayoutStrokeDashed, dashed: true, binding: batchBinding(\.strokeDashed, default: false))
+            }
+
+            Divider()
+            sectionHeader(^String.Titles.freeLayoutSectionText)
+            Toggle(^String.Titles.freeLayoutShowLabel, isOn: batchBinding(\.showLabel, default: true))
+            HStack {
+                Text(^String.Titles.freeLayoutColor).font(.caption)
+                Spacer()
+                ColorPicker("", selection: Binding(
+                    get: { batchValue(\.textColor, default: nil).map { Color(hex: $0) } ?? Color.white },
+                    set: { c in updateSelectedItems { $0.textColor = c.toHex() ?? "FFFFFF" } }
+                )).frame(width: 40, height: 24)
+            }
+            HStack {
+                Text(^String.Titles.freeLayoutFontSize).font(.caption)
+                Spacer()
+                Text("\(Int(batchValue(\.fontSize, default: 12)))pt").font(.caption).foregroundColor(.secondary)
+                Stepper("", value: batchBinding(\.fontSize, default: 12), in: 8...32, step: 1).labelsHidden()
+            }
+            HStack(spacing: 3) {
+                fontWeightButton(label: "R", weight: .regular, binding: batchBinding(\.fontWeight, default: .medium))
+                fontWeightButton(label: "M", weight: .medium, binding: batchBinding(\.fontWeight, default: .medium))
+                fontWeightButton(label: "B", weight: .bold, binding: batchBinding(\.fontWeight, default: .medium))
+            }
+
+            Divider()
+            sectionHeader(^String.Titles.freeLayoutSectionShadow)
+            Toggle(^String.Titles.freeLayoutShadowEnabled, isOn: batchBinding(\.shadowEnabled, default: true))
+
+            Spacer(minLength: 20)
+        }
+    }
+
+    private var batchShapeGrid: some View {
+        let shapes: [(TagFreeLayoutShape, String)] = [
+            (.square, "square"), (.circle, "circle"), (.triangle, "triangle"),
+            (.star, "star"), (.diamond, "diamond"), (.hexagon, "hexagon"), (.capsule, "capsule")
+        ]
+        let current = batchValue(\.shape, default: .square)
+        return LazyVGrid(columns: [GridItem(.adaptive(minimum: 40))], spacing: 6) {
+            ForEach(shapes, id: \.0) { shape, name in
+                Button(action: { updateSelectedItems { $0.shape = shape } }) {
+                    TagFreeShapeView(shape: shape, cornerRadius: 4)
+                        .fill(current == shape ? Color.accentColor : Color.secondary.opacity(0.4))
+                        .frame(width: 32, height: 24)
+                }
+                .buttonStyle(.plain)
+                .help(name.capitalized)
+            }
+        }
+    }
+
+    // MARK: - Copy / paste buttons
+
+    /// elementId первичной выделенной кнопки.
+    private var primarySelectedElementId: String {
+        if let id = session.selectedItemId, let item = layout.items.first(where: { $0.id == id }) {
+            return item.elementId
+        }
+        return layout.items.first(where: { session.selectedItemIds.contains($0.id) })?.elementId ?? ""
+    }
+
+    /// elementId выделенных тегов.
+    private var selectedTagElementIds: [String] {
+        layout.items.filter { session.selectedItemIds.contains($0.id) && $0.kind == .tag }.map { $0.elementId }
+    }
+
+    @ViewBuilder
+    private var copyPasteButtons: some View {
+        let canDuplicate = onDuplicateElement != nil
+        HStack(spacing: 6) {
+            Button(action: copySelectedButtons) {
+                SwiftUI.Label(^String.Titles.keyBindingsCopyAll, systemImage: "doc.on.doc").font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .disabled(session.selectedItemIds.isEmpty)
+
+            if canDuplicate {
+                Button(action: pasteButtons) {
+                    SwiftUI.Label(^String.Titles.keyBindingsPaste, systemImage: "doc.on.clipboard").font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!CanvasButtonClipboard.shared.hasContent)
+            }
+        }
+    }
+
+    /// Копирует выделенные кнопки в буфер (только визуал, без связок).
+    private func copySelectedButtons() {
+        let items = layout.items.filter { session.selectedItemIds.contains($0.id) }
+        guard !items.isEmpty else { return }
+        CanvasButtonClipboard.shared.copy(items)
+    }
+
+    /// Вставляет кнопки из буфера: дублирует сущности в коллекции, кладёт новые кнопки со смещением, без связок.
+    private func pasteButtons() {
+        guard let duplicate = onDuplicateElement, CanvasButtonClipboard.shared.hasContent else { return }
+        let offset: CGFloat = 30
+        var newIds = Set<String>()
+        for source in CanvasButtonClipboard.shared.items {
+            guard let newElementId = duplicate(source.kind, source.elementId) else { continue }
+            var newItem = source
+            newItem.elementId = newElementId
+            newItem.center = CGPoint(x: source.center.x + offset, y: source.center.y + offset)
+            // Не создаём дубликат поверх уже существующей кнопки той же сущности.
+            guard !layout.items.contains(where: { $0.id == newItem.id }) else { continue }
+            layout.items.append(newItem)
+            newIds.insert(newItem.id)
+        }
+        if !newIds.isEmpty {
+            session.selectedItemIds = newIds
+            session.selectedItemId = newIds.first
         }
     }
 
@@ -682,6 +1449,7 @@ struct TagFreeLayoutEditorContent: View {
             case .tag:       return tags.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             case .label:     return labels.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             case .timeEvent: return timeEvents.first(where: { $0.id == item.elementId })?.name ?? item.elementId
+            case .map:       return playFields.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             }
         }()
 
@@ -691,7 +1459,7 @@ struct TagFreeLayoutEditorContent: View {
                     .foregroundColor(.secondary).frame(width: 14)
                 Text(displayName).font(.headline).lineLimit(1)
                 Spacer()
-                Button(action: { session.selectedItemId = nil }) {
+                Button(action: { session.selectedItemId = nil; session.selectedItemIds = [] }) {
                     Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                 }.buttonStyle(.plain)
             }
@@ -726,6 +1494,22 @@ struct TagFreeLayoutEditorContent: View {
                         .font(.caption2).buttonStyle(.bordered)
                     Button(^String.Titles.freeLayoutOpaque) { binding.fillOpacity.wrappedValue = 1 }
                         .font(.caption2).buttonStyle(.bordered)
+                }
+            }
+
+            // Фон-картинка (только для тегов/лейблов; у карты фон — сама карта).
+            if item.kind != .map {
+                Divider()
+                sectionHeader(^String.Titles.freeLayoutBackgroundImage)
+                HStack(spacing: 6) {
+                    Button(item.backgroundImageBookmark == nil ? ^String.Titles.freeLayoutChooseImage : ^String.Titles.freeLayoutReplaceImage) {
+                        pickBackgroundImage(binding: binding)
+                    }
+                    .font(.caption2).buttonStyle(.bordered)
+                    if item.backgroundImageBookmark != nil {
+                        Button(^String.Titles.reset) { binding.backgroundImageBookmark.wrappedValue = nil }
+                            .font(.caption2).buttonStyle(.bordered)
+                    }
                 }
             }
 
@@ -868,7 +1652,7 @@ struct TagFreeLayoutEditorContent: View {
             Divider()
 
             // Remove palette item from canvas
-            if item.kind == .label || item.kind == .timeEvent {
+            if item.kind == .label || item.kind == .timeEvent || item.kind == .map {
                 Button(role: .destructive, action: { removePaletteItem(item: item) }) {
                     SwiftUI.Label(^String.Titles.keyBindingsRemoveFromCanvas, systemImage: "trash")
                         .font(.caption)
@@ -894,11 +1678,16 @@ struct TagFreeLayoutEditorContent: View {
         TagFreeLayoutStorage.addTimeEventToLayout(&layout, event: event)
     }
 
+    func addMapToCanvas(_ field: PlayField) {
+        TagFreeLayoutStorage.addMapToLayout(&layout, field: field)
+    }
+
     private func itemIcon(for kind: CanvasButtonKind) -> String {
         switch kind {
         case .tag:       return "tag.fill"
         case .label:     return "textformat"
         case .timeEvent: return "clock"
+        case .map:       return "map"
         }
     }
 
@@ -1059,6 +1848,23 @@ struct TagFreeLayoutEditorView: View {
 }
 
 // MARK: - TagFreeShapeView (reused in editor + canvas)
+
+/// Отслеживает положение курсора внутри вью (для зума к курсору). macOS 13+; на 12 — no-op.
+private struct HoverTracker: ViewModifier {
+    let onMove: (CGPoint?) -> Void
+    func body(content: Content) -> some View {
+        if #available(macOS 13.0, *) {
+            content.onContinuousHover(coordinateSpace: .local) { phase in
+                switch phase {
+                case .active(let p): onMove(p)
+                case .ended: onMove(nil)
+                }
+            }
+        } else {
+            content
+        }
+    }
+}
 
 struct TagFreeShapeView: Shape {
     let shape: TagFreeLayoutShape

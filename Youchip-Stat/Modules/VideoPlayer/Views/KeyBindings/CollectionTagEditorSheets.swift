@@ -59,8 +59,13 @@ struct TagCreateSheetView: View {
     private var nameField: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(^String.Titles.name).font(.caption).foregroundColor(.secondary)
-            FocusAwareTextField(text: $formData.name, placeholder: ^String.Titles.title)
-                .textFieldStyle(ModernNewTextFieldStyle())
+            FocusAwareTextField(
+                text: $formData.name,
+                placeholder: ^String.Titles.title,
+                autoFocus: true,
+                onSubmit: { saveTag() }
+            )
+            .textFieldStyle(ModernNewTextFieldStyle())
         }
     }
 
@@ -107,19 +112,28 @@ struct TagCreateSheetView: View {
     private var hotkeySection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(^String.Titles.hotkeys).font(.caption).foregroundColor(.secondary)
-            ZStack {
-                Button(action: { isCapturingHotkey = true }) {
-                    HStack {
-                        Image(systemName: "keyboard")
-                        Text(formData.hotkey ?? ^String.Titles.assign)
+            HStack(spacing: 8) {
+                ZStack {
+                    Button(action: { isCapturingHotkey = true }) {
+                        HStack {
+                            Image(systemName: "keyboard")
+                            Text(formData.hotkey ?? ^String.Titles.assign)
+                        }
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.controlBackgroundColor)))
                     }
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.controlBackgroundColor)))
+                    .buttonStyle(.plain)
+                    if isCapturingHotkey {
+                        KeyCaptureView(keyString: $formData.hotkey, isCapturing: $isCapturingHotkey)
+                            .allowsHitTesting(false)
+                    }
                 }
-                .buttonStyle(.plain)
-                if isCapturingHotkey {
-                    KeyCaptureView(keyString: $formData.hotkey, isCapturing: $isCapturingHotkey)
-                        .allowsHitTesting(false)
+                if let hk = formData.hotkey, !hk.isEmpty, !isCapturingHotkey {
+                    Button(action: { formData.hotkey = nil }) {
+                        Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(^String.Titles.reset)
                 }
             }
         }
@@ -131,6 +145,7 @@ struct TagCreateSheetView: View {
                 onDismiss()
                 presentationMode.wrappedValue.dismiss()
             }
+            .keyboardShortcut(.cancelAction)
             Spacer()
             Button(^String.Titles.collectionsButtonAdd) {
                 saveTag()
@@ -260,19 +275,28 @@ struct TagEditSheetView: View {
     private var hotkeySection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(^String.Titles.hotkeys).font(.caption).foregroundColor(.secondary)
-            ZStack {
-                Button(action: { isCapturingHotkey = true }) {
-                    HStack {
-                        Image(systemName: "keyboard")
-                        Text(formData.hotkey ?? ^String.Titles.assign)
+            HStack(spacing: 8) {
+                ZStack {
+                    Button(action: { isCapturingHotkey = true }) {
+                        HStack {
+                            Image(systemName: "keyboard")
+                            Text(formData.hotkey ?? ^String.Titles.assign)
+                        }
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.controlBackgroundColor)))
                     }
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.controlBackgroundColor)))
+                    .buttonStyle(.plain)
+                    if isCapturingHotkey {
+                        KeyCaptureView(keyString: $formData.hotkey, isCapturing: $isCapturingHotkey)
+                            .allowsHitTesting(false)
+                    }
                 }
-                .buttonStyle(.plain)
-                if isCapturingHotkey {
-                    KeyCaptureView(keyString: $formData.hotkey, isCapturing: $isCapturingHotkey)
-                        .allowsHitTesting(false)
+                if let hk = formData.hotkey, !hk.isEmpty, !isCapturingHotkey {
+                    Button(action: { formData.hotkey = nil }) {
+                        Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(^String.Titles.reset)
                 }
             }
         }

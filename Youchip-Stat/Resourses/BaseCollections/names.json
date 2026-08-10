@@ -2,18 +2,94 @@
     "collections": [
         {
             "language": "ru",
-            "names": [
-                "Хоккей",
-                "Футбол"
+            "items": [
+                {
+                    "folder": "Хоккей",
+                    "name": "Хоккей"
+                },
+                {
+                    "folder": "Футбол",
+                    "name": "Футбол"
+                }
             ]
         },
         {
             "language": "en",
-            "names": [
-                "Hockey",
-                "Football"
+            "items": [
+                {
+                    "folder": "Hockey",
+                    "name": "Hockey"
+                },
+                {
+                    "folder": "Football",
+                    "name": "Football"
+                }
+            ]
+        },
+        {
+            "language": "es",
+            "items": [
+                {
+                    "folder": "Hockey_es",
+                    "name": "Hockey sobre hielo"
+                },
+                {
+                    "folder": "Football_es",
+                    "name": "Fútbol"
+                }
+            ]
+        },
+        {
+            "language": "fr",
+            "items": [
+                {
+                    "folder": "Hockey_fr",
+                    "name": "Hockey sur glace"
+                },
+                {
+                    "folder": "Football_fr",
+                    "name": "Football"
+                }
+            ]
+        },
+        {
+            "language": "uz",
+            "items": [
+                {
+                    "folder": "Hockey_uz",
+                    "name": "Xokkey"
+                },
+                {
+                    "folder": "Football_uz",
+                    "name": "Futbol"
+                }
+            ]
+        },
+        {
+            "language": "zh-Hans",
+            "items": [
+                {
+                    "folder": "Hockey_zhHans",
+                    "name": "冰球"
+                },
+                {
+                    "folder": "Football_zhHans",
+                    "name": "足球"
+                }
+            ]
+        },
+        {
+            "language": "zh-Hant",
+            "items": [
+                {
+                    "folder": "Hockey_zhHant",
+                    "name": "冰球"
+                },
+                {
+                    "folder": "Football_zhHant",
+                    "name": "足球"
+                }
             ]
         }
     ]
 }
-

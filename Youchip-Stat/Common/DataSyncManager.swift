@@ -83,12 +83,15 @@ class DataSyncManager {
                 let isActiveForMapView: Bool?
                 let labels: [FullLabelWithGroup]
                 let timeEvents: [String]
-                let position: CGPoint?
-                
+                let mapPositions: [StampMapPosition]
+
+                /// Обратная совместимость: одиночная позиция = первая из `mapPositions`.
+                var position: CGPoint? { mapPositions.first?.position }
+
                 var idTag: String { tagRefs.first?.id ?? "" }
                 var idTags: [String] { tagRefs.map(\.id) }
-                
-                init(id: UUID, tagRefs: [StampTagRef], primaryID: String?, timeStartSeconds: Double, timeFinishSeconds: Double, colorHex: String, label: String, isActiveForMapView: Bool?, labels: [FullLabelWithGroup], timeEvents: [String], position: CGPoint?) {
+
+                init(id: UUID, tagRefs: [StampTagRef], primaryID: String?, timeStartSeconds: Double, timeFinishSeconds: Double, colorHex: String, label: String, isActiveForMapView: Bool?, labels: [FullLabelWithGroup], timeEvents: [String], mapPositions: [StampMapPosition]) {
                     self.id = id
                     self.tagRefs = tagRefs
                     self.primaryID = primaryID
@@ -99,14 +102,14 @@ class DataSyncManager {
                     self.isActiveForMapView = isActiveForMapView
                     self.labels = labels
                     self.timeEvents = timeEvents
-                    self.position = position
+                    self.mapPositions = mapPositions
                 }
-                
+
                 enum CodingKeys: String, CodingKey {
                     case id, tagRefs, idTags, idTag, tagGroupId, primaryID, timeStartSeconds, timeFinishSeconds
-                    case colorHex, label, isActiveForMapView, labels, timeEvents, position
+                    case colorHex, label, isActiveForMapView, labels, timeEvents, position, mapPositions
                 }
-                
+
                 func encode(to encoder: Encoder) throws {
                     var container = encoder.container(keyedBy: CodingKeys.self)
                     try container.encode(id, forKey: .id)
@@ -119,9 +122,10 @@ class DataSyncManager {
                     try container.encodeIfPresent(isActiveForMapView, forKey: .isActiveForMapView)
                     try container.encode(labels, forKey: .labels)
                     try container.encode(timeEvents, forKey: .timeEvents)
-                    try container.encodeIfPresent(position, forKey: .position)
+                    try container.encode(mapPositions, forKey: .mapPositions)
+                    try container.encodeIfPresent(position, forKey: .position) // зеркало для старых читателей
                 }
-                
+
                 init(from decoder: Decoder) throws {
                     let container = try decoder.container(keyedBy: CodingKeys.self)
                     id = try container.decode(UUID.self, forKey: .id)
@@ -132,8 +136,14 @@ class DataSyncManager {
                     label = try container.decode(String.self, forKey: .label)
                     isActiveForMapView = try container.decodeIfPresent(Bool.self, forKey: .isActiveForMapView)
                     timeEvents = try container.decodeIfPresent([String].self, forKey: .timeEvents) ?? []
-                    position = try container.decodeIfPresent(CGPoint.self, forKey: .position)
-                    
+                    if let positions = try? container.decode([StampMapPosition].self, forKey: .mapPositions) {
+                        mapPositions = positions
+                    } else if let legacy = try container.decodeIfPresent(CGPoint.self, forKey: .position) {
+                        mapPositions = [StampMapPosition(mapFieldId: nil, position: legacy)]
+                    } else {
+                        mapPositions = []
+                    }
+
                     if let refs = try? container.decode([StampTagRef].self, forKey: .tagRefs) {
                         tagRefs = refs
                     } else if let stringTags = try? container.decode([String].self, forKey: .idTags) {
@@ -396,11 +406,11 @@ class DataSyncManager {
                         label: stamp.label,
                         labels: stamp.labels,
                         timeEvents: stamp.timeEvents,
-                        position: stamp.position,
-                        isActiveForMapView: stamp.isActiveForMapView
+                        isActiveForMapView: stamp.isActiveForMapView,
+                        mapPositions: stamp.mapPositions
                     )
                 }
-                
+
                 // Only include timeline if it has stamps
                 guard !filteredStamps.isEmpty else {
                     print("⚠️ DataSync: Skipping timeline \(timeline.name) - no valid stamps after filtering")
@@ -469,7 +479,7 @@ class DataSyncManager {
                             isActiveForMapView: stamp.isActiveForMapView,
                             labels: stamp.labels,
                             timeEvents: stamp.timeEvents,
-                            position: stamp.position
+                            mapPositions: stamp.mapPositions
                         )
                     },
                     tagIdForMode: timeline.tagIdForMode
@@ -663,7 +673,7 @@ class DataSyncManager {
                                 isActiveForMapView: stamp.isActiveForMapView,
                                 labels: stamp.labels,
                                 timeEvents: stamp.timeEvents,
-                                position: stamp.position
+                                mapPositions: stamp.mapPositions
                             )
                         },
                         tagIdForMode: timeline.tagIdForMode
@@ -751,7 +761,7 @@ class DataSyncManager {
                             isActiveForMapView: stamp.isActiveForMapView,
                             labels: stamp.labels,
                             timeEvents: stamp.timeEvents,
-                            position: stamp.position
+                            mapPositions: stamp.mapPositions
                         )
                     },
                     tagIdForMode: timeline.tagIdForMode

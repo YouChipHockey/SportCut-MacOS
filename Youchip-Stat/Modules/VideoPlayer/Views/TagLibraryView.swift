@@ -72,8 +72,32 @@ struct TagLibraryView: View {
     @State private var bindingsArrowVisibility: KeyBindingArrowVisibility = .hidden
     @State private var tagLibraryScale: Double = 1.0
     @State private var isScalePopoverPresented = false
+    /// Масштаб на момент начала pinch-жеста тачпада — база для относительного зума.
+    @State private var tagLibraryScaleGestureStart: Double? = nil
 
     private static let tagLibraryScaleRange = 0.75...3.0
+
+    private func clampedTagLibraryScale(_ value: Double) -> Double {
+        min(max(value, Self.tagLibraryScaleRange.lowerBound), Self.tagLibraryScaleRange.upperBound)
+    }
+
+    /// Зум двумя пальцами по тачпаду (pinch). Не блокирует тапы/скролл — навешивается как simultaneousGesture.
+    private var tagLibraryMagnificationGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let start = tagLibraryScaleGestureStart ?? tagLibraryScale
+                if tagLibraryScaleGestureStart == nil {
+                    tagLibraryScaleGestureStart = start
+                }
+                tagLibraryScale = clampedTagLibraryScale(start * Double(value))
+            }
+            .onEnded { value in
+                let start = tagLibraryScaleGestureStart ?? tagLibraryScale
+                tagLibraryScale = clampedTagLibraryScale(start * Double(value))
+                tagLibraryScaleGestureStart = nil
+                saveScalePreference()
+            }
+    }
     
     @EnvironmentObject private var notificationSubscriptions: ProjectNotificationSubscriptions
     
@@ -82,6 +106,9 @@ struct TagLibraryView: View {
         let tag: Tag
         var startTime: Double
         var pendingLabelIds: [String] = []
+        /// Позиция с инлайн-карты, выбранная во время записи (штампа ещё нет) — применится по завершении.
+        var pendingPosition: CGPoint? = nil
+        var pendingMapFieldId: String? = nil
     }
     
     func loadUserCollections() {
@@ -161,27 +188,41 @@ struct TagLibraryView: View {
         .onChange(of: timelineData.selectedLineID) { _ in
             self.updateTagCounts()
         }
+        .simultaneousGesture(tagLibraryMagnificationGesture)
     }
 
     private var groupedModeBody: some View {
         ScrollView {
-            LazyVStack(spacing: 8) {
-                if !tagLibrary.timeEvents.isEmpty {
-                    timeEventsSection
-                        .id("timeEvents-\(tagLibrary.timeEvents.count)")
-                }
-
-                if !tagLibrary.tagGroups.isEmpty {
-                    tagGroupsSection
-                        .id("tagGroups-\(tagLibrary.tagGroups.count)")
-                }
-
-                if tagLibrary.timeEvents.isEmpty && tagLibrary.tagGroups.isEmpty {
-                    emptyStateView
+            // On older macOS a `LazyVStack` inside a `ScrollView` can mis-measure its content height
+            // (content built from GeometryReader-based flow layouts), which leaves the list
+            // unscrollable. A plain `VStack` measures eagerly and scrolls correctly; tag collections
+            // are small enough that we don't need laziness here. New macOS keeps `LazyVStack`.
+            Group {
+                if #available(macOS 14.0, *) {
+                    LazyVStack(spacing: 8) { groupedModeContent }
+                } else {
+                    VStack(spacing: 8) { groupedModeContent }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
+        }
+    }
+
+    @ViewBuilder
+    private var groupedModeContent: some View {
+        if !tagLibrary.timeEvents.isEmpty {
+            timeEventsSection
+                .id("timeEvents-\(tagLibrary.timeEvents.count)")
+        }
+
+        if !tagLibrary.tagGroups.isEmpty {
+            tagGroupsSection
+                .id("tagGroups-\(tagLibrary.tagGroups.count)")
+        }
+
+        if tagLibrary.timeEvents.isEmpty && tagLibrary.tagGroups.isEmpty {
+            emptyStateView
         }
     }
 
@@ -352,20 +393,53 @@ struct TagLibraryView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                Slider(
-                    value: Binding(
-                        get: { tagLibraryScale },
-                        set: { newValue in
-                            tagLibraryScale = newValue
-                            saveScalePreference()
+                HStack(spacing: 8) {
+                    // Older macOS: the slider alone is fiddly, so expose explicit −/+ zoom buttons.
+                    if #unavailable(macOS 18.0) {
+                        Button {
+                            adjustTagLibraryScale(by: -Self.tagLibraryScaleStep)
+                        } label: {
+                            Image(systemName: "minus.magnifyingglass")
                         }
-                    ),
-                    in: Self.tagLibraryScaleRange
-                )
-                .frame(width: 180)
+                        .buttonStyle(.borderless)
+                        .disabled(tagLibraryScale <= Self.tagLibraryScaleRange.lowerBound + 0.0001)
+                        .help(^String.Titles.videoZoomOutHelp)
+                    }
+
+                    Slider(
+                        value: Binding(
+                            get: { tagLibraryScale },
+                            set: { newValue in
+                                tagLibraryScale = newValue
+                                saveScalePreference()
+                            }
+                        ),
+                        in: Self.tagLibraryScaleRange
+                    )
+                    .frame(width: 180)
+
+                    if #unavailable(macOS 18.0) {
+                        Button {
+                            adjustTagLibraryScale(by: Self.tagLibraryScaleStep)
+                        } label: {
+                            Image(systemName: "plus.magnifyingglass")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(tagLibraryScale >= Self.tagLibraryScaleRange.upperBound - 0.0001)
+                        .help(^String.Titles.videoZoomInHelp)
+                    }
+                }
             }
             .padding(12)
         }
+    }
+
+    /// Step for the tag-library −/+ zoom buttons (shown on older macOS alongside the slider).
+    private static let tagLibraryScaleStep: Double = 0.25
+
+    private func adjustTagLibraryScale(by delta: Double) {
+        tagLibraryScale = clampedTagLibraryScale(tagLibraryScale + delta)
+        saveScalePreference()
     }
 
     /// Показ связок: под кнопками / над кнопками / скрыть — как в редакторе.
@@ -671,11 +745,13 @@ struct TagLibraryView: View {
             tags: tagLibrary.tags,
             labels: tagLibrary.allLabels,
             timeEvents: tagLibrary.timeEvents,
+            playFields: cachedPlayFields?.fields ?? [],
             onTagTap: { tag in handleCanvasButtonTap(kind: .tag, elementId: tag.id) },
             onLabelTap: { label, commandPressed in
                 handleCanvasLabelTap(label: label, commandPressed: commandPressed)
             },
             onTimeEventTap: { event in handleCanvasButtonTap(kind: .timeEvent, elementId: event.id) },
+            onMapTap: { fieldId, normalized in handleCanvasMapTap(fieldId: fieldId, normalized: normalized) },
             activeIntervalTags: activeIntervalTags,
             hoveredTagID: hoveredTagID,
             tagCounts: tagCounts,
@@ -765,54 +841,39 @@ struct TagLibraryView: View {
                                    lockWindowsDuringFieldMap: Bool = true,
                                    onComplete: (() -> Void)? = nil) {
         if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
-            if let cached = cachedPlayFields, cached.name == collectionName,
-               let field = resolveMapField(for: tag, in: cached.fields),
-               let imageBookmark = field.imageBookmark {
-                showFieldMapSelection(
-                    tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
-                    instantAnchorTime: instantAnchorTime,
-                    overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter,
-                    lockWindows: lockWindowsDuringFieldMap,
-                    onComplete: onComplete
-                )
-                return
-            } else {
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let collectionManager = CustomCollectionManager()
-                    if collectionManager.loadCollectionFromBookmarks(named: collectionName),
-                       !collectionManager.playFields.isEmpty {
-                        let fields = collectionManager.playFields
-                        DispatchQueue.main.async {
-                            self.cachedPlayFields = (name: collectionName, fields: fields)
-                            if let field = self.resolveMapField(for: tag, in: fields),
-                               let imageBookmark = field.imageBookmark {
-                                self.showFieldMapSelection(
-                                    tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
-                                    instantAnchorTime: instantAnchorTime,
-                                    overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter,
-                                    lockWindows: lockWindowsDuringFieldMap,
-                                    onComplete: onComplete
-                                )
-                            } else {
-                                self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil,
-                                                           instantAnchorTime: instantAnchorTime,
-                                                           overrideTimeBefore: overrideTimeBefore,
-                                                           overrideTimeAfter: overrideTimeAfter)
-                                onComplete?()
-                            }
-                        }
-                    } else {
-                        DispatchQueue.main.async {
-                            self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil,
-                                                       instantAnchorTime: instantAnchorTime,
-                                                       overrideTimeBefore: overrideTimeBefore,
-                                                       overrideTimeAfter: overrideTimeAfter)
-                            onComplete?()
+            ensureCollectionFields(collectionName: collectionName) { fields in
+                let usable = self.usableMapFields(for: tag, in: fields)
+                if usable.count > 1 {
+                    // Несколько карт: показываем стопкой, точку ставим на каждой.
+                    WindowsManager.shared.showMultiFieldMapSelection(
+                        tag: tag, items: self.mapItems(from: usable), lockWindows: lockWindowsDuringFieldMap
+                    ) { normalizedByField in
+                        self.proceedWithTagAdditionMulti(
+                            tag: tag, fields: usable, normalizedByField: normalizedByField,
+                            selectedLabels: selectedLabels, instantAnchorTime: instantAnchorTime,
+                            overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter
+                        )
+                        onComplete?()
+                        if lockWindowsDuringFieldMap, self.videoManager.playbackSpeed > 0 {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.videoManager.player?.play() }
                         }
                     }
+                } else if let field = usable.first, let imageBookmark = field.imageBookmark {
+                    self.showFieldMapSelection(
+                        tag: tag, imageBookmark: imageBookmark, selectedLabels: selectedLabels,
+                        instantAnchorTime: instantAnchorTime,
+                        overrideTimeBefore: overrideTimeBefore, overrideTimeAfter: overrideTimeAfter,
+                        lockWindows: lockWindowsDuringFieldMap, onComplete: onComplete
+                    )
+                } else {
+                    self.proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil,
+                                                instantAnchorTime: instantAnchorTime,
+                                                overrideTimeBefore: overrideTimeBefore,
+                                                overrideTimeAfter: overrideTimeAfter)
+                    onComplete?()
                 }
-                return
             }
+            return
         }
 
         proceedWithTagAddition(tag: tag, selectedLabels: selectedLabels, coordinates: nil,
@@ -858,6 +919,45 @@ struct TagLibraryView: View {
             return field
         }
         return fields.first
+    }
+
+    /// Все карты, привязанные к тегу (по `tag.resolvedMapFieldIds`), с сохранением порядка.
+    /// Пустой список привязок → первая карта коллекции (обратная совместимость).
+    private func resolveMapFields(for tag: Tag, in fields: [PlayField]) -> [PlayField] {
+        let ids = tag.resolvedMapFieldIds
+        if ids.isEmpty {
+            return [fields.first].compactMap { $0 }
+        }
+        return ids.compactMap { id in fields.first(where: { $0.id == id }) }
+    }
+
+    /// Гарантирует, что карты коллекции загружены в кэш, затем выполняет `completion` на главном потоке.
+    private func ensureCollectionFields(collectionName: String, completion: @escaping ([PlayField]) -> Void) {
+        if let cached = cachedPlayFields, cached.name == collectionName {
+            completion(cached.fields)
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let manager = CustomCollectionManager()
+            let fields = manager.loadCollectionFromBookmarks(named: collectionName) ? manager.playFields : []
+            DispatchQueue.main.async {
+                if !fields.isEmpty {
+                    self.cachedPlayFields = (name: collectionName, fields: fields)
+                }
+                completion(fields)
+            }
+        }
+    }
+
+    /// Карты для разметки тега (только те, у которых есть изображение).
+    private func usableMapFields(for tag: Tag, in fields: [PlayField]) -> [PlayField] {
+        resolveMapFields(for: tag, in: fields).filter { $0.imageBookmark != nil }
+    }
+
+    private func mapItems(from fields: [PlayField]) -> [FieldMapSelectionItem] {
+        fields.compactMap { field in
+            field.imageBookmark.map { FieldMapSelectionItem(id: field.id, name: field.name, imageBookmark: $0) }
+        }
     }
 
     /// Карта, назначенная тегу, из текущего кэша карт коллекции.
@@ -913,7 +1013,71 @@ struct TagLibraryView: View {
             }
         }
     }
-    
+
+    /// Точки на нескольких картах → массив позиций (по одной на карту). Порядок — как у `fields`.
+    private func mapPositions(fields: [PlayField], normalizedByField: [String: CGPoint]) -> [StampMapPosition] {
+        fields.compactMap { field in
+            guard let norm = normalizedByField[field.id] else { return nil }
+            let position = CGPoint(x: norm.x * CGFloat(field.width), y: norm.y * CGFloat(field.height))
+            return StampMapPosition(mapFieldId: field.id, position: position)
+        }
+    }
+
+    /// Мгновенный тег с несколькими картами: ОДИН штамп со всеми позициями (по точке на карту).
+    private func proceedWithTagAdditionMulti(tag: Tag, fields: [PlayField], normalizedByField: [String: CGPoint],
+                                             selectedLabels: [FullLabelWithGroup],
+                                             instantAnchorTime: Double? = nil,
+                                             overrideTimeBefore: Double? = nil, overrideTimeAfter: Double? = nil) {
+        let anchorTime = instantAnchorTime ?? videoManager.currentTime
+        let videoDuration = max(1.0, videoManager.timelineDuration)
+        let timeBefore = overrideTimeBefore ?? tag.defaultTimeBefore
+        let timeAfter = overrideTimeAfter ?? tag.defaultTimeAfter
+        let startTime = max(0, anchorTime - timeBefore)
+        let finishTime = min(videoDuration, startTime + timeBefore + timeAfter)
+        let tagGroupId = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.id) })?.id ?? ""
+        let events = effectiveTimeEventsForStamp()
+        let positions = mapPositions(fields: fields, normalizedByField: normalizedByField)
+
+        timelineData.addStampToSelectedLine(
+            tagRefs: [StampTagRef(id: tag.id, tagGroupId: tagGroupId)],
+            primaryId: tag.primaryID,
+            name: tag.name,
+            timeStartSeconds: startTime,
+            timeFinishSeconds: finishTime,
+            color: tag.color,
+            labels: selectedLabels,
+            mapPositions: positions,
+            timeEvents: events
+        )
+
+        VideoMarkupActivityBanner.shared.notifyInstantTagAdded(tagName: tag.name, tagColorHex: tag.color)
+        DispatchQueue.main.async { self.updateTagCounts() }
+    }
+
+    /// Интервальный тег с несколькими картами: ОДИН штамп со всеми позициями (по точке на карту).
+    private func proceedWithTagAdditionIntervalMulti(tag: Tag, fields: [PlayField], normalizedByField: [String: CGPoint],
+                                                     timeStartSeconds: Double, timeFinishSeconds: Double,
+                                                     selectedLabels: [FullLabelWithGroup]) {
+        let tagGroupId = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.id) })?.id ?? ""
+        let events = effectiveTimeEventsForStamp()
+        let positions = mapPositions(fields: fields, normalizedByField: normalizedByField)
+
+        timelineData.addStampToSelectedLine(
+            tagRefs: [StampTagRef(id: tag.id, tagGroupId: tagGroupId)],
+            primaryId: tag.primaryID,
+            name: tag.name,
+            timeStartSeconds: timeStartSeconds,
+            timeFinishSeconds: timeFinishSeconds,
+            color: tag.color,
+            labels: selectedLabels,
+            mapPositions: positions,
+            timeEvents: events
+        )
+
+        VideoMarkupActivityBanner.shared.completeIntervalRecording(tagName: tag.name, tagColorHex: tag.color)
+        DispatchQueue.main.async { self.updateTagCounts() }
+    }
+
     @ViewBuilder
     private var stampLabelSheet: some View {
         if markupMode == .tagBased {
@@ -1257,6 +1421,53 @@ struct TagLibraryView: View {
                     }
                 }
         )
+
+        notificationSubscriptions.store(
+            NotificationCenter.default.publisher(for: .liveRecordingWillStop)
+                // Синхронно (без receive(on:)): финализация должна успеть записать
+                // метки в TimelineDataManager ДО того, как остановка записи захватит
+                // текущий снимок таймлайнов, иначе метки будут перетёрты старым снимком.
+                .sink { [self] _ in
+                    finalizeAllActiveIntervalTags()
+                }
+        )
+        notificationSubscriptions.store(
+            // Открыли редактор коллекций из разметки — закрываем все интервальные теги,
+            // чтобы они не «писались» дальше, пока правится коллекция.
+            NotificationCenter.default.publisher(for: .collectionEditorOpened)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] _ in
+                    finalizeAllActiveIntervalTags()
+                }
+        )
+    }
+
+    /// Закрывает все открытые интервальные теги по текущему времени записи и пишет
+    /// их на таймлайн. Вызывается при завершении записи с камеры — иначе теги
+    /// «пишутся» дальше и не сохраняются.
+    private func finalizeAllActiveIntervalTags() {
+        guard !activeIntervalTags.isEmpty else { return }
+
+        let videoDuration = max(1.0, videoManager.timelineDuration)
+        let stopTime = videoManager.currentTime
+
+        // Забираем и очищаем список сразу, чтобы UI сбросил состояние «идёт запись».
+        let tagsToClose = activeIntervalTags
+        activeIntervalTags.removeAll()
+        pendingIntervalClosureRange = nil
+        showLabelSheet = false
+
+        for activeTag in tagsToClose {
+            let tag = activeTag.tag
+            let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
+            let end = min(videoDuration, stopTime + tag.defaultTimeAfter)
+            let timeStart = min(start, end)
+            let timeFinish = max(start, end)
+            // useFieldMap: false — при завершении записи нельзя открывать интерактивный
+            // выбор карты поля; пишем метку сразу, синхронно. Завершение записи в
+            // баннере делает сам proceedWithTagAdditionInterval.
+            addTagToTimelineInterval(tag: tag, timeStartSeconds: timeStart, timeFinishSeconds: timeFinish, selectedLabels: [], useFieldMap: false)
+        }
     }
     
     private func onDisappearCleanup() {
@@ -1404,34 +1615,28 @@ struct TagLibraryView: View {
     
     private func addTagToTimelineInterval(tag: Tag, timeStartSeconds: Double, timeFinishSeconds: Double, selectedLabels: [FullLabelWithGroup], useFieldMap: Bool = true, lockWindowsDuringFieldMap: Bool = true) {
         if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
-                if let cached = cachedPlayFields, cached.name == collectionName,
-                   let field = resolveMapField(for: tag, in: cached.fields),
-                   let imageBookmark = field.imageBookmark {
-                    showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels, lockWindows: lockWindowsDuringFieldMap)
-                    return
-                } else {
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        let collectionManager = CustomCollectionManager()
-                        if collectionManager.loadCollectionFromBookmarks(named: collectionName),
-                           !collectionManager.playFields.isEmpty {
-                            let fields = collectionManager.playFields
-                            DispatchQueue.main.async {
-                                self.cachedPlayFields = (name: collectionName, fields: fields)
-                                if let field = self.resolveMapField(for: tag, in: fields),
-                                   let imageBookmark = field.imageBookmark {
-                                    self.showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels, lockWindows: lockWindowsDuringFieldMap)
-                                } else {
-                                    self.proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
-                                }
-                            }
-                        } else {
-                            DispatchQueue.main.async {
-                                self.proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
-                            }
+            ensureCollectionFields(collectionName: collectionName) { fields in
+                let usable = self.usableMapFields(for: tag, in: fields)
+                if usable.count > 1 {
+                    WindowsManager.shared.showMultiFieldMapSelection(
+                        tag: tag, items: self.mapItems(from: usable), lockWindows: lockWindowsDuringFieldMap
+                    ) { normalizedByField in
+                        self.proceedWithTagAdditionIntervalMulti(
+                            tag: tag, fields: usable, normalizedByField: normalizedByField,
+                            timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds,
+                            selectedLabels: selectedLabels
+                        )
+                        if lockWindowsDuringFieldMap, self.videoManager.playbackSpeed > 0 {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.videoManager.player?.play() }
                         }
                     }
-                    return
+                } else if let field = usable.first, let imageBookmark = field.imageBookmark {
+                    self.showFieldMapSelectionInterval(tag: tag, imageBookmark: imageBookmark, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, selectedLabels: selectedLabels, lockWindows: lockWindowsDuringFieldMap)
+                } else {
+                    self.proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
                 }
+            }
+            return
         }
         proceedWithTagAdditionInterval(tag: tag, timeStartSeconds: timeStartSeconds, timeFinishSeconds: timeFinishSeconds, coordinates: nil, selectedLabels: selectedLabels)
     }
@@ -1550,7 +1755,8 @@ struct TagLibraryView: View {
             collectionId: info.id,
             tags: tagLibrary.tags,
             labels: tagLibrary.allLabels,
-            timeEvents: tagLibrary.timeEvents
+            timeEvents: tagLibrary.timeEvents,
+            playFields: cachedPlayFields?.fields ?? []
         ) {
             keyBindingRuntime.configure(layout: stored)
         }
@@ -1609,7 +1815,7 @@ struct TagLibraryView: View {
         }
 
         if kind == .timeEvent {
-            videoManager.player?.pause()
+            // Нажатие/снятие общего события не паузит видео.
             _ = keyBindingRuntime.handleButtonTap(kind: kind, elementId: elementId)
             if !keyBindingRuntime.highlightModeActive {
                 keyBindingRuntime.togglePendingTimeEvent(id: elementId)
@@ -1627,6 +1833,8 @@ struct TagLibraryView: View {
             let isStopping = activeIntervalTags.contains(where: { $0.tag.id == tag.id })
             if isStopping {
                 keyBindingRuntime.applyExclusiveOnTagDeactivation(tagId: elementId)
+                // Гасим подсветку лейблов, поднятую этим тегом при старте записи.
+                keyBindingRuntime.clearHighlightIfOriginatedFromTag(elementId)
             } else {
                 _ = keyBindingRuntime.handleButtonTap(kind: .tag, elementId: elementId)
             }
@@ -1695,6 +1903,11 @@ struct TagLibraryView: View {
             useFieldMap: isMapTag,
             lockWindowsDuringFieldMap: false
         )
+        // Позиция с инлайн-карты, накопленная во время записи, — применяем к только что созданному штампу.
+        if let pos = activeTag.pendingPosition, let fid = activeTag.pendingMapFieldId,
+           let stampID = timelineData.lastAddedStampID, let (lineID, stamp) = locateStamp(stampID: stampID) {
+            timelineData.updateStampPosition(lineID: lineID, stampID: stamp.id, position: pos, mapFieldId: fid)
+        }
     }
 
     private func handleIntervalTagTapInFreeMode(_ tag: Tag, triggeringLabelId: String? = nil) {
@@ -1744,6 +1957,64 @@ struct TagLibraryView: View {
         return nil
     }
 
+    // MARK: - Инлайн-карта на холсте
+
+    /// Клик по зоне карты в раскладке связок: ставит позицию тегу (как лейбл) и запускает связки карты.
+    private func handleCanvasMapTap(fieldId: String, normalized: CGPoint) {
+        guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
+        wireRuntimeCallbacks()
+        keyBindingRuntime.handleMapTap(mapId: fieldId, normalized: normalized)
+    }
+
+    /// Ставит позицию на карте нужному тегу-штампу (логика выбора штампа — как у лейблов).
+    /// Если целевой тег ещё пишется как интервал (штампа нет), позиция копится в pending —
+    /// как и лейблы — и применится по завершении записи.
+    private func attachMapPosition(fieldId: String, normalized: CGPoint, allowedTagIds: Set<String>?) {
+        guard isKeyBindingsCanvasMode,
+              let field = (cachedPlayFields?.fields ?? []).first(where: { $0.id == fieldId }) else { return }
+        let position = CGPoint(x: normalized.x * CGFloat(field.width), y: normalized.y * CGFloat(field.height))
+
+        // 0. Активная интервальная запись (штампа ещё нет) — копим позицию в pending.
+        if let allowed = allowedTagIds {
+            if let idx = activeIntervalTags.lastIndex(where: { allowed.contains($0.tag.id) }) {
+                setPendingMapPosition(position, fieldId: fieldId, atIntervalIndex: idx); return
+            }
+        } else if let anchor = keyBindingRuntime.anchorTagId,
+                  let idx = activeIntervalTags.lastIndex(where: { $0.tag.id == anchor }) {
+            setPendingMapPosition(position, fieldId: fieldId, atIntervalIndex: idx); return
+        } else if allowedTagIds == nil, keyBindingRuntime.anchorTagId == nil,
+                  let idx = activeIntervalTags.indices.last {
+            setPendingMapPosition(position, fieldId: fieldId, atIntervalIndex: idx); return
+        }
+
+        var target: (lineID: UUID, stamp: TimelineStamp)? = nil
+        // 1. Якорь цепочки подсветки (если он на таймлайне).
+        if let anchor = keyBindingRuntime.anchorTagId {
+            target = locateLastStamp(containingTag: anchor)
+        }
+        // 2. Эксклюзив: последний по времени штамп разрешённого тега.
+        if target == nil, let allowed = allowedTagIds {
+            var best: (lineID: UUID, stamp: TimelineStamp)? = nil
+            for line in timelineData.lines {
+                for stamp in line.stamps where stamp.idTags.contains(where: { allowed.contains($0) }) {
+                    if best == nil || stamp.timeStartSeconds > best!.stamp.timeStartSeconds { best = (line.id, stamp) }
+                }
+            }
+            target = best
+        }
+        // 3. Со всеми тегами: крайний добавленный штамп.
+        if target == nil, allowedTagIds == nil, let stampID = timelineData.lastAddedStampID {
+            target = locateStamp(stampID: stampID)
+        }
+        guard let t = target else { return }
+        timelineData.updateStampPosition(lineID: t.lineID, stampID: t.stamp.id, position: position, mapFieldId: fieldId)
+    }
+
+    private func setPendingMapPosition(_ position: CGPoint, fieldId: String, atIntervalIndex idx: Int) {
+        activeIntervalTags[idx].pendingPosition = position
+        activeIntervalTags[idx].pendingMapFieldId = fieldId
+    }
+
     /// Дописывает лейблы в штамп без дублей.
     private func mergeLabels(_ newLabelIds: [String], intoLineID lineID: UUID, stamp: TimelineStamp) {
         let newLabels = buildFullLabels(from: newLabelIds)
@@ -1755,20 +2026,27 @@ struct TagLibraryView: View {
         timelineData.updateStampLabels(lineID: lineID, stampID: stamp.id, newLabels: merged)
     }
 
-    /// Эксклюзивный лейбл: привязываем к крайнему тегу ТОЛЬКО если он входит в разрешённые (эксклюзивные партнёры).
+    /// Эксклюзивный лейбл привязывается к своему тегу независимо от того, когда его нажали:
+    /// ищем на таймлайне ПОСЛЕДНИЙ по времени штамп любого из эксклюзивных партнёров и ставим на него.
+    /// Если партнёров несколько — попадёт на последний отмеченный такой тег.
     private func attachLabelsToLastStampIfTagMatches(labelIds: [String], allowedTagIds: Set<String>) {
         guard isKeyBindingsCanvasMode, !labelIds.isEmpty else { return }
-        // Крайний = активная интервальная запись, если она есть.
-        if let idx = activeIntervalTags.indices.last {
-            if allowedTagIds.contains(activeIntervalTags[idx].tag.id) {
-                appendPendingLabels(labelIds, toIntervalAt: idx)
-            }
+        // Активная интервальная запись допустимого тега — самый «свежий» тег (ещё пишется).
+        if let idx = activeIntervalTags.lastIndex(where: { allowedTagIds.contains($0.tag.id) }) {
+            appendPendingLabels(labelIds, toIntervalAt: idx)
             return
         }
-        guard let stampID = timelineData.lastAddedStampID,
-              let (lineID, stamp) = locateStamp(stampID: stampID),
-              stamp.idTags.contains(where: { allowedTagIds.contains($0) }) else { return }
-        mergeLabels(labelIds, intoLineID: lineID, stamp: stamp)
+        // Иначе — последний по времени начала штамп любого разрешённого тега во всех линиях.
+        var best: (lineID: UUID, stamp: TimelineStamp)? = nil
+        for line in timelineData.lines {
+            for stamp in line.stamps where stamp.idTags.contains(where: { allowedTagIds.contains($0) }) {
+                if best == nil || stamp.timeStartSeconds > best!.stamp.timeStartSeconds {
+                    best = (line.id, stamp)
+                }
+            }
+        }
+        guard let target = best else { return }
+        mergeLabels(labelIds, intoLineID: target.lineID, stamp: target.stamp)
     }
 
     /// Копит лейблы в активную интервальную запись (штампа ещё нет).
@@ -1833,6 +2111,10 @@ struct TagLibraryView: View {
         }
         keyBindingRuntime.onAttachLabelsIfTagMatches = { [self] labelIds, allowedTagIds, onDone in
             attachLabelsToLastStampIfTagMatches(labelIds: labelIds, allowedTagIds: allowedTagIds)
+            onDone?()
+        }
+        keyBindingRuntime.onAttachMapPosition = { [self] fieldId, normalized, allowedTagIds, onDone in
+            attachMapPosition(fieldId: fieldId, normalized: normalized, allowedTagIds: allowedTagIds)
             onDone?()
         }
     }

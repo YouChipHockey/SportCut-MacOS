@@ -10,9 +10,16 @@ import SwiftUI
 struct VideoThumbnailView: View {
     let file: FilesFile
     @ObservedObject var viewModel: VideosViewModel
-    
+    /// Идёт выбор проектов для объединения — карточка кликается вместо открытия.
+    var isSelectionMode: Bool = false
+    /// Позиция проекта в очереди склейки (1, 2, 3…), nil — не выбран.
+    var selectionOrder: Int? = nil
+    var onToggleSelection: () -> Void = {}
+
     @State private var isHovered = false
-    
+
+    private var isSelected: Bool { selectionOrder != nil }
+
     private var isFavorite: Bool {
         file.videoData.isFavorite ?? false
     }
@@ -34,8 +41,8 @@ struct VideoThumbnailView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                isHovered ? Color.blue.opacity(0.3) : Color.clear,
-                                lineWidth: 2
+                                isSelected ? Color.accentColor : (isHovered ? Color.blue.opacity(0.3) : Color.clear),
+                                lineWidth: isSelected ? 3 : 2
                             )
                     )
                 
@@ -85,12 +92,15 @@ struct VideoThumbnailView: View {
                                 .frame(height: 120)
                         }
                         
+                        if isSelectionMode {
+                            selectionOverlay
+                        } else {
                         ZStack {
                             Rectangle()
                                 .fill(Color.black.opacity(0.3))
                                 .opacity(isHovered ? 1 : 0)
                                 .animation(.easeInOut(duration: 0.2), value: isHovered)
-                            
+
                             Button(action: {
                                 if file.isBroken {
                                     viewModel.action.send(.showRebindAlert(file: file))
@@ -113,6 +123,7 @@ struct VideoThumbnailView: View {
                             .buttonStyle(PlainButtonStyle())
                             .scaleEffect(isHovered ? 1.1 : 1.0)
                             .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        }
                         }
                     }
                     .clipShape(
@@ -166,11 +177,39 @@ struct VideoThumbnailView: View {
                 isHovered = hovering
             }
             .contextMenu {
-                contextMenuContent
+                if !isSelectionMode {
+                    contextMenuContent
+                }
             }
         }
     }
-    
+
+    /// Слой выбора: затемнение и номер позиции в очереди склейки.
+    private var selectionOverlay: some View {
+        ZStack {
+            Rectangle()
+                .fill(Color.black.opacity(isSelected ? 0.45 : 0.15))
+
+            if let order = selectionOrder {
+                Text("\(order)")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(Color.accentColor))
+                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+            } else {
+                Image(systemName: "circle")
+                    .font(.system(size: 34, weight: .thin))
+                    .foregroundColor(.white.opacity(0.9))
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onToggleSelection()
+        }
+    }
+
+
     private var contextMenuContent: some View {
         Group {
             if file.isBroken {

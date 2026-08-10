@@ -17,6 +17,7 @@ struct VideoPlayerView: View {
     @ObservedObject var viewModel: VideoPlayerViewModel
     @ObservedObject var videoManager: VideoPlayerManager
     @ObservedObject private var markupBanner = VideoMarkupActivityBanner.shared
+    @ObservedObject private var windowLayout = MarkupWindowLayoutStore.shared
     
     var body: some View {
         GeometryReader { geometry in
@@ -109,32 +110,21 @@ struct VideoPlayerView: View {
     // MARK: - Custom Normal Toolbar
     
     private var customNormalToolbar: some View {
-        HStack(spacing: 12) {
-            editorButton
-            
-            duplicateVideoWindowButton
-            
-            // Live broadcast controls
-            if videoManager.isLiveMode {
-                liveBroadcastControls
-            }
-
-            Toggle(isOn: Binding(
-                get: { markupBanner.isHistoryEnabled },
-                set: { markupBanner.setHistoryEnabled($0) }
-            )) {
-                HStack(spacing: 5) {
-                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                    Text(^String.Titles.videoHistoryToggle)
+        Group {
+            // Кнопки переносятся на новую строку, когда не влезают в ширину окна (иначе при
+            // сужении окна тулбар «распирало»). Flow-раскладка доступна с macOS 13; на 12 — обычный HStack.
+            if #available(macOS 13.0, *) {
+                ToolbarFlowLayout(horizontalSpacing: 12, verticalSpacing: 8) {
+                    toolbarControls
+                    zoomControls
                 }
-                .font(.system(size: 12, weight: .medium))
+            } else {
+                HStack(spacing: 12) {
+                    toolbarControls
+                    Spacer()
+                    zoomControls
+                }
             }
-            .toggleStyle(.switch)
-            .help(^String.Titles.videoHistoryHelp)
-            
-            Spacer()
-            
-            zoomControls
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -147,6 +137,45 @@ struct VideoPlayerView: View {
                     alignment: .bottom
                 )
         )
+    }
+
+    /// Кнопки тулбара (без зума) — общий набор для flow- и HStack-раскладок.
+    @ViewBuilder
+    private var toolbarControls: some View {
+        editorButton
+
+        duplicateVideoWindowButton
+
+        // Live broadcast controls
+        if videoManager.isLiveMode {
+            liveBroadcastControls
+        }
+
+        Toggle(isOn: Binding(
+            get: { markupBanner.isHistoryEnabled },
+            set: { markupBanner.setHistoryEnabled($0) }
+        )) {
+            HStack(spacing: 5) {
+                Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                Text(^String.Titles.videoHistoryToggle)
+            }
+            .font(.system(size: 12, weight: .medium))
+        }
+        .toggleStyle(.switch)
+        .help(^String.Titles.videoHistoryHelp)
+
+        Toggle(isOn: Binding(
+            get: { windowLayout.isLocked },
+            set: { windowLayout.setLocked($0) }
+        )) {
+            HStack(spacing: 5) {
+                Image(systemName: windowLayout.isLocked ? "lock.fill" : "lock.open")
+                Text(^String.Titles.videoLockWindowsToggle)
+            }
+            .font(.system(size: 12, weight: .medium))
+        }
+        .toggleStyle(.switch)
+        .help(^String.Titles.videoLockWindowsHelp)
     }
     
     // MARK: - Live Broadcast Controls
@@ -241,11 +270,19 @@ struct VideoPlayerView: View {
     private func liveStreamContent(geometry: GeometryProxy) -> some View {
         ZStack {
             if videoManager.isBroadcastActive {
-                DirectCameraPreviewView()
+                DirectCameraPreviewView(
+                    scale: viewModel.state.videoScale,
+                    offset: viewModel.state.videoOffset
+                )
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .gesture(videoGestures(geometry: geometry))
             } else {
-                DirectCameraPreviewView()
+                DirectCameraPreviewView(
+                    scale: viewModel.state.videoScale,
+                    offset: viewModel.state.videoOffset
+                )
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .gesture(videoGestures(geometry: geometry))
                     .overlay(
                         ZStack {
                             Color.black.opacity(0.3)
@@ -520,9 +557,11 @@ struct VideoPlayerView: View {
                     .gesture(videoGestures(geometry: geometry))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
-                CustomVideoPlayer(player: player)
-                    .scaleEffect(viewModel.state.videoScale)
-                    .offset(viewModel.state.videoOffset)
+                CustomVideoPlayer(
+                    player: player,
+                    scale: viewModel.state.videoScale,
+                    offset: viewModel.state.videoOffset
+                )
                     .gesture(videoGestures(geometry: geometry))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
@@ -720,33 +759,130 @@ struct JoystickView: View {
     }
 }
 
+// MARK: - Toolbar Flow Layout
+
+/// Раскладка-«поток»: кладёт дочерние вью в строку, а не влезающие переносит на следующую.
+/// Используется для тулбара окна разметки, чтобы при сужении окна кнопки переходили на новую строку.
+@available(macOS 13.0, *)
+struct ToolbarFlowLayout: Layout {
+    var horizontalSpacing: CGFloat = 8
+    var verticalSpacing: CGFloat = 8
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        let rows = computeRows(maxWidth: maxWidth, subviews: subviews)
+        let height = rows.enumerated().reduce(CGFloat.zero) { partial, item in
+            partial + item.element.height + (item.offset > 0 ? verticalSpacing : 0)
+        }
+        let width = proposal.width ?? (rows.map(\.width).max() ?? 0)
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
+        let rows = computeRows(maxWidth: bounds.width, subviews: subviews)
+        var y = bounds.minY
+        for row in rows {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(size)
+                )
+                x += size.width + horizontalSpacing
+            }
+            y += row.height + verticalSpacing
+        }
+    }
+
+    private func computeRows(maxWidth: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let projectedWidth = current.indices.isEmpty
+                ? size.width
+                : current.width + horizontalSpacing + size.width
+            if !current.indices.isEmpty && projectedWidth > maxWidth {
+                rows.append(current)
+                current = Row(indices: [index], width: size.width, height: size.height)
+            } else {
+                current.indices.append(index)
+                current.width = projectedWidth
+                current.height = max(current.height, size.height)
+            }
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
+    }
+}
+
 // MARK: - Custom Video Player
+
+/// NSView that hosts an AVPlayerLayer as a sublayer and keeps it sized + zoom-transformed.
+/// Sizing and the zoom transform are applied in `layout()` (called by AppKit on the first real
+/// layout and on every resize), so the video shows immediately at scale 1.0 — earlier we sized the
+/// layer only from `updateNSView`, whose first call happens before the view has real bounds, leaving
+/// a black frame until the next zoom change.
+final class ZoomablePlayerNSView: NSView {
+    let playerLayer = AVPlayerLayer()
+    var zoomScale: CGFloat = 1.0 { didSet { needsLayout = true } }
+    var zoomOffset: CGSize = .zero { didSet { needsLayout = true } }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        playerLayer.videoGravity = .resizeAspect
+        layer?.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        // Use bounds+position (not frame): frame is undefined while a non-identity transform is set.
+        playerLayer.bounds = CGRect(origin: .zero, size: bounds.size)
+        playerLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        // Scale about the layer center (anchorPoint 0.5,0.5), then translate by the pan offset.
+        // Layer y-axis points up, so negate height to match SwiftUI's downward-positive offset.
+        let transform = CGAffineTransform(translationX: zoomOffset.width, y: -zoomOffset.height)
+            .scaledBy(x: zoomScale, y: zoomScale)
+        playerLayer.setAffineTransform(transform)
+        CATransaction.commit()
+    }
+}
 
 struct CustomVideoPlayer: NSViewRepresentable {
     let player: AVPlayer
-    
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        let playerLayer = AVPlayerLayer(player: player)
-        playerLayer.videoGravity = .resizeAspect
-        view.layer = playerLayer
-        view.wantsLayer = true
-        context.coordinator.playerLayer = playerLayer
+    /// Zoom factor applied directly to the AVPlayerLayer (SwiftUI `.scaleEffect` doesn't reliably
+    /// transform an AVPlayerLayer, and AppKit resets the host layer's transform on layout).
+    var scale: CGFloat = 1.0
+    /// Pan offset in view points (positive width → right, positive height → down, matching SwiftUI `.offset`).
+    var offset: CGSize = .zero
+
+    func makeNSView(context: Context) -> ZoomablePlayerNSView {
+        let view = ZoomablePlayerNSView(frame: .zero)
+        view.playerLayer.player = player
+        view.zoomScale = scale
+        view.zoomOffset = offset
         return view
     }
-    
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if let playerLayer = context.coordinator.playerLayer {
-            playerLayer.frame = nsView.bounds
+
+    func updateNSView(_ nsView: ZoomablePlayerNSView, context: Context) {
+        if nsView.playerLayer.player !== player {
+            nsView.playerLayer.player = player
         }
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-    
-    class Coordinator {
-        var playerLayer: AVPlayerLayer?
+        nsView.zoomScale = scale
+        nsView.zoomOffset = offset
     }
 }
 
@@ -774,54 +910,70 @@ struct LivePreviewView: NSViewRepresentable {
 
 // MARK: - Direct Camera Preview (recording-independent)
 
+/// NSView that hosts an AVCaptureVideoPreviewLayer and keeps it sized + zoom-transformed in
+/// `layout()`. Sizing in `layout()` (not just `updateNSView`) makes the camera image appear
+/// immediately at scale 1.0 instead of only after the first zoom change.
+final class ZoomableCameraPreviewNSView: NSView {
+    private(set) var previewLayer: AVCaptureVideoPreviewLayer?
+    var zoomScale: CGFloat = 1.0 { didSet { needsLayout = true } }
+    var zoomOffset: CGSize = .zero { didSet { needsLayout = true } }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// Attaches (or re-attaches) the preview layer for the given capture session. No-op if unchanged.
+    func setSession(_ session: AVCaptureSession?) {
+        if previewLayer?.session === session { return }
+        previewLayer?.removeFromSuperlayer()
+        previewLayer = nil
+        guard let session = session else { return }
+        let layer = AVCaptureVideoPreviewLayer(session: session)
+        layer.videoGravity = .resizeAspect
+        self.layer?.addSublayer(layer)
+        previewLayer = layer
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        guard let previewLayer = previewLayer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        previewLayer.bounds = CGRect(origin: .zero, size: bounds.size)
+        previewLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        let transform = CGAffineTransform(translationX: zoomOffset.width, y: -zoomOffset.height)
+            .scaledBy(x: zoomScale, y: zoomScale)
+        previewLayer.setAffineTransform(transform)
+        CATransaction.commit()
+    }
+}
+
 /// Wraps AVCaptureVideoPreviewLayer in SwiftUI for smooth camera preview
 /// independent of HaishinKit recording pipeline. Uses a separate AVCaptureSession
 /// so H.264 encoding back-pressure never affects preview FPS.
 struct DirectCameraPreviewView: NSViewRepresentable {
-    
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        view.wantsLayer = true
-        if let session = LiveStreamManager.shared.directPreviewSession {
-            let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-            previewLayer.videoGravity = .resizeAspect
-            previewLayer.frame = view.bounds
-            previewLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-            view.layer?.addSublayer(previewLayer)
-            context.coordinator.previewLayer = previewLayer
-        }
+    /// Zoom factor applied directly to the preview layer (live markup zoom). Defaults to 1.0 so the
+    /// small side-panel preview stays un-zoomed.
+    var scale: CGFloat = 1.0
+    /// Pan offset in view points (positive width → right, positive height → down, matching SwiftUI `.offset`).
+    var offset: CGSize = .zero
+
+    func makeNSView(context: Context) -> ZoomableCameraPreviewNSView {
+        let view = ZoomableCameraPreviewNSView(frame: .zero)
+        view.setSession(LiveStreamManager.shared.directPreviewSession)
+        view.zoomScale = scale
+        view.zoomOffset = offset
         return view
     }
-    
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if let existing = context.coordinator.previewLayer,
-           existing.session !== LiveStreamManager.shared.directPreviewSession {
-            existing.removeFromSuperlayer()
-            context.coordinator.previewLayer = nil
-        }
-        
-        if context.coordinator.previewLayer == nil,
-           let session = LiveStreamManager.shared.directPreviewSession {
-            let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-            previewLayer.videoGravity = .resizeAspect
-            previewLayer.frame = nsView.bounds
-            previewLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-            nsView.layer?.addSublayer(previewLayer)
-            context.coordinator.previewLayer = previewLayer
-        }
-        
-        if let layer = context.coordinator.previewLayer {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            layer.frame = nsView.bounds
-            CATransaction.commit()
-        }
-    }
-    
-    func makeCoordinator() -> Coordinator { Coordinator() }
-    
-    class Coordinator {
-        var previewLayer: AVCaptureVideoPreviewLayer?
+
+    func updateNSView(_ nsView: ZoomableCameraPreviewNSView, context: Context) {
+        nsView.setSession(LiveStreamManager.shared.directPreviewSession)
+        nsView.zoomScale = scale
+        nsView.zoomOffset = offset
     }
 }
 

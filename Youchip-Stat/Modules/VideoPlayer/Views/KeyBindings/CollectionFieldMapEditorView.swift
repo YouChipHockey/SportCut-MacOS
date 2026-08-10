@@ -145,18 +145,10 @@ struct CollectionFieldMapEditorView: View {
                                 Circle().fill(Color(hex: tag.color)).frame(width: 10, height: 10)
                                 Text(tag.name).font(.caption)
                                 Spacer()
-                                // Выбор карты для тега (если карт несколько и включена карта).
+                                // Выбор карт для тега (мультивыбор): точку нужно поставить
+                                // на каждой выбранной карте. Показываем, только если карт несколько.
                                 if (tag.mapEnabled ?? false), collectionManager.playFields.count > 1 {
-                                    Picker("", selection: Binding(
-                                        get: { tag.mapFieldId ?? collectionManager.playFields.first?.id ?? "" },
-                                        set: { collectionManager.updateTagMapField(id: tag.id, mapFieldId: $0) }
-                                    )) {
-                                        ForEach(collectionManager.playFields, id: \.id) { field in
-                                            Text(field.name).tag(field.id)
-                                        }
-                                    }
-                                    .labelsHidden()
-                                    .frame(width: 130)
+                                    mapMultiSelectMenu(for: tag)
                                 }
                                 Toggle("", isOn: Binding(
                                     get: { tag.mapEnabled ?? false },
@@ -171,6 +163,49 @@ struct CollectionFieldMapEditorView: View {
                 }
             }
         }
+    }
+
+    /// Меню мультивыбора карт для тега. Отмеченные карты — те, на которых нужно
+    /// поставить точку при разметке (на каждую создаётся отдельный штамп).
+    @ViewBuilder
+    private func mapMultiSelectMenu(for tag: Tag) -> some View {
+        let selectedIds = Set(tag.resolvedMapFieldIds.isEmpty
+                              ? [collectionManager.playFields.first?.id].compactMap { $0 }
+                              : tag.resolvedMapFieldIds)
+        Menu {
+            ForEach(collectionManager.playFields, id: \.id) { field in
+                Button {
+                    collectionManager.toggleTagMapField(id: tag.id, mapFieldId: field.id)
+                } label: {
+                    HStack {
+                        Text(field.name)
+                        if selectedIds.contains(field.id) {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "map")
+                    .font(.system(size: 10))
+                Text(mapSelectionSummary(selectedIds: selectedIds))
+                    .font(.caption)
+                    .lineLimit(1)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .frame(maxWidth: 160, alignment: .trailing)
+    }
+
+    /// Короткая подпись для кнопки мультивыбора карт: имя единственной карты или «N карт».
+    private func mapSelectionSummary(selectedIds: Set<String>) -> String {
+        if selectedIds.count == 1, let only = selectedIds.first,
+           let field = collectionManager.playFields.first(where: { $0.id == only }) {
+            return field.name
+        }
+        return String.Titles.collectionsTagsCount.format(selectedIds.count, collectionManager.playFields.count)
     }
 
     private func dimensionField(title: String, value: Double, onChange: @escaping (Double) -> Void) -> some View {

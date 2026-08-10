@@ -14,7 +14,11 @@ import AppKit
 struct EditorToolsPanel: View {
     @ObservedObject var drawingState: EditorDrawingState
     let onSelectTool: (EditorTool) -> Void
-    
+    /// Показывать ли инструмент «Картинки» (только в самостоятельном редакторе).
+    var showImagesTool: Bool = false
+    /// Запрос выбора картинки для добавления на холст.
+    var onAddImage: (() -> Void)? = nil
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -107,6 +111,38 @@ struct EditorToolsPanel: View {
                     
                     // TextBox button
                     toolButton(tool: .textBox, icon: "text.bubble", label: ^String.Titles.editorTextBox)
+
+                    // Инструмент «Картинки» — только в самостоятельном редакторе.
+                    if showImagesTool {
+                        Button(action: {
+                            if drawingState.isCreatingTelestrationObject || drawingState.pendingTelestrationObject != nil {
+                                drawingState.cancelTelestrationObjectCreation()
+                            }
+                            if drawingState.isCreatingShape || drawingState.pendingShape != nil {
+                                drawingState.cancelShapeCreation()
+                            }
+                            if drawingState.isCreatingTextBox || drawingState.pendingTextBox != nil {
+                                drawingState.cancelTextBoxCreation()
+                            }
+                            onSelectTool(.image)
+                            onAddImage?()
+                        }) {
+                            HStack {
+                                Image(systemName: "photo.badge.plus")
+                                Text(^String.Titles.editorImagesTool)
+                                Spacer()
+                                if drawingState.currentTool == .image {
+                                    Image(systemName: "checkmark").foregroundColor(.blue)
+                                }
+                            }
+                            .padding(8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(drawingState.currentTool == .image ? Color.blue.opacity(0.1) : Color.clear)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 
                 Divider()

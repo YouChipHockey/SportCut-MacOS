@@ -1,0 +1,28 @@
+{
+  "events": [
+    {
+      "id": "2899bfb3-0a40-4afa-a430-d97bf3143f34",
+      "name": "Koʻpchilikda oʻyin"
+    },
+    {
+      "id": "0d05f06e-716b-43ad-bdd6-724e6b25e199",
+      "name": "Kamchilikda oʻyin"
+    },
+    {
+      "id": "57750b31-45b7-47f5-8706-fd41be2857a3",
+      "name": "Teng tarkibda"
+    },
+    {
+      "id": "4579bfb3-0a40-4afa-a430-d97bf3143f34",
+      "name": "1-davr"
+    },
+    {
+      "id": "0d05df6e-716b-43ad-bdd6-724e6b25e199",
+      "name": "2-davr"
+    },
+    {
+      "id": "57750231-45b7-47f5-8706-fd41be2857a3",
+      "name": "3-davr"
+    }
+  ]
+}

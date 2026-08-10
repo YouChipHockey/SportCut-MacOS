@@ -49,6 +49,7 @@ struct StampCommentEditSheet: View {
         .frame(width: 360)
         .onAppear {
             HotKeyManager.shared.isEnabled = false
+            if let existing = eventMonitor { NSEvent.removeMonitor(existing); eventMonitor = nil }
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 guard event.keyCode == 36 else { return event } // 36 = Return
                 if event.modifierFlags.contains(.shift) {

@@ -226,7 +226,7 @@ struct ViewerVideoView: View {
     }
     
     private func setupPlayer() {
-        player = AVPlayer()
+        player = AVPlayer().applyDebugMuteIfNeeded()
         playlistManager.setPlayer(player)
         isPlayerReady = true
     }

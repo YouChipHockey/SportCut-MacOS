@@ -221,6 +221,7 @@
 "LayoutAnalyticsPng" = "Balisage_Analyses.png";  // ^String.Titles.layoutAnalyticsPng
 "LayoutAnalytics" = "Analyses de balisage";  // ^String.Titles.layoutAnalytics
 "SelectMapPositionForTag" = "Sélectionner la position sur la carte pour l'étiquette :";  // ^String.Titles.selectMapPositionForTag
+"FieldMapMarkAllHint" = "Marquez un point sur chaque carte pour continuer";  // ^String.Titles.fieldMapMarkAllHint
 "TagLibrary" = "Bibliothèque d'étiquettes";  // ^String.Titles.tagLibrary
 "FieldMapVisualizationSettings" = "Paramètres de visualisation de la carte de terrain";  // ^String.Titles.fieldMapVisualizationSettings
 "EditScreenshot" = "Modifier la capture d'écran";  // ^String.Titles.editScreenshot
@@ -399,6 +400,9 @@
 "SubscriptionActive" = "Vous avez un abonnement actif";  // ^String.Titles.subscriptionActive
 "VideoUploadLimit" = "Vous pouvez télécharger %d vidéos supplémentaires sur %d";  // ^String.Titles.videoUploadLimit
 "VideoUploadLimitReached" = "Limite de téléchargement de vidéos atteinte. Connectez-vous pour télécharger plus de fichiers.";  // ^String.Titles.videoUploadLimitReached
+"ViewingSessionsLimit" = "Visionnage : %d sur %d";
+"ViewingLimitReachedTitle" = "Limite du mode visionnage atteinte";
+"ViewingLimitReachedMessage" = "Sans licence active, vous ne pouvez pas créer de nouveaux projets de visionnage ni ajouter de sources aux projets existants. Activez une licence pour lever la limite.";
 "RenewLicense" = "Renouveler la licence";  // ^String.Titles.renewLicense
 "MidDuration" = "Durée moyenne";  // ^String.Titles.midDuration
 "AIReports" = "Rapport";
@@ -484,7 +488,7 @@
 "Show" = "Afficher"; // ^String.Titles.show
 "SelectFormation" = "Sélectionner la formation pour"; // ^String.Titles.selectFormation
 "NoAvailableFormations" = "Aucune formation disponible pour"; // ^String.Titles.noAvailableFormations
-"players" = "joueurs"; // ^String.Titles.players
+"Players" = "joueurs"; // ^String.Titles.players
 "GlowColor" = "Couleur de lueur :"; // ^String.Titles.glowColor
 "Radius" = "Rayon :"; // ^String.Titles.radius
 "LineColor" = "Couleur de ligne :"; // ^String.Titles.lineColor
@@ -524,6 +528,13 @@
 "AppearanceSystem" = "Système";
 "AppearanceLight" = "Clair";
 "AppearanceDark" = "Sombre";
+"LanguageTitle" = "Langue de l'interface";
+"LanguageAuto" = "Système";
+"SettingsTitle" = "Réglages";
+"SettingsExportSection" = "Export des clips";
+"SettingsExportWatermark" = "Enregistrer les clips avec filigrane (nom du tag, labels)";
+"SettingsExportWatermarkHint" = "La même incrustation que l'option de la fenêtre d'export ; appliquée lors de l'enregistrement via Cmd+S / Opt+Cmd+S";
+"SettingsMenuItem" = "Réglages…";
 "Playlists" = "Playlists"; // ^String.Titles.playlists
 "Load" = "Charger"; // ^String.Titles.load
 "CurrentUnsaved" = "Actuelle (non sauvegardée)"; // ^String.Titles.currentUnsaved
@@ -625,7 +636,7 @@
 "ProjectImportChooseFormatTitle" = "Importer un projet";
 "ProjectImportChooseFormatMessage" = "Choisissez le type de fichier : projet YouChip (JSON) ou annotations Sportcode / Angels / Wyscout (XML).";
 "ProjectImportSportcutFormat" = "Projet YouChip Sportcut (JSON)";
-"ProjectImportSportcodeXmlFormat" = "Sportscode / Angels / Wyscout (XML)";
+"ProjectImportSportcodeXmlFormat" = "SportCut / Sportscode / Angels / Wyscout (XML)";
 "ProjectImportNacsportXmlFormat" = "Nacsport (XML)";
 "ProjectImportDartfishXmlFormat" = "Dartfish (XML)";
 "SelectSportcodeXmlForImport" = "Sélectionnez un fichier XML (ALL_INSTANCES)";
@@ -1002,6 +1013,8 @@
 "MomentEventsPrefix" = "Événements : %@";
 "MomentLabelsPrefix" = "Étiquettes : %@";
 "MomentWindowTitlePrefix" = "Moment : %@";
+"MomentClipNotFullyRecorded" = "Le clip n'est pas encore complet — une partie du tag n'est pas dans le tampon.";
+"MomentRefreshClip" = "Actualiser";
 
 // ReviewVideo
 "ReviewLoadingRecording" = "Chargement de l'enregistrement...";
@@ -1020,6 +1033,8 @@
 // VideoPlayer
 "VideoHistoryToggle" = "Historique";
 "VideoHistoryHelp" = "Afficher ou masquer l'historique des actions sur la vidéo";
+"VideoLockWindowsToggle" = "Verrouiller les fenêtres";
+"VideoLockWindowsHelp" = "Une fois activé, les fenêtres de balisage mémorisent leur disposition actuelle et s'ouvrent ainsi à chaque fois";
 "VideoBroadcastPauseHelp" = "Mettre la diffusion en pause";
 "VideoBroadcastResumeHelp" = "Reprendre la diffusion";
 "VideoBroadcastStopHelp" = "Arrêter la diffusion et passer en mode balisage normal";
@@ -1106,6 +1121,7 @@
 "KeyBindingsTapSourceHint" = "Étape 1 : appuyez sur un bouton source sur la zone";
 "KeyBindingsTapTargetHint" = "Étape 2 : appuyez sur un bouton cible sur la zone";
 "KeyBindingsButtonAllBindings" = "Toutes les liaisons de ce bouton";
+"KeyBindingsDeleteAllForButton" = "Supprimer toutes les liaisons du bouton";
 "CanvasEditTabParameters" = "Paramètres";
 "CanvasEditTabAppearance" = "Apparence";
 "CanvasEditName" = "Nom";
@@ -1178,3 +1194,184 @@
 "SportCutSlideAddLogo" = "Ajouter un logo";
 "SportCutSlideDone" = "Terminé";
 "SportCutSlideSave" = "Enregistrer";
+
+"CollectionDuplicateTo" = "Dupliquer vers";
+"CollectionSelectedGroupsCountFormat" = "Groupes sélectionnés : %d";
+"CollectionClearSelection" = "Effacer la sélection";
+"CollectionNoOtherCollections" = "Aucune autre collection";
+"CollectionMultiSelectHint" = "⌘+clic pour sélectionner plusieurs groupes";
+"CollectionStandardReadOnly" = "Lecture seule";
+"CollectionCreateCopy" = "Créer une copie";
+"CollectionStandardOpenReadOnly" = "Ouvrir (lecture seule)";
+
+"VideosAddMenuTitle" = "Ajouter";
+"VideosAddFromFile" = "Depuis un fichier";
+"VideosImportMenuTitle" = "Importer";
+"LicenseActive" = "Licence active";
+
+"SportCutSlideAddText" = "Texte";
+"SportCutSlideAddImage" = "Image";
+"SportCutSlideSelectHint" = "Sélectionnez un élément sur le canevas pour le modifier.";
+"SportCutSlideTextElement" = "Calque de texte";
+"SportCutSlideImageElement" = "Image";
+"SportCutSlideFont" = "Police";
+"SportCutSlideFontSystem" = "Système";
+"SportCutSlideBold" = "Gras";
+"SportCutSlideReplaceImage" = "Remplacer l’image";
+"SportCutSlideNewText" = "Nouveau texte";
+
+"ExportErrorNothingProduced" = "Aucun clip n’a pu être exporté. Vérifiez que les vidéos sont disponibles.";
+"ExportErrorFailedGeneric" = "Échec de l’exportation.";
+
+"KeyBindingsResetAll" = "Tout réinitialiser";
+"KeyBindingsResetBindingsOnly" = "Liaisons uniquement";
+
+// Heat Map
+"HeatMapLegendLow" = "Moins";
+"HeatMapLegendHigh" = "Plus";
+"HeatMapControlRadius" = "Rayon";
+"HeatMapControlIntensity" = "Contraste";
+"HeatMapControlShowMarkers" = "Afficher les repères";
+
+// Project Merge
+"MergeProjectsButton" = "Fusionner";
+"MergeProjectsExitSelection" = "Quitter la sélection";
+"MergeProjectsHelp" = "Fusionner plusieurs projets en un seul";
+"MergeProjectsSelectedCount" = "Sélectionnés : %d";
+"MergeProjectsSelectionHint" = "Cliquez sur les projets — le chiffre indique l'ordre";
+"MergeProjectsTitle" = "Fusion de projets";
+"MergeProjectsSubtitle" = "Les vidéos se suivent ; le marquage de chaque projet est décalé de la durée des précédents.";
+"MergeProjectsNameLabel" = "Nom du nouveau projet";
+"MergeProjectsOrderLabel" = "Ordre de fusion";
+"MergeProjectsMergeLinesTitle" = "Fusionner les pistes de même nom";
+"MergeProjectsMergeLinesOn" = "Les pistes portant le même nom deviennent une seule piste.";
+"MergeProjectsMergeLinesOff" = "Chaque piste reçoit le nom de son projet, rien n'est mélangé.";
+"MergeProjectsMergeLinesHint" = "Des pistes portant le même nom ont été trouvées. Celles cochées sont fusionnées en une seule ; les autres restent séparées (avec le nom du projet).";
+"MergeProjectsStartButton" = "Fusionner";
+"MergeProjectsSavePanelTitle" = "Enregistrer la vidéo fusionnée";
+"MergeProjectsSavePanelMessage" = "Choisissez où enregistrer la vidéo assemblée";
+"MergeProjectsKeepOpenHint" = "Ne fermez pas cette fenêtre avant la fin de l'opération.";
+"MergeProjectsDefaultName" = "Projet fusionné";
+"MergeStatusPreparing" = "Préparation…";
+"MergeStatusExporting" = "Assemblage de la vidéo…";
+"MergeStatusFinishing" = "Création du projet…";
+"MergeErrorNotEnoughProjects" = "Sélectionnez au moins deux projets.";
+"MergeErrorVideoUnavailable" = "La vidéo du projet « %@ » est indisponible.";
+"MergeErrorNoVideoTrack" = "Le projet « %@ » n'a pas de piste vidéo.";
+"MergeErrorComposition" = "Impossible de créer la vidéo combinée.";
+"MergeErrorExport" = "Impossible d'exporter la vidéo fusionnée.";
+"MergeErrorCancelled" = "Fusion annulée.";
+"MergeErrorProjectCreation" = "Impossible de créer le nouveau projet.";
+
+// Clip Auto-Save
+"ClipAutoSaveNotConfiguredBadge" = "Dossier d'enregistrement auto non défini";
+"ClipAutoSaveNotConfiguredTitle" = "Dossier d'enregistrement auto non sélectionné";
+"ClipAutoSaveNotConfiguredMessage" = "Choisissez un dossier pour l'enregistrement auto des clips (Cmd+S), puis réessayez.";
+"ClipAutoSavePickFolder" = "Choisir un dossier…";
+"ClipAutoSaveChangeFolder" = "Changer de dossier…";
+"ClipAutoSaveResetFolder" = "Réinitialiser le dossier";
+"ClipAutoSaveCurrentFolder" = "Dossier : %@";
+"ClipAutoSaveConfiguredHelp" = "Enregistrement auto des clips : %@";
+"ClipAutoSavePickPrompt" = "Choisir";
+"ClipAutoSavePickTitle" = "Dossier d'enregistrement auto des clips";
+"ClipAutoSaveInProgress" = "Enregistrement du clip…";
+"ClipAutoSaveSuccess" = "Clip enregistré : %@";
+"ClipAutoSaveErrorTitle" = "Enregistrement auto du clip";
+"ClipAutoSaveNoStampTitle" = "Aucun tag sélectionné";
+"ClipAutoSaveNoStampMessage" = "Sélectionnez sur la timeline le tag dont vous voulez enregistrer le clip.";
+"ClipAutoSaveNoVideoMessage" = "La vidéo actuelle est indisponible.";
+"ClipAutoSaveBadRangeMessage" = "Plage de clip non valide.";
+"ClipAutoSaveExportFailedMessage" = "Impossible d'enregistrer le clip.";
+"ClipAutoSaveNoSelectedClips" = "Aucun clip sélectionné.";
+"ClipAutoSaveMergedInProgress" = "Enregistrement de la compilation…";
+"ClipAutoSaveMergedSuccess" = "Compilation enregistrée : %@";
+"ClipAutoSaveMergedPrefix" = "Compilation";
+
+// Club Logo Watermark
+"ClubLogoTitle" = "Logo du club";
+"ClubLogoHint" = "Déplacez le logo et redimensionnez-le par le coin. La position est enregistrée pour l'export.";
+"ClubLogoChoose" = "Choisir une image";
+"ClubLogoReplace" = "Remplacer l'image";
+"ClubLogoNotSet" = "Logo non défini";
+"ClubLogoMenuItem" = "Logo du club";
+"ExportShowClubLogo" = "Ajouter le logo du club";
+"ExportClubLogoNotConfigured" = "Logo non configuré — définissez-le dans les réglages";
+
+// Image Editor
+"MainTabEditor" = "Éditeur";
+"EditorImages" = "Éditeur d'images";
+"EditorAddImage" = "Ajouter une image";
+"EditorNewProject" = "Nouveau projet";
+"EditorNoProjects" = "Aucun projet pour l'instant";
+"EditorChooseImage" = "Choisir une image";
+"Back" = "Retour";
+"Download" = "Télécharger";
+"Open" = "Ouvrir";
+"EditorImagesTool" = "Images";
+"CollectionPasteGroups" = "Coller les groupes";
+
+"CollectionsCopySuffix" = "(copie)";
+
+"KeyBindingsMapZoneHint" = "Click the map zone to drop a point and set a position on the tag";
+
+"KeyBindingsAddMap" = "Add map";
+
+"KeyBindingsAddMapFromDisk" = "From file…";
+
+"KeyBindingsLoadedMaps" = "Loaded maps";
+
+"KeyBindingsExportSelected" = "Export selection";
+
+"KeyBindingsExportAll" = "Export all";
+
+"KeyBindingsExportPart" = "Export part";
+
+"KeyBindingsExportChoosePart" = "Choose what to export";
+
+"FreeLayoutBackgroundImage" = "Background image";
+
+"FreeLayoutChooseImage" = "Choose image";
+
+"FreeLayoutReplaceImage" = "Replace image";
+
+"ClipAutoExportBadge" = "Auto-export des clips";
+
+// --- Added to match EN key coverage (Collections menu, KeyBindings, Video download from URL) ---
+"AddVideoFromURL" = "Ajouter depuis une URL";
+"CheckPermissions" = "Vérifier les autorisations";
+"CollectionTypeKeyBindings" = "Raccourcis clavier";
+"CollectionTypeKeyBindingsDescription" = "Disposition libre des tags sur le canevas avec raccourcis clavier.";
+"CollectionTypePickerHint" = "Le type est choisi uniquement à la création et ne peut pas être modifié ensuite.";
+"CollectionTypePickerTitle" = "Type de collection";
+"CollectionTypeStandard" = "Standard";
+"CollectionTypeStandardDescription" = "Les tags sont affichés en groupes dans la bibliothèque de marquage.";
+"CollectionsDeleteConfirmFormat" = "Voulez-vous vraiment supprimer la collection « %@ » ?";
+"CollectionsMenuButton" = "Collections";
+"CollectionsMenuEmpty" = "Aucune collection personnalisée pour l'instant";
+"CollectionsMenuSubtitle" = "Gérez vos collections de tags personnalisées";
+"CollectionsMenuTitle" = "Menu des collections";
+"DownloadButtonTitle" = "Télécharger";
+"DownloadVideoFromURL" = "Télécharger une vidéo depuis une URL";
+"DownloadVideoFromURLDescription" = "Collez une URL de vidéo, sélectionnez la qualité et le format à télécharger";
+"DownloadingVideo" = "Téléchargement de la vidéo...";
+"DownloadsFolderAccessDescription" = "L'application a besoin d'accéder au dossier Téléchargements pour enregistrer les vidéos";
+"DownloadsFolderAccessGranted" = "Accès au dossier Téléchargements accordé";
+"DownloadsFolderAccessRequired" = "Accès au dossier Téléchargements requis";
+"EnterVideoURL" = "Collez l'URL de la vidéo";
+"FetchFormats" = "Obtenir les informations";
+"FetchingVideoInfo" = "Récupération des informations de la vidéo...";
+"GrantAccessButtonTitle" = "Accorder l'accès";
+"KeyBindingsAddTimeEventHint" = "Ajoutez un événement temporel au canevas :";
+"KeyBindingsCanvasTimeEventsCount" = "Événements temporels : %d";
+"KeyBindingsNoTimeEvents" = "Aucun événement temporel dans la collection";
+"OpenSystemSettings" = "Ouvrir les Réglages Système";
+"SelectDownloadsFolderMessage" = "L'accès au dossier Téléchargements est requis pour enregistrer les vidéos. Veuillez sélectionner le dossier Téléchargements dans la boîte de dialogue suivante.";
+"SelectQuality" = "Sélectionner la qualité";
+"TryAgain" = "Réessayer";
+"UseServerVideoName" = "Utiliser le nom de la vidéo du serveur";
+"UseServerVideoNameDescription" = "Ignorer la saisie de l'équipe/du score et utiliser le nom de la vidéo du serveur";
+"VideoDownloaded" = "Vidéo téléchargée avec succès";
+"VideoDownloadedDescription" = "Vidéo enregistrée dans le dossier Téléchargements. Continuez pour l'ajouter à votre projet";
+"VideoFormat" = "Format vidéo";
+"VideoTitle" = "Titre de la vidéo";
+"VideoURL" = "URL de la vidéo";

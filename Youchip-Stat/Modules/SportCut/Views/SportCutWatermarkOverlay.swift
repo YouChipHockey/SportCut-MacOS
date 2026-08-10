@@ -209,7 +209,7 @@ private func sportCutWatermarkBuildSnapshot(playerManager: SportCutPlayerManager
                 let fallbackGroup = String(^String.Titles.labels)
                 let groupName = source.labelGroups
                     .first(where: { $0.lables.contains(label.id) })?
-                    .name ?? fallbackGroup
+                    .labelGroupDisplayName ?? fallbackGroup
                 if let idx = grouped.firstIndex(where: { $0.groupName == groupName }) {
                     grouped[idx].labels.append(label)
                 } else {

@@ -246,15 +246,31 @@ struct FieldMapVisualizationPicker: View {
         collections = UserDefaults.standard.getCollectionBookmarks()
     }
     
+    /// Id тегов и id карт (PlayField) выбранной коллекции — считаем один раз за проход.
+    private func collectionTagAndFieldIds(_ collection: CollectionBookmark) -> (tags: Set<String>, fields: Set<String>) {
+        let manager = CustomCollectionManager()
+        guard manager.loadCollectionFromBookmarks(named: collection.name) else { return ([], []) }
+        return (Set(manager.tags.map { $0.id }), Set(manager.playFields.map { $0.id }))
+    }
+
+    /// Штамп можно визуализировать, только если его тег в коллекции И карта, на которой стоит
+    /// позиция, есть в этой коллекции. Иначе рисовать негде — не учитываем.
+    private func isVisualizable(_ stamp: TimelineStamp, tagIds: Set<String>, fieldIds: Set<String>) -> Bool {
+        guard !stamp.mapPositions.isEmpty, stamp.isActiveForMapView == true else { return false }
+        guard stamp.idTags.contains(where: { tagIds.contains($0) }) else { return false }
+        // Хотя бы одна точка попадает в карту этой коллекции (или legacy-точка без карты → первая карта).
+        return stamp.mapPositions.contains { mp in
+            if let mid = mp.mapFieldId { return fieldIds.contains(mid) }
+            return !fieldIds.isEmpty
+        }
+    }
+
     private func availableTagsForCollection() -> [TimelineStamp] {
         guard let collection = selectedCollection else { return [] }
-        
+        let ids = collectionTagAndFieldIds(collection)
+
         let allTags = timelineData.lines.flatMap { line in
-            line.stamps.filter { stamp in
-                stamp.position != nil &&
-                stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
-                (stamp.isActiveForMapView == true)
-            }
+            line.stamps.filter { isVisualizable($0, tagIds: ids.tags, fieldIds: ids.fields) }
         }
 
         var uniqueTags: [String: TimelineStamp] = [:]
@@ -265,65 +281,41 @@ struct FieldMapVisualizationPicker: View {
         }
         return uniqueTags.values.sorted { $0.label < $1.label }
     }
-    
+
     private func availableTimelinesForCollection() -> [TimelineLine] {
         guard let collection = selectedCollection else { return [] }
-        
+        let ids = collectionTagAndFieldIds(collection)
         return timelineData.lines.filter { line in
-            line.stamps.contains { stamp in
-                stamp.position != nil &&
-                stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
-                (stamp.isActiveForMapView == true)
-            }
-        }
-    }
-    
-    private func countPositionedStampsInTimeline(_ timeline: TimelineLine) -> Int {
-        guard let collection = selectedCollection else { return 0 }
-        
-        return timeline.stamps.filter { stamp in
-            stamp.position != nil &&
-            stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
-            (stamp.isActiveForMapView == true)
-        }.count
-    }
-    
-    private func allPositionedStampsForCollection() -> [TimelineStamp] {
-        guard let collection = selectedCollection else { return [] }
-        
-        return timelineData.lines.flatMap { line in
-            line.stamps.filter { stamp in
-                stamp.position != nil &&
-                stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
-                (stamp.isActiveForMapView == true)
-            }
+            line.stamps.contains { isVisualizable($0, tagIds: ids.tags, fieldIds: ids.fields) }
         }
     }
 
-    private func isTagFromCollection(_ tagId: String, collection: CollectionBookmark) -> Bool {
-        let collectionManager = CustomCollectionManager()
-        guard collectionManager.loadCollectionFromBookmarks(named: collection.name) else {
-            return false
-        }
-        
-        return collectionManager.tags.contains { $0.id == tagId }
+    private func countPositionedStampsInTimeline(_ timeline: TimelineLine) -> Int {
+        guard let collection = selectedCollection else { return 0 }
+        let ids = collectionTagAndFieldIds(collection)
+        return timeline.stamps.filter { isVisualizable($0, tagIds: ids.tags, fieldIds: ids.fields) }.count
     }
-    
+
+    private func allPositionedStampsForCollection() -> [TimelineStamp] {
+        guard let collection = selectedCollection else { return [] }
+        let ids = collectionTagAndFieldIds(collection)
+        return timelineData.lines.flatMap { line in
+            line.stamps.filter { isVisualizable($0, tagIds: ids.tags, fieldIds: ids.fields) }
+        }
+    }
+
     private func getSelectedStamps() -> [TimelineStamp] {
         guard let collection = selectedCollection else { return [] }
-        
+
         switch selectedMode {
         case .byTimeline:
+            let ids = collectionTagAndFieldIds(collection)
             return timelineData.lines.filter { line in
                 selectedTimelineIDs.contains(line.id)
             }.flatMap { line in
-                line.stamps.filter { stamp in
-                    stamp.position != nil &&
-                    stamp.idTags.contains(where: { isTagFromCollection($0, collection: collection) }) &&
-                    (stamp.isActiveForMapView == true)
-                }
+                line.stamps.filter { isVisualizable($0, tagIds: ids.tags, fieldIds: ids.fields) }
             }
-            
+
         case .all:
             return allPositionedStampsForCollection()
         }

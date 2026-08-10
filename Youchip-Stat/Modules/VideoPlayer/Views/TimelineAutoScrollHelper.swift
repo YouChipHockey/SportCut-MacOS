@@ -14,7 +14,12 @@ final class TimelineScrollController: ObservableObject {
     // Cleared on pause→resume or zoom so auto-scroll resumes.
     var userDidManuallyScroll = false
 
+    /// Текущее горизонтальное смещение (обновляется непрерывно при скролле) — чтобы закреплённая
+    /// сверху линейка (safe-area/overlay) синхронно ехала за таймлайнами по горизонтали.
+    @Published var liveScrollX: CGFloat = 0
+
     private var scrollObserverToken: Any?
+    private var boundsObserverToken: Any?
     private var autoScrollTimer: Timer?
     private var autoScrollTargetX: CGFloat?
     private var lastAutoScrollTick: CFTimeInterval = 0
@@ -25,6 +30,10 @@ final class TimelineScrollController: ObservableObject {
             if let token = scrollObserverToken {
                 NotificationCenter.default.removeObserver(token)
                 scrollObserverToken = nil
+            }
+            if let token = boundsObserverToken {
+                NotificationCenter.default.removeObserver(token)
+                boundsObserverToken = nil
             }
             if let sv = scrollView {
                 // NSScrollView.willStartLiveScrollNotification fires only for
@@ -42,6 +51,18 @@ final class TimelineScrollController: ObservableObject {
                 ) { [weak self] _ in
                     self?.userDidManuallyScroll = true
                 }
+                // Непрерывное отслеживание горизонтального смещения для закреплённой линейки.
+                sv.contentView.postsBoundsChangedNotifications = true
+                boundsObserverToken = NotificationCenter.default.addObserver(
+                    forName: NSView.boundsDidChangeNotification,
+                    object: sv.contentView,
+                    queue: .main
+                ) { [weak self, weak sv] _ in
+                    guard let sv = sv else { return }
+                    let x = sv.documentVisibleRect.origin.x
+                    if self?.liveScrollX != x { self?.liveScrollX = x }
+                }
+                liveScrollX = sv.documentVisibleRect.origin.x
             }
         }
     }

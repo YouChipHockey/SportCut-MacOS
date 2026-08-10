@@ -336,6 +336,83 @@ extension SportCutPlaylist {
 
 // MARK: - Title Slide (between playlist clips)
 
+/// Один элемент слайда (текст или картинка). Геометрия нормализована к холсту 16:9
+/// (0…1 по ширине/высоте), чтобы не зависеть от разрешения рендера.
+struct SportCutSlideElement: Identifiable, Codable, Equatable {
+
+    enum Kind: String, Codable { case text, image }
+
+    let id: UUID
+    var kind: Kind
+    /// Центр элемента в долях холста (0…1).
+    var centerX: Double
+    var centerY: Double
+    /// Размер бокса картинки в долях холста (используется для .image).
+    var width: Double
+    var height: Double
+
+    // Текстовые свойства
+    var text: String
+    /// Имя шрифта (PostScript/family). nil = системный.
+    var fontName: String?
+    /// Кегль в пунктах при рендере 1080p.
+    var fontSize: Double
+    var colorHex: String
+    var bold: Bool
+    /// 0 = слева, 1 = по центру, 2 = справа.
+    var alignment: Int
+
+    // Картинка
+    var imageData: Data?
+
+    init(
+        id: UUID = UUID(),
+        kind: Kind,
+        centerX: Double = 0.5,
+        centerY: Double = 0.5,
+        width: Double = 0.4,
+        height: Double = 0.4,
+        text: String = "",
+        fontName: String? = nil,
+        fontSize: Double = 96,
+        colorHex: String = "FFFFFF",
+        bold: Bool = true,
+        alignment: Int = 1,
+        imageData: Data? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.centerX = centerX
+        self.centerY = centerY
+        self.width = width
+        self.height = height
+        self.text = text
+        self.fontName = fontName
+        self.fontSize = fontSize
+        self.colorHex = colorHex
+        self.bold = bold
+        self.alignment = alignment
+        self.imageData = imageData
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        kind = try c.decodeIfPresent(Kind.self, forKey: .kind) ?? .text
+        centerX = try c.decodeIfPresent(Double.self, forKey: .centerX) ?? 0.5
+        centerY = try c.decodeIfPresent(Double.self, forKey: .centerY) ?? 0.5
+        width = try c.decodeIfPresent(Double.self, forKey: .width) ?? 0.4
+        height = try c.decodeIfPresent(Double.self, forKey: .height) ?? 0.4
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        fontName = try c.decodeIfPresent(String.self, forKey: .fontName)
+        fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? 96
+        colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex) ?? "FFFFFF"
+        bold = try c.decodeIfPresent(Bool.self, forKey: .bold) ?? true
+        alignment = try c.decodeIfPresent(Int.self, forKey: .alignment) ?? 1
+        imageData = try c.decodeIfPresent(Data.self, forKey: .imageData)
+    }
+}
+
 /// Титульный слайд-заставка, показываемый между клипами плейлиста (презентация).
 struct SportCutSlide: Identifiable, Codable, Equatable {
     let id: UUID
@@ -344,12 +421,14 @@ struct SportCutSlide: Identifiable, Codable, Equatable {
     var durationSeconds: Double
     var backgroundColorHex: String
     var textColorHex: String
-    /// Кегль заголовка в пунктах (при рендере 1080p).
+    /// Кегль заголовка в пунктах (при рендере 1080p). Легаси — для старых слайдов.
     var textSize: Double
     /// Позиция среди клипов: слайд показывается ПЕРЕД клипом с этим индексом (0 = перед первым).
     var position: Int
-    /// PNG-логотип, встроенный как данные (переносится вместе с сессией).
+    /// PNG-логотип, встроенный как данные (легаси, один центральный логотип).
     var imageData: Data?
+    /// Слои слайда (текст/картинки) с произвольным расположением. Пусто → легаси-рендер.
+    var elements: [SportCutSlideElement]
 
     init(
         id: UUID = UUID(),
@@ -359,7 +438,8 @@ struct SportCutSlide: Identifiable, Codable, Equatable {
         textColorHex: String = "FFFFFF",
         textSize: Double = 96,
         position: Int = 0,
-        imageData: Data? = nil
+        imageData: Data? = nil,
+        elements: [SportCutSlideElement] = []
     ) {
         self.id = id
         self.title = title
@@ -369,6 +449,7 @@ struct SportCutSlide: Identifiable, Codable, Equatable {
         self.textSize = textSize
         self.position = position
         self.imageData = imageData
+        self.elements = elements
     }
 
     init(from decoder: Decoder) throws {
@@ -381,6 +462,46 @@ struct SportCutSlide: Identifiable, Codable, Equatable {
         textSize = try c.decodeIfPresent(Double.self, forKey: .textSize) ?? 96
         position = try c.decodeIfPresent(Int.self, forKey: .position) ?? 0
         imageData = try c.decodeIfPresent(Data.self, forKey: .imageData)
+        elements = try c.decodeIfPresent([SportCutSlideElement].self, forKey: .elements) ?? []
+    }
+
+    /// Возвращает слайд, у которого легаси-поля (заголовок + центральный логотип) сконвертированы
+    /// в элементы-слои. Если элементы уже есть — возвращает как есть.
+    func migratedToElements() -> SportCutSlide {
+        guard elements.isEmpty else { return self }
+        var result = self
+        var migrated: [SportCutSlideElement] = []
+
+        let hasLogo = imageData != nil
+        if let data = imageData {
+            migrated.append(
+                SportCutSlideElement(
+                    kind: .image,
+                    centerX: 0.5,
+                    centerY: hasLogo && !title.isEmpty ? 0.38 : 0.5,
+                    width: 0.5,
+                    height: 0.42,
+                    imageData: data
+                )
+            )
+        }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            migrated.append(
+                SportCutSlideElement(
+                    kind: .text,
+                    centerX: 0.5,
+                    centerY: hasLogo ? 0.72 : 0.5,
+                    text: title,
+                    fontSize: textSize,
+                    colorHex: textColorHex,
+                    bold: true,
+                    alignment: 1
+                )
+            )
+        }
+        result.elements = migrated
+        return result
     }
 }
 

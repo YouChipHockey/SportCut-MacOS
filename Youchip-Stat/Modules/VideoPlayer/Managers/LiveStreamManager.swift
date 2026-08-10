@@ -225,7 +225,10 @@ class LiveStreamManager: NSObject, ObservableObject {
         }
         
         // ── Create new session ──
-        let newMixer = MediaMixer(useManualCapture: true)
+        // HaishinKit 2.2: useManualCapture → captureSessionMode. Камере нужен реальный
+        // AVCaptureSession (.single); .manual = NullCaptureSession (только ReplayKit, без камеры).
+        // Захват по-прежнему стартуем/останавливаем вручную через mixer.startRunning()/stopRunning().
+        let newMixer = MediaMixer(captureSessionMode: .single)
         
         // Reuse existing preview view if it already exists in the SwiftUI hierarchy.
         let view: MTHKView
@@ -267,7 +270,7 @@ class LiveStreamManager: NSObject, ObservableObject {
         Task {
             do {
                 logger.logMixer("attachVideo: starting, initialFrameRate=\(initialFrameRate)")
-                await newMixer.setFrameRate(initialFrameRate)
+                try await newMixer.setFrameRate(initialFrameRate)
                 try await newMixer.attachVideo(videoDevice, track: 0)
                 logger.logMixer("attachVideo: success")
 
@@ -286,7 +289,7 @@ class LiveStreamManager: NSObject, ObservableObject {
                     logger.logMixer("DIAG postAttach: activeVideoMinFrameDuration=\(minDuration.value)/\(minDuration.timescale) (\(String(format: "%.4f", CMTimeGetSeconds(minDuration)))s = \(String(format: "%.2f", sec > 0 ? 1.0/sec : 0))fps)")
                     logger.logMixer("DIAG postAttach: activeVideoMaxFrameDuration=\(maxDuration.value)/\(maxDuration.timescale) (\(String(format: "%.4f", CMTimeGetSeconds(maxDuration)))s)")
                 } catch { /* keep initialFrameRate */ }
-                await newMixer.setFrameRate(actualFps)
+                try await newMixer.setFrameRate(actualFps)
                 logger.logMixer("actualFps after device attach=\(actualFps)")
 
                 // Real-time markup recording is video-only (no audio).
@@ -812,26 +815,45 @@ class LiveStreamManager: NSObject, ObservableObject {
     }
     
     /// Finalizes the current buffer once so that moment viewer can use the latest segments.
+    /// NB: must work while broadcast is paused — frames recorded right before the pause live in the
+    /// still-open current segment; if we skip finalization here the moment viewer builds its
+    /// composition without them and shows a black screen for those just-marked tags.
+    /// If a periodic review refresh is mid-flight we WAIT for it (and then finalize) instead of
+    /// bailing — otherwise the composition is built from stale segments (missing the last ~5s that
+    /// include the just-marked tag) and the moment viewer shows a black screen.
     func finalizeCurrentSegment(completion: @escaping () -> Void) {
-        guard isLive, !isBroadcastPaused, !isReviewRefreshInProgress,
-              let currentRecorder = recorder, let videoId = currentVideoId,
+        finalizeCurrentSegment(retriesLeft: 40, completion: completion)
+    }
+
+    private func finalizeCurrentSegment(retriesLeft: Int, completion: @escaping () -> Void) {
+        guard isLive, let currentRecorder = recorder, let videoId = currentVideoId,
               let currentTempURL = tempFileURL else {
             completion()
             return
         }
-        
+
+        // Периодический refresh уже финализирует текущий сегмент — дождёмся его завершения и
+        // финализируем ещё раз, чтобы гарантированно захватить самые свежие кадры (для 100% показа).
+        if isReviewRefreshInProgress {
+            guard retriesLeft > 0 else { completion(); return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.finalizeCurrentSegment(retriesLeft: retriesLeft - 1, completion: completion)
+            }
+            return
+        }
+
         isReviewRefreshInProgress = true
         let sessionId = self.sessionId
-        
+
         currentRecorder.stopRecording { [weak self] in
             guard let self = self, self.sessionId == sessionId else {
                 completion()
                 return
             }
-            
+
             self.allSegmentURLs.append(currentTempURL)
             self.reviewFileVersion += 1
-            
+
             Task { [weak self] in
                 await self?.startNewSegmentRecorder(videoId: videoId, sessionId: sessionId)
                 await MainActor.run { [weak self] in

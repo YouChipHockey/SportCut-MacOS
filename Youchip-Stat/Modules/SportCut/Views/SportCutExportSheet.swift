@@ -20,6 +20,8 @@ struct SportCutExportSheet: View {
     @State private var watermarkOptions: ExportWatermarkOptions = .default
     @State private var didStartExport = false
     @StateObject private var exportUI = SportCutExportUIState()
+    /// Держим бэкенд живым на всё время экспорта (иначе таймер прогресса/колбэки могут отвалиться).
+    @State private var exportBackend: SportCutExportBackend?
 
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
@@ -115,6 +117,18 @@ struct SportCutExportSheet: View {
                         .font(.system(size: 12))
                         .padding(.leading, 16)
                     }
+
+                    // Логотип клуба — независимо от текстового вотермарка.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle(^String.Titles.exportShowClubLogo, isOn: $watermarkOptions.showClubLogo)
+                            .font(.system(size: 13))
+                            .disabled(!ClubLogoWatermarkManager.shared.hasLogo)
+                        if !ClubLogoWatermarkManager.shared.hasLogo {
+                            Text(^String.Titles.exportClubLogoNotConfigured)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
@@ -157,11 +171,25 @@ struct SportCutExportSheet: View {
             }
         }
         .onChange(of: exportUI.isExporting) { exporting in
-            // Auto-close the export window once the export finishes.
+            // Закрываем окно только при успешном завершении. При ошибке — оставляем открытым и показываем алерт.
             if !exporting, didStartExport {
                 didStartExport = false
-                dismiss()
+                exportBackend = nil
+                if exportUI.errorMessage == nil {
+                    dismiss()
+                }
             }
+        }
+        .alert(
+            ^String.Titles.alertsErrorTitle,
+            isPresented: Binding(
+                get: { exportUI.errorMessage != nil },
+                set: { if !$0 { exportUI.errorMessage = nil } }
+            )
+        ) {
+            Button(^String.Titles.alertsOkTitle, role: .cancel) {}
+        } message: {
+            Text(exportUI.errorMessage ?? "")
         }
     }
 
@@ -190,16 +218,17 @@ struct SportCutExportSheet: View {
             return
         }
 
+        exportUI.errorMessage = nil
         exportUI.isExporting = true
         exportUI.progress = 0
         didStartExport = true
 
         let type = exportType
-        let ui = exportUI
         let wm = addWatermark
         let wmOptions = watermarkOptions
+        let backend = SportCutExportBackend(ui: exportUI)
+        exportBackend = backend
         DispatchQueue.global(qos: .userInitiated).async {
-            let backend = SportCutExportBackend(ui: ui)
             backend.run(playlists: selectedPlaylists, outputURL: outputURL, session: session, type: type, addWatermark: wm, watermarkOptions: wmOptions)
         }
     }
@@ -210,6 +239,8 @@ struct SportCutExportSheet: View {
 private final class SportCutExportUIState: ObservableObject {
     @Published var progress: Double = 0
     @Published var isExporting: Bool = false
+    /// Непустой — экспорт завершился ошибкой, показываем алерт и НЕ закрываем окно.
+    @Published var errorMessage: String? = nil
 }
 
 // MARK: - Background export
@@ -218,9 +249,49 @@ private final class SportCutExportBackend {
     private let ui: SportCutExportUIState
     private var addWatermark: Bool = false
     private var watermarkOptions: ExportWatermarkOptions = .default
+    private var progressTimer: DispatchSourceTimer?
+
+    /// Нужно ли наносить логотип клуба (флаг экспорта + логотип задан в настройках).
+    private var showLogo: Bool { watermarkOptions.showClubLogo && ClubLogoWatermarkManager.shared.hasLogo }
 
     init(ui: SportCutExportUIState) {
         self.ui = ui
+    }
+
+    // MARK: - Progress / completion
+
+    /// Периодически опрашивает реальный прогресс сессий экспорта и пишет в UI (0…1 через `map`).
+    private func startProgressPolling(_ map: @escaping () -> Double) {
+        stopProgressPolling()
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        timer.schedule(deadline: .now() + 0.15, repeating: 0.15)
+        timer.setEventHandler { [weak self] in
+            let value = min(max(map(), 0), 1)
+            DispatchQueue.main.async { self?.ui.progress = value }
+        }
+        timer.resume()
+        progressTimer = timer
+    }
+
+    private func stopProgressPolling() {
+        progressTimer?.cancel()
+        progressTimer = nil
+    }
+
+    private func finishSuccess() {
+        stopProgressPolling()
+        DispatchQueue.main.async {
+            self.ui.progress = 1.0
+            self.ui.isExporting = false
+        }
+    }
+
+    private func finishError(_ message: String) {
+        stopProgressPolling()
+        DispatchQueue.main.async {
+            self.ui.errorMessage = message
+            self.ui.isExporting = false
+        }
     }
 
     func run(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession, type: SportCutExportType, addWatermark: Bool, watermarkOptions: ExportWatermarkOptions = .default) {
@@ -351,7 +422,8 @@ private final class SportCutExportBackend {
         compositionDuration: CMTime,
         allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)]? = nil
     ) -> AVVideoComposition? {
-        guard !segments.isEmpty else { return nil }
+        // Композицию строим, если есть текстовые сегменты ИЛИ включён логотип клуба.
+        guard !segments.isEmpty || showLogo else { return nil }
 
         // Compute render size: max across all segment tracks, or from single videoTrack
         let renderSize: CGSize
@@ -489,6 +561,12 @@ private final class SportCutExportBackend {
                 bgLayer.add(opacity, forKey: "opacity")
                 textLayer.add(opacity.copy() as! CAKeyframeAnimation, forKey: "opacity")
             }
+
+            // Логотип клуба — статично на весь ролик, поверх текстового оверлея.
+            if welf.showLogo,
+               let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
+                parentLayer.addSublayer(logoLayer)
+            }
         }
 
         if Thread.isMainThread {
@@ -577,12 +655,12 @@ private final class SportCutExportBackend {
                     }
                 }
             }
-            let sortedGroups = grouped.sorted { $0.group.name < $1.group.name }
+            let sortedGroups = grouped.sorted { $0.group.labelGroupDisplayName < $1.group.labelGroupDisplayName }
             for (groupIndex, item) in sortedGroups.enumerated() {
                 let labelsJoined = item.labels.map(\.name).joined(separator: ", ")
                 result.append(
                     NSAttributedString(
-                        string: "\(item.group.name):",
+                        string: "\(item.group.labelGroupDisplayName):",
                         attributes: groupAttrs
                     )
                 )
@@ -897,11 +975,24 @@ private final class SportCutExportBackend {
         return vc
     }
 
+    /// Общий прогресс экспорта клипов, потокобезопасно (таймер прогресса читает из фонового потока).
+    private final class ClipsProgress {
+        private let lock = NSLock()
+        private var completed = 0
+        private var session: AVAssetExportSession?
+        func setSession(_ s: AVAssetExportSession?) { lock.lock(); session = s; lock.unlock() }
+        func markCompleted() { lock.lock(); completed += 1; session = nil; lock.unlock() }
+        func snapshot() -> (done: Int, frac: Double) {
+            lock.lock(); let c = completed; let p = Double(session?.progress ?? 0); lock.unlock()
+            return (c, p)
+        }
+    }
+
+    /// Клипы экспортируются ПОСЛЕДОВАТЕЛЬНО (не все разом) — иначе десятки параллельных
+    /// AVAssetExportSession (особенно с вотермаркой) перегружают систему и «вешают» экспорт.
     private func exportAsClips(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession) {
-        let sink = ui
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
         let drawingsFolder = SportCutPlayerManager.drawingsFolder(sessionID: session.id)
 
         struct EventEntry {
@@ -910,35 +1001,52 @@ private final class SportCutExportBackend {
         }
         let allEntries: [EventEntry] = playlists.flatMap { pl in pl.events.map { EventEntry(event: $0, playlist: pl) } }
         let total = max(allEntries.count, 1)
-        let group = DispatchGroup()
-        var processed = 0
-        let progressLock = NSLock()
 
-        for (index, entry) in allEntries.enumerated() {
-            group.enter()
+        var producedFiles: [URL] = []
+        var failures = 0
+        let prog = ClipsProgress()
+
+        // Экспорт клипов — 0…0.9, упаковка zip — 0.9…1.0.
+        startProgressPolling {
+            let s = prog.snapshot()
+            return min((Double(s.done) + s.frac) / Double(total) * 0.9, 0.9)
+        }
+
+        func finishZip() {
+            guard !producedFiles.isEmpty else {
+                try? FileManager.default.removeItem(at: tempDir)
+                self.finishError(^String.Titles.exportErrorNothingProduced)
+                return
+            }
+            do {
+                try Self.writeZip(files: producedFiles, to: outputURL) { frac in
+                    DispatchQueue.main.async { self.ui.progress = 0.9 + frac * 0.1 }
+                }
+                try? FileManager.default.removeItem(at: tempDir)
+                self.finishSuccess()
+            } catch {
+                try? FileManager.default.removeItem(at: tempDir)
+                self.finishError(error.localizedDescription)
+            }
+        }
+
+        func exportNext(_ index: Int) {
+            guard index < allEntries.count else { finishZip(); return }
+            let entry = allEntries[index]
             let event = resolvedEvent(entry.event, session: session)
             let drawings = entry.playlist.eventDrawings[entry.event.hiddenKey] ?? []
 
+            func skip() { failures += 1; exportNext(index + 1) }
+
             guard let source = session.sources.first(where: { $0.id == event.sourceID }),
-                  let url = source.mediaAccessURL() else {
-                group.leave()
-                progressLock.lock(); processed += 1; let p = processed; progressLock.unlock()
-                DispatchQueue.main.async { sink.progress = Double(p) / Double(total) }
-                continue
-            }
-            // Do NOT use defer — stopAccessing must happen after async export completes
+                  let url = source.mediaAccessURL() else { skip(); return }
             let securityURL = url
 
             let asset = AVAsset(url: url)
             let composition = AVMutableComposition()
-
             guard let videoTrack = asset.tracks(withMediaType: .video).first,
                   composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) != nil else {
-                securityURL.stopAccessingSecurityScopedResource()
-                group.leave()
-                progressLock.lock(); processed += 1; let p = processed; progressLock.unlock()
-                DispatchQueue.main.async { sink.progress = Double(p) / Double(total) }
-                continue
+                securityURL.stopAccessingSecurityScopedResource(); skip(); return
             }
 
             let audioTrack = asset.tracks(withMediaType: .audio).first
@@ -967,11 +1075,7 @@ private final class SportCutExportBackend {
                         try compAudio.insertTimeRange(timeRange, of: audio, at: .zero)
                     }
                 } catch {
-                    securityURL.stopAccessingSecurityScopedResource()
-                    group.leave()
-                    progressLock.lock(); processed += 1; let p = processed; progressLock.unlock()
-                    DispatchQueue.main.async { sink.progress = Double(p) / Double(total) }
-                    continue
+                    securityURL.stopAccessingSecurityScopedResource(); skip(); return
                 }
             }
 
@@ -984,27 +1088,27 @@ private final class SportCutExportBackend {
 
             let preset = Self.bestPreset(for: composition)
             guard let exportSession = AVAssetExportSession(asset: composition, presetName: preset) else {
-                securityURL.stopAccessingSecurityScopedResource()
-                group.leave()
-                progressLock.lock(); processed += 1; let p = processed; progressLock.unlock()
-                DispatchQueue.main.async { sink.progress = Double(p) / Double(total) }
-                continue
+                securityURL.stopAccessingSecurityScopedResource(); skip(); return
             }
 
             exportSession.outputURL = clipURL
             exportSession.outputFileType = .mp4
 
-            if addWatermark, let compVideoTrack = composition.tracks(withMediaType: .video).first {
-                let wmText = watermarkAttributedString(
-                    event: entry.event,
-                    source: source,
-                    playlist: entry.playlist,
-                    ordinal: index + 1,
-                    videoTrack: videoTrack
-                )
-                let seg = (text: wmText, start: CMTime.zero, duration: composition.duration)
+            if (addWatermark || showLogo), let compVideoTrack = composition.tracks(withMediaType: .video).first {
+                // При выключенном текстовом вотермарке сегменты пустые — рисуется только логотип.
+                var segs: [(text: NSAttributedString, start: CMTime, duration: CMTime)] = []
+                if addWatermark {
+                    let wmText = watermarkAttributedString(
+                        event: entry.event,
+                        source: source,
+                        playlist: entry.playlist,
+                        ordinal: index + 1,
+                        videoTrack: videoTrack
+                    )
+                    segs = [(text: wmText, start: CMTime.zero, duration: composition.duration)]
+                }
                 if let vc = watermarkVideoComposition(
-                    segments: [seg],
+                    segments: segs,
                     videoTrack: videoTrack,
                     compositionVideoTrack: compVideoTrack,
                     compositionDuration: composition.duration
@@ -1013,120 +1117,126 @@ private final class SportCutExportBackend {
                 }
             }
 
+            prog.setSession(exportSession)
             exportSession.exportAsynchronously {
                 securityURL.stopAccessingSecurityScopedResource()
-                progressLock.lock(); processed += 1; let p = processed; progressLock.unlock()
-                DispatchQueue.main.async { sink.progress = Double(p) / Double(total) }
-                group.leave()
+                if exportSession.status == .completed {
+                    producedFiles.append(clipURL)
+                } else {
+                    failures += 1
+                }
+                prog.markCompleted()
+                exportNext(index + 1)
             }
         }
 
-        group.notify(queue: .global(qos: .userInitiated)) {
-            let zipURL = outputURL
-            let files = (try? FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil))?.filter { $0.pathExtension == "mp4" } ?? []
-            guard !files.isEmpty else {
-                try? FileManager.default.removeItem(at: tempDir)
-                DispatchQueue.main.async { sink.isExporting = false }
-                return
-            }
-
-            // Create ZIP using Foundation (sandbox-safe, no subprocess needed)
-            try? FileManager.default.removeItem(at: zipURL)
-            var archiveData = Data()
-            for file in files {
-                guard let fileData = try? Data(contentsOf: file) else { continue }
-                let fileName = file.lastPathComponent
-                // Minimal ZIP format: local file header + data
-                var localHeader = Data()
-                localHeader.append(contentsOf: [0x50, 0x4B, 0x03, 0x04]) // signature
-                localHeader.append(contentsOf: [0x14, 0x00]) // version needed
-                localHeader.append(contentsOf: [0x00, 0x00]) // flags
-                localHeader.append(contentsOf: [0x00, 0x00]) // compression (store)
-                localHeader.append(contentsOf: [0x00, 0x00]) // mod time
-                localHeader.append(contentsOf: [0x00, 0x00]) // mod date
-                let crc = Self.crc32(fileData)
-                localHeader.append(contentsOf: withUnsafeBytes(of: crc.littleEndian) { Array($0) })
-                let size = UInt32(fileData.count)
-                localHeader.append(contentsOf: withUnsafeBytes(of: size.littleEndian) { Array($0) }) // compressed
-                localHeader.append(contentsOf: withUnsafeBytes(of: size.littleEndian) { Array($0) }) // uncompressed
-                let nameData = Data(fileName.utf8)
-                let nameLen = UInt16(nameData.count)
-                localHeader.append(contentsOf: withUnsafeBytes(of: nameLen.littleEndian) { Array($0) })
-                localHeader.append(contentsOf: [0x00, 0x00]) // extra field length
-                localHeader.append(nameData)
-                archiveData.append(localHeader)
-                archiveData.append(fileData)
-            }
-            // Build central directory
-            var centralDir = Data()
-            var offset: UInt32 = 0
-            var entryCount: UInt16 = 0
-            // Re-iterate to build central directory entries
-            for file in files {
-                guard let fileData = try? Data(contentsOf: file) else { continue }
-                let fileName = file.lastPathComponent
-                let nameData = Data(fileName.utf8)
-                let nameLen = UInt16(nameData.count)
-                let size = UInt32(fileData.count)
-                let crc = Self.crc32(fileData)
-
-                var entry = Data()
-                entry.append(contentsOf: [0x50, 0x4B, 0x01, 0x02]) // signature
-                entry.append(contentsOf: [0x14, 0x00]) // version made by
-                entry.append(contentsOf: [0x14, 0x00]) // version needed
-                entry.append(contentsOf: [0x00, 0x00]) // flags
-                entry.append(contentsOf: [0x00, 0x00]) // compression
-                entry.append(contentsOf: [0x00, 0x00]) // mod time
-                entry.append(contentsOf: [0x00, 0x00]) // mod date
-                entry.append(contentsOf: withUnsafeBytes(of: crc.littleEndian) { Array($0) })
-                entry.append(contentsOf: withUnsafeBytes(of: size.littleEndian) { Array($0) }) // compressed
-                entry.append(contentsOf: withUnsafeBytes(of: size.littleEndian) { Array($0) }) // uncompressed
-                entry.append(contentsOf: withUnsafeBytes(of: nameLen.littleEndian) { Array($0) })
-                entry.append(contentsOf: [0x00, 0x00]) // extra field length
-                entry.append(contentsOf: [0x00, 0x00]) // comment length
-                entry.append(contentsOf: [0x00, 0x00]) // disk number
-                entry.append(contentsOf: [0x00, 0x00]) // internal attrs
-                entry.append(contentsOf: [0x00, 0x00, 0x00, 0x00]) // external attrs
-                entry.append(contentsOf: withUnsafeBytes(of: offset.littleEndian) { Array($0) })
-                entry.append(nameData)
-                centralDir.append(entry)
-
-                // local header size: 30 + nameLen + fileData.count
-                offset += 30 + UInt32(nameData.count) + size
-                entryCount += 1
-            }
-            let centralDirOffset = UInt32(archiveData.count)
-            archiveData.append(centralDir)
-            let centralDirSize = UInt32(centralDir.count)
-            // End of central directory
-            var eocd = Data()
-            eocd.append(contentsOf: [0x50, 0x4B, 0x05, 0x06])
-            eocd.append(contentsOf: [0x00, 0x00]) // disk number
-            eocd.append(contentsOf: [0x00, 0x00]) // disk with central dir
-            eocd.append(contentsOf: withUnsafeBytes(of: entryCount.littleEndian) { Array($0) })
-            eocd.append(contentsOf: withUnsafeBytes(of: entryCount.littleEndian) { Array($0) })
-            eocd.append(contentsOf: withUnsafeBytes(of: centralDirSize.littleEndian) { Array($0) })
-            eocd.append(contentsOf: withUnsafeBytes(of: centralDirOffset.littleEndian) { Array($0) })
-            eocd.append(contentsOf: [0x00, 0x00]) // comment length
-            archiveData.append(eocd)
-
-            try? archiveData.write(to: zipURL)
-
-            try? FileManager.default.removeItem(at: tempDir)
-            DispatchQueue.main.async { sink.isExporting = false }
-        }
+        exportNext(0)
     }
 
-    /// CRC32 checksum for ZIP file format.
+    // MARK: - Streaming ZIP (store, no compression) — не держит все файлы в памяти сразу.
+
+    private static let crcTable: [UInt32] = (0..<256).map { i -> UInt32 in
+        var c = UInt32(i)
+        for _ in 0..<8 { c = (c & 1) != 0 ? 0xEDB88320 ^ (c >> 1) : c >> 1 }
+        return c
+    }
+
     private static func crc32(_ data: Data) -> UInt32 {
         var crc: UInt32 = 0xFFFFFFFF
-        for byte in data {
-            crc ^= UInt32(byte)
-            for _ in 0..<8 {
-                crc = (crc >> 1) ^ (crc & 1 != 0 ? 0xEDB88320 : 0)
+        data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            for byte in raw {
+                crc = crcTable[Int((crc ^ UInt32(byte)) & 0xFF)] ^ (crc >> 8)
             }
         }
         return crc ^ 0xFFFFFFFF
+    }
+
+    private static func le32(_ v: UInt32) -> [UInt8] { withUnsafeBytes(of: v.littleEndian) { Array($0) } }
+    private static func le16(_ v: UInt16) -> [UInt8] { withUnsafeBytes(of: v.littleEndian) { Array($0) } }
+
+    /// Дата/время в формате MS-DOS для zip-заголовков (иначе распакованные файлы получают дату 1980).
+    private static func dosDateTime(_ date: Date) -> (time: UInt16, date: UInt16) {
+        let comps = Calendar(identifier: .gregorian).dateComponents(
+            [.year, .month, .day, .hour, .minute, .second], from: date
+        )
+        let year: Int = max(1980, comps.year ?? 1980)
+        let month: Int = comps.month ?? 1
+        let day: Int = comps.day ?? 1
+        let hour: Int = comps.hour ?? 0
+        let minute: Int = comps.minute ?? 0
+        let second: Int = comps.second ?? 0
+
+        let dateBits: Int = ((year - 1980) << 9) | (month << 5) | day
+        let timeBits: Int = (hour << 11) | (minute << 5) | (second / 2)
+        return (UInt16(truncatingIfNeeded: timeBits), UInt16(truncatingIfNeeded: dateBits))
+    }
+
+    /// Пишет zip потоково прямо в файл (по одному входному файлу в памяти за раз), считая CRC один раз.
+    private static func writeZip(files: [URL], to outputURL: URL, progress: (Double) -> Void) throws {
+        try? FileManager.default.removeItem(at: outputURL)
+        guard FileManager.default.createFile(atPath: outputURL.path, contents: nil),
+              let handle = try? FileHandle(forWritingTo: outputURL) else {
+            throw NSError(domain: "SportCutZip", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot create archive"])
+        }
+        defer { try? handle.close() }
+
+        struct CentralEntry { let name: Data; let crc: UInt32; let size: UInt32; let offset: UInt32 }
+        var central: [CentralEntry] = []
+        var offset: UInt32 = 0
+        let count = max(files.count, 1)
+        let (dosTime, dosDate) = dosDateTime(Date())
+
+        for (i, file) in files.enumerated() {
+            guard let data = try? Data(contentsOf: file, options: .mappedIfSafe) else { continue }
+            let name = Data(file.lastPathComponent.utf8)
+            let crc = crc32(data)
+            let size = UInt32(truncatingIfNeeded: data.count)
+
+            var local = Data()
+            local.append(contentsOf: [0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00])
+            local.append(contentsOf: le16(dosTime))
+            local.append(contentsOf: le16(dosDate))
+            local.append(contentsOf: le32(crc))
+            local.append(contentsOf: le32(size)) // compressed
+            local.append(contentsOf: le32(size)) // uncompressed
+            local.append(contentsOf: le16(UInt16(name.count)))
+            local.append(contentsOf: [0x00, 0x00]) // extra len
+            local.append(name)
+
+            try handle.write(contentsOf: local)
+            try handle.write(contentsOf: data)
+
+            central.append(CentralEntry(name: name, crc: crc, size: size, offset: offset))
+            offset += UInt32(local.count) + size
+            progress(Double(i + 1) / Double(count))
+        }
+
+        var centralData = Data()
+        for e in central {
+            var entry = Data()
+            entry.append(contentsOf: [0x50, 0x4B, 0x01, 0x02, 0x14, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00])
+            entry.append(contentsOf: le16(dosTime))
+            entry.append(contentsOf: le16(dosDate))
+            entry.append(contentsOf: le32(e.crc))
+            entry.append(contentsOf: le32(e.size))
+            entry.append(contentsOf: le32(e.size))
+            entry.append(contentsOf: le16(UInt16(e.name.count)))
+            entry.append(contentsOf: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]) // extra/comment/disk/attrs
+            entry.append(contentsOf: le32(e.offset))
+            entry.append(e.name)
+            centralData.append(entry)
+        }
+        let centralOffset = offset
+        try handle.write(contentsOf: centralData)
+
+        var eocd = Data()
+        eocd.append(contentsOf: [0x50, 0x4B, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00])
+        eocd.append(contentsOf: le16(UInt16(central.count)))
+        eocd.append(contentsOf: le16(UInt16(central.count)))
+        eocd.append(contentsOf: le32(UInt32(centralData.count)))
+        eocd.append(contentsOf: le32(centralOffset))
+        eocd.append(contentsOf: [0x00, 0x00])
+        try handle.write(contentsOf: eocd)
     }
 
     private func exportAsFilm(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession) {
@@ -1140,12 +1250,11 @@ private final class SportCutExportBackend {
     }
 
     private func exportAsFilmBuild(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession, slideURLs: [UUID: URL]) {
-        let sink = ui
         let drawingsFolder = SportCutPlayerManager.drawingsFolder(sessionID: session.id)
         let composition = AVMutableComposition()
 
         guard composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) != nil else {
-            DispatchQueue.main.async { sink.isExporting = false }
+            finishError(^String.Titles.exportErrorFailedGeneric)
             return
         }
 
@@ -1222,10 +1331,16 @@ private final class SportCutExportBackend {
             }
         }
 
+        guard composition.duration.seconds > 0 else {
+            securityURLs.forEach { $0.stopAccessingSecurityScopedResource() }
+            finishError(^String.Titles.exportErrorNothingProduced)
+            return
+        }
+
         let preset = Self.bestPreset(for: composition)
         guard let exportSession = AVAssetExportSession(asset: composition, presetName: preset) else {
             securityURLs.forEach { $0.stopAccessingSecurityScopedResource() }
-            DispatchQueue.main.async { sink.isExporting = false }
+            finishError(^String.Titles.exportErrorFailedGeneric)
             return
         }
 
@@ -1233,7 +1348,7 @@ private final class SportCutExportBackend {
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .mp4
 
-        if addWatermark, !wmSegments.isEmpty,
+        if ((addWatermark && !wmSegments.isEmpty) || showLogo),
            let vTrack = firstVideoTrack,
            let compVideoTrack = composition.tracks(withMediaType: .video).first {
             if let vc = watermarkVideoComposition(
@@ -1254,10 +1369,16 @@ private final class SportCutExportBackend {
             }
         }
 
+        startProgressPolling { Double(exportSession.progress) }
         exportSession.exportAsynchronously {
             securityURLs.forEach { $0.stopAccessingSecurityScopedResource() }
-            DispatchQueue.main.async {
-                sink.isExporting = false
+            switch exportSession.status {
+            case .completed:
+                self.finishSuccess()
+            case .failed, .cancelled:
+                self.finishError(exportSession.error?.localizedDescription ?? (^String.Titles.exportErrorFailedGeneric))
+            default:
+                self.finishError(^String.Titles.exportErrorFailedGeneric)
             }
         }
     }
@@ -1272,12 +1393,16 @@ private final class SportCutExportBackend {
     }
 
     private func exportAsFilmPerPlaylistBuild(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession, slideURLs: [UUID: URL]) {
-        let sink = ui
+        _ = ui
         let parentDir = outputURL.deletingLastPathComponent()
         let baseName = outputURL.deletingPathExtension().lastPathComponent
         let drawingsFolder = SportCutPlayerManager.drawingsFolder(sessionID: session.id)
 
         let group = DispatchGroup()
+        var sessions: [AVAssetExportSession] = []
+        let resultLock = NSLock()
+        var succeeded = 0
+        var lastError: String?
 
         for playlist in playlists {
             group.enter()
@@ -1374,7 +1499,7 @@ private final class SportCutExportBackend {
             exportSession.outputURL = filmURL
             exportSession.outputFileType = .mp4
 
-            if addWatermark, !wmSegments.isEmpty,
+            if ((addWatermark && !wmSegments.isEmpty) || showLogo),
                let vTrack = firstVideoTrack,
                let compVideoTrack = composition.tracks(withMediaType: .video).first {
                 if let vc = watermarkVideoComposition(
@@ -1395,14 +1520,34 @@ private final class SportCutExportBackend {
                 }
             }
 
+            sessions.append(exportSession)
             exportSession.exportAsynchronously {
                 securityURLs.forEach { $0.stopAccessingSecurityScopedResource() }
+                resultLock.lock()
+                if exportSession.status == .completed {
+                    succeeded += 1
+                } else {
+                    lastError = exportSession.error?.localizedDescription ?? lastError
+                }
+                resultLock.unlock()
                 group.leave()
             }
         }
 
+        // Средний прогресс по всем сессиям плейлистов.
+        startProgressPolling {
+            guard !sessions.isEmpty else { return 0 }
+            let sum = sessions.reduce(0.0) { $0 + Double($1.progress) }
+            return sum / Double(sessions.count)
+        }
+
         group.notify(queue: .main) {
-            sink.isExporting = false
+            resultLock.lock(); let ok = succeeded; let err = lastError; resultLock.unlock()
+            if ok > 0 {
+                self.finishSuccess()
+            } else {
+                self.finishError(err ?? (^String.Titles.exportErrorNothingProduced))
+            }
         }
     }
 }

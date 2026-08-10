@@ -76,6 +76,8 @@ struct TagFreeLayoutItem: Codable, Identifiable {
     var shadowEnabled: Bool
     var shadowIntensity: Double
     var aspectRatioLocked: Bool
+    /// Картинка-фон кнопки (security-scoped bookmark на файл, выбранный пользователем). nil = без картинки.
+    var backgroundImageBookmark: Data?
 
     // MARK: Init
 
@@ -98,7 +100,8 @@ struct TagFreeLayoutItem: Codable, Identifiable {
         cornerRadius: CGFloat = 8,
         shadowEnabled: Bool = true,
         shadowIntensity: Double = 0.5,
-        aspectRatioLocked: Bool = false
+        aspectRatioLocked: Bool = false,
+        backgroundImageBookmark: Data? = nil
     ) {
         self.elementId = elementId
         self.kind = kind
@@ -119,6 +122,7 @@ struct TagFreeLayoutItem: Codable, Identifiable {
         self.shadowEnabled = shadowEnabled
         self.shadowIntensity = shadowIntensity
         self.aspectRatioLocked = aspectRatioLocked
+        self.backgroundImageBookmark = backgroundImageBookmark
     }
 
     // MARK: Codable (backward compatible)
@@ -130,6 +134,7 @@ struct TagFreeLayoutItem: Codable, Identifiable {
         case fillOpacity, strokeColor, strokeWidth, strokeDashed
         case textColor, fontSize, fontWeight, showLabel
         case cornerRadius, shadowEnabled, shadowIntensity, aspectRatioLocked
+        case backgroundImageBookmark
     }
 
     init(from decoder: Decoder) throws {
@@ -158,6 +163,7 @@ struct TagFreeLayoutItem: Codable, Identifiable {
         shadowEnabled = try c.decodeIfPresent(Bool.self, forKey: .shadowEnabled) ?? true
         shadowIntensity = try c.decodeIfPresent(Double.self, forKey: .shadowIntensity) ?? 0.5
         aspectRatioLocked = try c.decodeIfPresent(Bool.self, forKey: .aspectRatioLocked) ?? false
+        backgroundImageBookmark = try c.decodeIfPresent(Data.self, forKey: .backgroundImageBookmark)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -181,6 +187,7 @@ struct TagFreeLayoutItem: Codable, Identifiable {
         try c.encode(shadowEnabled, forKey: .shadowEnabled)
         try c.encode(shadowIntensity, forKey: .shadowIntensity)
         try c.encode(aspectRatioLocked, forKey: .aspectRatioLocked)
+        try c.encodeIfPresent(backgroundImageBookmark, forKey: .backgroundImageBookmark)
     }
 }
 

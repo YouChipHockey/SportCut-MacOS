@@ -10,6 +10,8 @@ import SwiftUI
 struct CollectionsMenuView: View {
 
     @State private var collections: [CollectionInfo] = []
+    @State private var standardCollections: [StandardCollection] = []
+    @State private var standardToView: String?
     @State private var showCreateTypeSheet = false
     @State private var collectionToDelete: CollectionInfo?
     @State private var collectionToRename: CollectionInfo?
@@ -20,10 +22,10 @@ struct CollectionsMenuView: View {
             headerBar
             Divider()
 
-            if collections.isEmpty {
+            if collections.isEmpty && standardCollections.isEmpty {
                 emptyState
             } else {
-                collectionsGrid
+                collectionsScroll
             }
         }
         .frame(minWidth: 720, minHeight: 480)
@@ -34,6 +36,21 @@ struct CollectionsMenuView: View {
         }
         .sheet(isPresented: $showCreateTypeSheet) {
             CreateCollectionTypeSheet(isPresented: $showCreateTypeSheet)
+        }
+        .sheet(isPresented: Binding(
+            get: { standardToView != nil },
+            set: { if !$0 { standardToView = nil } }
+        )) {
+            if let name = standardToView {
+                StandardCollectionViewerView(
+                    collectionName: name,
+                    isPresented: Binding(
+                        get: { standardToView != nil },
+                        set: { if !$0 { standardToView = nil } }
+                    ),
+                    onCreateCopy: { createCopyOfStandard(name) }
+                )
+            }
         }
         .alert(
             ^String.Titles.deleteCollection,
@@ -110,17 +127,94 @@ struct CollectionsMenuView: View {
 
     // MARK: - Grid
 
-    private var collectionsGrid: some View {
+    private var gridColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 200), spacing: 16)]
+    }
+
+    private var collectionsScroll: some View {
         ScrollView {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 200), spacing: 16)],
-                spacing: 16
-            ) {
-                ForEach(collections, id: \.id) { info in
-                    collectionCard(info)
+            VStack(alignment: .leading, spacing: 28) {
+                if !collections.isEmpty {
+                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                        ForEach(collections, id: \.id) { info in
+                            collectionCard(info)
+                        }
+                    }
+                }
+
+                if !standardCollections.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 8) {
+                            Text(^String.Titles.collectionsTemplateStandard)
+                                .font(.headline)
+                            Text(^String.Titles.collectionStandardReadOnly)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.12))
+                                .cornerRadius(6)
+                        }
+                        LazyVGrid(columns: gridColumns, spacing: 16) {
+                            ForEach(standardCollections, id: \.name) { std in
+                                standardCollectionCard(std)
+                            }
+                        }
+                    }
                 }
             }
             .padding(20)
+        }
+    }
+
+    private func standardCollectionCard(_ std: StandardCollection) -> some View {
+        Button(action: { standardToView = std.name }) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.blue)
+                    Spacer()
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+
+                Text(std.name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(^String.Titles.collectionStandardReadOnly)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(^String.Titles.collectionStandardOpenReadOnly)
+        .contextMenu {
+            Button(^String.Titles.collectionStandardOpenReadOnly) {
+                standardToView = std.name
+            }
+            Button(^String.Titles.collectionCreateCopy) {
+                createCopyOfStandard(std.name)
+            }
         }
     }
 
@@ -216,6 +310,16 @@ struct CollectionsMenuView: View {
 
     private func reloadCollections() {
         collections = CollectionsBookmarksManager.shared.loadCollections()
+        standardCollections = TagLibraryManager.shared.standardCollections
+    }
+
+    /// Создаёт редактируемую копию стандартной коллекции (через существующий механизм шаблонов)
+    /// и открывает её в редакторе. Саму стандартную коллекцию менять нельзя.
+    private func createCopyOfStandard(_ name: String) {
+        WindowsManager.shared.openCustomCollectionsWindow(
+            initialDisplayMode: .grouped,
+            template: .standard(name: name)
+        )
     }
 
     private func openCollectionEditor(_ info: CollectionInfo) {

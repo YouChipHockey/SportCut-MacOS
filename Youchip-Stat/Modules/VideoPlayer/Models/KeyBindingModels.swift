@@ -14,6 +14,9 @@ enum CanvasButtonKind: String, Codable, CaseIterable {
     case tag
     case label
     case timeEvent
+    /// Карта (PlayField) прямо на холсте: зона, по которой кликают, ставя позицию на карте.
+    /// Работает как лейбл (со всеми тегами, кроме эксклюзивных связок), но добавляет позицию.
+    case map
 }
 
 // MARK: - Binding type

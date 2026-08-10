@@ -12,23 +12,38 @@ import AVFoundation
 
 enum SportCutClipCache {
 
+    /// Корневая ВНУТРЕННЯЯ папка приложения (Application Support), не видимая пользователю в Documents.
+    private static func rootDir() -> URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("YouChip-Stat-PlaylistClips", isDirectory: true)
+    }
+
+    /// Путь к папке клипов сессии БЕЗ создания (для чтения/удаления).
+    private static func clipsDirPath(sessionID: UUID) -> URL {
+        rootDir().appendingPathComponent(sessionID.uuidString, isDirectory: true)
+    }
+
+    /// Папка клипов сессии, создаётся при необходимости (для записи).
     private static func clipsDir(sessionID: UUID) -> URL {
-        let dir = URL.appDocumentsDirectory
-            .appendingPathComponent("YouChip-Stat/PlaylistClips/\(sessionID.uuidString)", isDirectory: true)
+        let dir = clipsDirPath(sessionID: sessionID)
         if !FileManager.default.fileExists(atPath: dir.path) {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         return dir
     }
 
-    private static func fileName(for event: SportCutEvent) -> String {
+    private static func fileName(forHiddenKey hiddenKey: String) -> String {
         // hiddenKey = "sourceID|stampID" — заменяем разделитель для имени файла.
-        event.hiddenKey.replacingOccurrences(of: "|", with: "_") + ".mov"
+        hiddenKey.replacingOccurrences(of: "|", with: "_") + ".mov"
+    }
+
+    private static func fileName(for event: SportCutEvent) -> String {
+        fileName(forHiddenKey: event.hiddenKey)
     }
 
     /// URL закэшированного (обрезанного) клипа события, если он уже экспортирован.
     static func cachedClipURL(sessionID: UUID, event: SportCutEvent) -> URL? {
-        let url = clipsDir(sessionID: sessionID).appendingPathComponent(fileName(for: event))
+        let url = clipsDirPath(sessionID: sessionID).appendingPathComponent(fileName(for: event))
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
@@ -109,6 +124,86 @@ enum SportCutClipCache {
 
         DispatchQueue.global(qos: .userInitiated).async {
             processNext(0)
+        }
+    }
+
+    // MARK: - Auto-caching (клипы плейлистов сохраняются автоматически)
+
+    /// Сессии, для которых прямо сейчас идёт фоновый экспорт — чтобы не запускать вторую цепочку.
+    private static var inProgressSessions: Set<UUID> = []
+
+    /// Автоматически до-экспортирует все ещё не закэшированные видимые клипы плейлистов сессии.
+    /// Вызывается на каждом изменении сессии; уже закэшированные и слайды пропускаются, тяжёлый
+    /// экспорт идёт в фоне. Клипы источников, которых уже нет в сессии, не трогаем (их не переэкспортировать,
+    /// но ранее сохранённые копии остаются и продолжают играть).
+    static func autoCacheIfNeeded(session: SportCutSession) {
+        let sessionID = session.id
+        guard !inProgressSessions.contains(sessionID) else { return }
+
+        var seen = Set<String>()
+        var events: [SportCutEvent] = []
+        var startOverrides: [String: Double] = [:]
+        var durationOverrides: [String: Double] = [:]
+
+        for group in session.playlistGroups {
+            for playlist in group.playlists {
+                for event in playlist.events where !playlist.hiddenEventKeys.contains(event.hiddenKey) {
+                    let key = event.hiddenKey
+                    if event.isSlide || seen.contains(key) { continue }
+                    if cachedClipURL(sessionID: sessionID, event: event) != nil { continue }
+                    // Экспортировать можно только пока исходное видео ещё в сессии.
+                    guard session.sources.contains(where: { $0.id == event.sourceID }) else { continue }
+                    seen.insert(key)
+                    events.append(event)
+                    if let s = playlist.eventStartOverrides[key] { startOverrides[key] = s }
+                    if let d = playlist.eventDurationOverrides[key] { durationOverrides[key] = d }
+                }
+            }
+        }
+
+        guard !events.isEmpty else { return }
+
+        inProgressSessions.insert(sessionID)
+        exportClips(
+            events: events,
+            sessionID: sessionID,
+            sources: session.sources,
+            startOverrides: startOverrides,
+            durationOverrides: durationOverrides,
+            completion: { _, _ in
+                inProgressSessions.remove(sessionID)
+            }
+        )
+    }
+
+    // MARK: - Cleanup
+
+    /// Удаляет ВСЕ клипы сессии (при удалении сессии просмотра).
+    static func removeAllClips(sessionID: UUID) {
+        inProgressSessions.remove(sessionID)
+        try? FileManager.default.removeItem(at: clipsDirPath(sessionID: sessionID))
+    }
+
+    /// Удаляет «осиротевшие» клипы — те, что больше не встречаются ни в одном плейлисте сессии
+    /// (при удалении плейлиста/группы/эпизода). Клипы всё ещё присутствующих эпизодов сохраняются.
+    static func pruneOrphanedClips(for session: SportCutSession) {
+        let dir = clipsDirPath(sessionID: session.id)
+        guard FileManager.default.fileExists(atPath: dir.path),
+              let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+
+        var keepFileNames = Set<String>()
+        for group in session.playlistGroups {
+            for playlist in group.playlists {
+                for event in playlist.events {
+                    keepFileNames.insert(fileName(forHiddenKey: event.hiddenKey))
+                }
+            }
+        }
+
+        for file in files where file.pathExtension.lowercased() == "mov" {
+            if !keepFileNames.contains(file.lastPathComponent) {
+                try? FileManager.default.removeItem(at: file)
+            }
         }
     }
 }

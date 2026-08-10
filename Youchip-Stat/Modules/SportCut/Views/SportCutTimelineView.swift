@@ -109,7 +109,12 @@ struct SportCutTimelineView: View {
     @State private var showAddSourceSheet = false
     @StateObject private var filter = TimelineFilter()
     @State private var timelineScale: CGFloat = 1.0
+    @State private var showZoomPopover = false
     @GestureState private var magnifyScale: CGFloat = 1.0
+    /// Контроллер горизонтального скролла таймлайна разметки — чтобы зумить «в плейхед» (как в разметке).
+    @StateObject private var markupScrollController = TimelineScrollController()
+    /// Предыдущий эффективный масштаб — чтобы новый зум привязать к плейхеду (см. handleMarkupZoomChanged).
+    @State private var previousMarkupEffectiveScale: CGFloat = 1.0
     @State private var lineSort: SportCutTimelineLineSort = .original
     @State private var selectedSportStampID: UUID?
     /// Cmd+Click multi-selection of stamps for batch drag to playlists.
@@ -375,23 +380,51 @@ struct SportCutTimelineView: View {
     }
     
     private var zoomControls: some View {
-        HStack(spacing: 4) {
-            Button { timelineScale = max(1.0, timelineScale - 0.5) } label: {
-                Image(systemName: "minus.magnifyingglass")
-                    .font(.system(size: 11))
+        Button {
+            showZoomPopover.toggle()
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.system(size: 10, weight: .medium))
+                Text(String(format: "%.1fx", timelineScale))
+                    .font(.system(size: 9, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
-            .buttonStyle(PlainButtonStyle())
-            
+            .frame(minHeight: 22)
+            .padding(.horizontal, 6)
+            .background(Color.gray.opacity(0.12))
+            .foregroundColor(.primary)
+            .cornerRadius(4)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .popover(isPresented: $showZoomPopover, arrowEdge: .bottom) {
+            zoomPopoverContent
+        }
+    }
+
+    private var zoomPopoverContent: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "minus.magnifyingglass")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
+            Slider(value: $timelineScale, in: 1.0...sportCutTimelineMaxScale)
+                .controlSize(.small)
+                .frame(width: 180)
+
+            Image(systemName: "plus.magnifyingglass")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
             Text(String(format: "%.1fx", timelineScale))
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.secondary)
-            
-            Button { timelineScale = min(sportCutTimelineMaxScale, timelineScale + 0.5) } label: {
-                Image(systemName: "plus.magnifyingglass")
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(PlainButtonStyle())
+                .lineLimit(1)
+                .frame(width: 34, alignment: .trailing)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
     }
     
     private var addSourceButton: some View {
@@ -420,6 +453,50 @@ struct SportCutTimelineView: View {
         let baseCount = 20 * max(scale, 1.0)
         let baseInterval = totalDuration / baseCount
         return max(0.5, baseInterval)
+    }
+
+    /// Полная длительность шкалы разметки для источника (та же формула, что и при отрисовке таймлайна).
+    private func markupTotalDuration(for source: SportCutSource) -> Double {
+        let stampMax = source.timelines.flatMap(\.stamps).map(\.timeFinishSeconds).max() ?? 1.0
+        let fullVideoDuration = sourceVideoDurations[source.id] ?? stampMax
+        return max(1.0, max(fullVideoDuration, stampMax))
+    }
+
+    /// После изменения масштаба таймлайна разметки удерживаем плейхед на его экранной позиции
+    /// (или в центре, если он вне видимой области) — то есть зумим «в плейхед», как в разметке плеера.
+    private func handleMarkupZoomChanged(source: SportCutSource) {
+        let visibleWidth = markupScrollController.visibleWidth
+        let oldEffectiveScale = max(previousMarkupEffectiveScale, 1.0)
+        let newEffectiveScale = max(timelineScale, 1.0)
+        previousMarkupEffectiveScale = newEffectiveScale
+
+        let totalDuration = markupTotalDuration(for: source)
+        guard visibleWidth > 0, totalDuration > 0,
+              abs(newEffectiveScale - oldEffectiveScale) > 0.0001 else { return }
+
+        let oldGridWidth = visibleWidth * oldEffectiveScale
+        let newGridWidth = visibleWidth * newEffectiveScale
+
+        // Доля позиции, вокруг которой зумим: плейхед, если он известен, иначе — центр видимой области.
+        let ratio: CGFloat
+        if let absTime = playerManager.absoluteVideoTimelineTime(forSourceID: source.id) {
+            ratio = max(0, min(CGFloat(absTime / totalDuration), 1))
+        } else {
+            let centerContentX = markupScrollController.currentScrollX + visibleWidth / 2
+            ratio = oldGridWidth > 0 ? max(0, min(centerContentX / oldGridWidth, 1)) : 0
+        }
+
+        // Экранная позиция точки привязки до зума; если она вне области — привязываемся к центру.
+        let anchorViewportX = ratio * oldGridWidth - markupScrollController.currentScrollX
+        let anchorX = (anchorViewportX < 0 || anchorViewportX > visibleWidth)
+            ? visibleWidth / 2
+            : anchorViewportX
+
+        let newScrollX = ratio * newGridWidth - anchorX
+        // Контент пересчитывает ширину на следующем цикле лэйаута — прыгаем после него.
+        DispatchQueue.main.async {
+            markupScrollController.scrollTo(x: max(0, newScrollX))
+        }
     }
 
     @ViewBuilder
@@ -527,8 +604,13 @@ struct SportCutTimelineView: View {
                             )
                         }
                         .coordinateSpace(name: "sportCutMarkupTimeline")
+                        // Невидимый «прикрепитель» — находит NSScrollView, чтобы управлять скроллом при зуме.
+                        .background(TimelineScrollControllerAttacher(controller: markupScrollController))
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .onChange(of: timelineScale) { _ in
+                        handleMarkupZoomChanged(source: source)
+                    }
                 }
             }
         }
@@ -2476,9 +2558,10 @@ struct SportCutAddSourceSheet: View {
     
     @ObservedObject private var sessionManager = SportCutSessionManager.shared
     @State private var showProjectPicker = false
-    
+    @State private var showViewingLimitAlert = false
+
     private var filesManager: VideoFilesManager { VideoFilesManager.shared }
-    
+
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
     }
@@ -2541,11 +2624,20 @@ struct SportCutAddSourceSheet: View {
                 onCancel: { showProjectPicker = false }
             )
         }
+        .alert(^String.Titles.viewingLimitReachedTitle, isPresented: $showViewingLimitAlert) {
+            Button(^String.Titles.alertsOkTitle, role: .cancel) { }
+        } message: {
+            Text(^String.Titles.viewingLimitReachedMessage)
+        }
     }
-    
+
     private var addProjectSection: some View {
         HStack(spacing: 12) {
-            Button(action: { showProjectPicker = true }) {
+            Button(action: {
+                // Лимит просмотра: без активной лицензии нельзя добавлять источники, когда лимит исчерпан.
+                guard LicenseLimitsManager.shared.canModifyViewing else { showViewingLimitAlert = true; return }
+                showProjectPicker = true
+            }) {
                 HStack(spacing: 6) {
                     Image(systemName: "film.stack")
                         .font(.system(size: 14))
@@ -2624,6 +2716,8 @@ struct SportCutAddSourceSheet: View {
     }
     
     private func addVideoFiles() {
+        // Лимит просмотра: без активной лицензии нельзя добавлять источники, когда лимит исчерпан.
+        guard LicenseLimitsManager.shared.canModifyViewing else { showViewingLimitAlert = true; return }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false

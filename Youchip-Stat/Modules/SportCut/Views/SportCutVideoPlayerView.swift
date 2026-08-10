@@ -152,8 +152,10 @@ struct SportCutVideoPlayerView: View {
     
     private var videoContentView: some View {
         ZStack {
-            SportCutMinimalPlayerView(player: playerManager.player)
-                .background(Color.black)
+            ZoomableVideoPlayerView(player: playerManager.player) {
+                SportCutMinimalPlayerView(player: playerManager.player)
+            }
+            .background(Color.black)
 
             SportCutWatermarkOverlay(playerManager: playerManager)
 
