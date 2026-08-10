@@ -323,7 +323,23 @@ struct CollectionsMenuView: View {
     }
 
     private func openCollectionEditor(_ info: CollectionInfo) {
-        guard let bookmark = CollectionsBookmarksManager.shared.collectionBookmark(for: info.id) else { return }
+        // `collectionBookmark(for:)` строит bookmark'и из файлов коллекции, а они пишутся на диск
+        // отложенно (InMemoryStorageManager — UserDefaults сразу, файлы по таймеру 30 с). У только
+        // что созданной коллекции в папке лежит один tagLayout.json, поэтому метод возвращал nil и
+        // карточка просто не открывалась. Редактору сами bookmark-данные не нужны: он грузит
+        // коллекцию по имени через InMemoryStorageManager. Поэтому падаем на bookmark с пустыми
+        // Data — ровно так же его собирает TagLibraryView.loadUserCollections().
+        let bookmark = CollectionsBookmarksManager.shared.collectionBookmark(for: info.id)
+            ?? CollectionBookmark(
+                id: info.id,
+                name: info.name,
+                tagGroupsBookmark: Data(),
+                tagsBookmark: Data(),
+                labelGroupsBookmark: Data(),
+                labelsBookmark: Data(),
+                timeEventsBookmark: Data(),
+                playFieldBookmark: nil
+            )
         WindowsManager.shared.openCustomCollectionsWindow(withExistingCollection: bookmark)
     }
 
