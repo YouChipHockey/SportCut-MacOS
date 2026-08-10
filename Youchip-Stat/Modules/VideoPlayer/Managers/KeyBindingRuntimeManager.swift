@@ -41,6 +41,19 @@ typealias AttachTimeEventsToAnchorCallback = (
     _ onDone: (() -> Void)?
 ) -> Void
 
+// MARK: - Diagnostics
+
+/// Диагностика движка связок. Временная — включается одним флагом, чтобы видеть в консоли
+/// весь путь нажатия: конфигурация → цепочка связок → колбэки в библиотеку тегов.
+enum KeyBindingLog {
+    static var isEnabled = true
+
+    static func log(_ message: @autoclosure () -> String) {
+        guard isEnabled else { return }
+        print("🔗 KB: \(message())")
+    }
+}
+
 // MARK: - Manager
 
 final class KeyBindingRuntimeManager: ObservableObject {
@@ -139,10 +152,65 @@ final class KeyBindingRuntimeManager: ObservableObject {
 
     // MARK: - Configuration
 
-    func configure(layout: TagFreeLayout) {
+    /// Коллекция, под которую сейчас загружены связки. nil — связки не сконфигурированы.
+    private(set) var configuredCollectionId: String?
+
+    func configure(layout: TagFreeLayout, collectionId: String? = nil) {
         bindings = layout.bindings
         items = layout.items
+        configuredCollectionId = collectionId
+        KeyBindingLog.log("configure(collection: \(collectionId ?? "nil")) items=\(items.count) bindings=\(bindings.count)")
         reset()
+    }
+
+    /// Уход с коллекции связок. Чистит именно СВЯЗКИ (в отличие от `reset()`, который трогает
+    /// только состояние подсветки): движок — синглтон, и без этого связки прошлой коллекции
+    /// «протекали» в следующую.
+    func clearConfiguration() {
+        KeyBindingLog.log("clearConfiguration (было bindings=\(bindings.count), collection=\(configuredCollectionId ?? "nil"))")
+        bindings = []
+        items = []
+        configuredCollectionId = nil
+        reset()
+        resetRuntimeVisibility()
+    }
+
+    /// Гарантирует, что связки ТЕКУЩЕЙ коллекции загружены, и делает это лениво — прямо перед
+    /// обработкой нажатия.
+    ///
+    /// Раньше `configure` вызывался только из `onAppear`/`onChange` вьюх библиотеки тегов. Если
+    /// ни один из этих хуков не срабатывал (типовой случай — коллекция только что создана и
+    /// подхвачена в уже смонтированном канвасе), `bindings` оставался пустым: холст рисовался,
+    /// теги ставились, хоткеи работали, а связки молчали до перезапуска приложения.
+    ///
+    /// Идемпотентно: для уже загруженной коллекции — no-op (важно, иначе `configure` сбрасывал бы
+    /// подсветку посреди цепочки).
+    @discardableResult
+    func ensureConfiguredForCurrentCollection(playFields: [PlayField] = []) -> Bool {
+        let library = TagLibraryManager.shared
+        guard case .user(let name) = library.currentCollectionType,
+              let info = CollectionsBookmarksManager.shared.loadCollections().first(where: { $0.name == name })
+        else {
+            KeyBindingLog.log("ensureConfigured: текущая коллекция не пользовательская — пропуск")
+            return false
+        }
+
+        if configuredCollectionId == info.id { return true }
+
+        guard let stored = TagFreeLayoutStorage.loadLayoutIfExists(
+            collectionId: info.id,
+            tags: library.tags,
+            labels: library.allLabels,
+            timeEvents: library.timeEvents,
+            playFields: playFields
+        ) else {
+            KeyBindingLog.log("ensureConfigured: раскладка не найдена для '\(name)' (id \(info.id))")
+            return false
+        }
+
+        KeyBindingLog.log("ensureConfigured: ленивая загрузка '\(name)'")
+        configure(layout: stored, collectionId: info.id)
+        return true
     }
 
     func reset() {
@@ -194,7 +262,10 @@ final class KeyBindingRuntimeManager: ObservableObject {
         let triggeringLabelId = kind == .label ? elementId : nil
         didCompleteHighlightPair = false
 
+        KeyBindingLog.log("handleButtonTap \(buttonKey) | всего bindings=\(bindings.count), исходящих=\(bindings.filter { $0.sourceButtonKey == buttonKey }.count)")
+
         if kind == .tag, isIntervalTagActive?(elementId) == true {
+            KeyBindingLog.log("  ↳ тег уже пишется как интервал — связки не применяем")
             return true
         }
 
@@ -566,6 +637,7 @@ final class KeyBindingRuntimeManager: ObservableObject {
         visited: inout Set<String>
     ) {
         let targetKey = binding.targetButtonKey
+        KeyBindingLog.log("  применяю \(binding.type.rawValue): \(binding.sourceButtonKey) → \(targetKey)")
         switch binding.type {
 
         case .highlight:
@@ -576,12 +648,14 @@ final class KeyBindingRuntimeManager: ObservableObject {
 
         case .deactivation:
             if binding.targetKind == .tag {
+                KeyBindingLog.log("    ↳ deactivation \(binding.targetId): onStopIntervalTag \(onStopIntervalTag == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok"), сейчас активен=\(isIntervalTagActive?(binding.targetId) ?? false)")
                 onStopIntervalTag?(binding.targetId)
             }
 
         case .intervalInversion:
             if binding.targetKind == .tag {
                 let isActive = isIntervalTagActive?(binding.targetId) ?? false
+                KeyBindingLog.log("    ↳ intervalInversion \(binding.targetId): активен=\(isActive), onStart \(onStartIntervalTag == nil ? "НЕТ ❌" : "ok"), onStop \(onStopIntervalTag == nil ? "НЕТ ❌" : "ok")")
                 if isActive {
                     onStopIntervalTag?(binding.targetId)
                 } else {
@@ -712,6 +786,7 @@ final class KeyBindingRuntimeManager: ObservableObject {
         // защита→нападение), повторно его не активируем, иначе цепочка зациклится и
         // тег добавится ещё раз. `visited` содержит все теги, отработавшие в этой цепочке.
         if binding.targetKind == .tag, visited.contains(targetKey) {
+            KeyBindingLog.log("    ↳ activation пропущена: \(targetKey) уже отработал в этой цепочке")
             return
         }
 
@@ -722,6 +797,7 @@ final class KeyBindingRuntimeManager: ObservableObject {
 
         if binding.targetKind == .tag {
             didActivateTagInChain = true
+            KeyBindingLog.log("    ↳ activation тега \(targetId): onAddTag \(onAddTag == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok")")
             let labels = takeActivatedLabels(triggeringLabelId: triggeringLabelId)
             let capturedVisited = visited
             let capturedTrigger = triggeringLabelId

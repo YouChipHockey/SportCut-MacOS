@@ -1503,7 +1503,7 @@ struct TagLibraryView: View {
             tagLibrary.labels = cachedData.labels
             tagLibrary.timeEvents = cachedData.timeEvents
             tagLibrary.selectedTimeEvents.removeAll()
-            keyBindingRuntime.reset()
+            keyBindingRuntime.clearConfiguration()
             tagLibrary.currentCollectionType = .user(name: collection.name)
             HotKeyManager.shared.clearHotkeys()
             HotKeyManager.shared.registerHotkeys(from: cachedData.tags, for: .user(name: collection.name))
@@ -1527,7 +1527,7 @@ struct TagLibraryView: View {
                         self.tagLibrary.labels = collectionManager.labels
                         self.tagLibrary.timeEvents = collectionManager.timeEvents
                         self.tagLibrary.selectedTimeEvents.removeAll()
-                        self.keyBindingRuntime.reset()
+                        self.keyBindingRuntime.clearConfiguration()
                         self.tagLibrary.currentCollectionType = .user(name: collection.name)
                         HotKeyManager.shared.clearHotkeys()
                         HotKeyManager.shared.registerHotkeys(from: collectionManager.tags, for: .user(name: collection.name))
@@ -1551,7 +1551,7 @@ struct TagLibraryView: View {
                         self.tagLibrary.labels = []
                         self.tagLibrary.timeEvents = []
                         self.tagLibrary.selectedTimeEvents.removeAll()
-                        self.keyBindingRuntime.reset()
+                        self.keyBindingRuntime.clearConfiguration()
                         self.tagLibrary.currentCollectionType = .standard
                         HotKeyManager.shared.clearHotkeys()
                         self.cachedPlayFields = nil
@@ -1746,18 +1746,18 @@ struct TagLibraryView: View {
               let name = lastSelectedCollectionName,
               let info = CollectionsBookmarksManager.shared.loadCollections().first(where: { $0.name == name }) else {
             tagDisplayMode = .grouped
-            keyBindingRuntime.reset()
+            keyBindingRuntime.clearConfiguration()
             return
         }
 
         switch info.displayMode {
         case .grouped:
             tagDisplayMode = .grouped
-            keyBindingRuntime.reset()
+            keyBindingRuntime.clearConfiguration()
         case .free:
             tagDisplayMode = isFreeLayoutConfigured ? .free : .grouped
             if tagDisplayMode == .grouped {
-                keyBindingRuntime.reset()
+                keyBindingRuntime.clearConfiguration()
             } else {
                 reloadKeyBindingRuntimeLayout()
             }
@@ -1776,7 +1776,7 @@ struct TagLibraryView: View {
             timeEvents: tagLibrary.timeEvents,
             playFields: cachedPlayFields?.fields ?? []
         ) {
-            keyBindingRuntime.configure(layout: stored)
+            keyBindingRuntime.configure(layout: stored, collectionId: info.id)
         }
     }
 
@@ -1800,7 +1800,7 @@ struct TagLibraryView: View {
     private func handleCanvasLabelTap(label: Label, commandPressed: Bool) {
         guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
 
-        wireRuntimeCallbacks()
+        prepareRuntimeForTap()
 
         let labelId = label.id
 
@@ -1826,7 +1826,7 @@ struct TagLibraryView: View {
     private func handleCanvasButtonTap(kind: CanvasButtonKind, elementId: String) {
         guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
 
-        wireRuntimeCallbacks()
+        prepareRuntimeForTap()
 
         if kind == .label {
             return
@@ -1885,8 +1885,15 @@ struct TagLibraryView: View {
     }
 
     private func startIntervalRecording(tag: Tag, labelIds: [String]) {
-        guard isKeyBindingsCanvasMode else { return }
-        guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else { return }
+        guard isKeyBindingsCanvasMode else {
+            KeyBindingLog.log("startIntervalRecording '\(tag.name)': отказ — вьюха не в режиме связок (tagDisplayMode=\(tagDisplayMode)) ❌")
+            return
+        }
+        guard !activeIntervalTags.contains(where: { $0.tag.id == tag.id }) else {
+            KeyBindingLog.log("startIntervalRecording '\(tag.name)': уже пишется — пропуск")
+            return
+        }
+        KeyBindingLog.log("startIntervalRecording '\(tag.name)' ▶︎ (активных интервалов было \(activeIntervalTags.count))")
         keyBindingRuntime.clearActivatedLabels()
         activeIntervalTags.append(
             ActiveIntervalTag(
@@ -1900,9 +1907,13 @@ struct TagLibraryView: View {
     }
 
     private func finishIntervalRecording(at index: Int) {
-        guard isKeyBindingsCanvasMode else { return }
+        guard isKeyBindingsCanvasMode else {
+            KeyBindingLog.log("finishIntervalRecording: отказ — вьюха не в режиме связок ❌")
+            return
+        }
         let activeTag = activeIntervalTags[index]
         let tag = activeTag.tag
+        KeyBindingLog.log("finishIntervalRecording '\(tag.name)' ■")
         let videoDuration = max(1.0, videoManager.timelineDuration)
         let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
@@ -1980,7 +1991,7 @@ struct TagLibraryView: View {
     /// Клик по зоне карты в раскладке связок: ставит позицию тегу (как лейбл) и запускает связки карты.
     private func handleCanvasMapTap(fieldId: String, normalized: CGPoint) {
         guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
-        wireRuntimeCallbacks()
+        prepareRuntimeForTap()
         keyBindingRuntime.handleMapTap(mapId: fieldId, normalized: normalized)
     }
 
@@ -2074,15 +2085,38 @@ struct TagLibraryView: View {
         activeIntervalTags[idx].pendingLabelIds = pending
     }
 
+    /// Готовит движок связок к обработке нажатия: колбэки + гарантия, что связки ТЕКУЩЕЙ коллекции
+    /// загружены. Второе — страховка от того, что `configure` не успел пройти по жизненному циклу
+    /// вьюх (коллекцию только что создали/выбрали): без неё `bindings` оставался пустым и связки
+    /// не работали до перезапуска приложения. Повторные вызовы для той же коллекции — no-op.
+    private func prepareRuntimeForTap() {
+        KeyBindingLog.log("— нажатие: режим=\(tagDisplayMode), коллекция='\(lastSelectedCollectionName ?? "-")', активных интервалов=\(activeIntervalTags.count)")
+        wireRuntimeCallbacks()
+        keyBindingRuntime.ensureConfiguredForCurrentCollection(
+            playFields: cachedPlayFields?.fields ?? []
+        )
+    }
+
+    /// Подключает колбэки движка к ЭТОМУ экземпляру вьюхи.
+    ///
+    /// Перевязываем на каждом нажатии, а не один раз за запуск. Колбэки захватывают `self` —
+    /// структуру `TagLibraryView`, и её `@State` (`activeIntervalTags`, `tagDisplayMode`, …) живёт
+    /// в боксах, привязанных к идентичности вьюхи. После `refreshID = UUID()` вьюха
+    /// перемонтируется с НОВОЙ идентичностью, а колбэки продолжали писать в осиротевшие боксы
+    /// прошлого экземпляра: `startIntervalRecording` добавлял запись в мёртвый
+    /// `activeIntervalTags`, а `isKeyBindingsCanvasMode` мог читать там `.grouped` и вообще
+    /// отваливаться по guard. Наружу это выглядело как «связки с интервальными не работают»,
+    /// хотя прямое нажатие по тому же тегу (оно идёт из живой вьюхи) работало.
     private func wireRuntimeCallbacks() {
         guard isKeyBindingsCanvasMode else { return }
-        guard keyBindingRuntime.onAddTag == nil else { return }
         keyBindingRuntime.onAddTag = { [self] tagId, overrideBefore, overrideAfter, labelIds, onAdded in
             guard let tag = tagLibrary.allTags.first(where: { $0.id == tagId }) else {
+                KeyBindingLog.log("onAddTag: тег \(tagId) не найден в allTags ❌")
                 onAdded?()
                 return
             }
             let fullLabels = buildFullLabels(from: labelIds)
+            KeyBindingLog.log("onAddTag: '\(tag.name)' isInterval=\(tag.isInterval ?? false) labels=\(labelIds.count)")
             if tag.isInterval ?? false {
                 startIntervalRecording(tag: tag, labelIds: labelIds)
                 onAdded?()

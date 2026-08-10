@@ -402,7 +402,7 @@ struct FreeTagsCanvasView: View {
             collectionId: collectionId, tags: tags, labels: labels, timeEvents: timeEvents, playFields: playFields
         ) {
             layout = stored
-            runtime.configure(layout: stored)
+            runtime.configure(layout: stored, collectionId: collectionId)
             // Родитель мог ещё не закешировать карты (при открытии проекта) — подгружаем сами.
             if playFields.isEmpty, stored.items.contains(where: { $0.kind == .map }) {
                 loadSelfPlayFieldsIfNeeded()

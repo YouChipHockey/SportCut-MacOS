@@ -7,6 +7,59 @@
 
 ---
 
+## 2026-08-11 — Связки не работают в только что созданной коллекции (до перезапуска приложения)
+- **Симптом:** создаёшь коллекцию со связками клавиш, выбираешь её — холст рисуется корректно
+  (все кнопки на местах), теги по клику ставятся, хоткеи работают, а **связки не срабатывают
+  вообще**. Лечилось только так: выбрать коллекцию → закрыть приложение → открыть проект с ней
+  уже предвыбранной; после этого работает всегда.
+- **Диагностика:** данные на диске корректны — проверил `Collections/<id>/tagLayout.json` свежей
+  коллекции против `tags.json`/UserDefaults-блоба `collection_<id>`: items и bindings на месте,
+  осиротевших связок нет. Значит проблема чисто рантаймовая — у `KeyBindingRuntimeManager`
+  массив `bindings` оставался **пустым**.
+- **Причина:** `bindings` заполнялись ТОЛЬКО императивным `configure(layout:)` из двух
+  жизненных хуков вьюх — `TagLibraryView.reloadKeyBindingRuntimeLayout()` (через
+  `applyCollectionDisplayMode`) и `FreeTagsCanvasView.loadLayoutIfNeeded()` (`onAppear` /
+  `onChange(currentCollectionId)`, читающий НЕнаблюдаемые синглтоны). Если ни один из них не
+  срабатывал в нужном порядке (коллекция создана и подхвачена в уже смонтированном канвасе),
+  `configure` не звался вовсе. Всё остальное при этом работает независимо от связок: холст
+  рисуется из своего `@State layout`, тег ставится через `tagLibrary.allTags`, хоткеи — через
+  `HotKeyManager`. Поэтому симптом выглядел как «работает всё, кроме связок». При перезапуске
+  `TagLibraryManager.init` → `applyDefaultCollection()` расставляет коллекцию ДО появления вьюх,
+  и `configure` проходит гарантированно — отсюда «после перезахода работает всегда».
+  Вторая, сопутствующая проблема: `reset()` чистит только состояние подсветки, но НЕ `bindings`,
+  поэтому связки прошлой коллекции протекали в следующую (движок — синглтон).
+- **Фикс — конфигурация стала самовосстанавливающейся, а не зависящей от порядка хуков:**
+  - `KeyBindingRuntimeManager`: добавлен `private(set) var configuredCollectionId`;
+    `configure(layout:collectionId:)` его проставляет; новый `clearConfiguration()` (чистит
+    `bindings`/`items`/`runtimeVisibility` — в отличие от `reset()`); новый
+    `ensureConfiguredForCurrentCollection(playFields:)` — **ленивая** загрузка раскладки текущей
+    коллекции (резолвит `TagLibraryManager.currentCollectionType` → `CollectionsBookmarksManager`
+    → `TagFreeLayoutStorage`), идемпотентная по `configuredCollectionId` (иначе `configure`
+    сбрасывал бы подсветку посреди цепочки).
+  - `TagLibraryView`: новый `prepareRuntimeForTap()` = `wireRuntimeCallbacks()` +
+    `ensureConfiguredForCurrentCollection` — зовётся вместо `wireRuntimeCallbacks()` во всех трёх
+    обработчиках (`handleCanvasButtonTap`, `handleCanvasLabelTap`, `handleCanvasMapTap`), так что
+    связки гарантированно загружены к первому нажатию. Все `keyBindingRuntime.reset()` при смене
+    коллекции заменены на `clearConfiguration()`.
+- **Вторая причина (всплыла после первого фикса: «связки с ИНТЕРВАЛЬНЫМИ не работают»):**
+  `wireRuntimeCallbacks()` подключал колбэки ОДИН раз за запуск (`guard onAddTag == nil else
+  { return }`) и захватывал `[self]` — структуру вьюхи с её `@State`-боксами. После
+  `refreshID = UUID()` (перезагрузка коллекций, `.collectionsLoadingFinished`) вьюха
+  перемонтируется с новой идентичностью, и колбэки продолжают писать в осиротевшие боксы прошлого
+  экземпляра: `startIntervalRecording` кладёт запись в мёртвый `activeIntervalTags`, а
+  `isKeyBindingsCanvasMode` читает там `.grouped` и отваливается по guard. Прямое нажатие по тому
+  же интервальному тегу идёт из ЖИВОЙ вьюхи и работает — отсюда «ломаются только связки с
+  интервальными». Фикс: убрал one-shot guard, колбэки перевязываются на каждом нажатии
+  (8 замыканий на тап — пренебрежимо), всегда на актуальный экземпляр.
+- **Диагностика:** добавлен `KeyBindingLog` (флаг `KeyBindingLog.isEnabled`, префикс `🔗 KB:`) —
+  логирует configure/clear/ensure, вход в `handleButtonTap`, применение каждой связки, activation /
+  deactivation / intervalInversion с проверкой «подключён ли колбэк», и старт/стоп интервала с
+  причиной отказа. **Временное — снять, когда баг подтверждён закрытым.**
+- **Файлы:** `KeyBindingRuntimeManager.swift`, `TagLibraryView.swift`, `FreeTagsCanvasView.swift`.
+- **Прим.:** SourceKit на `KeyBindingRuntimeManager.swift` сыплет ложными «Cannot find type
+  `KeyBinding`/`TagFreeLayout`/`PlayField` in scope» — типы того же модуля, использовались там и
+  раньше; верить `xcodebuild`.
+
 ## 2026-08-11 — FullControl: стебли меток рисунков на всю высоту + голова в баре (регресс от sticky-header)
 - **Причина:** при выносе шапки таймлайнов в закреплённый оверлей я целиком переместил
   `ScreenshotMarkersView` (голова-карандаш + стебель) в `PinnedTimelineRulerView`, а тот
