@@ -342,17 +342,62 @@ struct TagFreeLayoutEditorContent: View {
     private func centerCameraOnItem(id: String) {
         guard viewportSize.width > 0, viewportSize.height > 0,
               let item = layout.items.first(where: { $0.id == id }) else { return }
-        // origin считаем так же, как в canvasArea: контент + симметричные поля infiniteMargin.
-        let content = layout.contentRect()
-            ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight)
-        let virtual = content.insetBy(dx: -infiniteMargin, dy: -infiniteMargin)
-        let origin = CGPoint(x: virtual.minX, y: virtual.minY)
+        let origin = originForContent(layout.contentRect()
+            ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight))
         let scale = canvasZoom
         let target = CGSize(
             width: viewportSize.width / 2 - (item.center.x - origin.x) * scale,
             height: viewportSize.height / 2 - (item.center.y - origin.y) * scale
         )
         withAnimation(.easeInOut(duration: 0.25)) {
+            panOffset = target
+        }
+    }
+
+    /// origin виртуального холста (как в canvasArea): контент + симметричные поля infiniteMargin.
+    private func originForContent(_ content: CGRect) -> CGPoint {
+        let virtual = content.insetBy(dx: -infiniteMargin, dy: -infiniteMargin)
+        return CGPoint(x: virtual.minX, y: virtual.minY)
+    }
+
+    /// После перетаскивания охват контента (и origin) может сместиться — например, элемент
+    /// вынесли левее/выше прежних границ. Тогда весь холст «прыгает». Компенсируем panOffset на
+    /// смещение origin, чтобы визуально ничего не дёрнулось (камера НЕ перепрыгивает к элементу).
+    private func compensatePanForContentShift(before: CGRect) {
+        let after = layout.contentRect()
+            ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight)
+        let originBefore = originForContent(before)
+        let originAfter = originForContent(after)
+        let scale = canvasZoom
+        let dx = (originAfter.x - originBefore.x) * scale
+        let dy = (originAfter.y - originBefore.y) * scale
+        guard dx != 0 || dy != 0 else { return }
+        panOffset = CGSize(width: panOffset.width + dx, height: panOffset.height + dy)
+    }
+
+    /// Камера следует за элементом ТОЛЬКО если после перетаскивания он оказался полностью за
+    /// пределами вьюпорта — и то плавно. Пока элемент виден, камеру не трогаем.
+    private func panToRevealIfOffscreen(id: String) {
+        guard viewportSize.width > 0, viewportSize.height > 0,
+              let item = layout.items.first(where: { $0.id == id }) else { return }
+        let origin = originForContent(layout.contentRect()
+            ?? CGRect(x: 0, y: 0, width: layout.canvasWidth, height: layout.canvasHeight))
+        let scale = canvasZoom
+        let px = (item.center.x - origin.x) * scale + panOffset.width
+        let py = (item.center.y - origin.y) * scale + panOffset.height
+        let halfW = item.size.width * scale / 2
+        let halfH = item.size.height * scale / 2
+        let margin: CGFloat = 8
+        let offscreen = px + halfW < margin
+            || px - halfW > viewportSize.width - margin
+            || py + halfH < margin
+            || py - halfH > viewportSize.height - margin
+        guard offscreen else { return }
+        let target = CGSize(
+            width: viewportSize.width / 2 - (item.center.x - origin.x) * scale,
+            height: viewportSize.height / 2 - (item.center.y - origin.y) * scale
+        )
+        withAnimation(.easeInOut(duration: 0.3)) {
             panOffset = target
         }
     }
@@ -751,9 +796,15 @@ struct TagFreeLayoutEditorContent: View {
                     }
                 }
                 .onEnded { _ in
+                    let movedId = draggingItemId
+                    let before = frozenContentRect
                     draggingItemId = nil
                     dragStartCenters = [:]
                     frozenContentRect = nil
+                    // Сначала гасим «прыжок» холста от разморозки охвата, затем — плавно
+                    // подводим элемент, только если он уехал за пределы вьюпорта.
+                    if let before { compensatePanForContentShift(before: before) }
+                    if let movedId { panToRevealIfOffscreen(id: movedId) }
                 }
         )
         // Ручки размера/поворота рисуются один раз на общем bounding box выделения (см. selectionHandlesOverlay).
@@ -928,7 +979,18 @@ struct TagFreeLayoutEditorContent: View {
                             updateItem(id: id) { $0.center = CGPoint(x: start.x + dx, y: start.y + dy) }
                         }
                     }
-                    .onEnded { _ in draggingItemId = nil; dragStartCenters = [:]; frozenContentRect = nil }
+                    .onEnded { _ in
+                        let movedIds = Array(dragStartCenters.keys)
+                        let before = frozenContentRect
+                        draggingItemId = nil
+                        dragStartCenters = [:]
+                        frozenContentRect = nil
+                        if let before { compensatePanForContentShift(before: before) }
+                        // Следуем за группой, только если её основной элемент уехал за вьюпорт.
+                        if let anchor = session.selectedItemId ?? movedIds.first {
+                            panToRevealIfOffscreen(id: anchor)
+                        }
+                    }
             )
     }
 
@@ -984,10 +1046,12 @@ struct TagFreeLayoutEditorContent: View {
                         }
                     }
                     .onEnded { _ in
+                        let before = frozenContentRect
                         resizingItemId = nil
                         groupResizeStartSizes = [:]
                         groupResizeStartCenters = [:]
                         frozenContentRect = nil
+                        if let before { compensatePanForContentShift(before: before) }
                     }
             )
     }
@@ -1014,10 +1078,12 @@ struct TagFreeLayoutEditorContent: View {
                         }
                     }
                     .onEnded { _ in
+                        let before = frozenContentRect
                         rotatingItemId = nil
                         groupRotateStartRotations = [:]
                         groupRotateStartCenters = [:]
                         frozenContentRect = nil
+                        if let before { compensatePanForContentShift(before: before) }
                     }
             )
     }

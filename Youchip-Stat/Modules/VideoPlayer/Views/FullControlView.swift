@@ -837,8 +837,17 @@ struct FullControlView: View {
             )
             .padding(.top, markerHeadBand)
 
-            // Метки рисунков («головы» — синие карандаши) вынесены в закреплённую сверху шапку
-            // (`PinnedTimelineRulerView`), чтобы оставались кликабельны при вертикальном скролле.
+            // Стебли меток рисунков — синяя полоска на всю высоту всех дорожек (как плейхед).
+            // «Головы»-карандаши вынесены в закреплённую шапку (`PinnedTimelineRulerView`),
+            // чтобы оставались кликабельны при вертикальном скролле; здесь — только стебли.
+            ScreenshotMarkersView(
+                duration: duration,
+                gridWidth: gridWidth,
+                totalHeight: 30 * CGFloat(timelineData.lines.count + 1),
+                part: .stemsOnly
+            )
+            .padding(.top, markerHeadBand)
+            .allowsHitTesting(false)
 
             TimelineMouseTracker(
                 duration: duration,
@@ -1242,6 +1251,7 @@ struct FullControlView: View {
                 PinnedTimelineRulerView(
                     controller: timelineScrollController,
                     videoManager: videoManager,
+                    dragController: playheadDragController,
                     duration: effectiveVideoDuration,
                     gridWidth: gridWidth,
                     interval: interval,
@@ -2979,12 +2989,19 @@ extension TimelineMouseTracker: Equatable {
 // MARK: - Screenshot Markers View
 
 struct ScreenshotMarkersView: View {
+    /// Что рисуем: голову-карандаш (кликабельна, живёт в закреплённой шапке) и/или стебель
+    /// (синяя полоска на всю высоту дорожек, живёт в скролле — как плейхед).
+    enum RenderPart { case full, headsOnly, stemsOnly }
+
     let duration: Double
     let gridWidth: CGFloat
     let totalHeight: CGFloat
     /// На сколько поднять «голову» метки (синий карандаш) над линейкой, чтобы её
     /// не перекрывал плейхед. Стебель метки при этом остаётся на своём месте.
     var headLift: CGFloat = 0
+    /// Голова и стебель разнесены по разным контейнерам: голова — в закреплённой шапке
+    /// (иначе уезжает при вертикальном скролле), стебель — в скролле (иначе обрезается шапкой).
+    var part: RenderPart = .full
 
     @ObservedObject var screenshotsManager = ScreenshotsMetadataManager.shared
     @ObservedObject var videoManager = VideoPlayerManager.shared
@@ -3085,10 +3102,13 @@ struct ScreenshotMarkersView: View {
         // Стебель метки идёт по дорожкам, а «голова» (карандаш) поднята на headLift
         // в верхнюю полосу — там её не перекрывает плейхед и по ней можно кликнуть.
         return ZStack(alignment: .top) {
-            Rectangle()
-                .fill(hasRelatedTags ? Color.blue.opacity(0.5) : Color.gray.opacity(0.5))
-                .frame(width: 2, height: totalHeight)
+            if part != .headsOnly {
+                Rectangle()
+                    .fill(hasRelatedTags ? Color.blue.opacity(0.5) : Color.gray.opacity(0.5))
+                    .frame(width: 2, height: totalHeight)
+            }
 
+            if part != .stemsOnly {
             Button(action: {
                 videoManager.seek(to: screenshot.videoTime)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -3137,8 +3157,12 @@ struct ScreenshotMarkersView: View {
                 }
             }
             .offset(y: -headLift)
+            }
         }
-        .offset(x: xPosition - 1)
+        // Голова (карандаш) центрируется на позиции времени за счёт `-7` в rawX. Стебель рисуется
+        // отдельным View шириной 2pt, поэтому без сдвига он оказывается на половину «шарика» левее
+        // головы — компенсируем на +7 (половина головы), чтобы полоска шла ровно под центром головы.
+        .offset(x: xPosition - 1 + (part == .stemsOnly ? 7 : 0))
     }
     
     private func screenshotTagsPopover(for screenshot: ScreenshotMetadata) -> some View {

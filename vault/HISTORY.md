@@ -7,6 +7,66 @@
 
 ---
 
+## 2026-08-11 — FullControl: стебли меток рисунков на всю высоту + голова в баре (регресс от sticky-header)
+- **Причина:** при выносе шапки таймлайнов в закреплённый оверлей я целиком переместил
+  `ScreenshotMarkersView` (голова-карандаш + стебель) в `PinnedTimelineRulerView`, а тот
+  `.frame(height: band+30).clipped()`. Итог: стебель (высотой `totalHeight` = все дорожки) обрезался
+  по шапке (синяя полоска только в верхней зоне), а голова с `.offset(y:-headLift)` уезжала выше
+  фрейма (не видна, но клики проходили).
+- **Фикс:** разнёс голову и стебель. В `ScreenshotMarkersView` добавил `enum RenderPart {full,
+  headsOnly, stemsOnly}` + `part`; в `screenshotMarker` стебель под `part != .headsOnly`, голова под
+  `part != .stemsOnly`.
+  - Шапка (`PinnedTimelineRulerView`): `part: .headsOnly`, `headLift: 0` — головы кликабельны и всегда
+    видны в баре (переживают вертикальный скролл). zIndex 3.
+  - Скролл (`timelineZStackContent`): добавил `part: .stemsOnly`, `.padding(.top, markerHeadBand)`,
+    `.allowsHitTesting(false)` — стебли на всю высоту дорожек, как плейхед.
+  - Выравнивание x: голова центрируется на времени за счёт `-7` в rawX (её контейнер ~14pt), а
+    стебель — отдельный View шириной 2pt, поэтому в `.stemsOnly` добавил `+7` к offset.x (половина
+    «шарика»), иначе полоска шла на пол-головы левее.
+- **Файлы:** `FullControlView.swift` (ScreenshotMarkersView + timelineZStackContent),
+  `PinnedTimelineRulerView.swift`.
+- **Прим.:** также поправлен баг №2 из записи ниже (рендер библиотеки связок) — верное решение
+  через remount `.id(freeCanvasCollectionKey)`, а не `onChange(tags)`; подробности в той записи.
+
+## 2026-08-10 — Связки клавиш: камера редактора, рендер библиотеки, хват плейхеда в шапке
+Три несвязанные правки из фидбэка.
+
+- **1. Камера в редакторе раскладки прыгала при перемещении тега** (`TagFreeLayoutEditorView`).
+  Причина: во время drag охват холста заморожен (`frozenContentRect`), но на `onEnded` разморозка
+  пересчитывала `contentRect()`; если элемент вынесли левее/выше прежних границ, `origin`
+  (`virtual.minX/minY`) смещался и весь холст «прыгал» — выглядело как перескок камеры к тегу.
+  Фикс: на завершении drag/resize/rotate компенсируем `panOffset` на смещение origin
+  (`compensatePanForContentShift`) — визуально ничего не дёргается. Камерой следуем (плавно,
+  0.3s) ТОЛЬКО если перемещённый элемент оказался полностью за вьюпортом
+  (`panToRevealIfOffscreen`). Вынес общий `originForContent`; `centerCameraOnItem` переиспользует его.
+  Правил все 4 `onEnded`: одиночный move, `selection-move`, resize, rotate.
+
+- **2. При переключении МЕЖДУ коллекциями связок в библиотеке не рисовались теги и карта**
+  (только лейблы) — до перезахода / открытия редактора / переключения на стандартную и обратно.
+  Ключ: баг ТОЛЬКО на keybinding→keybinding. При заходе из стандартной (.grouped) `FreeTagsCanvasView`
+  вообще не смонтирован → появление коллекции связок монтирует его заново → onAppear грузит раскладку
+  корректно. А между двумя .free-коллекциями канвас НЕ размонтируется, переиспользуется, и его
+  `@State layout` остаётся от прежней коллекции. Лейблы берутся из ГЛОБАЛЬНОГО `tagLibrary.allLabels`
+  (объединение всех коллекций, TagLibraryManager ~l.384) и потому рисуются даже со старой раскладкой,
+  а теги (`tagLibrary.tags`) и карты (collection-specific) — нет. Перезагрузка по
+  `onChange(currentCollectionId)` (читает необлюдаемые синглтоны) на этом переходе не срабатывала.
+  Фикс: `.id(freeCanvasCollectionKey)` на `freeTagsSection` (ключ = имя пользовательской коллекции) —
+  форсирует remount при смене коллекции, ровно как рабочий обходной путь «через стандартную и обратно».
+  Плюс `TagLibraryView.loadUserCollection` чистит `cachedPlayFields = nil` в самом начале, иначе при
+  switch в раскладку уходят карты ПРОШЛОЙ коллекции и `normalizeLayout` выкидывает карты новой (их id
+  нет среди старых); пустой список → карты сохраняются, канвас догружает их сам
+  (`loadSelfPlayFieldsIfNeeded`).
+  (Первая попытка через `onChange(of: tags.map(\.id))` не помогла — суть в remount, а не в onChange.)
+
+- **3. После закрепления шапки таймлайна плейхед нельзя было хватать в шапке**
+  (`PinnedTimelineRulerView` перекрывала стебель из скролла; голова была `allowsHitTesting(false)`).
+  Фикс: пробросил `playheadDragController` в `PinnedTimelineRulerView` и добавил прозрачную зону
+  захвата (16pt) над плейхедом в шапке. Своя `DragGesture` в координатах шапки
+  (`coordinateSpace "pinnedRuler"`), перевод `contentX = value.location.x + controller.currentScrollX`,
+  кормит ТОТ ЖЕ `dragController` (begin/update/endDrag) — логика скраб-превью и pause/resume
+  зеркалит `TimelinePlayheadView`. Курсор openHand на hover.
+  Файлы: `PinnedTimelineRulerView.swift` (переписан), `FullControlView.swift` (проброс параметра).
+
 ## 2026-08-10 — Восстановление openSettingsWindow / showMultiFieldMapSelection в WindowsManager
 - **Причина:** в ходе отката moment-viewer-правки был выполнен `git checkout -- WindowsManager.swift`,
   который снёс НЕзакоммиченные (жившие только в рабочей копии) методы `openSettingsWindow` и

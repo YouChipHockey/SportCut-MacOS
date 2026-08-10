@@ -760,6 +760,20 @@ struct TagLibraryView: View {
             arrowVisibility: bindingsArrowVisibility
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Пересоздаём канвас при смене коллекции. Между коллекциями связок обе — в .free-режиме,
+        // поэтому FreeTagsCanvasView НЕ размонтируется и переиспользуется (его @State layout остаётся
+        // от прежней коллекции; лейблы берутся из глобального allLabels и всё равно рисуются, а
+        // теги/карта — из текущей коллекции — нет). Смена .id форсирует remount → onAppear грузит
+        // раскладку заново с уже устаканенными данными (как при заходе из стандартной коллекции).
+        .id(freeCanvasCollectionKey)
+    }
+
+    /// Ключ идентичности канваса свободной раскладки — меняется при смене пользовательской коллекции.
+    private var freeCanvasCollectionKey: String {
+        if case .user(let name) = tagLibrary.currentCollectionType {
+            return "free-\(name)"
+        }
+        return "free-none"
     }
     
     private func tagGroupView(for group: TagGroup) -> some View {
@@ -1476,6 +1490,10 @@ struct TagLibraryView: View {
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {
+        // Сбрасываем карты прошлой коллекции СРАЗУ: иначе при переключении между коллекциями связок
+        // в раскладку уходят чужие playFields, и normalizeLayout выкидывает карты новой коллекции
+        // (их id нет среди старых). Пустой список → карты сохраняются, а канвас догружает их сам.
+        cachedPlayFields = nil
         // Try to get from cache first, otherwise load asynchronously
         if let cachedData = tagLibrary.getCollectionData(for: collection.name) {
             // Use cached data immediately

@@ -8,11 +8,15 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct PinnedTimelineRulerView: View {
 
     @ObservedObject var controller: TimelineScrollController
     @ObservedObject var videoManager: VideoPlayerManager
+    /// Контроллер перетаскивания плейхеда — тот же, что и у стебля в скролле, чтобы «голову» в
+    /// закреплённой шапке можно было хватать и тянуть (раньше шапка перекрывала стебель и хват пропадал).
+    @ObservedObject var dragController: PlayheadEdgeScrollController
     let duration: Double
     let gridWidth: CGFloat
     let interval: Double
@@ -21,6 +25,20 @@ struct PinnedTimelineRulerView: View {
     let band: CGFloat
     /// Высота таймлайнов (для позиционирования меток рисунков; стебли обрезаются по шапке).
     let markersTotalHeight: CGFloat
+
+    private let hitWidth: CGFloat = 16
+    @State private var lastScrubVideoPreviewAt = Date.distantPast
+    private let scrubVideoPreviewMinInterval: TimeInterval = 0.033
+    @State private var wasPlayingBeforePlayheadDrag = false
+
+    /// Экранная (во вьюпорте шапки) X плейхеда с учётом горизонтального скролла.
+    private var playheadViewportX: CGFloat {
+        let offsetX = -controller.liveScrollX
+        let base = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
+        // Во время перетаскивания показываем позицию из dragController (в координатах контента).
+        let contentX = dragController.isDragging ? dragController.dragX : base
+        return contentX + offsetX
+    }
 
     var body: some View {
         let offsetX = -controller.liveScrollX
@@ -34,24 +52,79 @@ struct PinnedTimelineRulerView: View {
                 }
                 .offset(x: offsetX, y: band)
 
-            // «Голова» плейхеда (треугольник) — только индикатор; тянут плейхед за стебель ниже.
+            // «Голова» плейхеда (треугольник) — только индикатор; хват — прозрачная зона ниже.
             PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
-                .frame(width: 16, height: band + 30)
-                .offset(x: playheadX + offsetX - 7, y: 0)
+                .frame(width: hitWidth, height: band + 30)
+                .offset(x: (dragController.isDragging ? dragController.dragX + offsetX : playheadX + offsetX) - 7, y: 0)
                 .allowsHitTesting(false)
 
-            // «Головы» меток рисунков (кликабельны — возврат к рисунку) закреплены в шапке.
+            // Прозрачная зона захвата плейхеда в шапке. Тянет тот же dragController, что и стебель
+            // в скролле, — поэтому голову теперь можно хватать прямо в закреплённой линейке.
+            Color.clear
+                .frame(width: hitWidth, height: band + 30)
+                .contentShape(Rectangle())
+                .offset(x: playheadViewportX - hitWidth / 2, y: 0)
+                .onHover { hovering in
+                    NSCursor.setHiddenUntilMouseMoves(false)
+                    if hovering { NSCursor.openHand.set() } else { NSCursor.arrow.set() }
+                }
+                .gesture(playheadDragGesture)
+                .zIndex(1)
+
+            // «Головы» меток рисунков (кликабельны — возврат к рисунку) закреплены в шапке-баре.
+            // Стебли рисуются отдельно в скролле (на всю высоту дорожек) — см. timelineZStackContent.
             ScreenshotMarkersView(
                 duration: duration,
                 gridWidth: gridWidth,
                 totalHeight: markersTotalHeight,
-                headLift: band
+                headLift: 0,
+                part: .headsOnly
             )
-            .frame(width: gridWidth, alignment: .topLeading)
+            .frame(width: gridWidth, height: band + 30, alignment: .topLeading)
             .offset(x: offsetX)
-            .zIndex(2)
+            .zIndex(3)
         }
         .frame(width: viewportWidth, height: band + 30, alignment: .topLeading)
+        .coordinateSpace(name: "pinnedRuler")
         .clipped()
+    }
+
+    /// Перетаскивание плейхеда в закреплённой шапке. Координаты — во вьюпорте шапки; переводим их
+    /// в координаты контента таймлайна (+ горизонтальный скролл) и кормим тем же dragController.
+    private var playheadDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("pinnedRuler"))
+            .onChanged { value in
+                let contentX = value.location.x + controller.currentScrollX
+                controller.stopAutoScrollFollow()
+                if dragController.isDragging {
+                    dragController.updateDrag(
+                        at: contentX, gridWidth: gridWidth, duration: duration, scrollController: controller
+                    )
+                } else {
+                    lastScrubVideoPreviewAt = .distantPast
+                    let vm = VideoPlayerManager.shared
+                    wasPlayingBeforePlayheadDrag = vm.player?.timeControlStatus == .playing
+                    if wasPlayingBeforePlayheadDrag { vm.player?.pause() }
+                    dragController.beginDrag(
+                        at: contentX, gridWidth: gridWidth, duration: duration, scrollController: controller
+                    )
+                }
+                let now = Date()
+                guard duration > 0, gridWidth > 0,
+                      now.timeIntervalSince(lastScrubVideoPreviewAt) >= scrubVideoPreviewMinInterval else { return }
+                lastScrubVideoPreviewAt = now
+                let lo = controller.currentScrollX
+                let hi = lo + controller.visibleWidth - 2
+                let x = max(lo, min(dragController.dragX, hi))
+                let t = Double(x / gridWidth) * duration
+                VideoPlayerManager.shared.seekForTimelineScrubPreview(to: t)
+            }
+            .onEnded { _ in
+                let time = dragController.endDrag()
+                let resume = wasPlayingBeforePlayheadDrag
+                wasPlayingBeforePlayheadDrag = false
+                lastScrubVideoPreviewAt = .distantPast
+                VideoPlayerManager.shared.seek(to: time, resumePlaybackAfterSeek: resume)
+            }
     }
 }
