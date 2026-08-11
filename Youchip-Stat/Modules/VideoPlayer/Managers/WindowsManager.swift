@@ -161,7 +161,12 @@ class WindowsManager: NSObject, NSWindowDelegate {
     
     func closeAll() {
         tagLibraryWindow?.cancelNotificationSubscriptions()
-        
+
+        // Дописываем позиции окон разметки ДО того, как снимем делегатов и закроем окна:
+        // stopTracking() делает flush() и отписывается, иначе последняя позиция не сохранится.
+        MarkupWindowLayoutStore.shared.stopTracking()
+
+
         videoWindow?.window?.delegate = nil
         controlWindow?.window?.delegate = nil
         tagLibraryWindow?.window?.delegate = nil
@@ -351,24 +356,66 @@ class WindowsManager: NSObject, NSWindowDelegate {
         controlWindow = FullControlWindowController()
         tagLibraryWindow = TagLibraryWindowController()
 
-        if let screen = NSScreen.main {
-            let screenFrame = screen.frame
-            let bottomHeight = screenFrame.height * 0.4
-            let topHeight = screenFrame.height - bottomHeight - 40
-            
-            let timelineRect = NSRect(x: screenFrame.minX, y: screenFrame.minY, width: screenFrame.width, height: bottomHeight)
-            controlWindow?.window?.setFrame(timelineRect, display: true)
-            
-            let libraryRect = NSRect(x: screenFrame.minX, y: screenFrame.minY + bottomHeight, width: screenFrame.width / 3, height: topHeight)
-            tagLibraryWindow?.window?.setFrame(libraryRect, display: true)
-            
-            let videoRect = NSRect(x: screenFrame.minX + screenFrame.width / 3, y: screenFrame.minY + bottomHeight, width: (screenFrame.width * 2) / 3, height: topHeight)
-            videoWindow?.window?.setFrame(videoRect, display: true)
-        }
-        
+        applyMarkupWindowsLayout()
+
         videoWindow?.showWindow(nil)
         controlWindow?.showWindow(nil)
         tagLibraryWindow?.showWindow(nil)
+    }
+
+    /// Расставляет три окна разметки и подписывает их на запоминание позиции.
+    ///
+    /// Приоритет: сохранённая раскладка (слепок блокировки, если она включена, иначе последняя
+    /// позиция при выходе из проекта) → раскладка по умолчанию. Частичного восстановления нет:
+    /// `hasCompleteLayout` требует валидных кадров для всех трёх окон, иначе они бы наложились.
+    private func applyMarkupWindowsLayout() {
+        let layout = MarkupWindowLayoutStore.shared
+        // Страховка от накопления наблюдателей, если прошлая сессия закрылась мимо closeAll().
+        // Запомненные кадры при этом не теряются — stopTracking() их только дописывает.
+        layout.stopTracking()
+
+        if layout.hasCompleteLayout,
+           let videoFrame = layout.savedFrame(for: .video),
+           let controlFrame = layout.savedFrame(for: .control),
+           let libraryFrame = layout.savedFrame(for: .tagLibrary) {
+            controlWindow?.window?.setFrame(controlFrame, display: true)
+            tagLibraryWindow?.window?.setFrame(libraryFrame, display: true)
+            videoWindow?.window?.setFrame(videoFrame, display: true)
+        } else if let screen = NSScreen.main {
+            let screenFrame = screen.frame
+            let bottomHeight = screenFrame.height * 0.4
+            let topHeight = screenFrame.height - bottomHeight - 40
+
+            let timelineRect = NSRect(
+                x: screenFrame.minX,
+                y: screenFrame.minY,
+                width: screenFrame.width,
+                height: bottomHeight
+            )
+            controlWindow?.window?.setFrame(timelineRect, display: true)
+
+            let libraryRect = NSRect(
+                x: screenFrame.minX,
+                y: screenFrame.minY + bottomHeight,
+                width: screenFrame.width / 3,
+                height: topHeight
+            )
+            tagLibraryWindow?.window?.setFrame(libraryRect, display: true)
+
+            let videoRect = NSRect(
+                x: screenFrame.minX + screenFrame.width / 3,
+                y: screenFrame.minY + bottomHeight,
+                width: (screenFrame.width * 2) / 3,
+                height: topHeight
+            )
+            videoWindow?.window?.setFrame(videoRect, display: true)
+        }
+
+        // Подписка идёт ПОСЛЕ расстановки: track() сразу запоминает текущий кадр окна,
+        // и при подписке до setFrame в стор попал бы дефолтный размер контроллера.
+        layout.track(videoWindow?.window, as: .video)
+        layout.track(controlWindow?.window, as: .control)
+        layout.track(tagLibraryWindow?.window, as: .tagLibrary)
     }
     
     /// Копирует все файлы скриншотов из папки live-сессии в папку импортированного видео (у импорта новый id).
@@ -802,41 +849,13 @@ class WindowsManager: NSObject, NSWindowDelegate {
         controlWindow = FullControlWindowController()
         tagLibraryWindow = TagLibraryWindowController()
         
-        if let screen = NSScreen.main {
-            let screenFrame = screen.frame
-            let bottomHeight = screenFrame.height * 0.4
-            let topHeight = screenFrame.height - bottomHeight - 40
-            
-            let timelineRect = NSRect(
-                x: screenFrame.minX,
-                y: screenFrame.minY,
-                width: screenFrame.width,
-                height: bottomHeight
-            )
-            controlWindow?.window?.setFrame(timelineRect, display: true)
-            
-            let libraryRect = NSRect(
-                x: screenFrame.minX,
-                y: screenFrame.minY + bottomHeight,
-                width: screenFrame.width / 3,
-                height: topHeight
-            )
-            tagLibraryWindow?.window?.setFrame(libraryRect, display: true)
-            
-            let videoRect = NSRect(
-                x: screenFrame.minX + screenFrame.width / 3,
-                y: screenFrame.minY + bottomHeight,
-                width: (screenFrame.width * 2) / 3,
-                height: topHeight
-            )
-            videoWindow?.window?.setFrame(videoRect, display: true)
-        }
-        
+        applyMarkupWindowsLayout()
+
         videoWindow?.showWindow(nil)
         controlWindow?.showWindow(nil)
         tagLibraryWindow?.showWindow(nil)
     }
-    
+
     func showFieldMapSelection(tag: Tag, imageBookmark: Data, lockWindows: Bool = true, onSave: @escaping (CGPoint) -> Void) {
         let controller = FieldMapSelectionWindowController(tag: tag, imageBookmark: imageBookmark, onSave: onSave)
         fieldMapWindow = controller
