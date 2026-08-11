@@ -307,8 +307,28 @@ private final class SportCutExportBackend {
         }
     }
 
-    private func resolvedEvent(_ event: SportCutEvent, session: SportCutSession) -> SportCutEvent {
-        session.timelineResolvedEvent(for: event)
+    /// Событие в том виде, в каком его надо экспортировать.
+    ///
+    /// `timelineResolvedEvent` пересобирает событие из ТЕКУЩЕЙ разметки — то есть возвращает тег
+    /// ровно с теми границами, что лежат в проекте разметки. Границы, изменённые ресайзом клипа
+    /// уже в режиме просмотра, живут отдельно — в оверрайдах плейлиста, и без их наложения
+    /// экспорт писал исходный вариант тега, хотя плеер и плейлист показывали изменённый
+    /// (плеер их учитывает, см. SportCutPlayerManager).
+    ///
+    /// Порядок тот же, что в плеере: оверрайд плейлиста важнее, иначе — свежее значение из разметки.
+    private func resolvedEvent(
+        _ event: SportCutEvent,
+        playlist: SportCutPlaylist,
+        session: SportCutSession
+    ) -> SportCutEvent {
+        let resolved = session.timelineResolvedEvent(for: event)
+        guard !resolved.isSlide else { return resolved }
+
+        // Ключ оверрайдов — sourceID|stampID, он переживает пересборку события.
+        let start = playlist.eventStartOverrides[event.hiddenKey] ?? resolved.startTime
+        let duration = playlist.eventDurationOverrides[event.hiddenKey] ?? resolved.duration
+        guard start != resolved.startTime || duration != resolved.duration else { return resolved }
+        return resolved.withClipRange(start: start, duration: duration)
     }
 
     /// Вставляет слайд-события между клипами по `position` (индекс в `playlist.events`).
@@ -1033,7 +1053,7 @@ private final class SportCutExportBackend {
         func exportNext(_ index: Int) {
             guard index < allEntries.count else { finishZip(); return }
             let entry = allEntries[index]
-            let event = resolvedEvent(entry.event, session: session)
+            let event = resolvedEvent(entry.event, playlist: entry.playlist, session: session)
             let drawings = entry.playlist.eventDrawings[entry.event.hiddenKey] ?? []
 
             func skip() { failures += 1; exportNext(index + 1) }
@@ -1276,7 +1296,7 @@ private final class SportCutExportBackend {
                     )
                     continue
                 }
-                let event = resolvedEvent(rawEvent, session: session)
+                let event = resolvedEvent(rawEvent, playlist: playlist, session: session)
                 let drawings = playlist.eventDrawings[rawEvent.hiddenKey] ?? []
 
                 guard let source = session.sources.first(where: { $0.id == event.sourceID }),
@@ -1429,7 +1449,7 @@ private final class SportCutExportBackend {
                     )
                     continue
                 }
-                let event = resolvedEvent(rawEvent, session: session)
+                let event = resolvedEvent(rawEvent, playlist: playlist, session: session)
                 let drawings = playlist.eventDrawings[rawEvent.hiddenKey] ?? []
 
                 guard let source = session.sources.first(where: { $0.id == event.sourceID }),

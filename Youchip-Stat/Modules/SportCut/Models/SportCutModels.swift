@@ -159,6 +159,27 @@ struct SportCutEvent: Identifiable, Codable, Equatable {
         )
     }
 
+    /// Копия события с другими границами клипа (`startTime`/`duration` объявлены `let`).
+    /// Нужна, чтобы наложить оверрайды плейлиста на событие, разрешённое из разметки.
+    func withClipRange(start: Double, duration: Double) -> SportCutEvent {
+        SportCutEvent(
+            id: id,
+            sourceID: sourceID,
+            stampID: stampID,
+            lineID: lineID,
+            mainTagID: mainTagID,
+            tagName: tagName,
+            lineName: lineName,
+            startTime: start,
+            duration: duration,
+            color: color,
+            tagGroupName: tagGroupName,
+            labelIDs: labelIDs,
+            eventIDs: eventIDs,
+            slideID: slideID
+        )
+    }
+
     static func == (lhs: SportCutEvent, rhs: SportCutEvent) -> Bool {
         lhs.stampID == rhs.stampID && lhs.sourceID == rhs.sourceID
     }
