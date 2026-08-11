@@ -156,26 +156,44 @@ final class ProjectMergeManager: ObservableObject {
         var instructions: [AVMutableVideoCompositionInstruction] = []
         var offsets: [Double] = []
         var cursor = CMTime.zero
+        var didInsertAudio = false
 
         for (index, asset) in assets.enumerated() {
             guard let videoTrack = asset.tracks(withMediaType: .video).first else {
                 throw MergeError.noVideoTrack(sources[index].name)
             }
             let duration = asset.duration
-            guard duration.isValid, duration.seconds > 0 else { continue }
-            let range = CMTimeRange(start: .zero, duration: duration)
-
+            // Смещение пишем для КАЖДОГО источника, включая пропущенный: `offsets` адресуется
+            // по индексу в `sources` (см. assembleProject), и пропуск сдвигал бы разметку
+            // всех последующих проектов.
             offsets.append(cursor.seconds)
+            guard duration.isValid, duration.seconds > 0 else { continue }
 
+            // Вставляем ПЕРЕСЕЧЕНИЕ запрошенного диапазона с реальным `timeRange` дорожки, а не
+            // `[0, asset.duration]`. У файлов, записанных нашим же AVAssetWriter (лайв), дорожка
+            // может и начинаться не с нуля, и заканчиваться раньше общей длительности ассета —
+            // insertTimeRange на такой диапазон бросает. Позицию вставки сдвигаем на начало
+            // дорожки, чтобы не разъезжалась синхронизация внутри клипа.
+            let assetRange = CMTimeRange(start: .zero, duration: duration)
+            let videoRange = videoTrack.timeRange.intersection(assetRange)
+            guard videoRange.duration.isValid, videoRange.duration.seconds > 0 else {
+                throw MergeError.noVideoTrack(sources[index].name)
+            }
             do {
-                try compositionVideoTrack.insertTimeRange(range, of: videoTrack, at: cursor)
+                try compositionVideoTrack.insertTimeRange(videoRange, of: videoTrack, at: cursor + videoRange.start)
             } catch {
                 throw MergeError.compositionFailed
             }
 
-            if let audioTrack = asset.tracks(withMediaType: .audio).first {
-                // Пропуск звука не критичен — в этом куске просто будет тишина.
-                try? compositionAudioTrack?.insertTimeRange(range, of: audioTrack, at: cursor)
+            if let compositionAudioTrack, let audioTrack = asset.tracks(withMediaType: .audio).first {
+                let audioRange = audioTrack.timeRange.intersection(assetRange)
+                if audioRange.duration.isValid, audioRange.duration.seconds > 0 {
+                    // Пропуск звука не критичен — в этом куске просто будет тишина.
+                    do {
+                        try compositionAudioTrack.insertTimeRange(audioRange, of: audioTrack, at: cursor + audioRange.start)
+                        didInsertAudio = true
+                    } catch {}
+                }
             }
 
             let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
@@ -191,6 +209,14 @@ final class ProjectMergeManager: ObservableObject {
 
         guard !instructions.isEmpty else {
             throw MergeError.compositionFailed
+        }
+
+        // Пустая аудиодорожка в композиции — рабочая причина падения экспорта с
+        // AVFoundationErrorDomain -11838 («операция не поддерживается для этого медиафайла»):
+        // писателю нечего положить в трек. Такое случается, когда ни у одного исходника нет
+        // звука либо все вставки звука не прошли. Просто убираем трек.
+        if !didInsertAudio, let compositionAudioTrack {
+            composition.removeTrack(compositionAudioTrack)
         }
 
         let videoComposition = AVMutableVideoComposition()
@@ -231,20 +257,29 @@ final class ProjectMergeManager: ObservableObject {
         outputURL: URL,
         completion: @escaping (Result<FilesFile, Error>) -> Void
     ) {
-        guard let session = AVAssetExportSession(
-            asset: prepared.composition,
-            presetName: AVAssetExportPresetHighestQuality
-        ) else {
+        guard let session = Self.makeExportSession(for: prepared.composition) else {
             DispatchQueue.main.async { [weak self] in
                 self?.finish(with: .failure(MergeError.compositionFailed), completion: completion)
             }
             return
         }
 
-        try? FileManager.default.removeItem(at: outputURL)
+        // Тип файла обязан быть из числа поддерживаемых для этой пары «пресет + ассет», иначе
+        // экспорт валится с -11838. Просили mp4, но он недоступен — уходим в mov и правим
+        // расширение, чтобы файл соответствовал содержимому.
+        let requestedType: AVFileType = outputURL.pathExtension.lowercased() == "mp4" ? .mp4 : .mov
+        let supported = session.supportedFileTypes
+        let fileType: AVFileType = supported.contains(requestedType)
+            ? requestedType
+            : (supported.contains(.mov) ? .mov : (supported.first ?? .mov))
+        let finalURL = fileType == requestedType
+            ? outputURL
+            : outputURL.deletingPathExtension().appendingPathExtension(fileType == .mp4 ? "mp4" : "mov")
 
-        session.outputURL = outputURL
-        session.outputFileType = outputURL.pathExtension.lowercased() == "mp4" ? .mp4 : .mov
+        try? FileManager.default.removeItem(at: finalURL)
+
+        session.outputURL = finalURL
+        session.outputFileType = fileType
         session.shouldOptimizeForNetworkUse = false
         session.videoComposition = prepared.videoComposition
         exportSession = session
@@ -268,19 +303,42 @@ final class ProjectMergeManager: ObservableObject {
                         sources: sources,
                         options: options,
                         offsets: prepared.offsets,
-                        videoURL: outputURL
+                        videoURL: finalURL
                     )
                     self.finish(with: result, completion: completion)
                 case .cancelled:
-                    try? FileManager.default.removeItem(at: outputURL)
+                    try? FileManager.default.removeItem(at: finalURL)
                     self.finish(with: .failure(MergeError.exportFailed(^String.Titles.mergeErrorCancelled)), completion: completion)
                 default:
-                    try? FileManager.default.removeItem(at: outputURL)
+                    try? FileManager.default.removeItem(at: finalURL)
                     let message = Self.detailedExportError(status: session.status, error: session.error)
                     self.finish(with: .failure(MergeError.exportFailed(message)), completion: completion)
                 }
             }
         }
+    }
+
+    /// Сессия экспорта на пресете, совместимом ИМЕННО с этой композицией.
+    ///
+    /// `AVAssetExportPresetHighestQuality` подходит не всегда: на части исходников
+    /// (нестандартный кодек/цветовое пространство/частота) экспорт валится с
+    /// AVFoundationErrorDomain -11838 «операция не поддерживается для этого медиафайла».
+    /// Поэтому спрашиваем у AVFoundation список совместимых пресетов и берём лучший из них.
+    private static func makeExportSession(for asset: AVAsset) -> AVAssetExportSession? {
+        let compatible = Set(AVAssetExportSession.exportPresets(compatibleWith: asset))
+        let candidates = [
+            AVAssetExportPresetHighestQuality,
+            AVAssetExportPreset3840x2160,
+            AVAssetExportPreset1920x1080,
+            AVAssetExportPreset1280x720,
+            AVAssetExportPresetMediumQuality
+        ]
+        for preset in candidates where compatible.contains(preset) {
+            if let session = AVAssetExportSession(asset: asset, presetName: preset) {
+                return session
+            }
+        }
+        return nil
     }
 
     /// Подробный текст ошибки экспорта — с domain/code и всей цепочкой underlying-ошибок,
