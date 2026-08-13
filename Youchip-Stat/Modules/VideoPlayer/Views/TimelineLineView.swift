@@ -539,7 +539,7 @@ struct TimelineLineView: View {
         if !stamp.timeEvents.isEmpty {
             Text(^String.Titles.fieldMapLabelEvents)
             ForEach(stamp.timeEvents, id: \.self) { eventID in
-                if let event = tagLibrary.allTimeEvents.first(where: { $0.id == eventID }) {
+                if let event = tagLibrary.findTimeEventById(eventID) {
                     Text("• \(event.name)")
                 }
             }

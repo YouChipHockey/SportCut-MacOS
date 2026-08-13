@@ -242,27 +242,10 @@ struct VideoPlayerView: View {
             .buttonStyle(PlainButtonStyle())
             .help(^String.Titles.videoBroadcastStopHelp)
             
-            // Duration display
-            Text(formatDuration(videoManager.currentTime))
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.gray.opacity(0.1))
-                )
+            // Duration display. Вынесен в отдельную вьюху: только она подписана на время
+            // воспроизведения, поэтому тик плеера не перестраивает весь VideoPlayerView.
+            LivePlaybackTimeLabel()
         }
-    }
-    
-    private func formatDuration(_ seconds: Double) -> String {
-        let hours = Int(seconds) / 3600
-        let minutes = (Int(seconds) % 3600) / 60
-        let secs = Int(seconds) % 60
-        if hours > 0 {
-            return String(format: "%02d:%02d:%02d", hours, minutes, secs)
-        }
-        return String(format: "%02d:%02d", minutes, secs)
     }
     
     // MARK: - Live Stream Content
@@ -699,6 +682,42 @@ struct VideoPlayerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
+    }
+}
+
+// MARK: - Live playback timecode
+
+/// Цифровой таймкод текущего времени воспроизведения.
+///
+/// Отдельная маленькая вьюха именно затем, чтобы подписка на [[PlaybackClock]] (30 Гц) жила
+/// здесь, а не в `VideoPlayerView` — иначе тик плеера перестраивал бы всё окно плеера целиком.
+/// Тот же приём применён к плейхеду (`TimelinePlayheadView`) и линейке
+/// (`PinnedTimelineRulerView`).
+struct LivePlaybackTimeLabel: View {
+
+    @ObservedObject private var clock = PlaybackClock.shared
+
+    var body: some View {
+        Text(formatted(clock.time))
+            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.gray.opacity(0.1))
+            )
+    }
+
+    private func formatted(_ seconds: Double) -> String {
+        let total = seconds.isFinite ? max(0, Int(seconds)) : 0
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%02d:%02d", minutes, secs)
     }
 }
 

@@ -75,7 +75,9 @@
       "Bash(git diff *)",
       "Bash(perl -0pi -e 's/TagLibraryManager\\\\.shared\\\\.allTags\\\\.first\\\\\\(where: \\\\{ \\\\$0\\\\.id == stamp\\\\.idTag \\\\}\\\\\\)/TagLibraryManager.shared.findTagById\\(stamp.idTag\\)/g' Youchip-Stat/Modules/VideoPlayer/Managers/ClipAutoSaveManager.swift)",
       "Bash(perl -0pi -e 's/TagLibraryManager\\\\.shared\\\\.allTags\\\\.first\\\\\\(where: \\\\{ \\\\$0\\\\.id == segment\\\\.tagId \\\\}\\\\\\)/TagLibraryManager.shared.findTagById\\(segment.tagId\\)/g' Youchip-Stat/Modules/VideoPlayer/Views/Viewer/OrganizerView.swift)",
-      "Bash(perl -0pi -e 's/tagLibrary\\\\.allTags\\\\.first\\\\\\(where: \\\\{ \\\\$0\\\\.id == segment\\\\.stamp\\\\.idTag \\\\}\\\\\\)/tagLibrary.findTagById\\(segment.stamp.idTag\\)/g' Youchip-Stat/Modules/VideoPlayer/Helpers/ExportHelper.swift)"
+      "Bash(perl -0pi -e 's/tagLibrary\\\\.allTags\\\\.first\\\\\\(where: \\\\{ \\\\$0\\\\.id == segment\\\\.stamp\\\\.idTag \\\\}\\\\\\)/tagLibrary.findTagById\\(segment.stamp.idTag\\)/g' Youchip-Stat/Modules/VideoPlayer/Helpers/ExportHelper.swift)",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(grep -v \"^--$\")"
     ]
   }
 }

@@ -137,7 +137,7 @@ struct StampLabelsOverlayView: View {
     
     private func updateDisplayedTimeEvents(availableWidth: CGFloat) {
         let events = stamp.timeEvents.compactMap { eventID in
-            tagLibrary.allTimeEvents.first(where: { $0.id == eventID })
+            tagLibrary.findTimeEventById(eventID)
         }
         if events.isEmpty {
             displayedTimeEvents = []

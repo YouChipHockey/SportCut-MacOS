@@ -19,7 +19,13 @@ struct FullControlView: View {
     @ObservedObject var timelineData = TimelineDataManager.shared
     @ObservedObject var focusManager = FocusStateManager.shared
     @ObservedObject var hotkeyManager = HotKeyManager.shared
-    @StateObject var exportHelper = ExportHelper()
+    /// ВНИМАНИЕ: именно `@State`, а НЕ `@StateObject`. `@StateObject` подписывает весь
+    /// `FullControlView` на `objectWillChange` хелпера — и каждый тик `progress` во время
+    /// экспорта пересчитывает body со ВСЕМИ дорожками. На больших проектах это приводило к
+    /// зависанию главного потока и убийству приложения watchdog'ом.
+    /// `@State` даёт стабильный экземпляр без подписки; `progress` читает только маленький
+    /// `ExportProgressOverlay`. Не меняй обратно (см. TASK-007, фаза 5.1).
+    @State private var exportHelper = ExportHelper()
     @ObservedObject var sportCutSessionManager = SportCutSessionManager.shared
     @ObservedObject var clipAutoSaveManager = ClipAutoSaveManager.shared
 
@@ -467,7 +473,11 @@ struct FullControlView: View {
         }
         .hideScrollIndicators()
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .onChange(of: videoManager.currentTime) { newTime in
+        // Именно `onReceive`, а не `onChange(of:)`. `onChange` сравнивает значения при пересчёте
+        // body — а body этой вьюхи больше не пересчитывается на каждый тик плеера, поэтому
+        // автоскролл с `onChange` просто перестал бы срабатывать. `onReceive` вызывает замыкание
+        // по событию публикатора и сам body не инвалидирует: внутри двигается только NSScrollView.
+        .onReceive(PlaybackClock.shared.$time) { newTime in
             handleTimelineAutoScroll(currentTime: newTime, duration: duration)
         }
         .onChange(of: videoManager.isPlaying) { isPlaying in
@@ -821,15 +831,13 @@ struct FullControlView: View {
             .padding(.bottom, 15) // for scroll indicator to not overlap timelines
             .padding(.top, markerHeadBand)
 
-            // timeOffsetToPixels is passed to TimelinePlayheadView so that
-            // FullControlView does NOT read any @Published property of
-            // playheadDragController in its own body — only TimelinePlayheadView
-            // observes it, keeping FullControlView out of the 60 Hz render loop.
-            let timeOffsetToPixels = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
+            // Ни одного чтения времени/позиции плейхеда в этом body: и `playheadDragController`,
+            // и `PlaybackClock` наблюдает только сам TimelinePlayheadView. Раньше здесь считался
+            // `timeOffsetToPixels` из `videoManager.currentTime` — из-за этой одной строки весь
+            // FullControlView со всеми дорожками перестраивался 30 раз в секунду.
             TimelinePlayheadView(
                 dragController: playheadDragController,
                 scrollController: timelineScrollController,
-                timeOffsetToPixels: timeOffsetToPixels,
                 tagEdgePosition: tagEdgePosition,
                 gridWidth: gridWidth,
                 duration: duration,
@@ -2004,22 +2012,9 @@ struct FullControlView: View {
             }
             .overlay {
                 if isExporting {
-                    VStack(spacing: 16) {
-                        CircularPercentProgressView(progress: Double(exportHelper.progress))
-                            .frame(width: 80, height: 80)
-                        Button(^String.Titles.cancelButtonTitle) {
-                            exportHelper.cancelExport()
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                    }
-                    .padding(30)
-                    .background(Color.black.opacity(0.8))
-                    .cornerRadius(12)
-                    .shadow(radius: 20)
-                    .transition(.opacity)
+                    // Прогресс читается ВНУТРИ оверлея — так тики `progress` перерисовывают
+                    // только его, а не весь FullControlView с дорожками.
+                    ExportProgressOverlay(exportHelper: exportHelper)
                 }
             }
             .onAppear {
@@ -2501,6 +2496,39 @@ struct FullControlView: View {
     
 }
 
+// MARK: - Export progress overlay
+
+/// Оверлей прогресса экспорта.
+///
+/// Существует отдельной вьюхой ровно затем, чтобы подписка на `ExportHelper` жила здесь.
+/// Если держать хелпер как `@StateObject` в `FullControlView`, каждый тик `progress`
+/// пересчитывает body со всеми дорожками таймлайна — на больших проектах это подвешивало
+/// главный поток. Общее правило: частообновляемый `ObservableObject` не должен наблюдаться
+/// вьюхой с тяжёлым списком — изолируй чтение в маленького ребёнка (см. TASK-007).
+struct ExportProgressOverlay: View {
+
+    @ObservedObject var exportHelper: ExportHelper
+
+    var body: some View {
+        VStack(spacing: 16) {
+            CircularPercentProgressView(progress: Double(exportHelper.progress))
+                .frame(width: 80, height: 80)
+            Button(^String.Titles.cancelButtonTitle) {
+                exportHelper.cancelExport()
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .padding(30)
+        .background(Color.black.opacity(0.8))
+        .cornerRadius(12)
+        .shadow(radius: 20)
+        .transition(.opacity)
+    }
+}
+
 struct LabelSelectionSheetView: View {
     let uniqueLabels: [Label]
     let onLabelSelected: (Label) -> Void
@@ -2904,7 +2932,7 @@ struct TimelineMouseTracker: NSViewRepresentable {
 
                 // Общие события через запятую
                 let eventNames = stamp.timeEvents.compactMap { eventID in
-                    tagLibrary.allTimeEvents.first(where: { $0.id == eventID })?.name
+                    tagLibrary.findTimeEventById(eventID)?.name
                 }
                 if !eventNames.isEmpty {
                     add(sep + eventNames.joined(separator: ", "))
@@ -3007,10 +3035,15 @@ struct ScreenshotMarkersView: View {
     var part: RenderPart = .full
 
     @ObservedObject var screenshotsManager = ScreenshotsMetadataManager.shared
-    @ObservedObject var videoManager = VideoPlayerManager.shared
+    /// Без `@ObservedObject`: плеер здесь нужен только чтобы вызвать `seek`/`pause` по нажатию.
+    /// Подписка тянула эту вьюху в перерисовку на каждое изменение плеера, а вместе с ней —
+    /// проверку наличия файлов на диске. См. TASK-007.
+    private let videoManager = VideoPlayerManager.shared
+    /// Эти двое остаются наблюдаемыми: `timelineData` читается в контенте контекстного меню
+    /// (`getAvailableStampsForScreenshot`), `tagLibrary` — в поповере со связанными тегами.
     @ObservedObject var timelineData = TimelineDataManager.shared
     @ObservedObject var tagLibrary = TagLibraryManager.shared
-    
+
     @State private var hoveredScreenshot: String? = nil
     @State private var showScreenshotTagEditor: Bool = false
     @State private var editingScreenshot: ScreenshotMetadata? = nil
@@ -3048,7 +3081,9 @@ struct ScreenshotMarkersView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
-                if screenshotFileExists(for: screenshot) {
+                // Проверка по кэшу менеджера, а НЕ обращение к диску: раньше здесь на каждый
+                // пересчёт body вызывался `FileManager.fileExists` на каждый скриншот.
+                if screenshotsManager.hasImageFile(for: screenshot) {
                     screenshotMarker(for: screenshot)
                 }
             }
@@ -3084,15 +3119,6 @@ struct ScreenshotMarkersView: View {
                 }
             }
         }
-    }
-    
-    private func screenshotFileExists(for screenshot: ScreenshotMetadata) -> Bool {
-        guard let screenshotsFolder = getCurrentScreenshotsFolder() else {
-            return false
-        }
-        let imageFileName = screenshot.screenshotName.hasSuffix(".png") ? screenshot.screenshotName : "\(screenshot.screenshotName).png"
-        let imageURL = screenshotsFolder.appendingPathComponent(imageFileName)
-        return FileManager.default.fileExists(atPath: imageURL.path)
     }
     
     private func screenshotMarker(for screenshot: ScreenshotMetadata) -> some View {

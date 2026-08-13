@@ -17,7 +17,13 @@ class VideoPlayerManager: ObservableObject {
     static let shared = VideoPlayerManager()
     @Published var player: AVPlayer?
     @Published var playbackSpeed: Double = 1.0
-    @Published var currentTime: Double = 0.0
+    /// НЕ `@Published` осознанно. Тик плеера идёт 30 Гц, а на этот синглтон подписаны почти все
+    /// экраны разметки — `@Published` здесь означал полную перестройку их `body` 30 раз в секунду
+    /// (см. [[PlaybackClock]] и `vault/tasks/…/TASK-007`). Читать значение можно как раньше;
+    /// подписываться на изменения — только через `PlaybackClock.shared`.
+    var currentTime: Double = 0.0 {
+        didSet { PlaybackClock.shared.update(currentTime) }
+    }
     @Published var isPlaying: Bool = false
     @Published var isResizingTag: Bool = false // Track if user is resizing a tag
     /// Режим редактирования скриншота во вьюхе видео-окна (для обработки кнопки закрытия окна).
@@ -30,7 +36,10 @@ class VideoPlayerManager: ObservableObject {
     // MARK: - Review Mode
     @Published var isReviewMode: Bool = false
     @Published var reviewPlayer: AVPlayer?
-    @Published var reviewCurrentTime: Double = 0
+    /// Тоже не `@Published` — по той же причине, что и `currentTime` (10 Гц × все окна).
+    /// Реактивных потребителей нет: значение читают только императивно (`VideoPlayerViewModel`),
+    /// а на экране время review-плеера показывается через `PlaybackClock`.
+    var reviewCurrentTime: Double = 0
     @Published var reviewPlaybackSpeed: Double = 1.0
 
     // MARK: - Review Screenshot Overlay
@@ -281,8 +290,9 @@ class VideoPlayerManager: ObservableObject {
         let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         reviewTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self, self.isReviewMode else { return }
-            self.reviewCurrentTime = CMTimeGetSeconds(time)
-            self.currentTime = self.reviewCurrentTime
+            let seconds = CMTimeGetSeconds(time)
+            self.reviewCurrentTime = seconds
+            self.currentTime = seconds
         }
     }
     

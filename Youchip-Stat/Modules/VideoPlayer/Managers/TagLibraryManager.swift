@@ -22,18 +22,60 @@ struct StandardCollection {
 
 class TagLibraryManager: ObservableObject {
     static let shared = TagLibraryManager()
-    @Published var tags: [Tag] = []
+    @Published var tags: [Tag] = [] { didSet { tagsByID = Self.indexed(tags, by: \.id) } }
     @Published var tagGroups: [TagGroup] = []
-    @Published var labelGroups: [LabelGroupData] = []
-    @Published var labels: [Label] = []
+    @Published var labelGroups: [LabelGroupData] = [] {
+        didSet { groupByLabelID = Self.groupsByLabelID(labelGroups) }
+    }
+    @Published var labels: [Label] = [] { didSet { labelsByID = Self.indexed(labels, by: \.id) } }
     @Published var timeEvents: [TimeEvent] = []
-    @Published var allTags: [Tag] = []
+    @Published var allTags: [Tag] = [] { didSet { allTagsByID = Self.indexed(allTags, by: \.id) } }
     @Published var allTagGroups: [TagGroup] = []
-    @Published var allLabelGroups: [LabelGroupData] = []
-    @Published var allLabels: [Label] = []
-    @Published var allTimeEvents: [TimeEvent] = []
+    @Published var allLabelGroups: [LabelGroupData] = [] {
+        didSet { groupByAllLabelID = Self.groupsByLabelID(allLabelGroups) }
+    }
+    @Published var allLabels: [Label] = [] { didSet { allLabelsByID = Self.indexed(allLabels, by: \.id) } }
+    @Published var allTimeEvents: [TimeEvent] = [] {
+        didSet { allTimeEventsByID = Self.indexed(allTimeEvents, by: \.id) }
+    }
     @Published var selectedTimeEvents: Set<String> = []
-    
+
+    // MARK: - Индексы по id
+    //
+    // Поиск по id раньше был линейным (`first(where:)`) и вызывался из горячих путей отрисовки:
+    // имя и цвет штампа перерезолвятся при каждом рендере, лейблы — на каждый штамп, группа
+    // лейбла — на каждое движение мыши по таймлайну. Индексы пересобираются только при смене
+    // набора (смена/перезагрузка коллекции), то есть редко. См. TASK-007, 6.2.
+    //
+    // ВАЖНО: при совпадающих id побеждает ПЕРВЫЙ элемент — ровно как у `first(where:)`, который
+    // эти словари заменяют. Дубли id между коллекциями — штатная ситуация (см. комментарий к
+    // `findTagById` ниже), поэтому `uniquingKeysWith` обязателен: `uniqueKeysWithValues` уронил
+    // бы приложение.
+
+    private var tagsByID: [String: Tag] = [:]
+    private var allTagsByID: [String: Tag] = [:]
+    private var labelsByID: [String: Label] = [:]
+    private var allLabelsByID: [String: Label] = [:]
+    private var allTimeEventsByID: [String: TimeEvent] = [:]
+    /// id лейбла → его группа. Обратный индекс: раньше группу искали перебором всех групп
+    /// с `contains` внутри — O(групп × лейблов) на каждый лейбл.
+    private var groupByLabelID: [String: LabelGroupData] = [:]
+    private var groupByAllLabelID: [String: LabelGroupData] = [:]
+
+    private static func indexed<T>(_ items: [T], by key: KeyPath<T, String>) -> [String: T] {
+        Dictionary(items.map { ($0[keyPath: key], $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private static func groupsByLabelID(_ groups: [LabelGroupData]) -> [String: LabelGroupData] {
+        var result: [String: LabelGroupData] = [:]
+        for group in groups {
+            for labelID in group.lables where result[labelID] == nil {
+                result[labelID] = group
+            }
+        }
+        return result
+    }
+
     private var defaultTags: [Tag] = []
     private var defaultTagGroups: [TagGroup] = []
     private var defaultLabelGroups: [LabelGroupData] = []
@@ -317,11 +359,29 @@ class TagLibraryManager: ObservableObject {
     // Фолбэк на пул оставлен для «чужих» id (разметка из другого проекта/коллекции).
 
     func findTagById(_ id: String) -> Tag? {
-        tags.first(where: { $0.id == id }) ?? allTags.first(where: { $0.id == id })
+        tagsByID[id] ?? allTagsByID[id]
     }
 
     func findLabelById(_ id: String) -> Label? {
-        labels.first(where: { $0.id == id }) ?? allLabels.first(where: { $0.id == id })
+        labelsByID[id] ?? allLabelsByID[id]
+    }
+
+    /// Событие по id. Раньше во всех вызывающих местах писали `allTimeEvents.first(where:)`
+    /// вручную — в том числе в отрисовке чипов на каждом штампе.
+    func findTimeEventById(_ id: String) -> TimeEvent? {
+        allTimeEventsByID[id]
+    }
+
+    /// Группа, которой принадлежит лейбл. Приоритет — как у остальных `find*`: сначала выбранная
+    /// коллекция, потом общий пул.
+    ///
+    /// ⚠️ НЕ полная замена инлайн-поискам группы, которые сейчас есть в отрисовке
+    /// (`TimelineLineView.menuForTag`, `TimelineMouseTracker`). Они отличаются в двух местах:
+    /// ищут только по пулу `allLabelGroups` (без приоритета выбранной коллекции) и имеют второй
+    /// фолбэк — по `FullLabelWithGroup.lableGroupId`. Переводить их сюда = менять поведение,
+    /// поэтому это отложено в фазу 3.4 и требует отдельного решения (см. TASK-007).
+    func findGroupForLabel(_ labelID: String) -> LabelGroupData? {
+        groupByLabelID[labelID] ?? groupByAllLabelID[labelID]
     }
 
     func findTagGroupForTag(_ tagID: String) -> TagGroup? {

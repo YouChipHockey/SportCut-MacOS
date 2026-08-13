@@ -68,8 +68,10 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         }
     }
 
+    /// Через кэш: свойство читается в горячем пути отрисовки таймлайна по нескольку раз
+    /// на штамп, а `Color(hex:)` каждый раз парсит строку Scanner'ом. См. [[ColorHexCache]].
     var color: Color {
-        Color(hex: colorHex)
+        ColorHexCache.color(hex: colorHex)
     }
     
     var idTags: [String] {

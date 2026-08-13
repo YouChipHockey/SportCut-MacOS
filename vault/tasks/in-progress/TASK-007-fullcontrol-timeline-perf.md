@@ -1,7 +1,7 @@
 ---
 id: TASK-007
 title: Производительность FullControlView / таймлайнов в разметке
-status: backlog
+status: in-progress
 assignee: developer
 created: 2026-08-13
 updated: 2026-08-13
@@ -196,7 +196,7 @@ ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
 
 Это одна правка, которая снимает большую часть нагрузки во всех окнах сразу.
 
-- [ ] **1.1. Отдельный «часовой» объект для времени.** Ввести
+- [x] **1.1. Отдельный «часовой» объект для времени.** Ввести
       `final class PlaybackClock: ObservableObject { @Published var time: Double }` (синглтон).
       `VideoPlayerManager` продолжает знать `currentTime` как **обычное** (не `@Published`)
       свойство, а 30 Гц-тик пишет только в `PlaybackClock.shared.time`. Тогда
@@ -208,24 +208,34 @@ ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
       неподписанную ссылку (`private let videoManager = VideoPlayerManager.shared`) + точечный
       `.onReceive(videoManager.$isPlaying)` там, где реакция реально нужна. Эффект тот же,
       но правок больше и легче что-то пропустить.
-- [ ] **1.2. Плейхед читает время сам.** `TimelinePlayheadView` и `PinnedTimelineRulerView`
+- [x] **1.2. Плейхед читает время сам.** `TimelinePlayheadView` и `PinnedTimelineRulerView`
       подписываются на `PlaybackClock` (`@ObservedObject`) и вычисляют X внутри себя.
       Убрать параметр `timeOffsetToPixels` и строку
       [FullControlView.swift:828](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:828).
-- [ ] **1.3. Автоскролл — не через `onChange` на body.** Заменить
-      `.onChange(of: videoManager.currentTime)`
-      ([FullControlView.swift:470](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:470))
-      на подписку в `TimelineScrollController` (Combine-`sink` на `PlaybackClock.$time` с
-      `throttle`), которая напрямую двигает `NSScrollView`. Автоскролл вообще не должен
-      проходить через SwiftUI-граф.
-- [ ] **1.4. Одно уведомление на тик в review-режиме:** в
-      [VideoPlayerManager.swift:284](Youchip-Stat/Modules/VideoPlayer/Managers/VideoPlayerManager.swift:284)
-      не писать `reviewCurrentTime` и `currentTime` двумя присваиваниями.
+      *Сделано.* Плюс третий потребитель, который нашёлся при инвентаризации: цифровой таймкод
+      в `VideoPlayerView` вынесен в `LivePlaybackTimeLabel`.
+- [x] **1.3. Автоскролл — не через `onChange` на body.** Сделано через
+      `.onReceive(PlaybackClock.shared.$time)`.
+      **Это было обязательно, а не «желательно»:** `onChange(of:)` сравнивает значения при
+      пересчёте body, а body FullControlView после 1.1 на тик плеера больше не пересчитывается —
+      автоскролл с `onChange` просто перестал бы работать. Замыкание body не инвалидирует,
+      внутри двигается только `NSScrollView`. Перенос подписки внутрь `TimelineScrollController`
+      не понадобился.
+- [x] **1.4. Одно уведомление на тик в review-режиме.** Решилось само: `reviewCurrentTime` тоже
+      переведён в обычное свойство (реактивных потребителей у него нет — читается только
+      императивно из `VideoPlayerViewModel`), поэтому на тик остаётся ровно одна публикация
+      через `PlaybackClock`.
 - [ ] **1.5. Снизить частоту, где не нужно 30 Гц.** Тик остаётся 30 Гц для плавности плейхеда,
       но остальные потребители (`liveStreamManager`, баннеры) — через `throttle(0.25)`.
+      *Отложено:* после 1.1 у часов осталось три мелких подписчика, throttle сейчас ничего не
+      экономит. Вернуться, если появятся новые.
 - [ ] **1.6. Кэшировать `timelineDuration`.** Сделать его закэшированным значением, которое
       обновляется при загрузке item / в live-режиме, а не читает `AVPlayerItem.duration`
       на каждое обращение.
+      *Сознательно отложено в фазу 3:* смысл был в том, что `timelineDuration` читался в каждой
+      из N строк 30 раз в секунду. После 1.1 body строк на тик не пересчитывается, и выигрыш
+      почти исчез, а кэш `AVPlayerItem.duration` — это риск получить 0/NaN до готовности item'а.
+      В фазе 3.1 длительность станет параметром строки, и вопрос закроется сам.
 
 **Ожидаемо:** на паузе перестройки прекращаются полностью; при воспроизведении перестраивается
 только плейхед (один `offset`).
@@ -253,8 +263,10 @@ ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
       `timelineZStackContent` ([FullControlView.swift:774](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:774)),
       оставив только закреплённую (в `PinnedTimelineRulerView`), с полосой-заглушкой той же
       высоты для выравнивания.
-- [ ] **2.5. `TimelineScrollControllerAttacher`** — привязываться один раз (флаг «уже нашли
-      scrollView»), а не обходить иерархию на каждый `updateNSView`.
+- [x] **2.5. `TimelineScrollControllerAttacher`** — привязываться один раз, а не обходить
+      иерархию на каждый `updateNSView`. *Сделано:* ранний выход по `controller.scrollView == nil`.
+      Отдельный флаг не понадобился — ссылка на скроллвью слабая, так что при пересоздании
+      скроллвью она сама обнулится и привязка повторится.
 
 ### Фаза 3 — сделать строку и штамп дешёвыми (большой эффект, средний риск)
 
@@ -271,9 +283,10 @@ ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
       `(line.id, stamps-версия, gridWidth)`. Это убирает из рендера: `getOverlapCount` (O(S²)
       → один линейный проход по отсортированным по началу штампам), `firstIndex(where:)`,
       `Array(enumerated())`.
-- [ ] **3.3. Кэш цветов.** `ColorCache.shared.color(forHex:)` — `[String: Color]`. Заменить
-      `stamp.color` в рендер-путях (`TimelineLineView`, `StampLabelsOverlayView`,
-      `ViewerTimelineView`, `MomentMiniTimelineView`).
+- [x] **3.3. Кэш цветов.** *Сделано:* `ColorHexCache` в `Common/Extensions/Color.swift`, и
+      `TimelineStamp.color` ходит через него. Править сами рендер-пути не понадобилось: все они
+      читают цвет через `stamp.color`, так что выигрыш получили и `TimelineLineView`, и
+      `StampLabelsOverlayView`, и вьюхи просмотра — одной точкой.
 - [ ] **3.4. Контекстное меню — по требованию.** Не строить `menuForTag` для каждого штампа.
       Варианты: (а) `.contextMenu` только на выбранном штампе, остальным — правый клик через
       `NSEvent`/жест, который сначала выделяет штамп; (б) вынести меню в `NSViewRepresentable`
@@ -296,23 +309,24 @@ ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
 
 ### Фаза 4 — рисунки/скриншоты (средний эффект, малый риск)
 
-- [ ] **4.1. Никакого `fileExists` в body.** Держать в `ScreenshotsMetadataManager` кэш
-      `Set<String>` существующих файлов, обновляемый при добавлении/удалении скриншота и при
-      смене видео (обход папки — один раз, на фоне). `screenshotFileExists` читает кэш.
-- [ ] **4.2. Отвязать `ScreenshotMarkersView` от `videoManager`** — она время не использует;
-      `@ObservedObject var videoManager` удалить (аналогично `timelineData`, `tagLibrary`, если
-      не используются в body).
+- [x] **4.1. Никакого `fileExists` в body.** *Сделано:* `ScreenshotsMetadataManager`
+      держит `existingImageBaseNames: Set<String>`, вьюха зовёт `hasImageFile(for:)`.
+      Отдельного обхода папки не появилось: набор строится из того же листинга, которым уже
+      читались метаданные. Обновляется при `loadScreenshots` (её зовут и после сохранения нового
+      рисунка), `removeScreenshot`, `clearScreenshots`. Мёртвый `screenshotFileExists` удалён.
+- [x] **4.2. Отвязать `ScreenshotMarkersView` от `videoManager`.** *Сделано.* А `timelineData` и
+      `tagLibrary` **оставлены наблюдаемыми осознанно** — вопреки исходной формулировке пункта:
+      они читаются в контенте контекстного меню (`getAvailableStampsForScreenshot`) и поповера
+      со связанными тегами, то есть это тоже `body`. Снять их — значит получить устаревшее меню.
 - [ ] **4.3. Один `.sheet` на окно**, а не внутри `ScreenshotMarkersView` (который создаётся
-      в двух местах). Убрать «переоткрытие листа» через двойной `asyncAfter`
-      ([FullControlView.swift:3075](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:3075)) —
-      это костыль, который лечится передачей актуальных данных в лист.
+      в двух местах). Убрать «переоткрытие листа» через двойной `asyncAfter` — это костыль,
+      который лечится передачей актуальных данных в лист.
 
 ### Фаза 5 — экспорт и запись на диск (средний эффект, малый риск)
 
-- [ ] **5.1. Вернуть исправление регресса:** `@State private var exportHelper` вместо
-      `@StateObject` ([FullControlView.swift:22](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:22)),
-      а `progress` читать только внутри маленького `ExportProgressOverlay(@ObservedObject …)`.
-      **Добавить комментарий-предупреждение в код**, чтобы регресс не вернулся третий раз.
+- [x] **5.1. `@State private var exportHelper`** вместо `@StateObject`, а `progress` читается
+      только внутри маленького `ExportProgressOverlay(@ObservedObject …)`. *Сделано*, с
+      комментарием-предупреждением «не меняй обратно» прямо у объявления.
 - [ ] **5.2. `updateTimelines()` — не на главном потоке и с коалесингом.** Дебаунс ~0.3–0.5 с +
       `JSONEncoder().encode` на `DispatchQueue.global(qos: .utility)`. На выходе из окна /
       `applicationWillTerminate` — принудительный сброс. Сейчас энкод многомегабайтного массива
@@ -330,10 +344,20 @@ ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
 - [ ] **6.1. `TagLibraryView`** (2712 строк): после фазы 1 она выпадет из 30 Гц-цикла, но
       стоит проверить профайлером её собственную стоимость body и разбить на под-View с
       `Equatable` там, где она перестраивается на любое изменение `TagLibraryManager`.
-- [ ] **6.2. Индексы в `TagLibraryManager`.** `findTagById` / `findLabelById` — линейный поиск
-      по двум массивам ([TagLibraryManager.swift:319](Youchip-Stat/Modules/VideoPlayer/Managers/TagLibraryManager.swift:319)),
-      вызывается из рендер-путей. Добавить `[String: Tag]` / `[String: Label]` /
-      `[String: TimeEvent]` / `label→group`, пересобирать при смене коллекции.
+- [x] **6.2. Индексы в `TagLibraryManager`.** *Сделано частично, осознанно.* Словари по id
+      собираются в `didSet` соответствующих `@Published`-массивов (пересборка редкая — только
+      смена/перезагрузка коллекции). `uniquingKeysWith: { first, _ in first }` обязателен:
+      дубли id между коллекциями штатны, а `uniqueKeysWithValues` уронил бы приложение — и
+      «первый побеждает» точно повторяет семантику `first(where:)`, которую индексы заменяют.
+      - Переведены: `findTagById`, `findLabelById`; добавлен `findTimeEventById` и применён в
+        трёх горячих местах (`StampLabelsOverlayView`, `TimelineLineView.menuForTag`,
+        `TimelineMouseTracker`) — там замена побайтово эквивалентна.
+      - `findGroupForLabel` добавлен, но **нигде не подключён**: инлайн-поиски группы в отрисовке
+        ищут только по пулу `allLabelGroups` (без приоритета выбранной коллекции) и имеют второй
+        фолбэк по `lableGroupId`. Перевод их на общее правило — изменение поведения в том самом
+        месте, где только что чинили дубли id, поэтому отложено в 3.4 и требует решения.
+      - `findTagGroupForTag` и `findLabelsForTag` не тронуты: они возвращают выборки/`filter`,
+        индекс по id там не применяется напрямую, а в горячем пути их нет.
 - [ ] **6.3. `secondsToTimeString`** использует `String(format:)` (NSString-форматирование) —
       480 вызовов на тик из двух линеек. После 2.4 останется 240; при желании заменить на
       ручную сборку строки.
@@ -391,8 +415,33 @@ ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
 ## Журнал работы
 
 - 2026-08-13 (developer): проведён ресерч, задача заведена и декомпозирована на 6 фаз.
-  Обнаружены два **регресса** относительно ранее сделанных оптимизаций (виртуализация строк
-  и `@StateObject exportHelper`) — их нужно вернуть в первую очередь.
+- 2026-08-13 (developer): **фаза 1 написана, ждёт сборки и проверки руками.**
+  - Инвентаризация перед правкой (это оказалось ключевым): из 172 упоминаний `currentTime` в
+    проекте **реактивная зависимость всего одна** — `onChange` автоскролла. Остальные читают
+    время императивно, в обработчиках (`TagLibraryView` — 18 мест, `VideoPlayerViewModel` — 2),
+    и от перевода свойства в обычное не страдают. `$currentTime` / `$reviewCurrentTime` не
+    используются нигде, так что молча «отвалиться» ничему не грозит.
+  - Реально живых чтений в `body` было четыре: плейхед в скролле, линейка в шапке, таймкод в
+    `VideoPlayerView` и `onChange` автоскролла. Все четыре переведены на `PlaybackClock`.
+  - Файлы: `PlaybackClock.swift` (новый), `VideoPlayerManager.swift`, `TimelinePlayheadView.swift`,
+    `PinnedTimelineRulerView.swift`, `FullControlView.swift`, `VideoPlayerView.swift`.
+  - Побочно: удалён осиротевший `VideoPlayerView.formatDuration`.
+  - 1.5 и 1.6 сознательно отложены — см. отметки в фазе 1, после 1.1 они потеряли смысл.
+- 2026-08-13 (developer): **второй заход — «невидимые» правки** (не меняют вёрстку, поэтому
+  безопасно делать до сборки первого захода): 2.5, 3.3, 4.1, 4.2, 5.1, 6.2. Всё ждёт сборки.
+  - Файлы: `ScreenshotsMetadataManager.swift`, `TagLibraryManager.swift`, `Color.swift`,
+    `TimelineStamp.swift`, `TimelineAutoScrollHelper.swift`, `FullControlView.swift`,
+    `StampLabelsOverlayView.swift`, `TimelineLineView.swift`.
+  - Побочно удалено мёртвое: `screenshotFileExists`.
+  - **Ложная тревога, чтобы не повторять.** По ходу решил, что приватные хранимые свойства
+    ломают memberwise-инициализатор (правило «init становится private, если хоть одно свойство
+    private») и снял `private` у трёх вьюх. Проверил на существующем коде: у самого
+    `TimelinePlayheadView` есть `private let hitWidth = 16` рядом с memberwise-инициализатором,
+    который зовут из другого файла, и это собирается. Значит приватные свойства **со значением
+    по умолчанию** в memberwise-инициализатор не попадают и доступность его не понижают;
+    правило из книги — про свойства БЕЗ дефолта. `private` возвращён.
+  - Что НЕ сделано намеренно (детали в отметках пунктов): 4.3, перевод инлайн-поисков группы
+    лейбла на `findGroupForLabel` (меняет поведение → в 3.4).
 
 ## Результат
 

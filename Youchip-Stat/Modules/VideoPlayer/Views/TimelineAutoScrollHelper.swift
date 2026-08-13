@@ -287,9 +287,16 @@ struct TimelineScrollControllerAttacher: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        // Уже привязаны и NSScrollView живой — обход иерархии не нужен. Раньше проверки не было,
+        // и на каждый `updateNSView` уходил `DispatchQueue.main.async` с проходом по superview:
+        // при перерисовке таймлайна это давало десятки обходов в секунду (см. TASK-007, 2.5).
+        // Слабая ссылка `controller.scrollView` обнуляется, когда скроллвью пересоздаётся —
+        // тогда привязываемся заново.
+        guard controller.scrollView == nil else { return }
+
         // Walk up the hierarchy asynchronously so the full view tree is ready.
         DispatchQueue.main.async { [weak controller] in
-            guard let controller = controller else { return }
+            guard let controller = controller, controller.scrollView == nil else { return }
             var current: NSView? = nsView
             var depth = 0
             while let view = current, depth < 30 {

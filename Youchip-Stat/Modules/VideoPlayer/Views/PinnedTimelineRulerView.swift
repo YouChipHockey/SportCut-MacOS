@@ -13,7 +13,11 @@ import AppKit
 struct PinnedTimelineRulerView: View {
 
     @ObservedObject var controller: TimelineScrollController
-    @ObservedObject var videoManager: VideoPlayerManager
+    /// Без `@ObservedObject`: менеджер нужен только для вызова `seek`, а подписка на него
+    /// затягивала шапку в перерисовку на каждое изменение любого его свойства. Время берём из
+    /// `PlaybackClock` — см. [[PlaybackClock]].
+    let videoManager: VideoPlayerManager
+    @ObservedObject private var clock = PlaybackClock.shared
     /// Контроллер перетаскивания плейхеда — тот же, что и у стебля в скролле, чтобы «голову» в
     /// закреплённой шапке можно было хватать и тянуть (раньше шапка перекрывала стебель и хват пропадал).
     @ObservedObject var dragController: PlayheadEdgeScrollController
@@ -34,7 +38,7 @@ struct PinnedTimelineRulerView: View {
     /// Экранная (во вьюпорте шапки) X плейхеда с учётом горизонтального скролла.
     private var playheadViewportX: CGFloat {
         let offsetX = -controller.liveScrollX
-        let base = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
+        let base = duration > 0 ? (clock.time / duration) * gridWidth : 0
         // Во время перетаскивания показываем позицию из dragController (в координатах контента).
         let contentX = dragController.isDragging ? dragController.dragX : base
         return contentX + offsetX
@@ -42,7 +46,7 @@ struct PinnedTimelineRulerView: View {
 
     var body: some View {
         let offsetX = -controller.liveScrollX
-        let playheadX = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
+        let playheadX = duration > 0 ? (clock.time / duration) * gridWidth : 0
 
         ZStack(alignment: .topLeading) {
             TimelineTimestampsHeaderView(duration: duration, interval: interval, width: gridWidth)

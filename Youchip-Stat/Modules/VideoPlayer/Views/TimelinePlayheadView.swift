@@ -12,15 +12,26 @@ import SwiftUI
 // By keeping all reads of PlayheadEdgeScrollController's @Published properties
 // inside this struct, FullControlView is excluded from the 60 Hz re-render loop
 // that the edge-scroll timer drives during interactive playhead drag.
+//
+// Время плейхед берёт сам, из `PlaybackClock` — раньше позиция приходила параметром
+// `timeOffsetToPixels`, который FullControlView считал в своём body из `videoManager.currentTime`.
+// Из-за этого вся изоляция была бесполезной: FullControlView всё равно перестраивался 30 Гц
+// вместе со всеми дорожками. Не возвращай чтение времени в родителя.
 struct TimelinePlayheadView: View {
 
     @ObservedObject var dragController: PlayheadEdgeScrollController
+    @ObservedObject private var clock = PlaybackClock.shared
     let scrollController: TimelineScrollController
-    let timeOffsetToPixels: CGFloat
     let tagEdgePosition: CGFloat?
     let gridWidth: CGFloat
     let duration: Double
     let isResizingTag: Bool
+
+    /// Позиция плейхеда по времени воспроизведения, в координатах контента таймлайна.
+    private var timeOffsetToPixels: CGFloat {
+        guard duration > 0 else { return 0 }
+        return (clock.time / duration) * gridWidth
+    }
 
     private let hitWidth: CGFloat = 16
     /// Высота зоны захвата, когда зажат Cmd — только верхняя «ручка»-треугольник. Ниже (по стеблю)

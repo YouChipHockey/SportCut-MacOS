@@ -7,8 +7,28 @@
 
 import SwiftUI
 
+/// Кэш разбора hex-строк в `Color`.
+///
+/// `Color(hex:)` на каждый вызов делает `trimmingCharacters` + `Scanner` — а цвет штампа
+/// (`TimelineStamp.color`) вычисляется заново при каждой отрисовке, по нескольку раз на штамп
+/// (градиент + тень). На таймлайне с сотнями тегов это заметная доля кадра. Строк-ключей мало
+/// (палитра тегов), поэтому кэш не растёт.
+///
+/// Только главный поток — как и вся отрисовка, из которой он зовётся.
+enum ColorHexCache {
+
+    private static var cache: [String: Color] = [:]
+
+    static func color(hex: String) -> Color {
+        if let cached = cache[hex] { return cached }
+        let parsed = Color(hex: hex)
+        cache[hex] = parsed
+        return parsed
+    }
+}
+
 extension Color {
-    
+
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
