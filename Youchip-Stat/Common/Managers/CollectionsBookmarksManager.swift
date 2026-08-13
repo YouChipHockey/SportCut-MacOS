@@ -550,17 +550,43 @@ class CollectionsBookmarksManager {
             try? fileManager.copyItem(at: sourceFolder, to: destFolder)
         }
 
-        let newData = CollectionData(
-            id: newId,
-            tagGroups: data.tagGroups,
+        // Копия обязана получить СВОИ id: иначе она делит их с оригиналом, а глобальные пулы
+        // дедуплицируются по id и оставляют копию из первой по списку коллекции — правки во
+        // второй нигде не видны. Перевязываем и раскладку со связками (см. CollectionIdRegenerator).
+        let sourceFields: [PlayField] = data.playFields ?? (data.playField.map { field in [field] } ?? [])
+        let sourceLayout = TagFreeLayoutStorage.loadLayoutIfExists(
+            collectionId: id,
             tags: data.tags,
+            labels: data.labels,
+            timeEvents: data.timeEvents,
+            playFields: sourceFields
+        )
+        let fresh = CollectionIdRegenerator.regenerate(
+            tags: data.tags,
+            tagGroups: data.tagGroups,
             labelGroups: data.labelGroups,
             labels: data.labels,
             timeEvents: data.timeEvents,
-            playField: data.playField,
-            playFields: data.playFields
+            playFields: sourceFields,
+            layout: sourceLayout,
+            collectionName: newName
+        )
+
+        let newData = CollectionData(
+            id: newId,
+            tagGroups: fresh.tagGroups,
+            tags: fresh.tags,
+            labelGroups: fresh.labelGroups,
+            labels: fresh.labels,
+            timeEvents: fresh.timeEvents,
+            playField: fresh.playFields.first,
+            playFields: fresh.playFields.isEmpty ? nil : fresh.playFields
         )
         InMemoryStorageManager.shared.saveCollection(newData)
+        // Папку скопировали целиком, поэтому в ней лежит tagLayout.json со СТАРЫМИ id — перезаписываем.
+        if let layout = fresh.layout {
+            TagFreeLayoutStorage.saveLayout(layout, collectionId: newId)
+        }
         saveCollection(id: newId, name: newName, tagLibraryDisplayMode: info.displayMode)
         CollectionsBackupManager.shared.syncFromUserDefaults()
         NotificationCenter.default.post(name: .collectionDataChanged, object: nil)

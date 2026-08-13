@@ -818,7 +818,7 @@ struct OrganizerView: View {
     }
 
     private func resolvedTag(for segment: ExportSegmentOrganaizer, stamp: TimelineStamp) -> Tag {
-        if let real = TagLibraryManager.shared.allTags.first(where: { $0.id == segment.tagId }) {
+        if let real = TagLibraryManager.shared.findTagById(segment.tagId) {
             return real
         }
         if let synthetic = Tag.syntheticDrawingTag(for: stamp) {

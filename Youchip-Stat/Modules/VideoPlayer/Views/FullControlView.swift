@@ -881,7 +881,10 @@ struct FullControlView: View {
     
     @ViewBuilder
     private func timelineContent(proxy: ScrollViewProxy) -> some View {
-        HStack(spacing: 0) {
+        // alignment: .top обязателен. Правая колонка выше левой (у неё `.padding(.bottom, 15)`
+        // под индикатор скролла), и при выравнивании по центру — по умолчанию — столбец имён
+        // опускался на половину разницы относительно своих дорожек.
+        HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 // Пустая полоса сверху под «головы» меток рисунков в правой части —
                 // чтобы левый столбец с названиями оставался выровнен с линейкой и дорожками.

@@ -1,0 +1,399 @@
+---
+id: TASK-007
+title: Производительность FullControlView / таймлайнов в разметке
+status: backlog
+assignee: developer
+created: 2026-08-13
+updated: 2026-08-13
+tags: [performance, VideoPlayer, FullControlView, timeline]
+---
+
+# TASK-007 — Разгрузка редактора разметки (FullControlView + таймлайны)
+
+## Постановка
+
+При появлении большого количества таймлайнов в окне FullControl («разметка») вся программа
+начинает ужасно тупить. Уже на ~20 таймлайнах пользоваться почти невозможно. Нужен
+глубокий разбор причин + план оптимизации и разгрузки.
+
+## Диагноз: одна корневая причина + семь усилителей
+
+### Корень: 30 Гц `currentTime` × веерное `@ObservedObject` на синглтонах
+
+`VideoPlayerManager.startTimeObserver()`
+([VideoPlayerManager.swift:383](Youchip-Stat/Modules/VideoPlayer/Managers/VideoPlayerManager.swift:383))
+пишет `@Published currentTime` **30 раз в секунду** на главном потоке.
+
+`@ObservedObject` подписывается на `objectWillChange` **всего объекта**, а не на конкретное
+свойство. Поэтому каждый тик currentTime инвалидирует `body` у всех, кто держит
+`VideoPlayerManager.shared` через `@ObservedObject` — даже если этот body currentTime вообще
+не читает:
+
+| Подписчик | Файл |
+|---|---|
+| `FullControlView` (весь body: 3513 строк логики, все строки таймлайнов) | FullControlView.swift:17 |
+| `TimelineLineView` — **каждая** из N строк, отдельной подпиской | TimelineLineView.swift:15 |
+| `ScreenshotMarkersView` — 2 экземпляра (стебли + головы) | FullControlView.swift:3010 |
+| `TagLibraryView` (2712 строк) | TagLibraryView.swift:19 |
+| `VideoPlayerView`, `MirroredVideoWindow`, `ReviewVideoView` | соотв. файлы |
+| `ViewerTimelineView` / `ViewerTableView` (если открыт просмотр) | Viewer/… |
+
+То есть тупит **вся программа**, а не только окно FullControl: три окна разметки (+ зеркала
++ просмотр) полностью перестраивают свои деревья 30 раз в секунду. Это и объясняет
+«тупит вообще всё, а не только таймлайны».
+
+**Прошлая изоляция сломана.** В `timelineZStackContent` есть комментарий, что FullControlView
+специально не читает `@Published` у `playheadDragController` — но строкой ниже он читает
+`videoManager.currentTime`
+([FullControlView.swift:828](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:828)):
+
+```swift
+let timeOffsetToPixels = duration > 0 ? (videoManager.currentTime / duration) * gridWidth : 0
+```
+
+Плюс `.onChange(of: videoManager.currentTime)` на `timelineScrollView`
+([FullControlView.swift:470](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:470)).
+Смысл выделения `TimelinePlayheadView` в отдельный View полностью потерян.
+
+### Усилитель 1 — виртуализации строк нет
+
+Материализуются **все** строки таймлайнов, а не только видимые:
+
+- [FullControlView.swift:596](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:596) — `ForEach(timelineData.lines)` в `timelineNameRows()`, обычный `VStack`
+- [FullControlView.swift:788](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:788) — `ForEach(timelineData.lines)` в `timelineZStackContent`, обычный `VStack`
+- `grep visibleLineRange|LazyVStack|TimelineVOffsetKey` → 0 совпадений
+
+> **Важно про историю.** Раньше такая оптимизация проектировалась (описание сохранилось в
+> памяти `project_fullcontrolview_perf`), но `git log --all -S "visibleLineRange"` не находит
+> её ни в одном коммите ни на одной ветке — включая ветку `optimization`. То есть это **не
+> регресс**: код никогда не был закоммичен и его нельзя восстановить через `git show`. Правку
+> придётся писать заново, но описанный в памяти подход можно использовать как готовый чертёж.
+
+### Усилитель 2 — `@StateObject exportHelper` подписывает весь body
+
+[FullControlView.swift:22](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:22)
+`@StateObject var exportHelper = ExportHelper()`, а `exportHelper.progress` читается прямо в
+body ([FullControlView.swift:2008](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:2008)).
+Каждый тик прогресса при экспорте пересчитывает весь body со всеми строками — ровно тот
+механизм, который на больших проектах приводил к hang'у и убийству по watchdog.
+
+Аналогичное исправление (`@State` + изолированный `@ObservedObject`-оверлей) применялось
+раньше **в другом файле** (`show export progress in viewer mode`); в `FullControlView` здесь
+`@StateObject` стоит с самого коммита `83d2b76` и не менялся.
+
+### Усилитель 3 — `fileExists` в теле View, 30 раз в секунду
+
+`ScreenshotMarkersView.body`
+([FullControlView.swift:3048](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:3048)):
+
+```swift
+ForEach(screenshotsManager.screenshots, id: \.screenshotName) { screenshot in
+    if screenshotFileExists(for: screenshot) { screenshotMarker(for: screenshot) }
+}
+```
+
+`screenshotFileExists` → `FileManager.default.fileExists(atPath:)` — **синхронный stat-syscall
+на главном потоке, на каждый скриншот, на каждый пересчёт body**. View подписан на
+`videoManager` → 30 пересчётов/сек × 2 экземпляра × K скриншотов. При 50 рисунках это
+**3000 stat/сек** на main. Плюс тот же body пересчитывается на каждый кадр горизонтального
+скролла (через `liveScrollX`).
+
+### Усилитель 4 — `.contextMenu` на каждом штампе с тяжёлым содержимым
+
+`stampView` навешивает `.contextMenu { menuForTag(stamp:) }` на **каждый** штамп
+([TimelineLineView.swift:308](Youchip-Stat/Modules/VideoPlayer/Views/TimelineLineView.swift:308)).
+Содержимое строится вместе с body и внутри делает:
+
+- `ScreenshotsMetadataManager.shared.screenshots.contains { … }` — O(K) на штамп
+  ([TimelineLineView.swift:599](Youchip-Stat/Modules/VideoPlayer/Views/TimelineLineView.swift:599))
+- на каждый лейбл: `tagLibrary.allLabelGroups.first(where: { $0.lables.contains(…) })` — O(G×L)
+- `SportCutSessionManager.shared.sessions.isEmpty`
+
+При 20 таймлайнах × 30 штампов = 600 меню × ~15 узлов = ~9000 View-узлов, пересобираемых 30 раз
+в секунду. Также каждый штамп несёт `.onDrag`, `.position`, `.coordinateSpace(name:)`, два
+`onTapGesture` и `DragGesture`.
+
+### Усилитель 5 — квадратичная и линейная работа в рендере строки
+
+В `stampView` на **каждый** штамп на **каждый** рендер:
+
+- `getOverlapCount` — O(index) → суммарно **O(S²)** на строку
+  ([TimelineLineView.swift:63](Youchip-Stat/Modules/VideoPlayer/Views/TimelineLineView.swift:63))
+- `timelineData.lines.firstIndex(where:)` — O(L) на штамп
+  ([TimelineLineView.swift:158](Youchip-Stat/Modules/VideoPlayer/Views/TimelineLineView.swift:158))
+- `stamp.color` → `Color(hex:)` — `trimmingCharacters` + `Scanner` **на каждое обращение**
+  ([Color.swift:12](Youchip-Stat/Common/Extensions/Color.swift:12)), а обращений 3 на штамп
+  (два в градиенте + тень)
+- `Array(line.stamps.enumerated())` — новая аллокация массива на рендер
+- `videoManager.timelineDuration` → `player?.currentItem?.duration.seconds`, обращение в
+  AVFoundation, на каждую строку ([TimelineLineView.swift:84](Youchip-Stat/Modules/VideoPlayer/Views/TimelineLineView.swift:84))
+
+### Усилитель 6 — `GeometryReader` и `.sheet` на каждый элемент
+
+- `GeometryReader` в корне `TimelineLineView.body` (лишний layout-проход на строку)
+- `GeometryReader` внутри `StampLabelsOverlayView` — **на каждый штамп**
+- **Два `.sheet(item:)` на каждую строку** (`commentEditingStamp`, `sessionPickerStamp`)
+  ([TimelineLineView.swift:126](Youchip-Stat/Modules/VideoPlayer/Views/TimelineLineView.swift:126)) →
+  при 20 строках это 40 presentation-хостов
+- `StampLabelsOverlayView` держит свой `@ObservedObject tagLibrary` — то есть **каждый штамп**
+  подписан ещё и на `TagLibraryManager`
+- В `updateDisplayedLabels` — `String.size(withSystemFontOfSize:)`, реальное измерение текста,
+  на каждый лейбл каждого штампа
+
+### Усилитель 7 — дубли и «жирные» слои
+
+- `TimelineTimestampsHeaderView` рендерится **дважды**: в скролле
+  ([FullControlView.swift:774](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:774))
+  и в закреплённой шапке (PinnedTimelineRulerView.swift:48). Первая версия при этом полностью
+  скрыта под закреплённой шапкой — 240 `Text` + 240 `String(format:)` вхолостую, 30 раз/сек.
+- `TimeGridView` — `Canvas` шириной `gridWidth` и высотой `30 × (lines.count + 1)`. Лимит на
+  число линий (550) есть, лимита на **размер слоя** нет. При максимальном зуме
+  `maxScale = duration/10` — для матча 90 мин это 540× → `gridWidth ≈ 650 000 pt`. Слой такой
+  ширины — прямой удар в CoreAnimation render-server и в память.
+- `TimelineScrollControllerAttacher.updateNSView` делает `DispatchQueue.main.async` с проходом
+  по иерархии NSView **на каждый апдейт** → 30 обходов/сек
+  ([TimelineAutoScrollHelper.swift:289](Youchip-Stat/Modules/VideoPlayer/Views/TimelineAutoScrollHelper.swift:289)).
+- В review-режиме `reviewCurrentTime` и `currentTime` присваиваются подряд
+  ([VideoPlayerManager.swift:284](Youchip-Stat/Modules/VideoPlayer/Managers/VideoPlayerManager.swift:284)) →
+  **два** `objectWillChange` на тик вместо одного.
+
+### Отдельно: залипания при *изменении* разметки (не при воспроизведении)
+
+`TimelineDataManager.updateTimelines()`
+([TimelineDataManager.swift:464](Youchip-Stat/Modules/VideoPlayer/Managers/TimelineDataManager.swift:464))
+на каждую мутацию делает `JSONEncoder().encode(lines)` + `UserDefaults.set(data:)`
+**синхронно на главном потоке**
+([InMemoryStorageManager.swift:38](Youchip-Stat/Common/Managers/InMemoryStorageManager.swift:38)).
+Вызывается из ~12 мест: добавление тега, ресайз, перенос штампа, правка лейблов, комментарий,
+удаление, сортировка. При 20 таймлайнах это многомегабайтный энкод на каждое действие — «залипло
+на пол-секунды при постановке тега».
+
+Плюс любая мутация `lines` инвалидирует **все** строки (общий `objectWillChange`), даже если
+изменился один штамп.
+
+---
+
+## Порядок работ (по соотношению «эффект / риск»)
+
+Каждая фаза самостоятельна и проверяема. Останавливаться можно после любой.
+
+### Фаза 0 — измерить, чтобы не оптимизировать наугад (0.5 дня)
+
+- [ ] Xcode Instruments → **Time Profiler** + **SwiftUI** template, сценарий: проект на 20
+      таймлайнах, воспроизведение 10 сек, затем горизонтальный скролл, затем постановка тега.
+      Зафиксировать baseline: % main thread, число `body` вызовов, самые дорогие фреймы.
+- [ ] Временный дебажный счётчик в `FullControlView.body`, `TimelineLineView.body`,
+      `ScreenshotMarkersView.body` (`os_signpost` или `print` раз в секунду) — чтобы видеть
+      реальное число пересчётов до/после. Убрать перед мержем.
+- [ ] `Self._printChanges()` в `FullControlView.body` и `TimelineLineView.body` (только в
+      `#if DEBUG`) — покажет, какое именно свойство инвалидирует.
+
+**Критерий приёмки всей задачи:** на паузе — 0 пересчётов `TimelineLineView.body` в секунду;
+при воспроизведении — 0 пересчётов body строк, движется только плейхед; постановка тега —
+без визуального фриза.
+
+### Фаза 1 — вывести плеер из 30 Гц-цикла перестроек (максимальный эффект, малый риск)
+
+Это одна правка, которая снимает большую часть нагрузки во всех окнах сразу.
+
+- [ ] **1.1. Отдельный «часовой» объект для времени.** Ввести
+      `final class PlaybackClock: ObservableObject { @Published var time: Double }` (синглтон).
+      `VideoPlayerManager` продолжает знать `currentTime` как **обычное** (не `@Published`)
+      свойство, а 30 Гц-тик пишет только в `PlaybackClock.shared.time`. Тогда
+      `objectWillChange` `VideoPlayerManager` перестаёт срабатывать 30 раз/сек, и все
+      «случайные» подписчики (`TagLibraryView`, `VideoPlayerView`, зеркала, строки таймлайна)
+      выпадают из цикла автоматически.
+      *Альтернатива, если правка синглтона слишком инвазивна:* оставить `currentTime`
+      `@Published`, но у всех «случайных» подписчиков заменить `@ObservedObject` на
+      неподписанную ссылку (`private let videoManager = VideoPlayerManager.shared`) + точечный
+      `.onReceive(videoManager.$isPlaying)` там, где реакция реально нужна. Эффект тот же,
+      но правок больше и легче что-то пропустить.
+- [ ] **1.2. Плейхед читает время сам.** `TimelinePlayheadView` и `PinnedTimelineRulerView`
+      подписываются на `PlaybackClock` (`@ObservedObject`) и вычисляют X внутри себя.
+      Убрать параметр `timeOffsetToPixels` и строку
+      [FullControlView.swift:828](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:828).
+- [ ] **1.3. Автоскролл — не через `onChange` на body.** Заменить
+      `.onChange(of: videoManager.currentTime)`
+      ([FullControlView.swift:470](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:470))
+      на подписку в `TimelineScrollController` (Combine-`sink` на `PlaybackClock.$time` с
+      `throttle`), которая напрямую двигает `NSScrollView`. Автоскролл вообще не должен
+      проходить через SwiftUI-граф.
+- [ ] **1.4. Одно уведомление на тик в review-режиме:** в
+      [VideoPlayerManager.swift:284](Youchip-Stat/Modules/VideoPlayer/Managers/VideoPlayerManager.swift:284)
+      не писать `reviewCurrentTime` и `currentTime` двумя присваиваниями.
+- [ ] **1.5. Снизить частоту, где не нужно 30 Гц.** Тик остаётся 30 Гц для плавности плейхеда,
+      но остальные потребители (`liveStreamManager`, баннеры) — через `throttle(0.25)`.
+- [ ] **1.6. Кэшировать `timelineDuration`.** Сделать его закэшированным значением, которое
+      обновляется при загрузке item / в live-режиме, а не читает `AVPlayerItem.duration`
+      на каждое обращение.
+
+**Ожидаемо:** на паузе перестройки прекращаются полностью; при воспроизведении перестраивается
+только плейхед (один `offset`).
+
+### Фаза 2 — вернуть и укрепить виртуализацию строк (большой эффект, средний риск)
+
+- [ ] **2.1. Реализовать ручное окно видимости** по чертежу из памяти (в git его нет — писать
+      `project_fullcontrolview_perf`): `TimelineVOffsetKey` (PreferenceKey) +
+      `.coordinateSpace(name: "vTimelineScroll")` на вертикальном `ScrollView` (обе ветки
+      macOS 12/13) + невидимый `GeometryReader`-трекер в `.background(timelineContent)` +
+      `visibleLineRange(count:)` (rowHeight 30, viewport ≈ `parentWindowHeight`, буфер 12).
+      Диапазон применяется **одинаково** к `timelineRows` и `timelineNameRows`, сверху/снизу —
+      `Color.clear` фиксированной высоты, чтобы общая высота и выравнивание колонок сохранялись.
+      Обязательно проверить: в коде нет вертикального `scrollTo` (только горизонтальный через
+      `timelineScrollController`), иначе окно сломает прокрутку к строке.
+      *Проверить в git-истории, в каком коммите правка потерялась* — возможно, её можно
+      вернуть `git show`-ом, а не переписывать.
+- [ ] **2.2. `LazyVStack` вместо `VStack`** в обеих колонках (сам по себе правую колонку не
+      виртуализует из-за вложенного горизонтального `ScrollView` — поэтому нужен и 2.1).
+- [ ] **2.3. Ограничить размер слоёв, зависящих от `gridWidth`.** Ограничить `maxScale` так,
+      чтобы `gridWidth` не превышал ~50 000 pt (либо перейти к отрисовке сетки только по
+      видимому окну: `TimeGridView` рисует `documentVisibleRect`, а не весь контент).
+      Это снимает риск взрыва CoreAnimation на длинных матчах при максимальном зуме.
+- [ ] **2.4. Убрать дубль линейки:** удалить `TimelineTimestampsHeaderView` из
+      `timelineZStackContent` ([FullControlView.swift:774](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:774)),
+      оставив только закреплённую (в `PinnedTimelineRulerView`), с полосой-заглушкой той же
+      высоты для выравнивания.
+- [ ] **2.5. `TimelineScrollControllerAttacher`** — привязываться один раз (флаг «уже нашли
+      scrollView»), а не обходить иерархию на каждый `updateNSView`.
+
+### Фаза 3 — сделать строку и штамп дешёвыми (большой эффект, средний риск)
+
+- [ ] **3.1. Убрать подписки из `TimelineLineView`.** `videoManager` и `timelineData` —
+      обычные `let`-ссылки, не `@ObservedObject`. Всё, что нужно строке, приходит параметрами:
+      `line`, `duration`, `gridWidth`, `isSelected`, `selectedStampID`, набор
+      `stampsSelectedForSportCut` для этой строки, `lineIndex`, `linesCount`.
+      Сделать `TimelineLineView: Equatable` по этим значениям (и обернуть в `EquatableView`
+      либо опираться на автоматическое сравнение POD-полей) — тогда строка не перерисовывается,
+      пока её данные не изменились.
+- [ ] **3.2. Предпосчитанная модель строки.** Ввести `struct StampLayout` (id, x, width,
+      height, цвет как `Color`, `overlapCount`, флаги selected/bulk) и считать её один раз на
+      строку в `TimelineDataManager`/лёгком view-model'е, кэшируя по
+      `(line.id, stamps-версия, gridWidth)`. Это убирает из рендера: `getOverlapCount` (O(S²)
+      → один линейный проход по отсортированным по началу штампам), `firstIndex(where:)`,
+      `Array(enumerated())`.
+- [ ] **3.3. Кэш цветов.** `ColorCache.shared.color(forHex:)` — `[String: Color]`. Заменить
+      `stamp.color` в рендер-путях (`TimelineLineView`, `StampLabelsOverlayView`,
+      `ViewerTimelineView`, `MomentMiniTimelineView`).
+- [ ] **3.4. Контекстное меню — по требованию.** Не строить `menuForTag` для каждого штампа.
+      Варианты: (а) `.contextMenu` только на выбранном штампе, остальным — правый клик через
+      `NSEvent`/жест, который сначала выделяет штамп; (б) вынести меню в `NSViewRepresentable`
+      с `NSMenu`, собираемым в `menu(for:)` в момент клика. Внутри меню заменить
+      `screenshots.contains {…}` и `allLabelGroups.first(where:)` на предпосчитанные словари
+      (`[UUID: Set<String>]`, `[String: String]` label→group) в `TagLibraryManager`.
+- [ ] **3.5. Убрать `.sheet` из строки.** Оба листа (`commentEditingStamp`, `sessionPickerStamp`)
+      поднять в `FullControlView` — один экземпляр на окно, состояние через колбэки строки.
+- [ ] **3.6. `StampLabelsOverlayView`:** убрать `GeometryReader` (ширина уже известна как
+      `maxWidth`), убрать `@ObservedObject tagLibrary` (лейблы приходят готовыми из
+      `StampLayout`), а измерение текста (`size(withSystemFontOfSize:)`) кэшировать в
+      `[String: CGFloat]`.
+- [ ] **3.7. Убрать корневой `GeometryReader`** из `TimelineLineView.body` (высота/ширина
+      известны: `lineHeight`, `widthMax`).
+- [ ] **3.8. `TimelineMouseTracker`:** `lines: [TimelineLine]` в `Equatable`-сравнении даёт
+      глубокое сравнение всех штампов на каждый апдейт. Передавать вместо массива компактный
+      снимок (или версию-счётчик) и хранить lookup-структуру внутри `TrackingView`.
+      `chronologicalOrdinalAmongSameTag` в `mouseMoved` — O(всех штампов) с сортировкой на
+      каждое движение мыши; предпосчитать ординалы.
+
+### Фаза 4 — рисунки/скриншоты (средний эффект, малый риск)
+
+- [ ] **4.1. Никакого `fileExists` в body.** Держать в `ScreenshotsMetadataManager` кэш
+      `Set<String>` существующих файлов, обновляемый при добавлении/удалении скриншота и при
+      смене видео (обход папки — один раз, на фоне). `screenshotFileExists` читает кэш.
+- [ ] **4.2. Отвязать `ScreenshotMarkersView` от `videoManager`** — она время не использует;
+      `@ObservedObject var videoManager` удалить (аналогично `timelineData`, `tagLibrary`, если
+      не используются в body).
+- [ ] **4.3. Один `.sheet` на окно**, а не внутри `ScreenshotMarkersView` (который создаётся
+      в двух местах). Убрать «переоткрытие листа» через двойной `asyncAfter`
+      ([FullControlView.swift:3075](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:3075)) —
+      это костыль, который лечится передачей актуальных данных в лист.
+
+### Фаза 5 — экспорт и запись на диск (средний эффект, малый риск)
+
+- [ ] **5.1. Вернуть исправление регресса:** `@State private var exportHelper` вместо
+      `@StateObject` ([FullControlView.swift:22](Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift:22)),
+      а `progress` читать только внутри маленького `ExportProgressOverlay(@ObservedObject …)`.
+      **Добавить комментарий-предупреждение в код**, чтобы регресс не вернулся третий раз.
+- [ ] **5.2. `updateTimelines()` — не на главном потоке и с коалесингом.** Дебаунс ~0.3–0.5 с +
+      `JSONEncoder().encode` на `DispatchQueue.global(qos: .utility)`. На выходе из окна /
+      `applicationWillTerminate` — принудительный сброс. Сейчас энкод многомегабайтного массива
+      идёт синхронно на main из ~12 точек мутации.
+- [ ] **5.3. Не гонять данные через `UserDefaults`.** `userDefaults.set(data:)` для
+      многомегабайтного блоба — дорого и уже требует ручной защиты от лимита 4 МБ
+      ([InMemoryStorageManager.swift:41](Youchip-Stat/Common/Managers/InMemoryStorageManager.swift:41)).
+      Писать таймлайны сразу в файл (атомарно), UserDefaults оставить только под мелкие ключи.
+- [ ] **5.4. Гранулярные апдейты вместо `lines` целиком.** Рассмотреть версионный счётчик на
+      строку (`TimelineLine.revision`), чтобы правка одного штампа не заставляла SwiftUI
+      считать изменёнными все строки.
+
+### Фаза 6 — прочее окружение редактора (малый эффект, малый риск)
+
+- [ ] **6.1. `TagLibraryView`** (2712 строк): после фазы 1 она выпадет из 30 Гц-цикла, но
+      стоит проверить профайлером её собственную стоимость body и разбить на под-View с
+      `Equatable` там, где она перестраивается на любое изменение `TagLibraryManager`.
+- [ ] **6.2. Индексы в `TagLibraryManager`.** `findTagById` / `findLabelById` — линейный поиск
+      по двум массивам ([TagLibraryManager.swift:319](Youchip-Stat/Modules/VideoPlayer/Managers/TagLibraryManager.swift:319)),
+      вызывается из рендер-путей. Добавить `[String: Tag]` / `[String: Label]` /
+      `[String: TimeEvent]` / `label→group`, пересобирать при смене коллекции.
+- [ ] **6.3. `secondsToTimeString`** использует `String(format:)` (NSString-форматирование) —
+      480 вызовов на тик из двух линеек. После 2.4 останется 240; при желании заменить на
+      ручную сборку строки.
+- [ ] **6.4. `FocusTrackingView`** — таймер 0.5 с, оставить как есть, но проверить, что он один.
+
+---
+
+## Сводка ожидаемого эффекта
+
+| Фаза | Что уходит | Ожидание |
+|---|---|---|
+| 1 | 30 Гц-перестройка ~7 деревьев View во всех окнах | основной выигрыш; на паузе UI полностью «замолкает» |
+| 2 | материализация всех N строк + гигантские слои | линейная зависимость от числа таймлайнов исчезает |
+| 3 | O(S²) + 600 контекстных меню + 40 sheet на окно | плавный скролл и выделение при 100+ таймлайнов |
+| 4 | тысячи `stat()` в секунду на main | пропадают микрофризы при скролле |
+| 5 | синхронный JSON-энкод на main при каждой правке | пропадает залипание при постановке тега |
+| 6 | линейные поиски и лишнее форматирование | «полировка» |
+
+## Риски и что легко сломать
+
+- **Фаза 1** меняет способ доставки времени. Проверить: плейхед, автоскролл при
+  воспроизведении, скраб плейхеда (обе точки — в скролле и в закреплённой шапке), live-режим,
+  review-режим, зеркальные окна, окно просмотра.
+- **Фаза 2.1** (окно видимости) — самая аккуратная часть: рассинхрон левой и правой колонок
+  ловится глазами сразу. Обязательно один и тот же `range` для обеих. При «мигании» пустотой
+  на быстром скролле — увеличивать буфер (был 12).
+- **Фаза 2.3** (ограничение зума) — поведенческое изменение, согласовать: максимальный зум
+  станет меньше на длинных видео.
+- **Фаза 3.4** (контекстное меню) — меняет UX правого клика; нужно сохранить все текущие пункты.
+- **Фаза 5.2/5.3** — трогает персистентность. Обязательно проверить: сохранение при закрытии
+  окна, при выходе из приложения, при переключении видео, отсутствие потери разметки после
+  краша (сброс по дебаунсу + на `willTerminate`).
+- Сборка после каждой фазы: `xcodebuild -workspace Youchip-Stat.xcworkspace -scheme Youchip-Stat
+  -configuration Debug build CODE_SIGNING_ALLOWED=NO -quiet` (запускает пользователь).
+
+## Затронутые модули / файлы
+
+- [[../knowledge/modules/VideoPlayer]] — основной модуль
+- `Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift` (3513 стр.)
+- `Youchip-Stat/Modules/VideoPlayer/Views/TimelineLineView.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Views/StampLabelsOverlayView.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Views/TimeGridView.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Views/TimelineTimestampsHeaderView.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Views/TimelinePlayheadView.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Views/PinnedTimelineRulerView.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Views/TimelineAutoScrollHelper.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Views/TagLibraryView.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Managers/VideoPlayerManager.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Managers/TimelineDataManager.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Managers/TagLibraryManager.swift`
+- `Youchip-Stat/Modules/VideoPlayer/Managers/ScreenshotsMetadataManager.swift`
+- `Youchip-Stat/Common/Managers/InMemoryStorageManager.swift`
+- `Youchip-Stat/Common/Extensions/Color.swift`
+
+## Журнал работы
+
+- 2026-08-13 (developer): проведён ресерч, задача заведена и декомпозирована на 6 фаз.
+  Обнаружены два **регресса** относительно ранее сделанных оптимизаций (виртуализация строк
+  и `@StateObject exportHelper`) — их нужно вернуть в первую очередь.
+
+## Результат
+
+_(заполняется по мере выполнения)_

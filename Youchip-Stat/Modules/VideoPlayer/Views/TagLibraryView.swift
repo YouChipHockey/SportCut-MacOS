@@ -1356,7 +1356,15 @@ struct TagLibraryView: View {
             NotificationCenter.default.publisher(for: .showLabelSheet)
                 .receive(on: DispatchQueue.main)
                 .sink { [self] notification in
-                    guard let tag = notification.object as? Tag else { return }
+                    guard let notified = notification.object as? Tag else { return }
+                    // `HotKeyManager.registeredHotkeys` хранит СНИМОК объекта Tag на момент
+                    // регистрации хоткеев, и именно он приезжает сюда в object уведомления.
+                    // Пересобираем тег по id из текущей коллекции: иначе в СГРУППИРОВАННОМ режиме
+                    // (в отличие от связок, где handleCanvasButtonTap и так резолвит по id) на
+                    // таймлайн уходят время до/после и интервальность, актуальные на момент
+                    // регистрации, а при совпадающих id в двух коллекциях — копия из чужой.
+                    // Клик мышью этим не задет: FlexibleTagGrid берёт тег из `tagLibrary.tags`.
+                    let tag = resolveTag(id: notified.id) ?? notified
                     // В коллекциях со связками клавиш хоткей должен работать как ЛКМ по тегу:
                     // без окна лейблов — всё через канвас-обработчик.
                     if isKeyBindingsCanvasMode {
@@ -1575,10 +1583,17 @@ struct TagLibraryView: View {
         }
     }
     
-    private func handleTagButtonTap(tag: Tag) {
+    private func handleTagButtonTap(tag incoming: Tag) {
         // Блокируем добавление тегов в режиме редактирования
         guard !isEditorModeActive else { return }
-        
+
+        // Тег ВСЕГДА берём по id из текущей коллекции, а не доверяем пришедшему объекту: он может
+        // быть копией из другой коллекции с тем же id (дубликат коллекции или повторный импорт —
+        // id при этом сохраняются) либо снимком с прежними настройками. Ровно так же поступает
+        // путь связок клавиш, поэтому там этой проблемы нет.
+        let tag = resolveTag(id: incoming.id) ?? incoming
+
+
         if tag.isInterval ?? false {
             if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                 let activeTag = activeIntervalTags[index]
@@ -1823,6 +1838,12 @@ struct TagLibraryView: View {
         keyBindingRuntime.handleLabelTap(labelId: labelId)
     }
 
+    /// Тег по id из ВЫБРАННОЙ сейчас коллекции (с фолбэком на глобальный пул).
+    /// Единое правило живёт в `TagLibraryManager.findTagById` — см. комментарий там.
+    private func resolveTag(id: String) -> Tag? {
+        tagLibrary.findTagById(id)
+    }
+
     private func handleCanvasButtonTap(kind: CanvasButtonKind, elementId: String) {
         guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
 
@@ -1841,7 +1862,7 @@ struct TagLibraryView: View {
             return
         }
 
-        guard kind == .tag, let tag = tagLibrary.allTags.first(where: { $0.id == elementId }) else { return }
+        guard kind == .tag, let tag = resolveTag(id: elementId) else { return }
 
         let isIntervalTag = tag.isInterval ?? false
         let isMapTag = tag.mapEnabled == true
@@ -2110,8 +2131,8 @@ struct TagLibraryView: View {
     private func wireRuntimeCallbacks() {
         guard isKeyBindingsCanvasMode else { return }
         keyBindingRuntime.onAddTag = { [self] tagId, overrideBefore, overrideAfter, labelIds, onAdded in
-            guard let tag = tagLibrary.allTags.first(where: { $0.id == tagId }) else {
-                KeyBindingLog.log("onAddTag: тег \(tagId) не найден в allTags ❌")
+            guard let tag = resolveTag(id: tagId) else {
+                KeyBindingLog.log("onAddTag: тег \(tagId) не найден ❌")
                 onAdded?()
                 return
             }
@@ -2136,7 +2157,7 @@ struct TagLibraryView: View {
             }
         }
         keyBindingRuntime.onStartIntervalTag = { [self] tagId in
-            guard let tag = tagLibrary.allTags.first(where: { $0.id == tagId }),
+            guard let tag = resolveTag(id: tagId),
                   tag.isInterval ?? false,
                   !activeIntervalTags.contains(where: { $0.tag.id == tagId }) else { return }
             let labelIds = keyBindingRuntime.takeActivatedLabels()

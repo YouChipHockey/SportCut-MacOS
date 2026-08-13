@@ -81,6 +81,8 @@ class TagLibraryManager: ObservableObject {
     }
     
     private var isReloadingCollections = false
+    /// Во время пересборки пулов пришло ещё одно изменение — нужен повторный прогон.
+    private var needsAnotherReload = false
     private var lastCollectionCount = 0
     
     @objc private func handleCollectionDataChanged(_ notification: Notification) {
@@ -109,9 +111,12 @@ class TagLibraryManager: ObservableObject {
             } else {
                 DispatchQueue.main.async(execute: apply)
             }
+            // Глобальный пул обязан пересобраться и в этой ветке: из него читаются теги в режиме
+            // связок клавиш. Без этого после правки настроек тега пул оставался со старой версией.
+            reloadAllCollectionsIfIdle()
             return
         }
-        
+
         let currentCollections = CollectionsBookmarksManager.shared.loadCollections()
         let currentCount = currentCollections.count
         if currentCount != lastCollectionCount {
@@ -145,13 +150,23 @@ class TagLibraryManager: ObservableObject {
             }
         }
         
-        guard !isReloadingCollections else { return }
+        reloadAllCollectionsIfIdle()
+    }
+
+    /// Запускает пересборку глобальных пулов. Если пересборка уже идёт — не бросает изменение,
+    /// а ставит отметку и повторяет прогон по завершении: иначе сохранение, попавшее в окно
+    /// текущей загрузки, молча терялось и пул оставался со старыми данными.
+    private func reloadAllCollectionsIfIdle() {
+        guard !isReloadingCollections else {
+            needsAnotherReload = true
+            return
+        }
         isReloadingCollections = true
-        
+
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .collectionsLoadingStarted, object: nil)
         }
-        
+
         loadAllUserCollections()
     }
         
@@ -283,28 +298,49 @@ class TagLibraryManager: ObservableObject {
         applyHotkeysFromCurrentCollection()
     }
     
+    // MARK: - Поиск по id
+    //
+    // Правило для ВСЕХ поисков: сначала ВЫБРАННАЯ сейчас коллекция (`tags`/`labels`/`tagGroups`),
+    // и только потом глобальный пул (`allTags`/…).
+    //
+    // Пул склеен из всех коллекций и дедуплицирован по id:
+    // `Dictionary(grouping: mergedTags, by: { $0.id }).values.compactMap { $0.first }`.
+    // `grouping` сохраняет порядок внутри группы, а `mergedTags` строится по порядку коллекций из
+    // `CollectionsBookmarks.json` — значит при совпадающих id побеждает копия из ПЕРВОЙ коллекции.
+    // Одинаковые id — штатная ситуация: `duplicateCollection` копирует теги как есть, а импорт
+    // сохраняет id из файла (новый генерируется только у самой коллекции), поэтому повторный
+    // импорт того же файла даёт полный комплект дублей.
+    //
+    // Без приоритета текущей коллекции это било по всему, что резолвит тег по id, — в том числе по
+    // ОТРИСОВКЕ штампа: имя на таймлайне берётся не из штампа, а перерезолвится через
+    // `findTagById`, поэтому переименованный тег показывался старым именем из соседней коллекции.
+    // Фолбэк на пул оставлен для «чужих» id (разметка из другого проекта/коллекции).
+
     func findTagById(_ id: String) -> Tag? {
-        return allTags.first(where: { $0.id == id })
+        tags.first(where: { $0.id == id }) ?? allTags.first(where: { $0.id == id })
     }
-    
+
     func findLabelById(_ id: String) -> Label? {
-        return allLabels.first(where: { $0.id == id })
+        labels.first(where: { $0.id == id }) ?? allLabels.first(where: { $0.id == id })
     }
-    
+
     func findTagGroupForTag(_ tagID: String) -> TagGroup? {
-        return allTagGroups.first { group in
-            group.tags.contains(tagID)
-        }
+        tagGroups.first { $0.tags.contains(tagID) }
+            ?? allTagGroups.first { $0.tags.contains(tagID) }
     }
-        
+
     func findLabelsForTag(_ tag: Tag) -> [Label] {
         // Optimize using Set for O(1) lookup
         let labelGroupIdsSet = Set(tag.lablesGroup)
-        let relevantLabelIds = allLabelGroups
-            .filter { labelGroupIdsSet.contains($0.id) }
-            .flatMap { $0.lables }
-        let relevantLabelIdsSet = Set(relevantLabelIds)
-        return allLabels.filter { relevantLabelIdsSet.contains($0.id) }
+        // Группы и лейблы тоже сначала из текущей коллекции — иначе у тега-дубля подтянутся
+        // лейблы соседней коллекции.
+        let ownGroups = labelGroups.filter { labelGroupIdsSet.contains($0.id) }
+        let groups = ownGroups.isEmpty
+            ? allLabelGroups.filter { labelGroupIdsSet.contains($0.id) }
+            : ownGroups
+        let relevantLabelIdsSet = Set(groups.flatMap { $0.lables })
+        let own = labels.filter { relevantLabelIdsSet.contains($0.id) }
+        return own.isEmpty ? allLabels.filter { relevantLabelIdsSet.contains($0.id) } : own
     }
     
     private var loadedCollectionsCache: [String: (tags: [Tag], tagGroups: [TagGroup], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent])] = [:]
@@ -390,8 +426,14 @@ class TagLibraryManager: ObservableObject {
                 self.allTimeEvents = finalTimeEvents
                 self.isReloadingCollections = false
                 print("✅ TagLibraryManager: Finished loading all collections - total tags: \(finalTags.count), tagGroups: \(finalTagGroups.count)")
-                
+
                 NotificationCenter.default.post(name: .collectionsLoadingFinished, object: nil)
+
+                // Пока собирали, пришло ещё одно изменение — прогоняем заново.
+                if self.needsAnotherReload {
+                    self.needsAnotherReload = false
+                    self.reloadAllCollectionsIfIdle()
+                }
             }
         }
     }

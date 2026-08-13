@@ -178,18 +178,14 @@ class CollectionImportManager: ObservableObject {
             
             let collectionManager = CustomCollectionManager()
             collectionManager.collectionName = exportData.collectionName
-            collectionManager.tagGroups = exportData.tagGroups
-            collectionManager.tags = exportData.tags
-            collectionManager.labelGroups = exportData.labelGroups
-            collectionManager.labels = exportData.labels
-            collectionManager.timeEvents = exportData.timeEvents
 
             // Карты: предпочитаем новый массив; иначе — одиночная карта (старые экспорты).
+            var playFields: [PlayField] = []
             if let playFieldExports = exportData.playFields, !playFieldExports.isEmpty {
-                collectionManager.playFields = playFieldExports.compactMap { $0.toPlayField() }
+                playFields = playFieldExports.compactMap { $0.toPlayField() }
             } else if let playFieldExport = exportData.playField,
                       let playField = playFieldExport.toPlayField() {
-                collectionManager.playFields = [playField]
+                playFields = [playField]
             }
 
             // Авто-определение типа: коллекция со связками клавиш, если задан режим .free
@@ -197,9 +193,52 @@ class CollectionImportManager: ObservableObject {
             let isFree = exportData.tagLibraryDisplayMode == CollectionTagLibraryDisplayMode.free.rawValue
                 || exportData.freeLayout != nil
             collectionManager.tagLibraryDisplayMode = isFree ? .free : .grouped
-            if isFree {
-                // Раскладка/связки сохранятся под новым id при saveCollectionToFiles.
-                collectionManager.pendingImportedLayout = exportData.freeLayout
+
+            // Импорт сохраняет id из файла, поэтому повторный импорт одного и того же файла даёт
+            // две коллекции с общими id — а глобальные пулы дедуплицируются по id и оставляют
+            // копию из первой коллекции. Разводим id молча, вместе со ссылками, раскладкой и
+            // связками (см. CollectionIdRegenerator).
+            let occupied = CollectionIdRegenerator.occupiedIds()
+            if CollectionIdRegenerator.collides(
+                tags: exportData.tags,
+                tagGroups: exportData.tagGroups,
+                labelGroups: exportData.labelGroups,
+                labels: exportData.labels,
+                timeEvents: exportData.timeEvents,
+                playFields: playFields,
+                occupied: occupied
+            ) {
+                let fresh = CollectionIdRegenerator.regenerate(
+                    tags: exportData.tags,
+                    tagGroups: exportData.tagGroups,
+                    labelGroups: exportData.labelGroups,
+                    labels: exportData.labels,
+                    timeEvents: exportData.timeEvents,
+                    playFields: playFields,
+                    layout: exportData.freeLayout,
+                    collectionName: exportData.collectionName
+                )
+                collectionManager.tags = fresh.tags
+                collectionManager.tagGroups = fresh.tagGroups
+                collectionManager.labelGroups = fresh.labelGroups
+                collectionManager.labels = fresh.labels
+                collectionManager.timeEvents = fresh.timeEvents
+                collectionManager.playFields = fresh.playFields
+                if isFree {
+                    collectionManager.pendingImportedLayout = fresh.layout
+                }
+                print("♻️ CollectionImport: id пересеклись с существующими коллекциями — перевыдал их")
+            } else {
+                collectionManager.tags = exportData.tags
+                collectionManager.tagGroups = exportData.tagGroups
+                collectionManager.labelGroups = exportData.labelGroups
+                collectionManager.labels = exportData.labels
+                collectionManager.timeEvents = exportData.timeEvents
+                collectionManager.playFields = playFields
+                if isFree {
+                    // Раскладка/связки сохранятся под новым id при saveCollectionToFiles.
+                    collectionManager.pendingImportedLayout = exportData.freeLayout
+                }
             }
 
             return collectionManager

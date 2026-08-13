@@ -26,6 +26,10 @@ struct ZoomableVideoPlayerView<Native: View>: View {
     private let maxScale: CGFloat = 4.0
     private let step: CGFloat = 0.25
 
+    /// Высота самой плашки зума: кнопка 22 + вертикальные отступы 5×2.
+    /// На неё же плашка поднимается над низом, чтобы не лежать на баре управления плеера.
+    private let controlsHeight: CGFloat = 32
+
     var body: some View {
         GeometryReader { geo in
             let effective = clamp(scale * pinch)
@@ -49,6 +53,7 @@ struct ZoomableVideoPlayerView<Native: View>: View {
             .overlay(alignment: .bottomTrailing) {
                 zoomControls
                     .padding(10)
+                    .padding(.bottom, controlsHeight)
             }
         }
     }

@@ -282,7 +282,7 @@ class ExportHelper: ObservableObject {
                         screenshots: screenshots,
                         startTime: currentTime
                     )
-                    let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
+                    let tag = tagLibrary.findTagById(segment.stamp.idTag)
                         ?? Tag.syntheticDrawingTag(for: segment.stamp)
                     if let tag {
                         episodeOrdinal += 1
@@ -313,7 +313,7 @@ class ExportHelper: ObservableObject {
                 return
             }
             
-            let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
+            let tag = tagLibrary.findTagById(segment.stamp.idTag)
                 ?? Tag.syntheticDrawingTag(for: segment.stamp)
             if let tag {
                 episodeOrdinal += 1
@@ -573,7 +573,7 @@ class ExportHelper: ObservableObject {
             let naturalSize = videoTrack.naturalSize.applying(transform)
             let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
             let overlayVideoComposition: AVVideoComposition?
-            let tag = tagLibrary.allTags.first(where: { $0.id == segment.stamp.idTag })
+            let tag = tagLibrary.findTagById(segment.stamp.idTag)
                 ?? Tag.syntheticDrawingTag(for: segment.stamp)
             if let tag {
                 let overlayItem = OverlayItem(

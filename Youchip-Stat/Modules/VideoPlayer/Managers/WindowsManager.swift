@@ -769,10 +769,10 @@ class WindowsManager: NSObject, NSWindowDelegate {
             window.center()
             window.setContentSize(NSSize(width: 850, height: 600))
         }
-        NotificationCenter.default.addObserver(forName: .collectionDataChanged, object: nil, queue: .main) { _ in
-            TagLibraryManager.shared.refreshGlobalPools()
-        }
-        
+        // Раньше здесь на каждое открытие редактора вешался наблюдатель `.collectionDataChanged`
+        // (без снятия — наблюдатели копились, и пулы пересобирались N раз на одно сохранение).
+        // Теперь пересборку делает сам TagLibraryManager в обеих ветках handleCollectionDataChanged.
+
         self.collectionWindowDelegate = CollectionWindowDelegate()
         window.delegate = self.collectionWindowDelegate
         NotificationCenter.default.post(name: .collectionEditorOpened, object: nil)

@@ -655,73 +655,29 @@ class CustomCollectionManager: ObservableObject {
         let copySuffix = NSLocalizedString("CollectionsCopySuffix", comment: "")
         let newName = copySuffix.isEmpty ? name : "\(name) \(copySuffix)"
 
-        // Лейблы
-        var labelIdMap: [String: String] = [:]
-        let newLabels = srcLabels.map { lbl -> Label in
-            let nid = UUID().uuidString
-            labelIdMap[lbl.id] = nid
-            return Label(id: nid, name: lbl.name, description: lbl.description)
-        }
-        // Группы лейблов
-        var labelGroupIdMap: [String: String] = [:]
-        let newLabelGroups = srcLabelGroups.map { g -> LabelGroupData in
-            let nid = UUID().uuidString
-            labelGroupIdMap[g.id] = nid
-            return LabelGroupData(id: nid, name: g.name, lables: g.lables.compactMap { labelIdMap[$0] })
-        }
-        // Карты
-        var playFieldIdMap: [String: String] = [:]
-        let newPlayFields = srcPlayFields.map { pf -> PlayField in
-            let nid = UUID().uuidString
-            playFieldIdMap[pf.id] = nid
-            return PlayField(id: nid, name: pf.name, imagePath: pf.imagePath, width: pf.width, height: pf.height, imageBookmark: pf.imageBookmark)
-        }
-        // Теги
-        var tagIdMap: [String: String] = [:]
-        let newTags = srcTags.map { t -> Tag in
-            let nid = UUID().uuidString
-            tagIdMap[t.id] = nid
-            var newLabelHotkeys: [String: String]? = nil
-            if let lh = t.labelHotkeys {
-                newLabelHotkeys = Dictionary(uniqueKeysWithValues: lh.compactMap { key, value in
-                    labelIdMap[key].map { ($0, value) }
-                })
-            }
-            return Tag(
-                id: nid,
-                primaryID: t.primaryID,
-                name: t.name,
-                description: t.description,
-                color: t.color,
-                defaultTimeBefore: t.defaultTimeBefore,
-                defaultTimeAfter: t.defaultTimeAfter,
-                collection: newName,
-                lablesGroup: t.lablesGroup.compactMap { labelGroupIdMap[$0] },
-                hotkey: t.hotkey,
-                labelHotkeys: newLabelHotkeys,
-                mapEnabled: t.mapEnabled,
-                isInterval: t.isInterval,
-                mapFieldId: t.mapFieldId.flatMap { playFieldIdMap[$0] },
-                mapFieldIds: t.resolvedMapFieldIds.compactMap { playFieldIdMap[$0] }
-            )
-        }
-        // Группы тегов
-        let newTagGroups = srcTagGroups.map { g -> TagGroup in
-            TagGroup(id: UUID().uuidString, name: g.name, tags: g.tags.compactMap { tagIdMap[$0] })
-        }
-        // Общие события
-        let newTimeEvents = srcTimeEvents.map { TimeEvent(id: UUID().uuidString, name: $0.name) }
+        // Перевязку id держим в одном месте — иначе правила разъезжаются между шаблоном,
+        // импортом и дублированием. У шаблона своей раскладки нет, поэтому layout: nil.
+        let fresh = CollectionIdRegenerator.regenerate(
+            tags: srcTags,
+            tagGroups: srcTagGroups,
+            labelGroups: srcLabelGroups,
+            labels: srcLabels,
+            timeEvents: srcTimeEvents,
+            playFields: srcPlayFields,
+            layout: nil,
+            collectionName: newName
+        )
 
         collectionID = UUID().uuidString
         isEditingExisting = false
         originalName = ""
         collectionName = newName
-        labels = newLabels
-        labelGroups = newLabelGroups
-        tags = newTags
-        tagGroups = newTagGroups
-        timeEvents = newTimeEvents
-        playFields = newPlayFields
+        labels = fresh.labels
+        labelGroups = fresh.labelGroups
+        tags = fresh.tags
+        tagGroups = fresh.tagGroups
+        timeEvents = fresh.timeEvents
+        playFields = fresh.playFields
         objectWillChange.send()
     }
     
