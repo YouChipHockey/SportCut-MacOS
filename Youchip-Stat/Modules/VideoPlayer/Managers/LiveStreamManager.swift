@@ -36,9 +36,18 @@ class LiveStreamManager: NSObject, ObservableObject {
         saveCopyBookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
     }
 
+    /// Закладка выбранной папки — нужна резервному копированию, чтобы положить туда
+    /// восстановленную запись уже после перезапуска приложения.
+    var saveCopyFolderBookmark: Data? { saveCopyBookmark }
+
     /// Копирует финализированную запись в выбранную пользователем папку (если задана). Имя — по проекту.
     func copyFinalizedRecordingToUserFolder(_ recordingURL: URL, suggestedName: String) {
         guard let bookmark = saveCopyBookmark else { return }
+        copyRecording(recordingURL, suggestedName: suggestedName, folderBookmark: bookmark)
+    }
+
+    /// Копирует запись в папку, заданную security-scoped закладкой.
+    func copyRecording(_ recordingURL: URL, suggestedName: String, folderBookmark bookmark: Data) {
         var isStale = false
         guard let folder = try? URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) else { return }
         guard folder.startAccessingSecurityScopedResource() else { return }
@@ -89,6 +98,10 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     private var tempFileURL: URL?
     private var currentVideoId: String?
+
+    /// Текущий, ещё не закрытый сегмент записи. Нужен резервному копированию: файл пишется
+    /// фрагментами, поэтому читается даже без финализации.
+    var currentSegmentURL: URL? { tempFileURL }
     
     /// URL of the pre-existing video that seeds the beginning of an append session.
     private(set) var preloadedBaseURL: URL? = nil
@@ -649,7 +662,9 @@ class LiveStreamManager: NSObject, ObservableObject {
         ) else { return composition }
         var insertTime = CMTime.zero
         for url in urls {
-            let asset = AVURLAsset(url: url)
+            // Точный разбор длительности обязателен: сегменты пишутся фрагментированным MOV,
+            // и без него длительность может прочитаться нулевой, а сегмент — молча пропасть.
+            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
             do {
                 let duration = try await asset.load(.duration)
                 guard duration.isValid && duration.seconds > 0 else { continue }
@@ -1409,6 +1424,9 @@ final class LiveStreamRecorder: MediaMixerOutput, @unchecked Sendable {
         let logger = CameraLogger.shared
         do {
             let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
+            // Пишем фрагментами: заголовок сбрасывается на диск каждые 5 секунд, поэтому файл
+            // читается даже если процесс убили и finishWriting не вызвался.
+            writer.movieFragmentInterval = CMTime(seconds: 5, preferredTimescale: 600)
 
             guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else {
                 logger.logError("setupWriter: formatDescription is nil")

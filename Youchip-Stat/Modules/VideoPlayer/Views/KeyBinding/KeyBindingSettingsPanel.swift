@@ -18,6 +18,7 @@ struct KeyBindingSettingsPanel: View {
     let labels: [Label]
     let timeEvents: [TimeEvent]
     var playFields: [PlayField] = []
+    var clocks: [ClockEntity] = []
     /// Ключ выбранной группы стрелок (source → target).
     let selectedGroupKey: KeyBindingGroupKey?
     /// Составной ключ сфокусированной кнопки ("kind:id"). Когда задан — показываются все её связки.
@@ -409,12 +410,28 @@ struct KeyBindingSettingsPanel: View {
             // Type picker
             sectionHeader(^String.Titles.keyBindingsType)
             Picker("", selection: bindingTypeBinding(id: binding.id)) {
-                ForEach(KeyBindingType.allCases, id: \.self) { type in
+                // «Сброс счётчика» показываем только там, где одна из сторон — счётчик.
+                ForEach(
+                    KeyBindingType.options(
+                        source: binding.sourceKind,
+                        target: binding.targetKind,
+                        current: binding.type
+                    ),
+                    id: \.self
+                ) { type in
                     Text(localizedTypeName(type)).tag(type)
                 }
             }
             .pickerStyle(.menu)
             .labelsHidden()
+
+            // «Сброс» вызывается отдельным жестом, а не обычным нажатием — подсказываем это здесь.
+            if binding.type == .clockReset {
+                Text(^String.Titles.keyBindingsClockResetHint)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Divider()
 
@@ -626,6 +643,8 @@ struct KeyBindingSettingsPanel: View {
             return timeEvents.first(where: { $0.id == elementId })?.name ?? elementId
         case .map:
             return playFields.first(where: { $0.id == elementId })?.name ?? elementId
+        case .clock:
+            return clocks.first(where: { $0.id == elementId })?.name ?? elementId
         }
     }
 

@@ -25,13 +25,13 @@ struct CSVExportSheet: View {
     @State private var allTags = true
 
     private var timelineOptions: [(id: UUID, name: String)] {
-        lines.filter { !$0.isDrawingsTimeline }.map { ($0.id, $0.name) }
+        lines.filter { !$0.isServiceTimeline }.map { ($0.id, $0.name) }
     }
 
     private var tagOptions: [(id: String, name: String)] {
         var order: [String] = []
         var seen = Set<String>()
-        for line in lines where !line.isDrawingsTimeline {
+        for line in lines where !line.isServiceTimeline {
             for stamp in line.stamps where seen.insert(stamp.idTag).inserted {
                 order.append(stamp.idTag)
             }

@@ -28,7 +28,7 @@ enum MarkupExcelExporter {
 
         var entries: [Entry] = []
         for line in lines {
-            if line.isDrawingsTimeline { continue }
+            if line.isServiceTimeline { continue }
             for stamp in line.stamps {
                 let tag = tagLibrary.findTagById(stamp.idTag)
                 let tagName = tag?.name ?? stamp.label

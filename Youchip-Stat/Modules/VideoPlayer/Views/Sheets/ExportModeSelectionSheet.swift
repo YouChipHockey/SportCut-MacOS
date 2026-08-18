@@ -37,6 +37,10 @@ struct ExportModeSelectionSheet: View {
 
             Divider()
 
+            clockSelection
+
+            Divider()
+
             clubLogoToggle
 
             Divider()
@@ -59,7 +63,51 @@ struct ExportModeSelectionSheet: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding()
-        .frame(width: 380, height: 410)
+        // Блок счётчиков появляется только когда они есть в проекте — под него и растим окно.
+        .frame(width: 380, height: ClockExportRecords.available().isEmpty ? 410 : 530)
+    }
+
+    /// Счётчики: сначала общий тумблер, под ним — какие именно наносить. По умолчанию берём все,
+    /// чтобы включить экспорт с таймерами можно было одной галочкой.
+    @ViewBuilder
+    private var clockSelection: some View {
+        let records = ClockExportRecords.available()
+        if records.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(^String.Titles.exportWithClocks, isOn: Binding(
+                    get: { !watermarkOptions.clockStampIDs.isEmpty },
+                    set: { on in
+                        watermarkOptions.clockStampIDs = on ? Set(records.map(\.id)) : []
+                    }
+                ))
+                .help(^String.Titles.exportWithClocksHelp)
+
+                if !watermarkOptions.clockStampIDs.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(records) { record in
+                                Toggle(record.title, isOn: Binding(
+                                    get: { watermarkOptions.clockStampIDs.contains(record.id) },
+                                    set: { on in
+                                        if on {
+                                            watermarkOptions.clockStampIDs.insert(record.id)
+                                        } else {
+                                            watermarkOptions.clockStampIDs.remove(record.id)
+                                        }
+                                    }
+                                ))
+                                .toggleStyle(.checkbox)
+                                .font(.caption)
+                            }
+                        }
+                        .padding(.leading, 16)
+                    }
+                    .frame(maxHeight: 90)
+                }
+            }
+        }
     }
 
     /// Тумблер логотипа клуба — независим от текстового вотермарка.

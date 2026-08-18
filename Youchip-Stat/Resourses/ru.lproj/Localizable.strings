@@ -235,6 +235,8 @@
 "ExportAs" = "Экспортировать как:";  // ^String.Titles.exportAs
 "ExportWithDrawings" = "Экспортировать с рисунками";  // ^String.Titles.exportWithDrawings
 "ExportWithDrawingsHelp" = "При включении рисунки будут вставлены в соответствующие моменты видео. Длительность показа каждого рисунка задаётся при его создании.";  // ^String.Titles.exportWithDrawingsHelp
+"ExportWithClocks" = "Экспортировать с таймерами";
+"ExportWithClocksHelp" = "Наносит на видео счётчики, которые шли в это время в разметке.";
 "ExportAddEpisodeNumbering" = "Добавить нумерацию эпизодов";  // ^String.Titles.exportAddEpisodeNumbering
 "ExportAddTagAndLabels" = "Добавить название тега и лейблов, общие события";  // ^String.Titles.exportAddTagAndLabels
 "ExportAddComment" = "Добавить комментарий";  // ^String.Titles.exportAddComment
@@ -984,6 +986,7 @@
 "SportCutLabelsColumn" = "Лейблы";
 "SportCutEventsColumn" = "События";
 "SportCutFilters" = "Фильтры";
+"SportCutFilterFound" = "Найдено"; // ^String.Titles.sportCutFilterFound
 "SportCutReset" = "Сбросить";
 "SportCutTagGroups" = "Группы тегов";
 "SportCutTags" = "Теги";
@@ -1201,6 +1204,8 @@
 "KeyBindingTypeActivation" = "Активация";
 "KeyBindingTypeDeactivation" = "Деактивация";
 "KeyBindingTypeIntervalInversion" = "Инверсия интервала";
+"KeyBindingTypeClockReset" = "Сброс счётчика";
+"KeyBindingsClockResetHint" = "Срабатывает при нажатии кнопки (в любую сторону связки): счётчик останавливается и возвращается к исходному значению. Ctrl+ЛКМ — только сброс, без обычного действия кнопки.";
 "KeyBindingTypeVisibility" = "Показать";
 "KeyBindingTypeInvisibility" = "Скрыть";
 "KeyBindingTypeVisibilityInversion" = "Инверсия видимости";
@@ -1276,6 +1281,43 @@
 "HeatMapControlShowMarkers" = "Показывать метки";
 
 // Project Merge
+"BulkDeleteButton" = "Удалить несколько"; // ^String.Titles.bulkDeleteButton
+"BulkDeleteHint" = "Кликайте по карточкам, чтобы отметить"; // ^String.Titles.bulkDeleteHint
+"BulkDeleteSelectedCount" = "Выбрано: %d"; // ^String.Titles.bulkDeleteSelectedCount
+"BulkDeleteConfirmTitle" = "Удалить выбранные?"; // ^String.Titles.bulkDeleteConfirmTitle
+"BulkDeleteConfirmMessage" = "Будет удалено: %d. Отменить действие нельзя."; // ^String.Titles.bulkDeleteConfirmMessage
+"BulkDeleteCountButton" = "Удалить %d проектов"; // ^String.Titles.bulkDeleteCountButton
+"ClipSearchTitle" = "Поиск по клипам"; // ^String.Titles.clipSearchTitle
+"ClipSearchPrompt" = "Введите текст — покажем теги, где он встречается (в названии, лейбле или событии)."; // ^String.Titles.clipSearchPrompt
+"ClockCountersTitle" = "Счётчики";
+"ClockCaptionTitle" = "Подпись";
+"ClockTimelineName" = "Счётчики";
+"ClockModeTitle" = "Режим";
+"ClockModeStopwatch" = "Секундомер";
+"ClockModeTimer" = "Таймер";
+"ClockInitialValue" = "Начальное значение";
+"ClockMinutesShort" = "мин";
+"ClockSecondsShort" = "сек";
+"ClockAppearanceTitle" = "Внешний вид";
+"ClockShowOnVideo" = "Показывать на видео";
+"ClockShowCentiseconds" = "Показывать сотые";
+"ClockAddStopwatch" = "Секундомер";
+"ClockAddTimer" = "Таймер";
+"ClockTabHint" = "Счётчики реального времени: активируются кликом или связкой, как тег.";
+"ClockNoCounters" = "Пока нет счётчиков";
+"ClockAddToCanvas" = "Добавить на холст";
+"ClockAppearanceSegments" = "8 сегментов";
+"ClockAppearanceAnalog" = "Аналоговые часы";
+"ClockAppearanceRing" = "Кольцо-прогресс";
+"ClockAppearanceText" = "Текст";
+"ClockZeroActionTitle" = "При достижении нуля";
+"ClockOverlayDragHelp" = "Перетащите, чтобы переместить; уголок — размер; двойной клик — вернуть на место";
+"ClockAppearanceInOwnSettings" = "Внешний вид счётчика настраивается в его параметрах: двойной клик по объекту.";
+"ClockZeroActionStop" = "Остановиться на нуле";
+"ClockZeroActionReset" = "Сбросить и остановиться";
+"ClockZeroActionRestart" = "Запустить заново (цикл)";
+"ClockFiresBindingsOnZero" = "Запускать связки при нуле";
+"ClockFiresBindingsOnZeroHint" = "Таймер сработает как источник: его исходящие связки отработают при достижении нуля.";
 "MergeProjectsButton" = "Объединить";
 "MergeProjectsExitSelection" = "Выйти из выбора";
 "MergeProjectsHelp" = "Объединить несколько проектов в один";
@@ -1375,3 +1417,19 @@
 "FreeLayoutReplaceImage" = "Заменить картинку";
 
 "ClipAutoExportBadge" = "Авто-экспорт клипов";
+
+
+// MARK: - Live Recovery
+"LiveRecoveryFoundTitle" = "Найдена незавершённая запись";
+"LiveRecoveryFoundMessage" = "«%1$@» — записано около %2$@. Приложение закрылось до сохранения. Восстановить проект с видео и разметкой?";
+"LiveRecoveryRestoreButton" = "Восстановить";
+"LiveRecoveryDiscardButton" = "Удалить";
+"LiveRecoveryLaterButton" = "Позже";
+"LiveRecoveryProgress" = "Восстановление записи...";
+"LiveQuitSaving" = "Сохраняем запись перед выходом. Не выключайте компьютер...";
+"LiveRecoveryFailed" = "Не удалось восстановить прерванную запись";
+
+// MARK: - Canvas copy / paste
+"CanvasCopyButtons" = "Копировать кнопки (%d)";
+"CanvasPasteButtons" = "Вставить кнопки (%d)";
+"CanvasRemoveFromCanvas" = "Убрать с холста (%d)";

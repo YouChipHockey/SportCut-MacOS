@@ -66,8 +66,15 @@ class WindowsManager: NSObject, NSWindowDelegate {
     /// Whether the current live session is appending to an existing video project.
     private var isAppendingToFile: Bool = false
     private var appendingFile: FilesFile? = nil
+    /// Идёт финализация live-сессии (остановка записи → склейка → импорт проекта).
+    private var isFinalizingLiveSession: Bool = false
     
-    private var collectionWindowDelegate: CollectionWindowDelegate?
+    /// Открытые окна редактора коллекций: ключ — id коллекции (`newCollectionEditorKey` для создания).
+    /// Два окна на одну коллекцию — это две независимые копии одних и тех же данных, которые при
+    /// сохранении затирают правки друг друга, поэтому повторное открытие поднимает уже открытое.
+    private var collectionEditorWindows: [String: NSWindow] = [:]
+    private var collectionEditorDelegates: [String: CollectionWindowDelegate] = [:]
+    private let newCollectionEditorKey = "__new__"
     private var collectionsMenuWindow: NSWindow?
     private var settingsWindow: NSWindow?
 
@@ -161,6 +168,9 @@ class WindowsManager: NSObject, NSWindowDelegate {
     
     func closeAll() {
         tagLibraryWindow?.cancelNotificationSubscriptions()
+
+        // Выход из проекта — счётчики (секундомеры/таймеры) замирают, а не тикают в фоне.
+        ClockRuntimeManager.shared.pauseAll()
 
         // Дописываем позиции окон разметки ДО того, как снимем делегатов и закроем окна:
         // stopTracking() делает flush() и отписывается, иначе последняя позиция не сохранится.
@@ -258,6 +268,13 @@ class WindowsManager: NSObject, NSWindowDelegate {
         
         VideoPlayerManager.shared.startLiveMode()
         LiveStreamManager.shared.startLiveStream(videoId: videoId)
+        LiveSessionRecoveryManager.shared.startSession(
+            videoId: videoId,
+            fileName: fileName,
+            isAppending: false,
+            appendTargetId: nil,
+            baseVideoURL: nil
+        )
         
         openLiveWindows()
     }
@@ -307,6 +324,13 @@ class WindowsManager: NSObject, NSWindowDelegate {
         
         VideoPlayerManager.shared.startLiveMode()
         LiveStreamManager.shared.startLiveStream(videoId: existingId, preloadedVideoURL: videoURL)
+        LiveSessionRecoveryManager.shared.startSession(
+            videoId: existingId,
+            fileName: file.name,
+            isAppending: true,
+            appendTargetId: existingId,
+            baseVideoURL: videoURL
+        )
         
         openLiveWindows()
     }
@@ -345,6 +369,13 @@ class WindowsManager: NSObject, NSWindowDelegate {
         
         VideoPlayerManager.shared.startLiveMode()
         LiveStreamManager.shared.startLiveStream(videoId: videoId, preloadedVideoURL: preloadedVideoURL)
+        LiveSessionRecoveryManager.shared.startSession(
+            videoId: videoId,
+            fileName: fileName,
+            isAppending: false,
+            appendTargetId: nil,
+            baseVideoURL: preloadedVideoURL
+        )
         
         openLiveWindows()
     }
@@ -441,12 +472,53 @@ class WindowsManager: NSObject, NSWindowDelegate {
     }
     
     /// Finalize the live recording: stop capture, write final file, import or update the video project.
-    private func finalizeLiveSession() {
-        if isAppendingToFile, let file = appendingFile {
-            finalizeAppendSession(existingFile: file)
-        } else {
-            finalizeNewSession()
+    private func finalizeLiveSession(completion: (() -> Void)? = nil) {
+        // Повторный вход возможен, если окна закроются, пока идёт склейка, — вторая финализация
+        // остановила бы уже остановленную запись и импортировала пустой файл.
+        guard !isFinalizingLiveSession else {
+            completion?()
+            return
         }
+        isFinalizingLiveSession = true
+        let finish: () -> Void = { [weak self] in
+            self?.isFinalizingLiveSession = false
+            completion?()
+        }
+        if isAppendingToFile, let file = appendingFile {
+            finalizeAppendSession(existingFile: file, completion: finish)
+        } else {
+            finalizeNewSession(completion: finish)
+        }
+    }
+
+    /// Завершение live-сессии при выходе из приложения (⌘Q). Делает то же, что закрытие окон
+    /// разметки: останавливает запись, склеивает файл, импортирует проект с разметкой — и только
+    /// потом отдаёт приложению добро на выход. Резерв на диске остаётся, если что-то сорвётся.
+    func finalizeLiveSessionForQuit(completion: @escaping () -> Void) {
+        guard isLiveSession else {
+            completion()
+            return
+        }
+
+        tagLibraryWindow?.cancelNotificationSubscriptions()
+        ClockRuntimeManager.shared.pauseAll()
+        // Позиции окон разметки дописываем до выхода — как в `closeAll()`.
+        MarkupWindowLayoutStore.shared.stopTracking()
+        HotKeyManager.shared.clearHotkeys()
+        HotKeyManager.shared.suspendKeyboardMonitoring()
+
+        // Снимаем делегатов: окна закроются при завершении приложения, и их колбэки не должны
+        // запустить закрытие проекта во второй раз, пока идёт склейка.
+        videoWindow?.window?.delegate = nil
+        controlWindow?.window?.delegate = nil
+        tagLibraryWindow?.window?.delegate = nil
+
+        if VideoPlayerManager.shared.isReviewMode {
+            VideoPlayerManager.shared.exitReviewMode()
+            closeReviewWindow()
+        }
+
+        finalizeLiveSession(completion: completion)
     }
 
     /// Stops live stream, finalizes recording and switches current windows to normal markup mode.
@@ -464,6 +536,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
         }
         
         VideoPlayerManager.shared.endLiveMode()
+        LiveSessionRecoveryManager.shared.stopBackups()
         
         LiveStreamManager.shared.stopAndFinalize { [weak self] fileURL in
             guard let self = self else { return }
@@ -481,6 +554,8 @@ class WindowsManager: NSObject, NSWindowDelegate {
                 
                 guard let finalURL = fileURL else {
                     print("WindowsManager: stop live failed - no file produced")
+                    // Финализация сорвалась — резервные данные оставляем, их предложат восстановить.
+                    LiveSessionRecoveryManager.shared.keepSessionForRecovery()
                     return
                 }
 
@@ -490,6 +565,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
                 if wasAppending, let existing = appendTarget {
                     VideoFilesManager.shared.updateVideoURL(for: existing, newURL: finalURL)
                     VideoFilesManager.shared.saveTimelines(timelines, for: existing.id)
+                    LiveSessionRecoveryManager.shared.finishSession()
 
                     self.currentVideoId = existing.id
                     TimelineDataManager.shared.currentBookmark = existing.videoData.bookmark
@@ -506,6 +582,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
 
                 guard let importedFile = VideoFilesManager.shared.importFile(url: finalURL, newName: fileName) else {
                     print("WindowsManager: import failed after stopping live")
+                    LiveSessionRecoveryManager.shared.keepSessionForRecovery()
                     return
                 }
 
@@ -513,6 +590,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
                     forVideoId: importedFile.videoData.id,
                     with: timelines
                 )
+                LiveSessionRecoveryManager.shared.finishSession()
                 self.copyLiveScreenshotsToImportedVideo(
                     liveVideoId: liveId,
                     importedScreenshotsFolder: importedFile.screenshotsFolder
@@ -532,15 +610,19 @@ class WindowsManager: NSObject, NSWindowDelegate {
         }
     }
     
-    private func finalizeNewSession() {
+    private func finalizeNewSession(completion: (() -> Void)? = nil) {
         let videoId = liveVideoId ?? ""
         let fileName = liveFileName ?? "Live_\(Date().timeIntervalSince1970)"
         let timelines = TimelineDataManager.shared.lines
         
         VideoPlayerManager.shared.endLiveMode()
+        LiveSessionRecoveryManager.shared.stopBackups()
         
         LiveStreamManager.shared.stopAndFinalize { [weak self] fileURL in
-            guard let self = self else { return }
+            guard let self = self else {
+                DispatchQueue.main.async { completion?() }
+                return
+            }
             
             DispatchQueue.main.async {
                 if let url = fileURL {
@@ -551,10 +633,14 @@ class WindowsManager: NSObject, NSWindowDelegate {
                             with: timelines
                         )
                         self.copyLiveScreenshotsToImportedVideo(liveVideoId: videoId, importedScreenshotsFolder: filesFile.screenshotsFolder)
+                        LiveSessionRecoveryManager.shared.finishSession()
                         print("WindowsManager: Live recording imported as '\(fileName)' with \(timelines.count) timelines")
+                    } else {
+                        LiveSessionRecoveryManager.shared.keepSessionForRecovery()
                     }
                 } else {
                     print("WindowsManager: Live recording finalization failed - no file produced")
+                    LiveSessionRecoveryManager.shared.keepSessionForRecovery()
                 }
                 
                 self.isLiveSession = false
@@ -562,17 +648,22 @@ class WindowsManager: NSObject, NSWindowDelegate {
                 self.liveFileName = nil
                 
                 LiveStreamManager.shared.fullCleanup()
+                completion?()
             }
         }
     }
     
-    private func finalizeAppendSession(existingFile: FilesFile) {
+    private func finalizeAppendSession(existingFile: FilesFile, completion: (() -> Void)? = nil) {
         let timelines = TimelineDataManager.shared.lines
         
         VideoPlayerManager.shared.endLiveMode()
+        LiveSessionRecoveryManager.shared.stopBackups()
         
         LiveStreamManager.shared.stopAndFinalize { [weak self] fileURL in
-            guard let self = self else { return }
+            guard let self = self else {
+                DispatchQueue.main.async { completion?() }
+                return
+            }
             
             DispatchQueue.main.async {
                 if let url = fileURL {
@@ -581,9 +672,11 @@ class WindowsManager: NSObject, NSWindowDelegate {
                     VideoFilesManager.shared.updateVideoURL(for: existingFile, newURL: url)
                     // Save the merged timelines back to the existing project's ID.
                     VideoFilesManager.shared.saveTimelines(timelines, for: existingFile.id)
+                    LiveSessionRecoveryManager.shared.finishSession()
                     print("WindowsManager: Append session finalized for '\(existingFile.name)' with \(timelines.count) timelines")
                 } else {
                     print("WindowsManager: Append session finalization failed - no file produced")
+                    LiveSessionRecoveryManager.shared.keepSessionForRecovery()
                 }
                 
                 self.isLiveSession = false
@@ -593,6 +686,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
                 self.liveFileName = nil
                 
                 LiveStreamManager.shared.fullCleanup()
+                completion?()
             }
         }
     }
@@ -675,7 +769,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
     
     func showFieldMapVisualization(collection: CollectionBookmark, mode: VisualizationMode, stamps: [TimelineStamp]) {
         let view = FieldMapVisualizationView(collection: collection, mode: mode, stamps: stamps)
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
         window.title = ^String.Titles.fieldMapVisualization
@@ -719,7 +813,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
             return
         }
 
-        let hostingController = NSHostingController(rootView: CollectionsMenuView())
+        let hostingController = FirstMouseHostingController(rootView: CollectionsMenuView())
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.collectionsMenuTitle
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
@@ -736,7 +830,18 @@ class WindowsManager: NSObject, NSWindowDelegate {
         initialDisplayMode: CollectionTagLibraryDisplayMode = .grouped,
         template: CollectionTemplate? = nil
     ) {
+        // Редактор на эту коллекцию уже открыт — поднимаем его, а не плодим второе окно.
+        let editorKey = existingCollection?.id ?? newCollectionEditorKey
+        if let openedEditor = collectionEditorWindows[editorKey] {
+            if openedEditor.isMiniaturized { openedEditor.deminiaturize(nil) }
+            openedEditor.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
         VideoPlayerManager.shared.player?.pause()
+        // Открыли редактор коллекции — счётчики разметки замирают (вернёмся к ним как оставили).
+        ClockRuntimeManager.shared.pauseAll()
 
         let view: AnyView
 
@@ -754,7 +859,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
             view = AnyView(CreateCustomCollectionsView(initialDisplayMode: initialDisplayMode, template: template))
         }
         
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
         window.title = existingCollection != nil ?
@@ -773,8 +878,26 @@ class WindowsManager: NSObject, NSWindowDelegate {
         // (без снятия — наблюдатели копились, и пулы пересобирались N раз на одно сохранение).
         // Теперь пересборку делает сам TagLibraryManager в обеих ветках handleCollectionDataChanged.
 
-        self.collectionWindowDelegate = CollectionWindowDelegate()
-        window.delegate = self.collectionWindowDelegate
+        // Делегат — свой на каждое окно: раньше он лежал в одном свойстве, и при открытии
+        // второго редактора первый терял делегата (NSWindow.delegate — weak) и уже не сообщал
+        // о своём закрытии.
+        let delegate = CollectionWindowDelegate { [weak self] in
+            // Снимаем с учёта после цикла закрытия, чтобы не выдернуть окно из-под AppKit.
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.collectionEditorWindows.removeValue(forKey: editorKey)
+                self.collectionEditorDelegates.removeValue(forKey: editorKey)
+                // Горячие клавиши возвращаем, только когда закрыт последний редактор.
+                if self.collectionEditorWindows.isEmpty {
+                    NotificationCenter.default.post(name: .collectionEditorClosed, object: nil)
+                }
+            }
+        }
+        window.isReleasedWhenClosed = false
+        window.delegate = delegate
+        collectionEditorWindows[editorKey] = window
+        collectionEditorDelegates[editorKey] = delegate
+
         NotificationCenter.default.post(name: .collectionEditorOpened, object: nil)
         window.makeKeyAndOrderFront(nil)
     }
@@ -905,7 +1028,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
             window.makeKeyAndOrderFront(nil)
             return
         }
-        let hostingController = NSHostingController(rootView: SettingsView())
+        let hostingController = FirstMouseHostingController(rootView: SettingsView())
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.settingsTitle
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
@@ -974,7 +1097,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
     
     func showReportWindow(htmlString: String, teamName: String, opponentName: String) {
         let view = WebViewWrapper(htmlString: htmlString)
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
         window.title = String.Titles.aiReportTitle.format(teamName, opponentName)

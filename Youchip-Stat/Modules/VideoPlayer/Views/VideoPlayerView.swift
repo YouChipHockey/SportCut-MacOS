@@ -526,11 +526,15 @@ struct VideoPlayerView: View {
                 joystickView(geometry: geometry)
             }
 
+            // Секундомеры/таймеры с включённым «показывать на видео» — просто визуализация.
+            ClockVideoOverlayView()
+                .zIndex(7)
+
             VideoMarkupActivityOverlay()
                 .zIndex(6)
         }
     }
-    
+
     private func videoPlayerView(geometry: GeometryProxy, player: AVPlayer) -> some View {
         ZStack {
             if viewModel.state.videoScale == 1.0 {
@@ -855,6 +859,11 @@ final class ZoomablePlayerNSView: NSView {
     var zoomScale: CGFloat = 1.0 { didSet { needsLayout = true } }
     var zoomOffset: CGSize = .zero { didSet { needsLayout = true } }
 
+    /// Накопитель горизонтального скролла трекпада: событий много и они мелкие,
+    /// поэтому кадр «отщёлкиваем» на каждые `scrollPointsPerFrame` пунктов.
+    private var scrollAccumulator: CGFloat = 0
+    private let scrollPointsPerFrame: CGFloat = 12
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -863,6 +872,68 @@ final class ZoomablePlayerNSView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    // MARK: - Покадровая перемотка
+    //
+    // На масштабе 1.0 в `ZoomableVideoPlayerView` показывается нативный AVPlayerView, и кадры
+    // листает он сам (стрелки и двупальцевый свайп). При зуме он подменяется этим слоем, вместе
+    // с ним пропадала и покадровая перемотка — поэтому повторяем её здесь.
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Забираем фокус, чтобы стрелки работали сразу после зума, но не выдёргиваем его
+        // из поля ввода (см. урок про глобальные мониторы клавиш).
+        guard let window = window else { return }
+        // Редактируемый текст — это field editor окна (NSTextView, наследник NSText).
+        guard !(window.firstResponder is NSText) else { return }
+        window.makeFirstResponder(self)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard modifiers.isDisjoint(with: [.shift, .command, .option, .control]) else {
+            super.keyDown(with: event)
+            return
+        }
+        switch event.keyCode {
+        case 123: stepFrame(by: -1)
+        case 124: stepFrame(by: 1)
+        default: super.keyDown(with: event)
+        }
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        // Только горизонтальный жест: вертикальный оставляем родителю.
+        guard abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY), event.scrollingDeltaX != 0 else {
+            super.scrollWheel(with: event)
+            return
+        }
+        if event.phase == .began { scrollAccumulator = 0 }
+        scrollAccumulator += event.scrollingDeltaX
+
+        // Свайп влево (deltaX < 0) уводит содержимое влево — то есть вперёд по времени.
+        while abs(scrollAccumulator) >= scrollPointsPerFrame {
+            stepFrame(by: scrollAccumulator < 0 ? 1 : -1)
+            scrollAccumulator += scrollAccumulator < 0 ? scrollPointsPerFrame : -scrollPointsPerFrame
+        }
+    }
+
+    private func stepFrame(by count: Int) {
+        guard let player = playerLayer.player, let item = player.currentItem else { return }
+        guard count > 0 ? item.canStepForward : item.canStepBackward else { return }
+        // Как и нативный плеер: перемотка по кадрам ставит воспроизведение на паузу.
+        if player.rate != 0 { player.pause() }
+        item.step(byCount: count)
+    }
 
     override func layout() {
         super.layout()
@@ -1014,7 +1085,7 @@ struct EditorTagSelectionSheet: View {
         var stamps: [TimelineStamp] = []
         
         for line in timelineData.lines {
-            if line.id == ScreenshotConstants.screenshotsTimelineID { continue }
+            if line.isServiceTimeline { continue }
             for stamp in line.stamps {
                 if videoTime >= stamp.timeStartSeconds && videoTime <= stamp.timeFinishSeconds {
                     let stampLabelNorm = stamp.label.replacingOccurrences(of: ".png", with: "")

@@ -12,6 +12,7 @@ enum CollectionNavigationTab: String, CaseIterable, Identifiable {
     case labels
     case events
     case map
+    case clocks
 
     var id: String { rawValue }
 
@@ -21,6 +22,7 @@ enum CollectionNavigationTab: String, CaseIterable, Identifiable {
         case .labels: return ^String.Titles.labels
         case .events: return ^String.Titles.commonEvents
         case .map: return ^String.Titles.fieldMap
+        case .clocks: return ^String.Titles.clockCountersTitle
         }
     }
 
@@ -30,6 +32,7 @@ enum CollectionNavigationTab: String, CaseIterable, Identifiable {
         case .labels: return "textformat"
         case .events: return "clock.fill"
         case .map: return "map.fill"
+        case .clocks: return "stopwatch.fill"
         }
     }
 }
@@ -367,7 +370,74 @@ struct CollectionNavigationPanel: View {
         case .labels: labelsTabContent
         case .events: eventsTabContent
         case .map: mapTabContent
+        case .clocks: clocksTabContent
         }
+    }
+
+    // MARK: - Clocks tab (секундомеры / таймеры)
+
+    private var clocksTabContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                Button(action: { addClock(mode: .stopwatch) }) {
+                    SwiftUI.Label(^String.Titles.clockAddStopwatch, systemImage: "stopwatch")
+                }
+                .buttonStyle(.plain).foregroundColor(.blue)
+                Button(action: { addClock(mode: .timer) }) {
+                    SwiftUI.Label(^String.Titles.clockAddTimer, systemImage: "timer")
+                }
+                .buttonStyle(.plain).foregroundColor(.blue)
+            }
+            .font(.subheadline)
+
+            Text(^String.Titles.clockTabHint)
+                .font(.caption).foregroundColor(.secondary)
+
+            if collectionManager.clocks.isEmpty {
+                Text(^String.Titles.clockNoCounters).font(.caption).foregroundColor(.secondary)
+            }
+
+            ForEach(collectionManager.clocks) { clock in
+                HStack(spacing: 8) {
+                    Image(systemName: clock.mode == .timer ? "timer" : "stopwatch")
+                        .foregroundColor(.secondary)
+                    Text(clock.name).font(.subheadline).lineLimit(1)
+                    Spacer()
+                    Button(action: { TagFreeLayoutStorage.addClockToLayout(&layout, clock: clock) }) {
+                        Image(systemName: "plus.rectangle.on.rectangle")
+                    }
+                    .buttonStyle(.plain).foregroundColor(.blue)
+                    .help(^String.Titles.clockAddToCanvas)
+                    Button(action: { deleteClock(clock) }) {
+                        Image(systemName: "trash").foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    /// Удаление счётчика убирает и его объект с холста вместе со связками. Иначе на холсте
+    /// оставался «призрак»: сущности нет, а кнопка рисуется рамкой, выделяется и таскается.
+    private func deleteClock(_ clock: ClockEntity) {
+        let itemKey = "\(CanvasButtonKind.clock.rawValue):\(clock.id)"
+        layout.items.removeAll { $0.kind == .clock && $0.elementId == clock.id }
+        layout.bindings.removeAll { $0.sourceButtonKey == itemKey || $0.targetButtonKey == itemKey }
+
+        collectionManager.removeClock(id: clock.id)
+        _ = collectionManager.saveCollectionToFiles()
+        TagFreeLayoutStorage.saveLayout(layout, collectionId: collectionManager.collectionID)
+        ClockRuntimeManager.shared.register(collectionManager.clocks)
+    }
+
+    private func addClock(mode: ClockMode) {
+        let name = mode == .timer ? ^String.Titles.clockModeTimer : ^String.Titles.clockModeStopwatch
+        let clock = collectionManager.createClock(name: name, mode: mode)
+        _ = collectionManager.saveCollectionToFiles()
+        ClockRuntimeManager.shared.register(collectionManager.clocks)
+        TagFreeLayoutStorage.addClockToLayout(&layout, clock: clock)
     }
 
     // MARK: - Tags tab

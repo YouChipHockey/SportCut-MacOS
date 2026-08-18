@@ -31,26 +31,104 @@ final class InMemoryStorageManager {
     
     @objc private func applicationWillTerminate() {
         saveToDiskTimer?.invalidate()
+        // Сначала синхронно доводим до диска последний снимок разметки — иначе правки,
+        // сделанные за секунду до выхода, не доедут.
+        flushTimelinesNow()
         saveToDiskImmediate()
         CollectionsBookmarksManager.shared.saveToFileImmediate()
     }
-    
+
+    // MARK: - Таймлайны: отложенная запись
+    //
+    // Раньше `saveTimelines` кодировал весь массив и писал его в UserDefaults СИНХРОННО НА
+    // ГЛАВНОМ ПОТОКЕ, а звался из ~12 точек мутации разметки (добавление тега, ресайз, перенос
+    // штампа, правка лейблов, комментарий, удаление, сортировка). На проекте с 613 таймлайнами
+    // и ~7000 тегов это многомегабайтный JSON на каждое действие — «нажал добавить тег, ждёшь
+    // 5 секунд». См. TASK-007, 5.2/5.3.
+    //
+    // Теперь в память кладётся снимок, а кодирование и запись идут на фоновой очереди с
+    // коалесингом: серия быстрых правок даёт одну запись. Пользователь диск не ждёт.
+    //
+    // ИНВАРИАНТ, на котором держится отсутствие потери данных: пока снимок не записан, он лежит
+    // в `pendingTimelines`, и `loadTimelines` обязан читать ОТТУДА. Иначе переключение видео
+    // сразу после правки прочитало бы с диска устаревшую версию. Точки принудительного сброса —
+    // `flushTimelinesNow()`: выход из приложения и `saveToDiskImmediate()`.
+
+    private let timelineIOQueue = DispatchQueue(label: "com.youchip.timelineIO", qos: .utility)
+    private let pendingLock = NSLock()
+    private var pendingTimelines: [String: [TimelineLine]] = [:]
+    private var pendingFlushWork: DispatchWorkItem?
+    private let timelineFlushDelay: TimeInterval = 0.4
+
     func saveTimelines(_ timelines: [TimelineLine], for videoId: String) {
-        let key = "timeline_\(videoId)"
-        if let data = try? JSONEncoder().encode(timelines) {
-            if data.count > maxUserDefaultsBlobSize {
-                // Large timelines must bypass UserDefaults to avoid CFPreferences
-                // hard-limit warnings/errors and UI stalls on save.
-                userDefaults.removeObject(forKey: key)
-                saveTimelineDataToFile(data, videoId: videoId)
-            } else {
-                userDefaults.set(data, forKey: key)
-                scheduleSaveToDisk()
-            }
+        pendingLock.lock()
+        pendingTimelines[videoId] = timelines
+        // Предыдущий отложенный сброс отменяем — иначе серия правок даст серию записей.
+        pendingFlushWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.flushPendingTimelines() }
+        pendingFlushWork = work
+        pendingLock.unlock()
+
+        // DispatchWorkItem, а не Timer: `saveTimelines` могут позвать не с главного потока,
+        // и тогда Timer молча не сработал бы (не к тому раннлупу).
+        timelineIOQueue.asyncAfter(deadline: .now() + timelineFlushDelay, execute: work)
+
+        // Единственная точка, через которую проходит ЛЮБОЕ изменение разметки проекта —
+        // отсюда о нём узнаёт режим просмотра (см. SportCutMarkupSyncManager).
+        NotificationCenter.default.post(
+            name: .projectTimelinesDidChange,
+            object: nil,
+            userInfo: ["videoId": videoId, "timelines": timelines]
+        )
+    }
+
+    /// Синхронно доводит отложенный снимок до диска. Для выхода из приложения и для мест,
+    /// которым нужна гарантия записи.
+    func flushTimelinesNow() {
+        pendingLock.lock()
+        pendingFlushWork?.cancel()
+        pendingFlushWork = nil
+        pendingLock.unlock()
+        // Зовётся с главного потока, поэтому `sync` на другой очереди не даёт дедлока.
+        timelineIOQueue.sync { self.flushPendingTimelines() }
+    }
+
+    private func flushPendingTimelines() {
+        pendingLock.lock()
+        let snapshot = pendingTimelines
+        pendingTimelines.removeAll()
+        pendingFlushWork = nil
+        pendingLock.unlock()
+
+        guard !snapshot.isEmpty else { return }
+        for (videoId, timelines) in snapshot {
+            writeTimelines(timelines, for: videoId)
         }
     }
-    
+
+    private func writeTimelines(_ timelines: [TimelineLine], for videoId: String) {
+        let key = "timeline_\(videoId)"
+        guard let data = try? JSONEncoder().encode(timelines) else { return }
+
+        // Файл пишем ВСЕГДА: он и есть надёжное хранилище. UserDefaults остаётся только
+        // быстрым кэшем для чтения — и лишь пока блоб влезает под лимит CFPreferences.
+        // Раньше файл появлялся лишь через 30-секундный таймер, который потом заново обходил
+        // все ключи UserDefaults; теперь мы уже на фоне, ждать незачем.
+        if data.count > maxUserDefaultsBlobSize {
+            userDefaults.removeObject(forKey: key)
+        } else {
+            userDefaults.set(data, forKey: key)
+        }
+        saveTimelineDataToFile(data, videoId: videoId)
+    }
+
     func loadTimelines(for videoId: String) -> [TimelineLine] {
+        // Незаписанный снимок — самый свежий. Читать в этот момент с диска = потерять правки.
+        pendingLock.lock()
+        let pending = pendingTimelines[videoId]
+        pendingLock.unlock()
+        if let pending { return pending }
+
         let key = "timeline_\(videoId)"
         guard let data = userDefaults.data(forKey: key),
               let timelines = try? JSONDecoder().decode([TimelineLine].self, from: data) else {
@@ -58,26 +136,46 @@ final class InMemoryStorageManager {
         }
         return timelines
     }
-    
+
     func deleteTimelines(for videoId: String) {
         let key = "timeline_\(videoId)"
+        // Снимаем отложенную запись, иначе она воскресила бы только что удалённые таймлайны.
+        pendingLock.lock()
+        pendingTimelines.removeValue(forKey: videoId)
+        pendingLock.unlock()
+
         userDefaults.removeObject(forKey: key)
         deleteTimelinesFile(for: videoId)
     }
     
+    // Коллекции: файлы в Documents — источник правды, блоб в UserDefaults — только кэш.
+    //
+    // Раньше было наоборот: `loadCollection` брал блоб `collection_<id>`, а `saveCollectionsToDisk`
+    // потом перезаписывал из него ВСЕ файлы коллекций. Любое изменение файлов мимо UserDefaults
+    // (восстановление из бэкапа, импорт, перенос с другой машины, запись старой сборкой) делало
+    // блоб устаревшим — и приложение молча откатывало коллекцию к нему. Так, в частности,
+    // терялся `isInterval` у тегов: в старом блобе его нет, `Bool?` декодируется в nil, а при
+    // кодировании ключ не пишется вовсе. См. vault/tasks TASK-008.
+
     func saveCollection(_ collection: CollectionData) {
         let key = "collection_\(collection.id)"
         if let data = try? JSONEncoder().encode(collection) {
             userDefaults.set(data, forKey: key)
-            scheduleSaveToDisk()
         }
+        // Файл пишем сразу: раз он источник правды при чтении, отложенная запись оставляла бы
+        // окно, в котором файл старее только что сохранённых правок.
+        saveCollectionToFile(collection)
+        scheduleSaveToDisk()
     }
-    
+
     func loadCollection(id: String) -> CollectionData? {
+        if let fromFile = loadCollectionFromFile(id: id) {
+            return fromFile
+        }
         let key = "collection_\(id)"
         guard let data = userDefaults.data(forKey: key),
               let collection = try? JSONDecoder().decode(CollectionData.self, from: data) else {
-            return loadCollectionFromFile(id: id)
+            return nil
         }
         return collection
     }
@@ -99,9 +197,14 @@ final class InMemoryStorageManager {
     }
     
     func saveToDiskImmediate() {
+        // Это API «гарантированно положить всё на диск», поэтому отложенный снимок разметки
+        // сбрасываем до проверки `pendingSave`: он живёт своей очередью и к этому флагу
+        // отношения не имеет.
+        flushTimelinesNow()
+
         guard pendingSave else { return }
         pendingSave = false
-        
+
         DispatchQueue.global(qos: .utility).async { [weak self] in
             self?.saveTimelinesToDisk()
             self?.saveCollectionsToDisk()
@@ -124,27 +227,36 @@ final class InMemoryStorageManager {
     
     private func saveCollectionsToDisk() {
         let keys = userDefaults.dictionaryRepresentation().keys.filter { $0.hasPrefix("collection_") }
-        let existingCollectionIds = Set(keys.map { String($0.dropFirst("collection_".count)) })
-        
+        let cachedCollectionIds = Set(keys.map { String($0.dropFirst("collection_".count)) })
+        // Список коллекций описывает CollectionsBookmarks.json, а не наличие кэш-блоба:
+        // у восстановленной или принесённой извне папки блоба ещё нет, и раньше её тут удаляли.
+        let declaredCollectionIds = Set(CollectionsBookmarksManager.shared.loadCollections().map { $0.id })
+
         let collectionsDirectory = getCollectionsDirectory()
         guard fileManager.fileExists(atPath: collectionsDirectory.path) else { return }
-        
+
         do {
             let folderContents = try fileManager.contentsOfDirectory(at: collectionsDirectory, includingPropertiesForKeys: nil)
-            
+
             for folderURL in folderContents where folderURL.hasDirectoryPath {
                 let folderId = folderURL.lastPathComponent
-                if !existingCollectionIds.contains(folderId) {
+                if !cachedCollectionIds.contains(folderId) && !declaredCollectionIds.contains(folderId) {
                     try? fileManager.removeItem(at: folderURL)
                 }
             }
         } catch {}
-        
+
+        // Пишем только те коллекции, файлов которых ещё нет: файл авторитетнее кэша,
+        // и затирать его старым блобом нельзя.
         for key in keys {
             guard let data = userDefaults.data(forKey: key),
                   let collection = try? JSONDecoder().decode(CollectionData.self, from: data) else {
                 continue
             }
+            let tagsURL = collectionsDirectory
+                .appendingPathComponent(collection.id, isDirectory: true)
+                .appendingPathComponent("tags.json")
+            guard !fileManager.fileExists(atPath: tagsURL.path) else { continue }
             saveCollectionToFile(collection)
         }
     }
@@ -232,6 +344,17 @@ final class InMemoryStorageManager {
             playFields = playField.map { [$0] }
         }
 
+        // Секундомеры/таймеры (новый формат). Файла нет в старых коллекциях.
+        let clocksURL = collectionFolderUrl.appendingPathComponent("clocks.json")
+        let clocks: [ClockEntity]?
+        if fileManager.fileExists(atPath: clocksURL.path),
+           let data = try? Data(contentsOf: clocksURL),
+           let decoded = try? JSONDecoder().decode([ClockEntity].self, from: data) {
+            clocks = decoded
+        } else {
+            clocks = nil
+        }
+
         let collection = CollectionData(
             id: id,
             tagGroups: tagGroups.tagGroups,
@@ -240,14 +363,17 @@ final class InMemoryStorageManager {
             labels: labels.labels,
             timeEvents: timeEvents,
             playField: playField,
-            playFields: playFields
+            playFields: playFields,
+            clocks: clocks
         )
         
+        // Обновляем кэш, только если он реально разошёлся с файлами: чтение коллекций идёт
+        // пачкой на каждое изменение, лишние записи в CFPreferences тут ни к чему.
         let key = "collection_\(id)"
-        if let data = try? JSONEncoder().encode(collection) {
+        if let data = try? JSONEncoder().encode(collection), userDefaults.data(forKey: key) != data {
             userDefaults.set(data, forKey: key)
         }
-        
+
         return collection
     }
     
@@ -293,6 +419,15 @@ final class InMemoryStorageManager {
         } else if fileManager.fileExists(atPath: playFieldsURL.path) {
             try? fileManager.removeItem(at: playFieldsURL)
         }
+
+        // Секундомеры/таймеры.
+        let clocksURL = collectionFolderUrl.appendingPathComponent("clocks.json")
+        if let clocks = collection.clocks, !clocks.isEmpty,
+           let data = try? encoder.encode(clocks) {
+            try? data.write(to: clocksURL)
+        } else if fileManager.fileExists(atPath: clocksURL.path) {
+            try? fileManager.removeItem(at: clocksURL)
+        }
     }
     
     private func getTimelinesDirectory() -> URL {
@@ -317,8 +452,10 @@ struct CollectionData: Codable {
     var playField: PlayField?
     /// Полный набор карт коллекции. nil в старых данных — тогда используется `playField`.
     var playFields: [PlayField]?
+    /// Секундомеры/таймеры коллекции. nil/пусто в старых данных.
+    var clocks: [ClockEntity]?
 
-    init(id: String, tagGroups: [TagGroup], tags: [Tag], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent], playField: PlayField?, playFields: [PlayField]? = nil) {
+    init(id: String, tagGroups: [TagGroup], tags: [Tag], labelGroups: [LabelGroupData], labels: [Label], timeEvents: [TimeEvent], playField: PlayField?, playFields: [PlayField]? = nil, clocks: [ClockEntity]? = nil) {
         self.id = id
         self.tagGroups = tagGroups
         self.tags = tags
@@ -327,5 +464,6 @@ struct CollectionData: Codable {
         self.timeEvents = timeEvents
         self.playFields = playFields ?? playField.map { [$0] }
         self.playField = self.playFields?.first ?? playField
+        self.clocks = clocks
     }
 }

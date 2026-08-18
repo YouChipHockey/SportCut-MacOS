@@ -234,6 +234,19 @@ class HotKeyManager: ObservableObject {
                 }
                 return nil
             }
+            // ⌘⌃0 в окне разметки — показать/скрыть служебный таймлайн счётчиков.
+            if event.keyCode == 29 /* 0 */,
+               event.modifierFlags.contains(.command),
+               event.modifierFlags.contains(.control),
+               !event.modifierFlags.contains(.option),
+               ActiveWindowManager.shared.isMarkerWindowActive(),
+               self.isEnabled,
+               !self.blockedSheetActive,
+               !self.isEditingTextBox,
+               !FocusStateManager.shared.isAnyTextFieldFocused {
+                TimelineDataManager.shared.toggleClocksTimelineVisibility()
+                return nil
+            }
             // Opt+Cmd+S в окне разметки — сохранение выделенных клипов одним склеенным фильмом.
             if event.keyCode == 1 /* S */,
                event.modifierFlags.contains(.command),

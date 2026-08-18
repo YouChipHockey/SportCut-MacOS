@@ -86,6 +86,12 @@ final class KeyBindingRuntimeManager: ObservableObject {
     var onStartIntervalTag: IntervalTagCallback?
     var onStopIntervalTag: StopIntervalTagCallback?
     var isIntervalTagActive: IsIntervalActiveCallback?
+    /// Секундомеры/таймеры как цели связок (активация/деактивация/инверсия → старт/стоп/toggle,
+    /// отдельный тип связки `.clockReset` → сброс).
+    var onStartClock: ((_ clockId: String) -> Void)?
+    var onStopClock: ((_ clockId: String) -> Void)?
+    var onResetClock: ((_ clockId: String) -> Void)?
+    var isClockActive: ((_ clockId: String) -> Bool)?
     var onAttachLabelsToAnchor: AttachLabelsToAnchorCallback?
     var onAttachLabelsToLastStamp: AttachLabelsToLastStampCallback?
     var onAttachLabelsIfTagMatches: AttachLabelsIfTagMatchesCallback?
@@ -241,19 +247,6 @@ final class KeyBindingRuntimeManager: ObservableObject {
         clearHighlight()
     }
 
-    func applyExclusiveOnTagDeactivation(tagId: String) {
-        let buttonKey = "\(CanvasButtonKind.tag.rawValue):\(tagId)"
-        // Прямое направление: тег — источник связки.
-        let outgoing = filteredOutgoingBindings(from: buttonKey, sourceKind: .tag, sourceId: tagId)
-        for binding in outgoing where binding.type == .exclusive {
-            if binding.sourceKind == .tag, binding.targetKind == .tag {
-                handleExclusiveTagTag(binding: binding, sourceActivating: false)
-            }
-        }
-        // Обратное направление: тег — цель связки (двунаправленность эксклюзива).
-        applyIncomingExclusiveTagTagBindings(tagId: tagId, activating: false)
-    }
-
     // MARK: - Button tap entry point
 
     @discardableResult
@@ -268,6 +261,15 @@ final class KeyBindingRuntimeManager: ObservableObject {
             KeyBindingLog.log("  ↳ тег уже пишется как интервал — связки не применяем")
             return true
         }
+
+        // Счётчик — своя точка входа (старт/стоп + цепочка). Сюда приходит с горячей клавиши подсветки.
+        if kind == .clock {
+            handleClockTap(clockId: elementId)
+            return true
+        }
+
+        // Связки «сброс» этой кнопки — в обе стороны (цепочка видит только исходящие).
+        applyClockResets(kind: kind, elementId: elementId)
 
         if tryCompleteHighlightPair(partnerKind: kind, partnerId: elementId) {
             didCompleteHighlightPair = true
@@ -293,7 +295,7 @@ final class KeyBindingRuntimeManager: ObservableObject {
         // Эксклюзивная связка тег↔тег двунаправленная: применяем её и для входящего направления
         // (когда нажатый тег — цель связки). Прямое направление уже отработало выше.
         if kind == .tag {
-            applyIncomingExclusiveTagTagBindings(tagId: elementId, activating: true)
+            applyIncomingExclusiveBindings(kind: .tag, elementId: elementId)
             // Эксклюзив тег↔лейбл: нажатие тега подсвечивает его эксклюзивные лейблы (выбор партнёра).
             highlightExclusiveLabelPartners(ofTag: elementId)
         }
@@ -378,6 +380,9 @@ final class KeyBindingRuntimeManager: ObservableObject {
         didCompleteHighlightPair = false
         didActivateTagInChain = false
 
+        // Связки «сброс» этого лейбла — в обе стороны (цепочка видит только исходящие).
+        applyClockResets(kind: .label, elementId: labelId)
+
         // Случай 1: лейбл — подсвеченный партнёр активной цепочки (в т.ч. эксклюзивный лейбл,
         // подсвеченный своим тегом) → прикрепляем к якорю и продолжаем его собственную цепочку.
         if highlightModeActive, highlightedButtonIds.contains(buttonKey) {
@@ -446,6 +451,102 @@ final class KeyBindingRuntimeManager: ObservableObject {
             from: buttonKey, sourceKind: .map, sourceId: mapId,
             sourceTagActivating: nil, triggeringLabelId: nil, visited: &visited
         )
+    }
+
+    // MARK: - Reset tap (Ctrl + ЛКМ)
+
+    /// Сбрасывает счётчики, связанные с этой кнопкой связкой «сброс».
+    ///
+    /// Направление стрелки не важно: сброс — это отношение «кнопка ↔ счётчик», и связку рисуют
+    /// в обе стороны. Прямое направление (кнопка — источник) отрабатывает и обычной цепочкой
+    /// связок, здесь оно продублировано намеренно: сброс идемпотентен, зато жест работает и тогда,
+    /// когда обычное действие кнопки мы пропускаем.
+    /// Возвращает число сброшенных счётчиков.
+    @discardableResult
+    func applyClockResets(kind: CanvasButtonKind, elementId: String) -> Int {
+        let buttonKey = "\(kind.rawValue):\(elementId)"
+
+        var targets: [(clockId: String, delay: Double)] = []
+        for binding in bindings where binding.type == .clockReset {
+            if binding.sourceButtonKey == buttonKey, binding.targetKind == .clock {
+                targets.append((binding.targetId, binding.delaySeconds ?? 0))
+            } else if binding.targetButtonKey == buttonKey, binding.sourceKind == .clock {
+                targets.append((binding.sourceId, binding.delaySeconds ?? 0))
+            }
+        }
+        guard !targets.isEmpty else { return 0 }
+
+        KeyBindingLog.log("сброс по связке от \(buttonKey): счётчики \(targets.map(\.clockId)), onResetClock \(onResetClock == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok")")
+        for target in targets {
+            guard target.delay > 0 else {
+                onResetClock?(target.clockId)
+                continue
+            }
+            let work = DispatchWorkItem { [weak self] in
+                DispatchQueue.main.async { self?.onResetClock?(target.clockId) }
+            }
+            pendingWork.append(work)
+            DispatchQueue.global().asyncAfter(deadline: .now() + target.delay, execute: work)
+        }
+        return targets.count
+    }
+
+    /// Ctrl+ЛКМ (вторичный клик) по кнопке холста: отрабатывают ТОЛЬКО связки «сброс» —
+    /// обычное действие кнопки не выполняется (тег на таймлайн не уходит, цепочки не запускаются,
+    /// подсветка не трогается). Клик по самому счётчику сбрасывает его всегда, без связок.
+    /// Возвращает `false`, если сбрасывать нечего — тогда вызывающий обрабатывает нажатие как обычное.
+    @discardableResult
+    func handleResetTap(kind: CanvasButtonKind, elementId: String) -> Bool {
+        var count = applyClockResets(kind: kind, elementId: elementId)
+
+        // Сам счётчик: вторичный клик по нему — это его сброс.
+        if kind == .clock {
+            onResetClock?(elementId)
+            count += 1
+        }
+
+        guard count == 0 else { return true }
+
+        let known = bindings.filter { $0.type == .clockReset }
+            .map { "\($0.sourceButtonKey)→\($0.targetButtonKey)" }
+        KeyBindingLog.log("handleResetTap \(kind.rawValue):\(elementId): сбрасывать нечего (всего bindings=\(bindings.count), связки сброса: \(known.isEmpty ? "нет" : known.joined(separator: ", ")))")
+        return false
+    }
+
+    // MARK: - Clock tap (секундомер / таймер)
+
+    /// Клик по счётчику на холсте. Ведёт себя как интервальный тег: активация запускает счётчик
+    /// И его цепочку связок; повторное нажатие по идущему счётчику — просто остановка (связки
+    /// не отрабатываем, как и у интервального тега, чтобы выключение не «дёргало» партнёров).
+    /// Следа на таймлайне счётчик не оставляет — цепочка идёт от него как от обычного источника.
+    func handleClockTap(clockId: String) {
+        let buttonKey = "\(CanvasButtonKind.clock.rawValue):\(clockId)"
+        let wasActive = isClockActive?(clockId) ?? false
+        didCompleteHighlightPair = false
+
+        KeyBindingLog.log("handleClockTap \(buttonKey) | активен=\(wasActive), исходящих=\(bindings.filter { $0.sourceButtonKey == buttonKey }.count)")
+
+        // Нажатие счётчика — уход из текущей цепочки подсветки (в т.ч. если счётчик сам подсвечен:
+        // пара считается отработанной). Гасим ДО связок — они могут поднять свою подсветку.
+        if highlightModeActive { clearHighlight() }
+
+        if wasActive {
+            onStopClock?(clockId)
+            return
+        }
+
+        onStartClock?(clockId)
+
+        // Связки «сброс» этого счётчика на СОСЕДНИЕ счётчики (себя запуском не сбрасываем).
+        applyClockResets(kind: .clock, elementId: clockId)
+
+        var visited = Set<String>()
+        applyOutgoingBindings(
+            from: buttonKey, sourceKind: .clock, sourceId: clockId,
+            sourceTagActivating: nil, triggeringLabelId: nil, visited: &visited
+        )
+        // Эксклюзив двунаправленный: применяем и когда счётчик — цель связки.
+        applyIncomingExclusiveBindings(kind: .clock, elementId: clockId)
     }
 
     /// Теги — эксклюзивные партнёры карты (эксклюзивные связки тег↔карта с участием этой карты).
@@ -650,10 +751,27 @@ final class KeyBindingRuntimeManager: ObservableObject {
             if binding.targetKind == .tag {
                 KeyBindingLog.log("    ↳ deactivation \(binding.targetId): onStopIntervalTag \(onStopIntervalTag == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok"), сейчас активен=\(isIntervalTagActive?(binding.targetId) ?? false)")
                 onStopIntervalTag?(binding.targetId)
+            } else if binding.targetKind == .clock {
+                KeyBindingLog.log("    ↳ deactivation счётчика \(binding.targetId): onStopClock \(onStopClock == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok")")
+                onStopClock?(binding.targetId)
+            }
+
+        case .clockReset:
+            if binding.targetKind == .clock {
+                KeyBindingLog.log("    ↳ сброс счётчика \(binding.targetId): onResetClock \(onResetClock == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok")")
+                onResetClock?(binding.targetId)
             }
 
         case .intervalInversion:
-            if binding.targetKind == .tag {
+            if binding.targetKind == .clock {
+                let isActive = isClockActive?(binding.targetId) ?? false
+                KeyBindingLog.log("    ↳ инверсия счётчика \(binding.targetId): активен=\(isActive)")
+                if isActive {
+                    onStopClock?(binding.targetId)
+                } else {
+                    startClockAndContinueChain(clockId: binding.targetId, visited: &visited)
+                }
+            } else if binding.targetKind == .tag {
                 let isActive = isIntervalTagActive?(binding.targetId) ?? false
                 KeyBindingLog.log("    ↳ intervalInversion \(binding.targetId): активен=\(isActive), onStart \(onStartIntervalTag == nil ? "НЕТ ❌" : "ok"), onStop \(onStopIntervalTag == nil ? "НЕТ ❌" : "ok")")
                 if isActive {
@@ -691,8 +809,8 @@ final class KeyBindingRuntimeManager: ObservableObject {
             runtimeVisibility[targetKey] = !current
 
         case .exclusive:
-            if binding.sourceKind == .tag, binding.targetKind == .tag {
-                handleExclusiveTagTag(binding: binding, sourceActivating: sourceTagActivating ?? true)
+            if isStatefulKind(binding.sourceKind), isStatefulKind(binding.targetKind) {
+                handleExclusiveStateful(binding: binding, sourceActivating: sourceTagActivating ?? true)
             }
             // Эксклюзив тег↔лейбл обрабатывается при простом ЛКМ по лейблу
             // (привязка к крайнему тегу только если он — эксклюзивный партнёр), без подсветки.
@@ -704,33 +822,40 @@ final class KeyBindingRuntimeManager: ObservableObject {
         (binding.sourceKind == .label && binding.targetKind == .tag)
     }
 
-    private func handleExclusiveTagTag(binding: KeyBinding, sourceActivating: Bool) {
-        guard binding.sourceKind == .tag, binding.targetKind == .tag else { return }
-        applyExclusiveEffect(on: binding.targetId, actorActivating: sourceActivating)
+    /// Кнопки со «включённым/выключенным» состоянием: интервальный тег и счётчик.
+    /// Только между ними эксклюзив означает «активация одного гасит другой».
+    private func isStatefulKind(_ kind: CanvasButtonKind) -> Bool {
+        kind == .tag || kind == .clock
     }
 
-    /// Эффект эксклюзивной связки тег↔тег на «другой» тег:
-    /// при активации актора — гасим другой; при деактивации — запускаем другой.
-    private func applyExclusiveEffect(on otherTagId: String, actorActivating: Bool) {
-        if actorActivating {
-            if isIntervalTagActive?(otherTagId) == true {
-                onStopIntervalTag?(otherTagId)
-            }
-        } else {
-            if isIntervalTagActive?(otherTagId) != true {
-                onStartIntervalTag?(otherTagId)
-            }
+    private func handleExclusiveStateful(binding: KeyBinding, sourceActivating: Bool) {
+        // Эксклюзив гасит партнёра только при АКТИВАЦИИ актора: повторное нажатие по уже
+        // активному тегу/счётчику — обычное выключение, партнёра при этом не трогаем.
+        guard sourceActivating else { return }
+        deactivateExclusivePartner(kind: binding.targetKind, id: binding.targetId)
+    }
+
+    /// Эффект эксклюзивной связки тег↔тег (и тег↔счётчик / счётчик↔счётчик): активация одного
+    /// гасит другой. Обратного эффекта («выключил один — включился другой») нет намеренно.
+    private func deactivateExclusivePartner(kind: CanvasButtonKind, id: String) {
+        switch kind {
+        case .tag:
+            if isIntervalTagActive?(id) == true { onStopIntervalTag?(id) }
+        case .clock:
+            if isClockActive?(id) == true { onStopClock?(id) }
+        default:
+            break
         }
     }
 
-    /// Эксклюзивная связка тег↔тег работает в обе стороны: применяем её и когда нажатый тег —
-    /// ЦЕЛЬ связки (обратное направление). Прямое направление (тег-источник) обрабатывается в applyBinding.
-    private func applyIncomingExclusiveTagTagBindings(tagId: String, activating: Bool) {
-        let buttonKey = "\(CanvasButtonKind.tag.rawValue):\(tagId)"
+    /// Эксклюзивная связка работает в обе стороны: применяем её и когда нажатая кнопка —
+    /// ЦЕЛЬ связки (обратное направление). Прямое направление (кнопка-источник) — в applyBinding.
+    private func applyIncomingExclusiveBindings(kind: CanvasButtonKind, elementId: String) {
+        let buttonKey = "\(kind.rawValue):\(elementId)"
         for binding in bindings where binding.type == .exclusive
-            && binding.sourceKind == .tag && binding.targetKind == .tag
+            && isStatefulKind(binding.sourceKind) && isStatefulKind(binding.targetKind)
             && binding.targetButtonKey == buttonKey {
-            applyExclusiveEffect(on: binding.sourceId, actorActivating: activating)
+            deactivateExclusivePartner(kind: binding.sourceKind, id: binding.sourceId)
         }
     }
 
@@ -833,7 +958,25 @@ final class KeyBindingRuntimeManager: ObservableObject {
             var pending = pendingTimeEventIds
             pending.insert(targetId)
             pendingTimeEventIds = pending
+        } else if binding.targetKind == .clock {
+            KeyBindingLog.log("    ↳ activation счётчика \(targetId): onStartClock \(onStartClock == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok")")
+            startClockAndContinueChain(clockId: targetId, visited: &visited)
         }
+    }
+
+    /// Запускает счётчик и продолжает цепочку его исходящими связками (счётчик как звено).
+    /// Уже отработавший в этой цепочке счётчик пропускаем — иначе взаимные связки зациклятся.
+    private func startClockAndContinueChain(clockId: String, visited: inout Set<String>) {
+        let targetKey = "\(CanvasButtonKind.clock.rawValue):\(clockId)"
+        guard !visited.contains(targetKey) else {
+            KeyBindingLog.log("    ↳ счётчик \(targetKey) уже отработал в этой цепочке — пропуск")
+            return
+        }
+        onStartClock?(clockId)
+        applyOutgoingBindings(
+            from: targetKey, sourceKind: .clock, sourceId: clockId,
+            sourceTagActivating: nil, triggeringLabelId: nil, visited: &visited
+        )
     }
 
     private func clearHighlight() {

@@ -28,7 +28,7 @@ enum MarkupCSVExporter {
         struct Entry { let lineName: String; let stamp: TimelineStamp }
 
         var entries: [Entry] = []
-        for line in lines where !line.isDrawingsTimeline {
+        for line in lines where !line.isServiceTimeline {
             if let sel = selectedLineIDs, !sel.contains(line.id) { continue }
             for stamp in line.stamps {
                 entries.append(Entry(lineName: line.name, stamp: stamp))
@@ -96,7 +96,7 @@ enum MarkupCSVExporter {
         struct Entry { let lineName: String; let stamp: TimelineStamp }
 
         var entries: [Entry] = []
-        for line in lines where !line.isDrawingsTimeline {
+        for line in lines where !line.isServiceTimeline {
             for stamp in line.stamps {
                 if let sel = selectedTagIDs, !sel.contains(stamp.idTag) { continue }
                 entries.append(Entry(lineName: line.name, stamp: stamp))

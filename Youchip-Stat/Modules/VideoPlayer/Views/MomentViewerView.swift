@@ -311,6 +311,8 @@ struct MomentViewerView: View {
     @State private var momentMiniTimelineScale: CGFloat = 1.0
     /// Увеличивается при каждом показе окна — мини-таймлайн снова ставит ~25% и центрирует тег.
     @State private var momentMiniLayoutEpoch = 0
+    /// Отмеченные счётчики: их показываем поверх кадра момента.
+    @State private var enabledClockStampIDs: Set<UUID> = []
 
     private var sourceStamp: TimelineStamp? {
         guard let lineID = session.lineID,
@@ -342,11 +344,27 @@ struct MomentViewerView: View {
         }
     }
 
+    /// Записи счётчиков, пересекающиеся с этим моментом. Считаются от ТЕКУЩИХ границ момента,
+    /// поэтому ресайз клипа сам обновляет и список, и отрисовку.
+    private var clockEntries: [MomentClockEntry] {
+        MomentClocksFinder.entries(
+            from: timelineData.lines,
+            start: session.displayStartTime,
+            duration: session.displayDuration
+        )
+    }
+
+    /// Время в исходном видео: начало момента + позиция воспроизведения внутри клипа.
+    private var sourceVideoTime: Double {
+        session.displayStartTime + session.compositionPlaybackSeconds
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            ZoomableVideoPlayerView(player: session.player) {
-                VideoPlayer(player: session.player)
-            }
+            HStack(spacing: 0) {
+                ZoomableVideoPlayerView(player: session.player) {
+                    VideoPlayer(player: session.player)
+                }
                 .background(Color.black)
                 .overlay(alignment: .top) {
                     if session.isTruncated {
@@ -355,6 +373,21 @@ struct MomentViewerView: View {
                             .padding(.horizontal, 10)
                     }
                 }
+                // Включённые счётчики идут прямо на кадре — значения те же, что были в разметке.
+                .overlay(
+                    MomentClocksOverlay(
+                        entries: clockEntries,
+                        enabledStampIDs: enabledClockStampIDs,
+                        videoTime: sourceVideoTime
+                    )
+                )
+
+                // Панель появляется только если в момент вообще попали счётчики.
+                if !clockEntries.isEmpty {
+                    Divider()
+                    MomentClocksPanel(entries: clockEntries, enabledStampIDs: $enabledClockStampIDs)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 6) {

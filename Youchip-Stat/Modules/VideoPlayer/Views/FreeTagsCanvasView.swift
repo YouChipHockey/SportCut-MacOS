@@ -20,6 +20,11 @@ struct FreeTagsCanvasView: View {
     let onTimeEventTap: ((TimeEvent) -> Void)?
     /// Клик по зоне карты: id карты + нормализованная точка (0…1). Ставит позицию тегу.
     var onMapTap: ((_ fieldId: String, _ normalized: CGPoint) -> Void)? = nil
+    var clocks: [ClockEntity] = []
+    /// Клик по счётчику: старт/стоп (как активация интервального тега).
+    var onClockTap: ((ClockEntity) -> Void)? = nil
+    /// Ctrl+ЛКМ / ПКМ по кнопке: жест «сброс» — отрабатывают только связки сброса этой кнопки.
+    var onResetTap: ((_ kind: CanvasButtonKind, _ elementId: String) -> Void)? = nil
     let activeIntervalTags: [TagLibraryView.ActiveIntervalTag]
     let hoveredTagID: String?
     let tagCounts: [String: Int]
@@ -35,6 +40,9 @@ struct FreeTagsCanvasView: View {
     /// Карты, подгруженные самим канвасом — на случай, когда родитель ещё не закешировал их
     /// (например при открытии проекта): иначе инлайн-карта не рисуется до захода в редактор.
     @State private var selfLoadedPlayFields: [PlayField] = []
+    /// То же для счётчиков: при открытии проекта кэш родителя пуст, и без своей подгрузки
+    /// секундомеры/таймеры не рисовались до ручного переключения коллекции.
+    @State private var selfLoadedClocks: [ClockEntity] = []
     // Ручной pan + зум к курсору (вместо ScrollView) — чтобы приближение шло к мыши, а не в угол.
     @State private var panOffset: CGSize = .zero
     @State private var hoverInViewport: CGPoint? = nil
@@ -50,6 +58,11 @@ struct FreeTagsCanvasView: View {
     /// Карты для отрисовки: приоритет — переданные родителем, иначе подгруженные самим канвасом.
     private var effectivePlayFields: [PlayField] {
         !playFields.isEmpty ? playFields : selfLoadedPlayFields
+    }
+
+    /// Счётчики для отрисовки: приоритет — переданные родителем, иначе подгруженные самим канвасом.
+    private var effectiveClocks: [ClockEntity] {
+        !clocks.isEmpty ? clocks : selfLoadedClocks
     }
 
     private var currentCollectionId: String? {
@@ -99,6 +112,11 @@ struct FreeTagsCanvasView: View {
 
                             runtimeItemView(item: item, scale: scale, isHighlighted: isHighlighted)
                                 .frame(width: viewWidth, height: viewHeight)
+                                // Ctrl+ЛКМ (он же вторичный клик) — жест «сброс». Ловим слоем
+                                // поверх: обычный tap-gesture вторичное нажатие не видит.
+                                .onSecondaryClick(enabled: needsSecondaryClick(in: effectiveLayout)) {
+                                    onResetTap?(item.kind, item.elementId)
+                                }
                                 .offset(
                                     x: (item.center.x - origin.x) * scale - viewWidth / 2,
                                     y: (item.center.y - origin.y) * scale - viewHeight / 2
@@ -259,6 +277,14 @@ struct FreeTagsCanvasView: View {
         fitScale = computed
     }
 
+    /// Нужен ли холсту перехват вторичного клика. Гранулярность намеренно грубая — на всю
+    /// раскладку, а не на конкретную кнопку: сопоставлять ключи кнопки со связками здесь значит
+    /// продублировать логику движка и молча потерять жест при любом расхождении. Решение о том,
+    /// что сбрасывать, принимает `KeyBindingRuntimeManager.handleResetTap`.
+    private func needsSecondaryClick(in layout: TagFreeLayout) -> Bool {
+        layout.items.contains { $0.kind == .clock } || layout.bindings.contains { $0.type == .clockReset }
+    }
+
     // MARK: - Visibility check
 
     private func isVisible(item: TagFreeLayoutItem) -> Bool {
@@ -277,6 +303,7 @@ struct FreeTagsCanvasView: View {
         case .timeEvent: return 20
         case .tag: return 10
         case .map: return 1   // карта — фон-зона под кнопками
+        case .clock: return 25
         }
     }
 
@@ -360,6 +387,22 @@ struct FreeTagsCanvasView: View {
                     }
                 )
             }
+
+        case .clock:
+            if let clock = effectiveClocks.first(where: { $0.id == item.elementId }) {
+                FreeClockRuntimeItemView(
+                    clock: clock,
+                    item: item,
+                    scale: scale,
+                    isHighlighted: isHighlighted,
+                    showBindingsMode: showBindingsMode,
+                    onSelectBinding: { toggleBindingSelection(buttonKey) },
+                    onTap: {
+                        runtime.applyRevertVisibilityIfNeeded(for: buttonKey)
+                        onClockTap?(clock)
+                    }
+                )
+            }
         }
     }
 
@@ -383,14 +426,24 @@ struct FreeTagsCanvasView: View {
         if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
     }
 
-    /// Асинхронно подгружает карты текущей коллекции (когда родитель их ещё не передал).
-    private func loadSelfPlayFieldsIfNeeded() {
-        guard case .user(let name) = TagLibraryManager.shared.currentCollectionType else { return }
+    /// Асинхронно подгружает карты/счётчики текущей коллекции, когда родитель их ещё не передал
+    /// (типовой случай — только что открытый проект: кэш в `TagLibraryView` ещё пуст).
+    /// Счётчики заодно регистрируем в рантайме — без регистрации кнопка не запускается.
+    private func loadSelfCollectionAssetsIfNeeded(needsFields: Bool, needsClocks: Bool) {
+        guard needsFields || needsClocks,
+              case .user(let name) = TagLibraryManager.shared.currentCollectionType else { return }
         DispatchQueue.global(qos: .userInitiated).async {
             let manager = CustomCollectionManager()
-            guard manager.loadCollectionFromBookmarks(named: name), !manager.playFields.isEmpty else { return }
+            guard manager.loadCollectionFromBookmarks(named: name) else { return }
             let fields = manager.playFields
-            DispatchQueue.main.async { selfLoadedPlayFields = fields }
+            let loadedClocks = manager.clocks
+            DispatchQueue.main.async {
+                if needsFields, !fields.isEmpty { selfLoadedPlayFields = fields }
+                if needsClocks, !loadedClocks.isEmpty {
+                    selfLoadedClocks = loadedClocks
+                    ClockRuntimeManager.shared.register(loadedClocks)
+                }
+            }
         }
     }
 
@@ -403,10 +456,11 @@ struct FreeTagsCanvasView: View {
         ) {
             layout = stored
             runtime.configure(layout: stored, collectionId: collectionId)
-            // Родитель мог ещё не закешировать карты (при открытии проекта) — подгружаем сами.
-            if playFields.isEmpty, stored.items.contains(where: { $0.kind == .map }) {
-                loadSelfPlayFieldsIfNeeded()
-            }
+            // Родитель мог ещё не закешировать карты/счётчики (при открытии проекта) — подгружаем сами.
+            loadSelfCollectionAssetsIfNeeded(
+                needsFields: playFields.isEmpty && stored.items.contains(where: { $0.kind == .map }),
+                needsClocks: clocks.isEmpty && stored.items.contains(where: { $0.kind == .clock })
+            )
         } else {
             let def = TagFreeLayoutStorage.makeDefaultLayout(for: tags)
             layout = def
@@ -555,7 +609,10 @@ private struct FreeTagRuntimeItemView: View {
         .scaleEffect(pulsing ? 1.06 : 1.0)
         .rotationEffect(.degrees(item.rotation))
         .contentShape(Rectangle())
-        .onTapGesture { onTap() }
+        // Не `.onTapGesture`: он теряет первый клик по неактивному окну (нужно было сначала
+        // «взять фокус», потом нажать). Ловим нажатие AppKit-слоем — см. FirstMouseHosting.
+        .onFirstMouseTap { onTap() }
+        .pointingHandCursor()
         .onAppear { updatePulsing(shouldPulse) }
         .onChange(of: shouldPulse) { updatePulsing($0) }
     }
@@ -631,6 +688,7 @@ private struct FreeLabelRuntimeItemView: View {
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
+        .pointingHandCursor()
     }
 }
 
@@ -687,7 +745,8 @@ private struct FreeTimeEventRuntimeItemView: View {
         )
         .rotationEffect(.degrees(item.rotation))
         .contentShape(Rectangle())
-        .onTapGesture { onTap() }
+        .onFirstMouseTap { onTap() }
+        .pointingHandCursor()
     }
 }
 
@@ -746,19 +805,17 @@ private struct FreeMapRuntimeItemView: View {
         )
         .rotationEffect(.degrees(item.rotation))
         .contentShape(Rectangle())
-        // Клик по зоне: важно КУДА нажали, а не сам факт.
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onEnded { value in
-                    if showBindingsMode { onSelectBinding(); return }
-                    guard w > 0, h > 0,
-                          value.location.x >= 0, value.location.x <= w,
-                          value.location.y >= 0, value.location.y <= h else { return }
-                    let norm = CGPoint(x: value.location.x / w, y: value.location.y / h)
-                    showTransientPoint(norm)
-                    onPick(norm)
-                }
-        )
+        // Клик по зоне: важно КУДА нажали, а не сам факт. `DragGesture` здесь терял первый
+        // клик по неактивному окну — ловим нажатие AppKit-слоем (см. FirstMouseHosting).
+        .onFirstMouseTap(location: { point in
+            if showBindingsMode { onSelectBinding(); return }
+            guard w > 0, h > 0,
+                  point.x >= 0, point.x <= w,
+                  point.y >= 0, point.y <= h else { return }
+            let norm = CGPoint(x: point.x / w, y: point.y / h)
+            showTransientPoint(norm)
+            onPick(norm)
+        })
     }
 
     private func showTransientPoint(_ norm: CGPoint) {
@@ -766,5 +823,63 @@ private struct FreeMapRuntimeItemView: View {
         withAnimation(.easeIn(duration: 0.1)) { pointOpacity = 1 }
         // Держим ~3 секунды, затем плавно гасим.
         withAnimation(.easeOut(duration: 0.6).delay(2.4)) { pointOpacity = 0 }
+    }
+}
+
+// MARK: - Clock runtime item (секундомер / таймер)
+
+/// Живой счётчик на холсте библиотеки: показывает текущее время из ClockRuntimeManager,
+/// клик = старт/стоп (как активация интервального тега). Активный — подсвечен рамкой.
+private struct FreeClockRuntimeItemView: View {
+    let clock: ClockEntity
+    let item: TagFreeLayoutItem
+    var scale: CGFloat = 1.0
+    let isHighlighted: Bool
+    let showBindingsMode: Bool
+    let onSelectBinding: () -> Void
+    let onTap: () -> Void
+
+    @ObservedObject private var runtime = ClockRuntimeManager.shared
+
+    var body: some View {
+        let s = max(scale, 0.01)
+        let cr = item.cornerRadius * s
+        let w = item.size.width * s
+        let h = item.size.height * s
+        let isActive = runtime.activeIDs.contains(clock.id)
+        let value = runtime.displaySeconds[clock.id] ?? (clock.mode == .timer ? clock.initialSeconds : 0)
+        let strokeCol: Color = isHighlighted ? .yellow : (isActive ? .green : (item.strokeColor.map { Color(hex: $0) } ?? Color.secondary.opacity(0.4)))
+
+        ClockDisplayView(
+            seconds: value,
+            appearance: clock.appearance,
+            showCentiseconds: clock.showCentiseconds,
+            style: ClockStyle(
+                foreground: item.textColor.map { Color(hex: $0) } ?? .white,
+                accent: .accentColor,
+                cellBackground: Color.black.opacity(0.55),
+                fontWeight: .semibold
+            ),
+            progress: clock.appearance == .ring ? runtime.progressFraction(clock.id) : nil,
+            caption: clock.caption
+        )
+        .padding(4 * s)
+        .frame(width: w, height: h)
+        // Фон объекту не нужен — рисуем только сам счётчик; рамку показываем лишь при
+        // подсветке/активности (обратная связь), в покое — ничего.
+        .overlay(
+            Group {
+                if isHighlighted || isActive {
+                    TagFreeShapeView(shape: item.shape, cornerRadius: cr)
+                        .stroke(strokeCol, lineWidth: 2.5 * s)
+                }
+            }
+        )
+        .rotationEffect(.degrees(item.rotation))
+        .contentShape(Rectangle())
+        .onFirstMouseTap {
+            if showBindingsMode { onSelectBinding() } else { onTap() }
+        }
+        .pointingHandCursor()
     }
 }

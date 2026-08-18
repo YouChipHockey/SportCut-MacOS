@@ -27,6 +27,8 @@ struct SportcutCollectionExport: Codable {
     let tagLibraryDisplayMode: String?
     /// Раскладка холста и связки клавиш — только для коллекций со связками (free). Наличие = коллекция со связками.
     let freeLayout: TagFreeLayout?
+    /// Секундомеры/таймеры коллекции. nil в старых экспортах.
+    let clocks: [ClockEntity]?
 
     init(collectionManager: CustomCollectionManager) {
         self.version = "1.1"
@@ -39,6 +41,7 @@ struct SportcutCollectionExport: Codable {
         self.timeEvents = collectionManager.timeEvents
         self.playField = collectionManager.playField.map { PlayFieldExport(from: $0) }
         self.playFields = collectionManager.playFields.isEmpty ? nil : collectionManager.playFields.map { PlayFieldExport(from: $0) }
+        self.clocks = collectionManager.clocks.isEmpty ? nil : collectionManager.clocks
         self.tagLibraryDisplayMode = collectionManager.tagLibraryDisplayMode.rawValue
         if collectionManager.tagLibraryDisplayMode == .free {
             self.freeLayout = TagFreeLayoutStorage.loadLayoutIfExists(
@@ -58,7 +61,8 @@ struct SportcutCollectionExport: Codable {
          tagGroups: [TagGroup], tags: [Tag],
          labelGroups: [LabelGroupData], labels: [Label],
          timeEvents: [TimeEvent], playFields: [PlayField],
-         displayMode: String, freeLayout: TagFreeLayout?) {
+         displayMode: String, freeLayout: TagFreeLayout?,
+         clocks: [ClockEntity] = []) {
         self.version = "1.1"
         self.collectionName = collectionName
         self.exportDate = Date()
@@ -69,6 +73,7 @@ struct SportcutCollectionExport: Codable {
         self.timeEvents = timeEvents
         self.playField = playFields.first.map { PlayFieldExport(from: $0) }
         self.playFields = playFields.isEmpty ? nil : playFields.map { PlayFieldExport(from: $0) }
+        self.clocks = clocks.isEmpty ? nil : clocks
         self.tagLibraryDisplayMode = displayMode
         self.freeLayout = freeLayout
     }
@@ -206,6 +211,7 @@ class CollectionImportManager: ObservableObject {
                 labels: exportData.labels,
                 timeEvents: exportData.timeEvents,
                 playFields: playFields,
+                clocks: exportData.clocks ?? [],
                 occupied: occupied
             ) {
                 let fresh = CollectionIdRegenerator.regenerate(
@@ -215,6 +221,7 @@ class CollectionImportManager: ObservableObject {
                     labels: exportData.labels,
                     timeEvents: exportData.timeEvents,
                     playFields: playFields,
+                    clocks: exportData.clocks ?? [],
                     layout: exportData.freeLayout,
                     collectionName: exportData.collectionName
                 )
@@ -224,6 +231,7 @@ class CollectionImportManager: ObservableObject {
                 collectionManager.labels = fresh.labels
                 collectionManager.timeEvents = fresh.timeEvents
                 collectionManager.playFields = fresh.playFields
+                collectionManager.clocks = fresh.clocks
                 if isFree {
                     collectionManager.pendingImportedLayout = fresh.layout
                 }
@@ -235,6 +243,7 @@ class CollectionImportManager: ObservableObject {
                 collectionManager.labels = exportData.labels
                 collectionManager.timeEvents = exportData.timeEvents
                 collectionManager.playFields = playFields
+                collectionManager.clocks = exportData.clocks ?? []
                 if isFree {
                     // Раскладка/связки сохранятся под новым id при saveCollectionToFiles.
                     collectionManager.pendingImportedLayout = exportData.freeLayout

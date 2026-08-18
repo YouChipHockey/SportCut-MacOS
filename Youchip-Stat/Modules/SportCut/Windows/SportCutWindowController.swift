@@ -32,7 +32,7 @@ class SportCutWindowController: NSWindowController {
     init(session: SportCutSession) {
         self.session = session
         let view = SportCutMainView(sessionID: session.id)
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = SportCutWindow(contentViewController: hostingController)
         
         window.title = String.Titles.sportCutWindowTitlePrefix.format(session.name)

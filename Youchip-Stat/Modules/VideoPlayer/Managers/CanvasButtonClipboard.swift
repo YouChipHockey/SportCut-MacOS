@@ -8,12 +8,16 @@
 //
 
 import Foundation
+import Combine
 
-final class CanvasButtonClipboard {
+/// ObservableObject, а не простой синглтон: меню и кнопки «Вставить» строятся при отрисовке вью,
+/// и без публикации изменений после копирования редактор не перерисовывался — пункт «Вставить»
+/// оставался скрытым/выключенным, из-за чего копирование выглядело неработающим.
+final class CanvasButtonClipboard: ObservableObject {
 
     static let shared = CanvasButtonClipboard()
 
-    private(set) var items: [TagFreeLayoutItem] = []
+    @Published private(set) var items: [TagFreeLayoutItem] = []
 
     var hasContent: Bool { !items.isEmpty }
 

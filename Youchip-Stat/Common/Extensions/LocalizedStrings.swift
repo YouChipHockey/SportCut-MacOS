@@ -273,6 +273,8 @@ extension String {
         case exportAs
         case exportWithDrawings
         case exportWithDrawingsHelp
+        case exportWithClocks
+        case exportWithClocksHelp
         case exportAddEpisodeNumbering
         case exportAddTagAndLabels
         case exportAddComment
@@ -857,6 +859,21 @@ extension String {
         case liveStreamSaveFolderHint
         case liveStreamPickSaveFolder
         case appendToVideo
+
+        // Live Recovery
+        case liveRecoveryFoundTitle
+        case liveRecoveryFoundMessage
+        case liveRecoveryRestoreButton
+        case liveRecoveryDiscardButton
+        case liveRecoveryLaterButton
+        case liveRecoveryProgress
+        case liveRecoveryFailed
+        case liveQuitSaving
+
+        // Canvas copy / paste / remove
+        case canvasCopyButtons
+        case canvasPasteButtons
+        case canvasRemoveFromCanvas
         
         // Data Sync & Backup
         case dataManagementTitle
@@ -1050,6 +1067,7 @@ extension String {
         case sportCutLabelsColumn
         case sportCutEventsColumn
         case sportCutFilters
+        case sportCutFilterFound
         case sportCutReset
         case sportCutTagGroups
         case sportCutTags
@@ -1233,6 +1251,7 @@ extension String {
         case keyBindingsRemoveFromCanvas
         case keyBindingsReturnToCanvas
         case keyBindingsMapZoneHint
+        case keyBindingsClockResetHint
         case keyBindingsAddMap
         case keyBindingsAddMapFromDisk
         case keyBindingsLoadedMaps
@@ -1302,6 +1321,42 @@ extension String {
         case versionOutdatedMessage
 
         // Project Merge
+        // Массовое удаление проектов (разметка / просмотр / редактор)
+        case bulkDeleteButton
+        case bulkDeleteHint
+        case bulkDeleteSelectedCount
+        case bulkDeleteConfirmTitle
+        case bulkDeleteConfirmMessage
+        case bulkDeleteCountButton
+
+        // Поиск по клипам (разметка / просмотр)
+        case clipSearchTitle
+        case clipSearchPrompt
+
+        // Секундомер / таймер (объекты холста связок)
+        case clockCountersTitle
+        case clockModeTitle
+        case clockModeStopwatch
+        case clockModeTimer
+        case clockInitialValue
+        case clockMinutesShort
+        case clockSecondsShort
+        case clockAppearanceTitle
+        case clockShowOnVideo
+        case clockShowCentiseconds
+        case clockAddStopwatch
+        case clockAddTimer
+        case clockTabHint
+        case clockNoCounters
+        case clockAddToCanvas
+        case clockZeroActionTitle
+        case clockOverlayDragHelp
+        case clockAppearanceInOwnSettings
+        case clockCaptionTitle
+        case clockTimelineName
+        case clockFiresBindingsOnZero
+        case clockFiresBindingsOnZeroHint
+
         case mergeProjectsButton
         case mergeProjectsExitSelection
         case mergeProjectsHelp

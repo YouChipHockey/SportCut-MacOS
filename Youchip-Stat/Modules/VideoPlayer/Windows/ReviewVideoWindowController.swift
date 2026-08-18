@@ -10,7 +10,7 @@ class ReviewVideoWindowController: NSWindowController, NSWindowDelegate {
     
     init() {
         let view = ReviewVideoView()
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.reviewWindowTitle
         window.tabbingMode = .disallowed

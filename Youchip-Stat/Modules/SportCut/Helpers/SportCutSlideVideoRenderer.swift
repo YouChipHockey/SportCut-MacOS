@@ -49,8 +49,12 @@ enum SportCutSlideVideoRenderer {
             return
         }
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = renderSync(slide: slide, to: outURL)
-            DispatchQueue.main.async { completion(result) }
+            // render(...) не блокирует поток: завершение приходит асинхронно из finishWriting.
+            // Раньше здесь был sema.wait() и userInitiated-поток висел на writer-очереди (Utility) —
+            // инверсия приоритетов. Теперь никто не ждёт блокирующе.
+            render(slide: slide, to: outURL) { result in
+                DispatchQueue.main.async { completion(result) }
+            }
         }
     }
 
@@ -72,10 +76,13 @@ enum SportCutSlideVideoRenderer {
         group.notify(queue: .main) { completion(result) }
     }
 
-    private static func renderSync(slide: SportCutSlide, to outURL: URL) -> URL? {
+    /// Пишет видео слайда без блокирующего ожидания: результат отдаётся в `completion` из
+    /// колбэка `finishWriting` (может прийти на произвольной очереди — вызывающий сам уводит
+    /// его на нужный поток).
+    private static func render(slide: SportCutSlide, to outURL: URL, completion: @escaping (URL?) -> Void) {
         try? FileManager.default.removeItem(at: outURL)
 
-        guard let writer = try? AVAssetWriter(outputURL: outURL, fileType: .mov) else { return nil }
+        guard let writer = try? AVAssetWriter(outputURL: outURL, fileType: .mov) else { completion(nil); return }
         let settings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: renderSize.width,
@@ -90,25 +97,29 @@ enum SportCutSlideVideoRenderer {
         ]
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: attrs)
 
-        guard writer.canAdd(input) else { return nil }
+        guard writer.canAdd(input) else { completion(nil); return }
         writer.add(input)
-        guard writer.startWriting() else { return nil }
+        guard writer.startWriting() else { completion(nil); return }
         writer.startSession(atSourceTime: .zero)
 
         guard let buffer = pixelBuffer(from: SportCutSlideRenderer.renderImage(for: slide, size: renderSize)) else {
             writer.cancelWriting()
-            return nil
+            completion(nil)
+            return
         }
 
         let totalFrames = max(1, Int(slide.durationSeconds * Double(fps)))
         var frame = 0
-        let sema = DispatchSemaphore(value: 0)
-        let queue = DispatchQueue(label: "youchip.slide.writer")
+        // Явный QoS у writer-очереди под стать вызывающему userInitiated — чтобы кадры не писались
+        // с пониженным приоритетом.
+        let queue = DispatchQueue(label: "youchip.slide.writer", qos: .userInitiated)
         input.requestMediaDataWhenReady(on: queue) {
             while input.isReadyForMoreMediaData {
                 if frame >= totalFrames {
                     input.markAsFinished()
-                    writer.finishWriting { sema.signal() }
+                    writer.finishWriting {
+                        completion(writer.status == .completed ? outURL : nil)
+                    }
                     return
                 }
                 let pts = CMTime(value: CMTimeValue(frame), timescale: fps)
@@ -116,8 +127,6 @@ enum SportCutSlideVideoRenderer {
                 frame += 1
             }
         }
-        sema.wait()
-        return writer.status == .completed ? outURL : nil
     }
 
     private static func pixelBuffer(from image: NSImage) -> CVPixelBuffer? {

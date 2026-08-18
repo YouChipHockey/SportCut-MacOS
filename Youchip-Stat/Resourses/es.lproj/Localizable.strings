@@ -236,6 +236,8 @@
 "ExportAs" = "Exportar como:";  // ^String.Titles.exportAs
 "ExportWithDrawings" = "Exportar con dibujos";  // ^String.Titles.exportWithDrawings
 "ExportWithDrawingsHelp" = "Cuando está activado, los dibujos se insertarán en los momentos correspondientes del video. La duración de visualización de cada dibujo se establece al crearlo.";  // ^String.Titles.exportWithDrawingsHelp
+"ExportWithClocks" = "Exportar con contadores";
+"ExportWithClocksHelp" = "Incrusta en el vídeo los contadores que corrían en ese momento del marcaje.";
 "ExportAddEpisodeNumbering" = "Añadir numeración de episodios";  // ^String.Titles.exportAddEpisodeNumbering
 "ExportAddTagAndLabels" = "Añadir nombre de etiqueta, etiquetas y eventos";  // ^String.Titles.exportAddTagAndLabels
 "ExportAddComment" = "Añadir comentario";  // ^String.Titles.exportAddComment
@@ -945,6 +947,7 @@
 "SportCutLabelsColumn" = "Etiquetas";
 "SportCutEventsColumn" = "Eventos";
 "SportCutFilters" = "Filtros";
+"SportCutFilterFound" = "Encontrado"; // ^String.Titles.sportCutFilterFound
 "SportCutReset" = "Restablecer";
 "SportCutTagGroups" = "Grupos de etiquetas";
 "SportCutTags" = "Etiquetas";
@@ -1152,6 +1155,8 @@
 "KeyBindingTypeActivation" = "Activación";
 "KeyBindingTypeDeactivation" = "Desactivación";
 "KeyBindingTypeIntervalInversion" = "Inversión de intervalo";
+"KeyBindingTypeClockReset" = "Reiniciar contador";
+"KeyBindingsClockResetHint" = "Se activa al pulsar el botón (en cualquier dirección del vínculo): el contador se detiene y vuelve a su valor inicial. Ctrl+clic realiza solo el reinicio, sin la acción normal del botón.";
 "KeyBindingTypeVisibility" = "Mostrar";
 "KeyBindingTypeInvisibility" = "Ocultar";
 "KeyBindingTypeVisibilityInversion" = "Inversión de visibilidad";
@@ -1234,6 +1239,43 @@
 "HeatMapControlShowMarkers" = "Mostrar marcas";
 
 // Project Merge
+"BulkDeleteButton" = "Eliminar varios"; // ^String.Titles.bulkDeleteButton
+"BulkDeleteHint" = "Haz clic en las tarjetas para seleccionarlas"; // ^String.Titles.bulkDeleteHint
+"BulkDeleteSelectedCount" = "Seleccionados: %d"; // ^String.Titles.bulkDeleteSelectedCount
+"BulkDeleteConfirmTitle" = "¿Eliminar lo seleccionado?"; // ^String.Titles.bulkDeleteConfirmTitle
+"BulkDeleteConfirmMessage" = "Se eliminarán %d elementos. No se puede deshacer."; // ^String.Titles.bulkDeleteConfirmMessage
+"BulkDeleteCountButton" = "Eliminar %d proyectos"; // ^String.Titles.bulkDeleteCountButton
+"ClipSearchTitle" = "Búsqueda de clips"; // ^String.Titles.clipSearchTitle
+"ClipSearchPrompt" = "Escribe cualquier texto: mostraremos las etiquetas donde aparece (en el nombre, una etiqueta o un evento)."; // ^String.Titles.clipSearchPrompt
+"ClockCountersTitle" = "Contadores";
+"ClockCaptionTitle" = "Leyenda";
+"ClockTimelineName" = "Contadores";
+"ClockModeTitle" = "Modo";
+"ClockModeStopwatch" = "Cronómetro";
+"ClockModeTimer" = "Temporizador";
+"ClockInitialValue" = "Valor inicial";
+"ClockMinutesShort" = "min";
+"ClockSecondsShort" = "seg";
+"ClockAppearanceTitle" = "Apariencia";
+"ClockShowOnVideo" = "Mostrar en el vídeo";
+"ClockShowCentiseconds" = "Mostrar centésimas";
+"ClockAddStopwatch" = "Cronómetro";
+"ClockAddTimer" = "Temporizador";
+"ClockTabHint" = "Contadores en tiempo real: se activan con clic o combinación, como una etiqueta.";
+"ClockNoCounters" = "Aún no hay contadores";
+"ClockAddToCanvas" = "Añadir al lienzo";
+"ClockAppearanceSegments" = "8 segmentos";
+"ClockAppearanceAnalog" = "Reloj analógico";
+"ClockAppearanceRing" = "Anillo de progreso";
+"ClockAppearanceText" = "Texto";
+"ClockZeroActionTitle" = "Al llegar a cero";
+"ClockOverlayDragHelp" = "Arrastre para mover; esquina para redimensionar; doble clic para restablecer";
+"ClockAppearanceInOwnSettings" = "La apariencia del contador se configura en sus propios ajustes: haga doble clic en el objeto.";
+"ClockZeroActionStop" = "Detenerse en cero";
+"ClockZeroActionReset" = "Reiniciar y detenerse";
+"ClockZeroActionRestart" = "Empezar de nuevo (bucle)";
+"ClockFiresBindingsOnZero" = "Activar vínculos al llegar a cero";
+"ClockFiresBindingsOnZeroHint" = "El temporizador actúa como origen: sus vínculos salientes se ejecutan al llegar a cero.";
 "MergeProjectsButton" = "Combinar";
 "MergeProjectsExitSelection" = "Salir de la selección";
 "MergeProjectsHelp" = "Combinar varios proyectos en uno";
@@ -1375,3 +1417,19 @@
 "VideoFormat" = "Formato de video";
 "VideoTitle" = "Título del video";
 "VideoURL" = "URL del video";
+
+
+// MARK: - Live Recovery
+"LiveRecoveryFoundTitle" = "Se encontró una grabación sin terminar";
+"LiveRecoveryFoundMessage" = "«%1$@»: se grabaron unos %2$@. La aplicación se cerró antes de guardar. ¿Restaurar el proyecto con el vídeo y las marcas?";
+"LiveRecoveryRestoreButton" = "Restaurar";
+"LiveRecoveryDiscardButton" = "Eliminar";
+"LiveRecoveryLaterButton" = "Más tarde";
+"LiveRecoveryProgress" = "Restaurando la grabación...";
+"LiveQuitSaving" = "Guardando la grabación antes de salir. No apague el ordenador...";
+"LiveRecoveryFailed" = "No se pudo restaurar la grabación interrumpida";
+
+// MARK: - Canvas copy / paste
+"CanvasCopyButtons" = "Copiar botones (%d)";
+"CanvasPasteButtons" = "Pegar botones (%d)";
+"CanvasRemoveFromCanvas" = "Quitar del lienzo (%d)";

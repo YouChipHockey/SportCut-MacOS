@@ -15,7 +15,8 @@ class VideoPlayerWindowController: NSWindowController, NSWindowDelegate {
     
     init(id: String) {
         let view = VideoPlayerWindow(id: id)
-        let hostingController = NSHostingController(rootView: view)
+        // Клик по неактивному окну сразу доходит до контрола — см. FirstMouseHosting.
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.video
         super.init(window: window)

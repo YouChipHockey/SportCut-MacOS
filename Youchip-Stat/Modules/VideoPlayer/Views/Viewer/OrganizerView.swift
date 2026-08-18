@@ -552,6 +552,8 @@ struct OrganizerView: View {
         }
         
         var overlayItems: [OverlayItem] = []
+        // Счётчики: показания берутся из записи разметки по времени исходника каждого сегмента.
+        var clockPlacements: [ClockExportPlacement] = []
         var currentTime = CMTime.zero
         for (segmentIndex, segment) in segments.enumerated() {
             let transform = videoTrack.preferredTransform
@@ -583,6 +585,12 @@ struct OrganizerView: View {
                     watermarkOptions: watermarkOptions
                 )
                 overlayItems.append(overlayItem)
+                clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
+                    selectedStampIDs: watermarkOptions.clockStampIDs,
+                    lines: TimelineDataManager.shared.lines,
+                    sourceRange: segment.timeRange,
+                    compositionStart: CMTimeGetSeconds(timeBefore)
+                ))
                 continue
             }
 
@@ -608,13 +616,19 @@ struct OrganizerView: View {
                 watermarkOptions: watermarkOptions
             )
             overlayItems.append(overlayItem)
+            clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
+                selectedStampIDs: watermarkOptions.clockStampIDs,
+                lines: TimelineDataManager.shared.lines,
+                sourceRange: segment.timeRange,
+                compositionStart: CMTimeGetSeconds(currentTime - segment.timeRange.duration)
+            ))
         }
         
         let fileName = "\(playlistManager.currentPlaylist?.name ?? ^String.Titles.newPlaylist).mp4"
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: outputURL)
         
-        let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
+        let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clockPlacements)
         
         let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
         exportHelper.addExportSession(exportSession)
@@ -726,7 +740,14 @@ struct OrganizerView: View {
                 overlayItem: overlayItem,
                 videoTrack: videoTrack,
                 compositionVideoTrack: compVideoTrack,
-                compositionDuration: composition.duration
+                compositionDuration: composition.duration,
+                // Клип = ровно один сегмент, его шкала начинается с нуля.
+                clockPlacements: ClockExportOverlayBuilder.placements(
+                    selectedStampIDs: watermarkOptions.clockStampIDs,
+                    lines: TimelineDataManager.shared.lines,
+                    sourceRange: segment.timeRange,
+                    compositionStart: 0
+                )
             )
             
             

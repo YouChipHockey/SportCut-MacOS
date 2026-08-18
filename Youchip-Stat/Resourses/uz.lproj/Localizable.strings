@@ -236,6 +236,8 @@
 "ExportAs" = "Eksport qilish:";  // ^String.Titles.exportAs
 "ExportWithDrawings" = "Chizmalar bilan eksport qilish";  // ^String.Titles.exportWithDrawings
 "ExportWithDrawingsHelp" = "Yoqilganda chizmalar videoning tegishli momentlariga joylashtiriladi. Har bir chizmaning ko‘rsatilish davomiyligi uni yaratishda belgilanadi.";  // ^String.Titles.exportWithDrawingsHelp
+"ExportWithClocks" = "Hisoblagichlar bilan eksport";
+"ExportWithClocksHelp" = "Belgilash paytida ishlagan hisoblagichlarni videoga joylaydi.";
 "ExportAddEpisodeNumbering" = "Epizod raqamlashini qo'shish";  // ^String.Titles.exportAddEpisodeNumbering
 "ExportAddTagAndLabels" = "Teg nomi, yorliqlar va hodisalarni qo'shish";  // ^String.Titles.exportAddTagAndLabels
 "ExportAddComment" = "Izoh qo'shish";  // ^String.Titles.exportAddComment
@@ -945,6 +947,7 @@
 "SportCutLabelsColumn" = "Yorliqlar";
 "SportCutEventsColumn" = "Voqealar";
 "SportCutFilters" = "Filtrlar";
+"SportCutFilterFound" = "Topildi"; // ^String.Titles.sportCutFilterFound
 "SportCutReset" = "Tiklash";
 "SportCutTagGroups" = "Teg guruhlari";
 "SportCutTags" = "Teglar";
@@ -1152,6 +1155,8 @@
 "KeyBindingTypeActivation" = "Faollashtirish";
 "KeyBindingTypeDeactivation" = "O'chirish";
 "KeyBindingTypeIntervalInversion" = "Interval inversiyasi";
+"KeyBindingTypeClockReset" = "Hisoblagichni tiklash";
+"KeyBindingsClockResetHint" = "Tugma bosilganda ishlaydi (bog'lanishning har ikki yo'nalishida): hisoblagich to'xtaydi va boshlang'ich qiymatiga qaytadi. Ctrl+chap tugma — faqat tiklash, tugmaning odatiy amalisiz.";
 "KeyBindingTypeVisibility" = "Ko'rsatish";
 "KeyBindingTypeInvisibility" = "Yashirish";
 "KeyBindingTypeVisibilityInversion" = "Ko'rinish inversiyasi";
@@ -1234,6 +1239,43 @@
 "HeatMapControlShowMarkers" = "Belgilarni ko'rsatish";
 
 // Project Merge
+"BulkDeleteButton" = "Bir nechtasini o'chirish"; // ^String.Titles.bulkDeleteButton
+"BulkDeleteHint" = "Belgilash uchun kartalarni bosing"; // ^String.Titles.bulkDeleteHint
+"BulkDeleteSelectedCount" = "Tanlandi: %d"; // ^String.Titles.bulkDeleteSelectedCount
+"BulkDeleteConfirmTitle" = "Tanlanganlar o'chirilsinmi?"; // ^String.Titles.bulkDeleteConfirmTitle
+"BulkDeleteConfirmMessage" = "%d ta element o'chiriladi. Buni bekor qilib bo'lmaydi."; // ^String.Titles.bulkDeleteConfirmMessage
+"BulkDeleteCountButton" = "%d ta loyihani o'chirish"; // ^String.Titles.bulkDeleteCountButton
+"ClipSearchTitle" = "Kliplar bo'yicha qidiruv"; // ^String.Titles.clipSearchTitle
+"ClipSearchPrompt" = "Matn kiriting — u uchraydigan teglarni ko'rsatamiz (nomda, leyblda yoki hodisada)."; // ^String.Titles.clipSearchPrompt
+"ClockCountersTitle" = "Hisoblagichlar";
+"ClockCaptionTitle" = "Izoh";
+"ClockTimelineName" = "Hisoblagichlar";
+"ClockModeTitle" = "Rejim";
+"ClockModeStopwatch" = "Sekundomer";
+"ClockModeTimer" = "Taymer";
+"ClockInitialValue" = "Boshlang'ich qiymat";
+"ClockMinutesShort" = "daq";
+"ClockSecondsShort" = "son";
+"ClockAppearanceTitle" = "Ko'rinishi";
+"ClockShowOnVideo" = "Videoda ko'rsatish";
+"ClockShowCentiseconds" = "Yuzdan bir ulushni ko'rsatish";
+"ClockAddStopwatch" = "Sekundomer";
+"ClockAddTimer" = "Taymer";
+"ClockTabHint" = "Real vaqt hisoblagichlari: teg kabi klik yoki bog'lanish bilan faollashadi.";
+"ClockNoCounters" = "Hozircha hisoblagich yo'q";
+"ClockAddToCanvas" = "Kanvasga qo'shish";
+"ClockAppearanceSegments" = "8 segment";
+"ClockAppearanceAnalog" = "Analog soat";
+"ClockAppearanceRing" = "Progress halqasi";
+"ClockAppearanceText" = "Matn";
+"ClockZeroActionTitle" = "Nolga yetganda";
+"ClockOverlayDragHelp" = "Ko'chirish uchun torting; o'lcham — burchakdan; joyiga qaytarish — ikki marta bosing";
+"ClockAppearanceInOwnSettings" = "Hisoblagich ko'rinishi o'z parametrlarida sozlanadi: obyektni ikki marta bosing.";
+"ClockZeroActionStop" = "Nolda to'xtash";
+"ClockZeroActionReset" = "Tiklab, to'xtash";
+"ClockZeroActionRestart" = "Qaytadan boshlash (tsikl)";
+"ClockFiresBindingsOnZero" = "Nolda bog'lanishlarni ishga tushirish";
+"ClockFiresBindingsOnZeroHint" = "Taymer manba bo'ladi: nolga yetganda uning chiquvchi bog'lanishlari ishlaydi.";
 "MergeProjectsButton" = "Birlashtirish";
 "MergeProjectsExitSelection" = "Tanlovdan chiqish";
 "MergeProjectsHelp" = "Bir nechta loyihani bittaga birlashtirish";
@@ -1375,3 +1417,19 @@
 "VideoFormat" = "Video formati";
 "VideoTitle" = "Video sarlavhasi";
 "VideoURL" = "Video URL";
+
+
+// MARK: - Live Recovery
+"LiveRecoveryFoundTitle" = "Tugallanmagan yozuv topildi";
+"LiveRecoveryFoundMessage" = "«%1$@» — taxminan %2$@ yozib olingan. Ilova saqlashdan oldin yopildi. Loyihani video va belgilar bilan tiklansinmi?";
+"LiveRecoveryRestoreButton" = "Tiklash";
+"LiveRecoveryDiscardButton" = "O'chirish";
+"LiveRecoveryLaterButton" = "Keyinroq";
+"LiveRecoveryProgress" = "Yozuv tiklanmoqda...";
+"LiveQuitSaving" = "Chiqishdan oldin yozuv saqlanmoqda. Kompyuterni o'chirmang...";
+"LiveRecoveryFailed" = "Uzilgan yozuvni tiklab bo'lmadi";
+
+// MARK: - Canvas copy / paste
+"CanvasCopyButtons" = "Tugmalarni nusxalash (%d)";
+"CanvasPasteButtons" = "Tugmalarni joylash (%d)";
+"CanvasRemoveFromCanvas" = "Kanvasdan olib tashlash (%d)";

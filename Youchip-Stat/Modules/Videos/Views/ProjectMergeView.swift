@@ -39,7 +39,7 @@ struct ProjectMergeView: View {
     private static func computeDuplicateLineNames(in sources: [ProjectMergeSource]) -> [String] {
         var counts: [String: Int] = [:]
         for source in sources {
-            for line in source.file.timelines where !line.isDrawingsTimeline {
+            for line in source.file.timelines where !line.isServiceTimeline {
                 counts[line.name, default: 0] += 1
             }
         }

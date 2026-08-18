@@ -94,6 +94,9 @@ struct KeyBindingArrowLinesOverlay: View {
         case .highlight:           return highlightArrowColor                         // белый в тёмной теме, чёрный в светлой
         case .exclusive:           return .orange                                    // оранжевый
         case .intervalInversion:   return .purple                                    // фиолетовый
+        // Пурпурный — сброс счётчика. Тон намеренно «малиновее» фиолетовой инверсии интервала,
+        // иначе две связки не различить на холсте.
+        case .clockReset:          return Color(red: 0.68, green: 0.10, blue: 0.60)
         case .visibility:          return Color(red: 0.60, green: 0.85, blue: 0.30)  // салатовый
         case .invisibility:        return Color(red: 1.00, green: 0.45, blue: 0.70)  // розовый
         case .visibilityInversion: return .brown                                     // коричневый

@@ -12,7 +12,11 @@ struct SportCutListView: View {
     @State private var sessionToDelete: SportCutSession?
     @State private var showDeleteAlert = false
     @State private var searchText = ""
-    
+    /// Режим выбора сессий для массового удаления.
+    @State private var isBulkDeleteMode = false
+    @State private var bulkDeleteSelection: Set<UUID> = []
+    @State private var showBulkDeleteAlert = false
+
     private var filteredSessions: [SportCutSession] {
         if searchText.isEmpty {
             return sessionManager.sessions
@@ -25,7 +29,11 @@ struct SportCutListView: View {
     var body: some View {
         VStack(spacing: 0) {
             headerView
-            
+
+            if isBulkDeleteMode {
+                bulkDeleteBar
+            }
+
             if filteredSessions.isEmpty {
                 emptyStateView
             } else {
@@ -60,6 +68,82 @@ struct SportCutListView: View {
                 Text(String.Titles.sportCutSessionWillBeDeleted.format(session.name))
             }
         }
+        .alert(^String.Titles.bulkDeleteConfirmTitle, isPresented: $showBulkDeleteAlert) {
+            Button(^String.Titles.cancelButtonTitle, role: .cancel) { }
+            Button(^String.Titles.deleteButtonTitle, role: .destructive) {
+                deleteSelectedSessions()
+            }
+        } message: {
+            Text(String(format: ^String.Titles.bulkDeleteConfirmMessage, bulkDeleteSelection.count))
+        }
+    }
+
+    // MARK: - Массовое удаление сессий
+
+    /// Панель под шапкой: сколько отмечено и кнопка удаления.
+    private var bulkDeleteBar: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "trash")
+                .foregroundColor(.red)
+
+            Text(String(format: ^String.Titles.bulkDeleteSelectedCount, bulkDeleteSelection.count))
+                .font(.system(size: 13, weight: .medium))
+
+            Text(^String.Titles.bulkDeleteHint)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Button(^String.Titles.sportCutSelectAll) {
+                bulkDeleteSelection = Set(filteredSessions.map(\.id))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.blue)
+
+            Button(^String.Titles.cancelButtonTitle) {
+                exitBulkDeleteMode()
+            }
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.secondary)
+
+            Button(action: { showBulkDeleteAlert = true }) {
+                Text(String(format: ^String.Titles.bulkDeleteCountButton, bulkDeleteSelection.count))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(bulkDeleteSelection.isEmpty ? Color.gray : Color.red))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(bulkDeleteSelection.isEmpty)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Color.red.opacity(0.08))
+    }
+
+    private func toggleBulkDeleteSelection(for session: SportCutSession) {
+        if bulkDeleteSelection.contains(session.id) {
+            bulkDeleteSelection.remove(session.id)
+            // Сняли выбор с последней сессии — режим удаления выключаем.
+            if bulkDeleteSelection.isEmpty { exitBulkDeleteMode() }
+        } else {
+            bulkDeleteSelection.insert(session.id)
+        }
+    }
+
+    private func exitBulkDeleteMode() {
+        isBulkDeleteMode = false
+        bulkDeleteSelection.removeAll()
+    }
+
+    private func deleteSelectedSessions() {
+        let sessions = sessionManager.sessions.filter { bulkDeleteSelection.contains($0.id) }
+        for session in sessions {
+            sessionManager.deleteSession(session)
+        }
+        exitBulkDeleteMode()
     }
     
     private var headerView: some View {
@@ -143,10 +227,23 @@ struct SportCutListView: View {
                 ForEach(filteredSessions) { session in
                     SessionCardView(
                         session: session,
-                        onOpen: { openSession(session) },
+                        isSelectionMode: isBulkDeleteMode,
+                        isChecked: bulkDeleteSelection.contains(session.id),
+                        onOpen: {
+                            if isBulkDeleteMode {
+                                toggleBulkDeleteSelection(for: session)
+                            } else {
+                                openSession(session)
+                            }
+                        },
                         onDelete: {
                             sessionToDelete = session
                             showDeleteAlert = true
+                        },
+                        showBulkSelectCircle: !isBulkDeleteMode,
+                        onBulkSelectCircleTap: {
+                            isBulkDeleteMode = true
+                            toggleBulkDeleteSelection(for: session)
                         }
                     )
                 }
@@ -211,9 +308,16 @@ struct SportCutListView: View {
 
 struct SessionCardView: View {
     let session: SportCutSession
+    /// В режиме массового удаления клик по карточке отмечает её, а не открывает сессию.
+    var isSelectionMode: Bool = false
+    var isChecked: Bool = false
     let onOpen: () -> Void
     let onDelete: () -> Void
-    
+    /// Показывать кружок-вход в массовое удаление в углу карточки (когда режим выбора не активен).
+    var showBulkSelectCircle: Bool = false
+    /// Клик по кружку в углу: включить режим массового удаления и отметить эту сессию.
+    var onBulkSelectCircleTap: () -> Void = {}
+
     private var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -225,12 +329,18 @@ struct SessionCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Image(systemName: "play.rectangle.on.rectangle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.blue)
-                    
+                    // Кружок выбора в левом-верхнем углу — единая точка входа и отметки для
+                    // массового удаления (вместо декоративной иконки, без прыжка в центр).
+                    if isSelectionMode || showBulkSelectCircle {
+                        BulkSelectCornerCircle(isSelected: isChecked, action: onBulkSelectCircleTap)
+                    } else {
+                        Image(systemName: "play.rectangle.on.rectangle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.blue)
+                    }
+
                     Spacer()
-                    
+
                     Menu {
                         Button(^String.Titles.sportCutOpen) { onOpen() }
                         Divider()
@@ -276,7 +386,7 @@ struct SessionCardView: View {
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                .stroke(isChecked ? Color.red : Color(NSColor.separatorColor), lineWidth: isChecked ? 2.5 : 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
         .onTapGesture { onOpen() }

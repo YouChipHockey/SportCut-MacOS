@@ -15,7 +15,7 @@ class FieldMapSelectionWindowController: NSWindowController, NSWindowDelegate {
     
     init(tag: Tag, imageBookmark: Data, onSave: @escaping (CGPoint) -> Void) {
         let view = FieldMapSelectionView(tag: tag, imageBookmark: imageBookmark, onSave: onSave)
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "\(^String.Titles.selectMapPositionForTag) \(tag.name)"
         super.init(window: window)

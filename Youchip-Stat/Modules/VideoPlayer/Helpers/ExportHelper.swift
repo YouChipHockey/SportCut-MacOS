@@ -247,6 +247,8 @@ class ExportHelper: ObservableObject {
         }
         
         var overlayItems: [OverlayItem] = []
+        // Счётчики: какие записи и в какой момент композиции показывать (см. ClockExportOverlayBuilder).
+        var clockPlacements: [ClockExportPlacement] = []
         var currentTime = CMTime.zero
         // «Фильм по рисункам»: у каждого рисунка свой synthetic-тег (id = stamp.idTag), поэтому
         // нумерация «по эпизодам того же тега» всегда даёт 1. Нумеруем последовательно по порядку
@@ -298,6 +300,14 @@ class ExportHelper: ObservableObject {
                         )
                         overlayItems.append(overlayItem)
                     }
+                    // В этот блок вклеены стоп-кадры рисунков, поэтому время внутри него уже не
+                    // линейно времени исходника: счётчик привязываем к началу блока.
+                    clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
+                        selectedStampIDs: watermarkOptions.clockStampIDs,
+                        lines: timelineData.lines,
+                        sourceRange: segment.timeRange,
+                        compositionStart: CMTimeGetSeconds(timeBefore)
+                    ))
                     continue
                 }
             }
@@ -329,7 +339,13 @@ class ExportHelper: ObservableObject {
                 )
                 overlayItems.append(overlayItem)
             }
-            
+
+            clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
+                selectedStampIDs: watermarkOptions.clockStampIDs,
+                lines: timelineData.lines,
+                sourceRange: segment.timeRange,
+                compositionStart: CMTimeGetSeconds(currentTime - segment.timeRange.duration)
+            ))
         }
         
         // Проверяем, что в композицию были добавлены сегменты
@@ -387,7 +403,7 @@ class ExportHelper: ObservableObject {
             completion(.failure(error.localizedDescription))
         }
         
-        let overlayVideoComposition = videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
+        let overlayVideoComposition = videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clockPlacements)
         
         let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
         exportSession?.outputURL = outputURL
@@ -575,6 +591,12 @@ class ExportHelper: ObservableObject {
             let overlayVideoComposition: AVVideoComposition?
             let tag = tagLibrary.findTagById(segment.stamp.idTag)
                 ?? Tag.syntheticDrawingTag(for: segment.stamp)
+            let clipClockPlacements = ClockExportOverlayBuilder.placements(
+                selectedStampIDs: watermarkOptions.clockStampIDs,
+                lines: timelineData.lines,
+                sourceRange: segment.timeRange,
+                compositionStart: 0
+            )
             if let tag {
                 let overlayItem = OverlayItem(
                     tag: tag,
@@ -585,7 +607,7 @@ class ExportHelper: ObservableObject {
                     videoSize: videoSize,
                     watermarkOptions: watermarkOptions
                 )
-                overlayVideoComposition = videoCompositionWithTextOverlay(overlayItem: overlayItem, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration)
+                overlayVideoComposition = videoCompositionWithTextOverlay(overlayItem: overlayItem, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clipClockPlacements)
             } else {
                 overlayVideoComposition = nil
             }
@@ -681,7 +703,8 @@ class ExportHelper: ObservableObject {
                 }
             }
         case .allTimelines:
-            for line in timelineData.lines {
+            // Служебные линии (рисунки, счётчики) — не клипы разметки, в «все таймлайны» им не место.
+            for line in timelineData.lines where !line.isServiceTimeline {
                 for stamp in line.stamps {
                     guard let correctedTime = correctTimeRange(
                         startSeconds: stamp.timeStartSeconds,
@@ -991,7 +1014,8 @@ class ExportHelper: ObservableObject {
         overlayItems: [OverlayItem],
         videoTrack: AVAssetTrack,
         compositionVideoTrack: AVMutableCompositionTrack,
-        compositionDuration: CMTime
+        compositionDuration: CMTime,
+        clockPlacements: [ClockExportPlacement] = []
     ) -> AVVideoComposition {
         let videoComposition = AVMutableVideoComposition()
 
@@ -1076,6 +1100,14 @@ class ExportHelper: ObservableObject {
                 textLayer.add(opacity.copy() as! CAKeyframeAnimation, forKey: "opacity")
             }
 
+            // Счётчики: тикают по записи разметки, каждый своим куском времени.
+            ClockExportOverlayBuilder.addLayers(
+                placements: clockPlacements,
+                to: parentLayer,
+                renderSize: renderSize,
+                totalDuration: total
+            )
+
             // Логотип клуба — статично на весь клип, поверх текстового оверлея.
             if overlayItems.first?.watermarkOptions.showClubLogo == true,
                let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
@@ -1101,7 +1133,8 @@ class ExportHelper: ObservableObject {
         overlayItem: OverlayItem,
         videoTrack: AVAssetTrack,
         compositionVideoTrack: AVMutableCompositionTrack,
-        compositionDuration: CMTime
+        compositionDuration: CMTime,
+        clockPlacements: [ClockExportPlacement] = []
     ) -> AVVideoComposition {
         let videoComposition = AVMutableVideoComposition()
 
@@ -1164,6 +1197,14 @@ class ExportHelper: ObservableObject {
                 textLayer.displayIfNeeded()
                 parentLayer.addSublayer(textLayer)
             }
+
+            // Счётчики: тикают по записи разметки (в клипе — свой кусок времени).
+            ClockExportOverlayBuilder.addLayers(
+                placements: clockPlacements,
+                to: parentLayer,
+                renderSize: renderSize,
+                totalDuration: CMTimeGetSeconds(compositionDuration)
+            )
 
             // Логотип клуба — статично на весь клип, поверх текстового оверлея.
             if overlayItem.watermarkOptions.showClubLogo,

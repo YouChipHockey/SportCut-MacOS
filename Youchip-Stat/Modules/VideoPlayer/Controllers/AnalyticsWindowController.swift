@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
     init() {
         let view = AnalyticsView()
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.layoutAnalytics
         super.init(window: window)

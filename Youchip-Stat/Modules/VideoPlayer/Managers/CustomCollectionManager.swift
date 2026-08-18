@@ -37,6 +37,8 @@ class CustomCollectionManager: ObservableObject {
     @Published var labelGroups: [LabelGroupData] = []
     @Published var labels: [Label] = []
     @Published var timeEvents: [TimeEvent] = []
+    /// Секундомеры/таймеры коллекции (объекты холста связок).
+    @Published var clocks: [ClockEntity] = []
     @Published var collectionName: String = ^String.Titles.myCollection
     @Published var collectionID: String = UUID().uuidString
     @Published var isEditingExisting: Bool = false
@@ -504,9 +506,10 @@ class CustomCollectionManager: ObservableObject {
             labels: labels,
             timeEvents: timeEvents,
             playField: playField,
-            playFields: playFields.isEmpty ? nil : playFields
+            playFields: playFields.isEmpty ? nil : playFields,
+            clocks: clocks.isEmpty ? nil : clocks
         )
-        
+
         InMemoryStorageManager.shared.saveCollection(collection)
         
         CollectionsBookmarksManager.shared.saveCollection(
@@ -590,6 +593,7 @@ class CustomCollectionManager: ObservableObject {
             self.labels = collection.labels
             self.timeEvents = collection.timeEvents
             self.playFields = collection.playFields ?? collection.playField.map { [$0] } ?? []
+            self.clocks = collection.clocks ?? []
         } else {
             DispatchQueue.main.sync {
                 self.collectionID = collection.id
@@ -601,6 +605,7 @@ class CustomCollectionManager: ObservableObject {
                 self.labels = collection.labels
                 self.timeEvents = collection.timeEvents
                 self.playFields = collection.playFields ?? collection.playField.map { [$0] } ?? []
+                self.clocks = collection.clocks ?? []
             }
         }
         
@@ -636,7 +641,8 @@ class CustomCollectionManager: ObservableObject {
                 labelGroups: data.labelGroups,
                 labels: data.labels,
                 timeEvents: data.timeEvents,
-                playFields: data.playFields ?? (data.playField.map { [$0] } ?? [])
+                playFields: data.playFields ?? (data.playField.map { [$0] } ?? []),
+                clocks: data.clocks ?? []
             )
         }
     }
@@ -650,7 +656,8 @@ class CustomCollectionManager: ObservableObject {
         labelGroups srcLabelGroups: [LabelGroupData],
         labels srcLabels: [Label],
         timeEvents srcTimeEvents: [TimeEvent],
-        playFields srcPlayFields: [PlayField] = []
+        playFields srcPlayFields: [PlayField] = [],
+        clocks srcClocks: [ClockEntity] = []
     ) {
         let copySuffix = NSLocalizedString("CollectionsCopySuffix", comment: "")
         let newName = copySuffix.isEmpty ? name : "\(name) \(copySuffix)"
@@ -664,6 +671,7 @@ class CustomCollectionManager: ObservableObject {
             labels: srcLabels,
             timeEvents: srcTimeEvents,
             playFields: srcPlayFields,
+            clocks: srcClocks,
             layout: nil,
             collectionName: newName
         )
@@ -678,6 +686,7 @@ class CustomCollectionManager: ObservableObject {
         tagGroups = fresh.tagGroups
         timeEvents = fresh.timeEvents
         playFields = fresh.playFields
+        clocks = fresh.clocks
         objectWillChange.send()
     }
     
@@ -1043,6 +1052,35 @@ class CustomCollectionManager: ObservableObject {
     
     func removeTimeEvent(id: String) {
         timeEvents.removeAll { $0.id == id }
+    }
+
+    // MARK: - Секундомеры / таймеры
+
+    @discardableResult
+    func createClock(name: String, mode: ClockMode) -> ClockEntity {
+        let clock = ClockEntity(name: name, mode: mode)
+        clocks.insert(clock, at: 0)
+        return clock
+    }
+
+    func updateClock(_ clock: ClockEntity) {
+        if let idx = clocks.firstIndex(where: { $0.id == clock.id }) {
+            clocks[idx] = clock
+        }
+    }
+
+    func removeClock(id: String) {
+        clocks.removeAll { $0.id == id }
+    }
+
+    @discardableResult
+    func duplicateClock(id: String, nameSuffix: String) -> ClockEntity? {
+        guard let src = clocks.first(where: { $0.id == id }) else { return nil }
+        var copy = src
+        copy.id = UUID().uuidString
+        copy.name = src.name + nameSuffix
+        clocks.insert(copy, at: 0)
+        return copy
     }
     
     func isHotkeyAssigned(_ hotkey: String?) -> Bool {

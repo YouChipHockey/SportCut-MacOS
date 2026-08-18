@@ -28,7 +28,7 @@ final class ImageEditorWindowManager {
             onClose?()
         })
 
-        let hosting = NSHostingController(rootView: editor)
+        let hosting = FirstMouseHostingController(rootView: editor)
         let window = NSWindow(contentViewController: hosting)
         window.title = ImageEditorProjectsManager.shared.meta(for: projectId)?.name ?? (^String.Titles.mainTabEditor)
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]

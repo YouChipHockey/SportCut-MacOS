@@ -59,19 +59,18 @@ struct FieldMapSelectionView: View {
                             }
                         )
                         .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onEnded { value in
-                                    if value.location.x >= 0 && value.location.x <= imageSize.width &&
-                                        value.location.y >= 0 && value.location.y <= imageSize.height {
-                                        selectedCoordinate = value.location
-                                        normalizedCoordinate = CGPoint(
-                                            x: value.location.x / imageSize.width,
-                                            y: value.location.y / imageSize.height
-                                        )
-                                    }
-                                }
-                        )
+                        // Не жест: он теряет первый клик по неактивному окну — точку пришлось бы
+                        // ставить со второго раза (см. FirstMouseHosting).
+                        .onFirstMouseTap(location: { point in
+                            if point.x >= 0 && point.x <= imageSize.width &&
+                                point.y >= 0 && point.y <= imageSize.height {
+                                selectedCoordinate = point
+                                normalizedCoordinate = CGPoint(
+                                    x: point.x / imageSize.width,
+                                    y: point.y / imageSize.height
+                                )
+                            }
+                        })
                 }
                 .padding()
                 .background(Color.black.opacity(0.05))

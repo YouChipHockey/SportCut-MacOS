@@ -17,7 +17,16 @@ struct TagLibraryView: View {
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @ObservedObject var hotkeyManager = HotKeyManager.shared
     @ObservedObject var videoManager = VideoPlayerManager.shared
-    @ObservedObject var timelineData = TimelineDataManager.shared
+    /// БЕЗ `@ObservedObject` осознанно. Подписка здесь означала полную перестройку этой вьюхи
+    /// (2700+ строк) на КАЖДОЕ добавление/правку штампа — то есть залипание того самого окна,
+    /// в котором пользователь нажимает тег. И она же обесценивала троттлинг ниже: счётчики
+    /// обновлялись раз в 300 мс, а body перестраивался на каждое изменение.
+    ///
+    /// Что нужно от разметки — приходит явными подписками: `$lines` (троттленно, для счётчиков)
+    /// и `$selectedLineID`. Остальные обращения императивные, из обработчиков.
+    /// Добавляешь чтение `lines` в body — заводи `@State` и обновляй его подпиской, иначе
+    /// вернётся ровно эта проблема. См. TASK-007.
+    let timelineData = TimelineDataManager.shared
     @ObservedObject var keyBindingRuntime = KeyBindingRuntimeManager.shared
     @State private var activeCollection: TagCollection = .standard
     @State private var markupMode = MarkupMode.current
@@ -43,6 +52,8 @@ struct TagLibraryView: View {
     @State private var collectionsScrollPosition: CGFloat = 0
     /// Кэш всех карт текущей коллекции. Карта для тега выбирается по `tag.mapFieldId` (иначе первая).
     @State private var cachedPlayFields: (name: String, fields: [PlayField])? = nil
+    /// Секундомеры/таймеры текущей коллекции (для отрисовки на холсте и рантайма).
+    @State private var cachedClocks: [ClockEntity] = []
     
     @State var activeIntervalTags: [ActiveIntervalTag] = []
     /// Время клика по мгновенному тегу до листа лейблов (в live иначе подтверждение сдвигает `currentTime`).
@@ -145,6 +156,13 @@ struct TagLibraryView: View {
         if let collectionBookmarkName = userCollections.first(where: { $0.name == tagLibrary.selectedStandardCollectionName })?.name ?? tagLibrary.standardCollections.first(where: { $0.name == tagLibrary.selectedStandardCollectionName })?.name {
             lastSelectedCollectionName = collectionBookmarkName
             isUserCollectionActive = !tagLibrary.standardCollections.contains { $0.name == collectionBookmarkName }
+            // Коллекция восстановлена из настроек, а не выбрана руками, поэтому `selectCollection`
+            // здесь не проходит — подтягиваем карты и счётчики сами. Без этого `cachedClocks`
+            // оставался пустым до первого ручного переключения коллекции, и счётчики на холсте
+            // не рисовались (и не были зарегистрированы в рантайме).
+            if isUserCollectionActive {
+                cachePlayFieldForCollection(collectionBookmarkName)
+            }
         }
         hotkeyManager.registerHotkeys(from: tagLibrary.tags, for: .standard)
         expandedGroups = Set(tagLibrary.tagGroups.map { $0.id })
@@ -185,10 +203,80 @@ struct TagLibraryView: View {
         .onReceive(timelineData.$lines.throttle(for: .milliseconds(300), scheduler: DispatchQueue.main, latest: true)) { _ in
             self.updateTagCounts()
         }
-        .onChange(of: timelineData.selectedLineID) { _ in
+        // Именно `onReceive`, а не `onChange(of:)`: без подписки на менеджер body этой вьюхи
+        // больше не пересчитывается при смене выбранной линии, а `onChange` сравнивает значения
+        // как раз при пересчёте body — то есть молча перестал бы срабатывать.
+        .onReceive(timelineData.$selectedLineID) { _ in
             self.updateTagCounts()
         }
+        // Один хук на ВСЕ места, где меняется `activeIntervalTags` (старт, стоп, отмена,
+        // финализация при остановке записи) — иначе растущий штамп на таймлайне пришлось бы
+        // синхронизировать в десятке мест и где-нибудь он бы завис навсегда.
+        .onChange(of: intervalRecordingSignature) { _ in
+            syncIntervalRecordingPreview()
+        }
         .simultaneousGesture(tagLibraryMagnificationGesture)
+    }
+
+    /// Слепок активных интервальных записей для `onChange`: `ActiveIntervalTag` не `Equatable`,
+    /// а строки сравниваются как есть.
+    private var intervalRecordingSignature: [String] {
+        activeIntervalTags.map { "\($0.id)|\($0.startTime)" }
+    }
+
+    /// Предел, дальше которого конец штампа не уезжает при расчёте границ.
+    ///
+    /// Вне лайва — длительность видео. В лайве предела нет: «время после» тега указывает в
+    /// ещё не снятое, и обрезать его здесь нельзя — фактический конец и дозапись хвоста
+    /// считает `resolvedFinish` (см. `LiveStampTailManager`). `min(.greatestFiniteMagnitude, x)`
+    /// всегда даёт `x`, то есть в лайве выражения с этим пределом просто отдают желаемое время.
+    private var stampFinishLimit: Double {
+        videoManager.isLiveMode ? .greatestFiniteMagnitude : max(1.0, videoManager.timelineDuration)
+    }
+
+    /// Что реально кладём в штамп сейчас и что осталось дописать.
+    private struct ResolvedStampFinish {
+        let finish: Double
+        /// Конец, до которого штамп нужно дотянуть по мере записи (nil — дотягивать нечего).
+        let tailTarget: Double?
+    }
+
+    /// В лайве видео пишется «прямо сейчас»: хвоста тега (`время после`) на диске ещё нет.
+    /// Кладём в штамп записанное, остальное уходит в дозапись.
+    private func resolvedFinish(start: Double, desired: Double) -> ResolvedStampFinish {
+        guard videoManager.isLiveMode else {
+            return ResolvedStampFinish(finish: min(max(1.0, videoManager.timelineDuration), desired), tailTarget: nil)
+        }
+        let recorded = LiveStreamManager.shared.liveDuration
+        guard desired > recorded + 0.05 else {
+            return ResolvedStampFinish(finish: desired, tailTarget: nil)
+        }
+        // Трансляция уже остановлена — дописывать нечего, остаётся сколько записалось.
+        let target: Double? = LiveStreamManager.shared.isLive ? desired : nil
+        return ResolvedStampFinish(finish: max(start + 0.1, recorded), tailTarget: target)
+    }
+
+    /// Ставит хвост только что добавленного штампа на дозапись. Вызывать сразу после
+    /// `addStampToSelectedLine` — id штампа берётся из `lastAddedStampID`.
+    private func registerLiveTail(_ resolved: ResolvedStampFinish, tag: Tag) {
+        guard let target = resolved.tailTarget, let stampID = timelineData.lastAddedStampID else { return }
+        LiveStampTailManager.shared.register(stampID: stampID, colorHex: tag.color, desiredFinish: target)
+    }
+
+    /// Отдаёт активные записи в стор превью — по ним таймлайн рисует растущие штампы.
+    private func syncIntervalRecordingPreview() {
+        IntervalRecordingPreviewStore.shared.sync(
+            activeIntervalTags.map { active in
+                IntervalRecordingPreviewStore.Item(
+                    id: active.id,
+                    tagId: active.tag.id,
+                    name: active.tag.name,
+                    colorHex: active.tag.color,
+                    // Ровно тот левый край, что получит готовый штамп (см. finishIntervalRecording).
+                    visualStart: max(0, active.startTime - active.tag.defaultTimeBefore)
+                )
+            }
+        )
     }
 
     private var groupedModeBody: some View {
@@ -752,6 +840,9 @@ struct TagLibraryView: View {
             },
             onTimeEventTap: { event in handleCanvasButtonTap(kind: .timeEvent, elementId: event.id) },
             onMapTap: { fieldId, normalized in handleCanvasMapTap(fieldId: fieldId, normalized: normalized) },
+            clocks: cachedClocks,
+            onClockTap: { clock in handleCanvasClockTap(clockId: clock.id) },
+            onResetTap: { kind, elementId in handleCanvasResetTap(kind: kind, elementId: elementId) },
             activeIntervalTags: activeIntervalTags,
             hoveredTagID: hoveredTagID,
             tagCounts: tagCounts,
@@ -985,12 +1076,13 @@ struct TagLibraryView: View {
                                         instantAnchorTime: Double? = nil,
                                         overrideTimeBefore: Double? = nil, overrideTimeAfter: Double? = nil) {
         let anchorTime = instantAnchorTime ?? videoManager.currentTime
-        let videoDuration = max(1.0, videoManager.timelineDuration)
+        let videoDuration = stampFinishLimit
         let timeBefore = overrideTimeBefore ?? tag.defaultTimeBefore
         let timeAfter = overrideTimeAfter ?? tag.defaultTimeAfter
         let startTime = max(0, anchorTime - timeBefore)
-        let finishTime = min(videoDuration, startTime + timeBefore + timeAfter)
-        
+        let resolved = resolvedFinish(start: startTime, desired: min(videoDuration, startTime + timeBefore + timeAfter))
+        let finishTime = resolved.finish
+
         let mapField = cachedMapField(for: tag)
         var fieldPosition: CGPoint? = nil
         if let normalizedCoords = coordinates, let playField = mapField {
@@ -1012,7 +1104,8 @@ struct TagLibraryView: View {
             mapFieldId: fieldPosition != nil ? mapField?.id : nil,
             timeEvents: effectiveTimeEventsForStamp()
         )
-        
+        registerLiveTail(resolved, tag: tag)
+
         VideoMarkupActivityBanner.shared.notifyInstantTagAdded(tagName: tag.name, tagColorHex: tag.color)
         
         DispatchQueue.main.async {
@@ -1043,11 +1136,11 @@ struct TagLibraryView: View {
                                              instantAnchorTime: Double? = nil,
                                              overrideTimeBefore: Double? = nil, overrideTimeAfter: Double? = nil) {
         let anchorTime = instantAnchorTime ?? videoManager.currentTime
-        let videoDuration = max(1.0, videoManager.timelineDuration)
+        let videoDuration = stampFinishLimit
         let timeBefore = overrideTimeBefore ?? tag.defaultTimeBefore
         let timeAfter = overrideTimeAfter ?? tag.defaultTimeAfter
         let startTime = max(0, anchorTime - timeBefore)
-        let finishTime = min(videoDuration, startTime + timeBefore + timeAfter)
+        let resolved = resolvedFinish(start: startTime, desired: min(videoDuration, startTime + timeBefore + timeAfter))
         let tagGroupId = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.id) })?.id ?? ""
         let events = effectiveTimeEventsForStamp()
         let positions = mapPositions(fields: fields, normalizedByField: normalizedByField)
@@ -1057,12 +1150,13 @@ struct TagLibraryView: View {
             primaryId: tag.primaryID,
             name: tag.name,
             timeStartSeconds: startTime,
-            timeFinishSeconds: finishTime,
+            timeFinishSeconds: resolved.finish,
             color: tag.color,
             labels: selectedLabels,
             mapPositions: positions,
             timeEvents: events
         )
+        registerLiveTail(resolved, tag: tag)
 
         VideoMarkupActivityBanner.shared.notifyInstantTagAdded(tagName: tag.name, tagColorHex: tag.color)
         DispatchQueue.main.async { self.updateTagCounts() }
@@ -1075,18 +1169,20 @@ struct TagLibraryView: View {
         let tagGroupId = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.id) })?.id ?? ""
         let events = effectiveTimeEventsForStamp()
         let positions = mapPositions(fields: fields, normalizedByField: normalizedByField)
+        let resolved = resolvedFinish(start: timeStartSeconds, desired: timeFinishSeconds)
 
         timelineData.addStampToSelectedLine(
             tagRefs: [StampTagRef(id: tag.id, tagGroupId: tagGroupId)],
             primaryId: tag.primaryID,
             name: tag.name,
             timeStartSeconds: timeStartSeconds,
-            timeFinishSeconds: timeFinishSeconds,
+            timeFinishSeconds: resolved.finish,
             color: tag.color,
             labels: selectedLabels,
             mapPositions: positions,
             timeEvents: events
         )
+        registerLiveTail(resolved, tag: tag)
 
         VideoMarkupActivityBanner.shared.completeIntervalRecording(tagName: tag.name, tagColorHex: tag.color)
         DispatchQueue.main.async { self.updateTagCounts() }
@@ -1121,7 +1217,7 @@ struct TagLibraryView: View {
                                         selectedLabels: fullLabels
                                     )
                                 } else if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
-                                    let videoDuration = max(1.0, videoManager.timelineDuration)
+                                    let videoDuration = stampFinishLimit
                                     let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                     let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                     let timeStart = min(start, end)
@@ -1152,6 +1248,9 @@ struct TagLibraryView: View {
                             pendingIntervalClosureRange = nil
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
+                                // Штампа не будет — убираем и превью, и пустую дорожку,
+                                // если она заводилась только ради этой записи.
+                                IntervalRecordingPreviewStore.shared.cancelRecording(tagId: tag.id)
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                 VideoMarkupActivityBanner.shared.cancelIntervalRecording(tagName: tag.name)
                             }
@@ -1163,7 +1262,7 @@ struct TagLibraryView: View {
                             .onAppear {
                                 if tag.isInterval == true {
                                     if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
-                                        let videoDuration = max(1.0, videoManager.timelineDuration)
+                                        let videoDuration = stampFinishLimit
                                         let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                         let timeStart = min(start, end)
@@ -1218,7 +1317,7 @@ struct TagLibraryView: View {
                                         selectedLabels: fullLabels
                                     )
                                 } else if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
-                                    let videoDuration = max(1.0, videoManager.timelineDuration)
+                                    let videoDuration = stampFinishLimit
                                     let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                     let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                     let timeStart = min(start, end)
@@ -1249,6 +1348,9 @@ struct TagLibraryView: View {
                             pendingIntervalClosureRange = nil
                             self.videoManager.player?.play()
                             if let tag = selectedTag, tag.isInterval == true {
+                                // Штампа не будет — убираем и превью, и пустую дорожку,
+                                // если она заводилась только ради этой записи.
+                                IntervalRecordingPreviewStore.shared.cancelRecording(tagId: tag.id)
                                 activeIntervalTags.removeAll { $0.tag.id == tag.id }
                                 VideoMarkupActivityBanner.shared.cancelIntervalRecording(tagName: tag.name)
                             }
@@ -1260,7 +1362,7 @@ struct TagLibraryView: View {
                             .onAppear {
                                 if tag.isInterval == true {
                                     if let firstActiveTag = activeIntervalTags.first(where: { $0.tag.id == tag.id }) {
-                                        let videoDuration = max(1.0, videoManager.timelineDuration)
+                                        let videoDuration = stampFinishLimit
                                         let start = max(0, firstActiveTag.startTime - tag.defaultTimeBefore)
                                         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                                         let timeStart = min(start, end)
@@ -1374,7 +1476,7 @@ struct TagLibraryView: View {
                     if tag.isInterval ?? false {
                         if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                             let activeTag = activeIntervalTags[index]
-                            let videoDuration = max(1.0, videoManager.timelineDuration)
+                            let videoDuration = stampFinishLimit
                             let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
                             let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                             let timeStart = min(start, end)
@@ -1423,6 +1525,8 @@ struct TagLibraryView: View {
                 .sink { [self] notification in
                     if let isActive = notification.object as? Bool {
                         isEditorModeActive = isActive
+                        // Ушли в редактор — счётчики на паузу (в фоне не тикают).
+                        if isActive { ClockRuntimeManager.shared.pauseAll() }
                     }
                 }
         )
@@ -1454,6 +1558,15 @@ struct TagLibraryView: View {
                 }
         )
         notificationSubscriptions.store(
+            // Удалили дорожку, в которую писался интервальный тег — запись обрываем.
+            NotificationCenter.default.publisher(for: .timelineLineRemoved)
+                .receive(on: DispatchQueue.main)
+                .sink { [self] notification in
+                    guard let removed = notification.object as? RemovedTimelineLine else { return }
+                    abortIntervalRecordings(forRemovedLine: removed)
+                }
+        )
+        notificationSubscriptions.store(
             // Открыли редактор коллекций из разметки — закрываем все интервальные теги,
             // чтобы они не «писались» дальше, пока правится коллекция.
             NotificationCenter.default.publisher(for: .collectionEditorOpened)
@@ -1464,13 +1577,43 @@ struct TagLibraryView: View {
         )
     }
 
+    /// Обрывает интервальные записи, которым больше некуда лечь: их дорожку удалили.
+    /// Штамп не создаётся — записи просто не стало (как при «Отмене» в листе лейблов).
+    ///
+    /// - `tagBased`: дорожка привязана к тегу (`tagIdForMode`) — гасим записи этого тега.
+    /// - `standard`: штамп всегда идёт в ВЫБРАННУЮ дорожку, поэтому её удаление обрывает
+    ///   все открытые записи (`selectedLineID` при этом обнуляется, и штамп бы не сохранился).
+    private func abortIntervalRecordings(forRemovedLine removed: RemovedTimelineLine) {
+        guard !activeIntervalTags.isEmpty else { return }
+        let isTagBased = (markupMode == .tagBased)
+        let doomed = activeIntervalTags.filter { active in
+            isTagBased ? (active.tag.id == removed.tagIdForMode) : removed.wasSelected
+        }
+        guard !doomed.isEmpty else { return }
+
+        let doomedIDs = Set(doomed.map(\.id))
+        activeIntervalTags.removeAll { doomedIDs.contains($0.id) }
+
+        for active in doomed {
+            KeyBindingLog.log("интервал '\(active.tag.name)' оборван: дорожку удалили ✖︎")
+            IntervalRecordingPreviewStore.shared.cancelRecording(tagId: active.tag.id)
+            VideoMarkupActivityBanner.shared.cancelIntervalRecording(tagName: active.tag.name)
+        }
+
+        // Если ждали лейблы по закрытию оборванного интервала — лист уже не о чем.
+        if let tag = selectedTag, doomed.contains(where: { $0.tag.id == tag.id }) {
+            pendingIntervalClosureRange = nil
+            showLabelSheet = false
+        }
+    }
+
     /// Закрывает все открытые интервальные теги по текущему времени записи и пишет
     /// их на таймлайн. Вызывается при завершении записи с камеры — иначе теги
     /// «пишутся» дальше и не сохраняются.
     private func finalizeAllActiveIntervalTags() {
         guard !activeIntervalTags.isEmpty else { return }
 
-        let videoDuration = max(1.0, videoManager.timelineDuration)
+        let videoDuration = stampFinishLimit
         let stopTime = videoManager.currentTime
 
         // Забираем и очищаем список сразу, чтобы UI сбросил состояние «идёт запись».
@@ -1495,6 +1638,9 @@ struct TagLibraryView: View {
     private func onDisappearCleanup() {
         updateTimer?.invalidate()
         updateTimer = nil
+        // Окно разметки закрыли — растущих штампов на таймлайне быть не должно.
+        IntervalRecordingPreviewStore.shared.reset()
+        LiveStampTailManager.shared.reset()
     }
     
     func loadUserCollection(_ collection: CollectionBookmark) {
@@ -1545,7 +1691,11 @@ struct TagLibraryView: View {
                         if !collectionManager.playFields.isEmpty {
                             self.cachedPlayFields = (name: collection.name, fields: collectionManager.playFields)
                         }
-                        
+
+                        // Секундомеры/таймеры коллекции + регистрация в рантайме.
+                        self.cachedClocks = collectionManager.clocks
+                        ClockRuntimeManager.shared.register(collectionManager.clocks)
+
                         self.updateTagCounts()
                         self.expandedGroups = Set(self.tagLibrary.tagGroups.map { $0.id })
                         self.tagLibrary.objectWillChange.send()
@@ -1563,6 +1713,8 @@ struct TagLibraryView: View {
                         self.tagLibrary.currentCollectionType = .standard
                         HotKeyManager.shared.clearHotkeys()
                         self.cachedPlayFields = nil
+                        self.cachedClocks = []
+                        ClockRuntimeManager.shared.register([])
                     }
                 }
             }
@@ -1573,12 +1725,16 @@ struct TagLibraryView: View {
     private func cachePlayFieldForCollection(_ collectionName: String) {
         DispatchQueue.global(qos: .userInitiated).async {
             let collectionManager = CustomCollectionManager()
-            if collectionManager.loadCollectionFromBookmarks(named: collectionName),
-               !collectionManager.playFields.isEmpty {
-                let fields = collectionManager.playFields
-                DispatchQueue.main.async {
+            guard collectionManager.loadCollectionFromBookmarks(named: collectionName) else { return }
+            let fields = collectionManager.playFields
+            let clocks = collectionManager.clocks
+            DispatchQueue.main.async {
+                if !fields.isEmpty {
                     self.cachedPlayFields = (name: collectionName, fields: fields)
                 }
+                // Счётчики коллекции для холста библиотеки + регистрация в рантайме.
+                self.cachedClocks = clocks
+                ClockRuntimeManager.shared.register(clocks)
             }
         }
     }
@@ -1597,7 +1753,7 @@ struct TagLibraryView: View {
         if tag.isInterval ?? false {
             if let index = activeIntervalTags.firstIndex(where: { $0.tag.id == tag.id }) {
                 let activeTag = activeIntervalTags[index]
-                let videoDuration = max(1.0, videoManager.timelineDuration)
+                let videoDuration = stampFinishLimit
                 let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
                 let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
                 let timeStart = min(start, end)
@@ -1696,20 +1852,22 @@ struct TagLibraryView: View {
         }
 
         let tagGroupId = tagLibrary.allTagGroups.first(where: { $0.tags.contains(tag.id) })?.id ?? ""
+        let resolved = resolvedFinish(start: timeStartSeconds, desired: timeFinishSeconds)
 
         timelineData.addStampToSelectedLine(
             tagRefs: [StampTagRef(id: tag.id, tagGroupId: tagGroupId)],
             primaryId: tag.primaryID,
             name: tag.name,
             timeStartSeconds: timeStartSeconds,
-            timeFinishSeconds: timeFinishSeconds,
+            timeFinishSeconds: resolved.finish,
             color: tag.color,
             labels: selectedLabels,
             position: fieldPosition,
             mapFieldId: fieldPosition != nil ? mapField?.id : nil,
             timeEvents: effectiveTimeEventsForStamp()
         )
-        
+        registerLiveTail(resolved, tag: tag)
+
         VideoMarkupActivityBanner.shared.completeIntervalRecording(tagName: tag.name, tagColorHex: tag.color)
         
         DispatchQueue.main.async {
@@ -1819,6 +1977,11 @@ struct TagLibraryView: View {
 
         let labelId = label.id
 
+        // Ctrl+ЛКМ — жест «сброс»: обнуляет счётчики, связанные с кнопкой связкой сброса.
+        if isResetModifierPressed, keyBindingRuntime.handleResetTap(kind: .label, elementId: labelId) {
+            return
+        }
+
         if commandPressed {
             if keyBindingRuntime.isLabelActivated(labelId) {
                 keyBindingRuntime.deactivateLabel(id: labelId)
@@ -1844,12 +2007,33 @@ struct TagLibraryView: View {
         tagLibrary.findTagById(id)
     }
 
+    /// Зажат ли модификатор жеста «сброс» (Ctrl) в момент обработки нажатия.
+    private var isResetModifierPressed: Bool {
+        NSEvent.modifierFlags.contains(.control)
+    }
+
+    /// Жест «сброс»: Ctrl+ЛКМ или ПКМ по кнопке холста. Отрабатывают ТОЛЬКО связки сброса этой
+    /// кнопки — обычное действие (добавление тега, старт счётчика) не выполняется.
+    /// Повторный вызов безвреден: сброс идемпотентен, поэтому дублирующая проверка модификатора
+    /// в обычных обработчиках нажатия оставлена как страховка.
+    private func handleCanvasResetTap(kind: CanvasButtonKind, elementId: String) {
+        guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
+        prepareRuntimeForTap()
+        keyBindingRuntime.handleResetTap(kind: kind, elementId: elementId)
+    }
+
     private func handleCanvasButtonTap(kind: CanvasButtonKind, elementId: String) {
         guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
 
         prepareRuntimeForTap()
 
         if kind == .label {
+            return
+        }
+
+        // Ctrl+ЛКМ по тегу (или другой кнопке) — только связки сброса: счётчики обнуляются,
+        // тег на таймлайн не добавляется.
+        if isResetModifierPressed, keyBindingRuntime.handleResetTap(kind: kind, elementId: elementId) {
             return
         }
 
@@ -1871,7 +2055,8 @@ struct TagLibraryView: View {
         if isIntervalTag {
             let isStopping = activeIntervalTags.contains(where: { $0.tag.id == tag.id })
             if isStopping {
-                keyBindingRuntime.applyExclusiveOnTagDeactivation(tagId: elementId)
+                // Повторное нажатие по активному тегу — просто выключение: связки (в т.ч.
+                // эксклюзивные) не отрабатываем, партнёр остаётся как есть.
                 // Гасим подсветку лейблов, поднятую этим тегом при старте записи.
                 keyBindingRuntime.clearHighlightIfOriginatedFromTag(elementId)
             } else {
@@ -1935,7 +2120,7 @@ struct TagLibraryView: View {
         let activeTag = activeIntervalTags[index]
         let tag = activeTag.tag
         KeyBindingLog.log("finishIntervalRecording '\(tag.name)' ■")
-        let videoDuration = max(1.0, videoManager.timelineDuration)
+        let videoDuration = stampFinishLimit
         let start = max(0, activeTag.startTime - tag.defaultTimeBefore)
         let end = min(videoDuration, videoManager.currentTime + tag.defaultTimeAfter)
         let timeStart = min(start, end)
@@ -2014,6 +2199,23 @@ struct TagLibraryView: View {
         guard isKeyBindingsCanvasMode, !isEditorModeActive else { return }
         prepareRuntimeForTap()
         keyBindingRuntime.handleMapTap(mapId: fieldId, normalized: normalized)
+    }
+
+    // MARK: - Счётчики на холсте (секундомер / таймер)
+
+    /// Клик по счётчику: старт/стоп + его цепочка связок (через движок, как у интервального тега).
+    /// Вне режима связок (или в редакторе) просто тоглим счётчик — цепочки там всё равно нет.
+    private func handleCanvasClockTap(clockId: String) {
+        guard isKeyBindingsCanvasMode, !isEditorModeActive else {
+            ClockRuntimeManager.shared.toggle(clockId)
+            return
+        }
+        prepareRuntimeForTap()
+        // Ctrl+ЛКМ по самому счётчику: сначала его связки сброса (если их нет — обычный старт/стоп).
+        if isResetModifierPressed, keyBindingRuntime.handleResetTap(kind: .clock, elementId: clockId) {
+            return
+        }
+        keyBindingRuntime.handleClockTap(clockId: clockId)
     }
 
     /// Ставит позицию на карте нужному тегу-штампу (логика выбора штампа — как у лейблов).
@@ -2169,6 +2371,17 @@ struct TagLibraryView: View {
         }
         keyBindingRuntime.isIntervalTagActive = { [self] tagId in
             activeIntervalTags.contains(where: { $0.tag.id == tagId })
+        }
+        // Счётчики: состояния вьюхи не трогают, поэтому колбэки идут прямо в ClockRuntimeManager.
+        keyBindingRuntime.onStartClock = { clockId in ClockRuntimeManager.shared.start(clockId) }
+        keyBindingRuntime.onStopClock = { clockId in ClockRuntimeManager.shared.stop(clockId) }
+        // Сброс всегда и останавливает счётчик: сбрасывают именно чтобы «обнулить и начать заново».
+        keyBindingRuntime.onResetClock = { clockId in ClockRuntimeManager.shared.stopAndReset(clockId) }
+        keyBindingRuntime.isClockActive = { clockId in ClockRuntimeManager.shared.isActive(clockId) }
+        // Таймер дошёл до нуля с включённым «запускать связки» — счётчик становится источником цепочки.
+        ClockRuntimeManager.shared.onReachedZero = { clockId in
+            KeyBindingLog.log("счётчик \(clockId) достиг нуля → запускаю его связки")
+            KeyBindingRuntimeManager.shared.applyOutgoingBindingsAfterSourceAdded(kind: .clock, elementId: clockId)
         }
         keyBindingRuntime.onAttachLabelsToAnchor = { [self] anchorTagId, labelIds, onDone in
             attachLabelsToAnchorStamp(anchorTagId: anchorTagId, labelIds: labelIds)
@@ -2391,6 +2604,7 @@ struct TagButtonView: View, Equatable {
         }
         .buttonStyle(.plain)
         .onHover(perform: onHover)
+        .pointingHandCursor()
     }
 }
 

@@ -20,6 +20,9 @@ extension NSNotification.Name {
     static let collectionEditorClosed = NSNotification.Name("collectionEditorClosed")
     static let markupModeChanged = NSNotification.Name("markupModeChanged")
     static let stampCountsChanged = NSNotification.Name("stampCountsChanged")
+    /// Разметка проекта записана на диск. userInfo: "videoId" (String), "timelines" ([TimelineLine]).
+    /// Слушает режим просмотра — чтобы таблица/таймлайны сессии всегда показывали свежую разметку.
+    static let projectTimelinesDidChange = NSNotification.Name("projectTimelinesDidChange")
     static let timelineStampHoverChanged = NSNotification.Name("timelineStampHoverChanged")
     static let editorModeChanged = NSNotification.Name("editorModeChanged")
     static let editorEnterKeyPressed = NSNotification.Name("editorEnterKeyPressed")
@@ -44,6 +47,9 @@ extension NSNotification.Name {
     static let videoIdDidChange = NSNotification.Name("videoIdDidChange")
     /// Запись с камеры завершается — открытые интервальные теги нужно закрыть по текущему времени.
     static let liveRecordingWillStop = NSNotification.Name("liveRecordingWillStop")
+    /// Дорожку таймлайна удалили. object = `RemovedTimelineLine`. Слушает `TagLibraryView`:
+    /// интервальные теги, которые писались в эту дорожку, надо оборвать.
+    static let timelineLineRemoved = NSNotification.Name("timelineLineRemoved")
     
     // MARK: - Tools Menu Commands (macOS menu bar)
     static let toolsExportMarkupJSONFull = NSNotification.Name("toolsExportMarkupJSONFull")
@@ -65,6 +71,15 @@ extension NSNotification.Name {
     static let keyBindingEscPressed = NSNotification.Name("keyBindingEscPressed")
     /// Нажатие горячей клавиши подсветки (object = highlightHotkey String).
     static let keyBindingHighlightHotkey = NSNotification.Name("keyBindingHighlightHotkey")
+}
+
+/// Payload удаления дорожки таймлайна (`.timelineLineRemoved`).
+/// `wasSelected` важен для режима `standard`: там интервальный тег пишется в ВЫБРАННУЮ
+/// дорожку, и её удаление обрывает запись, даже если id дорожки в теге нигде не хранится.
+struct RemovedTimelineLine {
+    let lineID: UUID
+    let tagIdForMode: String
+    let wasSelected: Bool
 }
 
 /// Payload для открытия редактора из таймлайна (ПКМ по иконке рисунка → Редактировать).

@@ -370,33 +370,70 @@ enum TimelineDisplayMode: String, CaseIterable {
 class TimelineFilter: ObservableObject {
     @Published var selectedTags: Set<String> = []
     @Published var selectedLabels: Set<String> = []
+    /// Нормализованные имена выбранных лейблов (см. `labelKey`). У одного и того же лейбла
+    /// в разных проектах разные id (id коллекций разводятся при импорте, у Label нет сквозного
+    /// `primaryID`), поэтому между разметками лейблы сшиваются по имени. Логика внутри
+    /// категории — «ИЛИ»: событие проходит, если у него есть хотя бы один из выбранных лейблов.
+    @Published var selectedLabelNames: Set<String> = []
     @Published var selectedEvents: Set<String> = []
     @Published var isFilterActive: Bool = false
-    
+
+    /// Поиск по клипам: текст запроса (для отображения) и набор id штампов, оставленных на
+    /// таймлайне/в таблице. `nil` — поиск по клипам не применён (все проходят). Слой независим
+    /// от категорийного фильтра (тег/лейбл/событие) и комбинируется с ним по «И».
+    /// Результат поиска сгруппирован по тегам (см. ClipSearch), но применяется по id штампов —
+    /// так «остаются только клипы с Ивановым» точно, включая совпадения по лейблу/событию.
+    @Published var searchQuery: String = ""
+    @Published var searchAllowedStampIDs: Set<UUID>? = nil
+
+    /// Ключ сопоставления лейблов между проектами.
+    static func labelKey(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     func clearFilters() {
         selectedTags.removeAll()
         selectedLabels.removeAll()
+        selectedLabelNames.removeAll()
         selectedEvents.removeAll()
+        searchQuery = ""
+        searchAllowedStampIDs = nil
         isFilterActive = false
     }
-    
-    func hasActiveFilters() -> Bool {
-        return !selectedTags.isEmpty || !selectedLabels.isEmpty || !selectedEvents.isEmpty
+
+    /// Категорийный фильтр (теги/лейблы/события) — без учёта поиска по клипам.
+    func hasCategoryFilters() -> Bool {
+        return !selectedTags.isEmpty || !selectedLabels.isEmpty || !selectedLabelNames.isEmpty || !selectedEvents.isEmpty
     }
-    
+
+    func hasActiveFilters() -> Bool {
+        return hasCategoryFilters() || searchAllowedStampIDs != nil
+    }
+
     func matches(stamp: TimelineStamp) -> Bool {
-        if !isFilterActive || !hasActiveFilters() {
+        // Поиск по клипам — независимый слой поверх категорийного фильтра.
+        if let allowed = searchAllowedStampIDs, !allowed.contains(stamp.id) {
+            return false
+        }
+
+        if !hasCategoryFilters() {
             return true
         }
-        
+
         if !selectedTags.isEmpty && selectedTags.isDisjoint(with: stamp.idTags) {
             return false
         }
-        
-        if !selectedLabels.isEmpty && selectedLabels.isDisjoint(with: stamp.labelIDs) {
-            return false
+
+        if !selectedLabels.isEmpty || !selectedLabelNames.isEmpty {
+            let matchesByID = !selectedLabels.isEmpty && !selectedLabels.isDisjoint(with: stamp.labelIDs)
+            let matchesByName = !selectedLabelNames.isEmpty && stamp.labels.contains {
+                selectedLabelNames.contains(Self.labelKey($0.name))
+            }
+            if !matchesByID && !matchesByName {
+                return false
+            }
         }
-        
+
         if !selectedEvents.isEmpty && selectedEvents.isDisjoint(with: stamp.timeEvents) {
             return false
         }

@@ -1936,7 +1936,25 @@ struct ScreenshotConstants {
     static var screenshotsGroupName: String { ^String.Titles.drawingsTimelineName }
 }
 
+// MARK: - Clock Timeline Constants
+
+/// Скрытый таймлайн счётчиков: секундомеры/таймеры пишутся туда отрезками, как интервальные теги,
+/// но пользователю линия по умолчанию не показывается (⌘⌃0 — показать/скрыть). Отдельная линия с
+/// фиксированным id — тот же приём, что у таймлайна рисунков.
+struct ClockTimelineConstants {
+    static let clocksTimelineID = UUID(uuidString: "00000000-0000-0000-0000-000000000229")!
+    static let clocksGroupID = "clocks_group_id_unique_229"
+    static var clocksTimelineName: String { ^String.Titles.clockTimelineName }
+    /// Цвет штампов счётчиков на таймлайне.
+    static let stampColorHex = "5AC8FA"
+}
+
 extension TimelineLine {
     var isDrawingsTimeline: Bool { id == ScreenshotConstants.screenshotsTimelineID }
+    /// Скрытая линия счётчиков — служебная, как и линия рисунков: не участвует в аналитике,
+    /// экспорте разметки и слиянии проектов.
+    var isClocksTimeline: Bool { id == ClockTimelineConstants.clocksTimelineID }
+    /// Служебная линия (не пользовательская разметка тегами).
+    var isServiceTimeline: Bool { isDrawingsTimeline || isClocksTimeline }
 }
 

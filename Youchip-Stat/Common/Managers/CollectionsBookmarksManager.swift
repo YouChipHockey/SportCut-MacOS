@@ -568,6 +568,7 @@ class CollectionsBookmarksManager {
             labels: data.labels,
             timeEvents: data.timeEvents,
             playFields: sourceFields,
+            clocks: data.clocks ?? [],
             layout: sourceLayout,
             collectionName: newName
         )
@@ -580,7 +581,8 @@ class CollectionsBookmarksManager {
             labels: fresh.labels,
             timeEvents: fresh.timeEvents,
             playField: fresh.playFields.first,
-            playFields: fresh.playFields.isEmpty ? nil : fresh.playFields
+            playFields: fresh.playFields.isEmpty ? nil : fresh.playFields,
+            clocks: fresh.clocks.isEmpty ? nil : fresh.clocks
         )
         InMemoryStorageManager.shared.saveCollection(newData)
         // Папку скопировали целиком, поэтому в ней лежит tagLayout.json со СТАРЫМИ id — перезаписываем.

@@ -74,6 +74,24 @@ final class TagFreeLayoutEditorSession: ObservableObject {
     }
 }
 
+/// Достаёт окно, в котором живёт холст: монитор клавиатуры должен реагировать только на события
+/// своего окна, иначе редактор в фоне перехватывает ⌘C/⌘V у активного окна.
+private struct CanvasWindowAccessor: NSViewRepresentable {
+    @Binding var window: NSWindow?
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async { self.window = view.window }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            if self.window !== nsView.window { self.window = nsView.window }
+        }
+    }
+}
+
 // MARK: - Embeddable editor content
 
 struct TagFreeLayoutEditorContent: View {
@@ -85,6 +103,7 @@ struct TagFreeLayoutEditorContent: View {
     let labels: [Label]
     let timeEvents: [TimeEvent]
     var playFields: [PlayField] = []
+    var clocks: [ClockEntity] = []
     var pane: TagFreeLayoutEditorPane = .full
     var showsModePicker: Bool = true
     /// Панель настроек растягивается по ширине (иначе фиксированные 340pt).
@@ -133,6 +152,11 @@ struct TagFreeLayoutEditorContent: View {
     @State private var hoverInViewport: CGPoint? = nil
     @State private var panOffset: CGSize = .zero
     @State private var scrollMonitor: Any? = nil
+    /// Буфер кнопок — наблюдаемый, иначе пункт «Вставить» не появляется после копирования.
+    @ObservedObject private var clipboard = CanvasButtonClipboard.shared
+    /// Монитор ⌘/⌃+C, ⌘/⌃+V и Delete. Работает только пока окно этого холста ключевое.
+    @State private var keyMonitor: Any? = nil
+    @State private var hostWindow: NSWindow? = nil
     // Автопанорама к только что созданному элементу (тег/лейбл/событие/карта). Новые элементы
     // кладутся ПОД существующими и оказываются за краем — камеру двигаем так, чтобы новый был по центру.
     @State private var lastKnownItemIds: Set<String> = []
@@ -258,6 +282,7 @@ struct TagFreeLayoutEditorContent: View {
                     .onAppear {
                         viewportSize = geo.size
                         installScrollMonitor()
+                        installKeyMonitor()
                         // Базовый набор элементов — чтобы стартовые добавления не считались «новыми».
                         lastKnownItemIds = Set(layout.items.map(\.id))
                         // Взводим автопанораму чуть позже, когда стартовая нормализация уже отработала.
@@ -273,10 +298,16 @@ struct TagFreeLayoutEditorContent: View {
                             height: geo.size.height / 2 - (content.midY - origin.y) * z
                         )
                     }
-                    .onDisappear { removeScrollMonitor() }
+                    .onDisappear {
+                        removeScrollMonitor()
+                        removeKeyMonitor()
+                    }
+                    .background(CanvasWindowAccessor(window: $hostWindow))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)
+        // Пустое место холста: правый клик — вставка скопированных кнопок.
+        .contextMenu { canvasBackgroundContextMenu }
         // Перетаскивание карты-картинки из Finder прямо на холст.
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in handleMapDrop(providers) }
         // Ползунок масштаба холста.
@@ -417,6 +448,55 @@ struct TagFreeLayoutEditorContent: View {
         if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
     }
 
+    // MARK: - Клавиатура холста (копировать / вставить / убрать)
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            handleCanvasKeyDown(event) ? nil : event
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+    }
+
+    /// true — событие наше, дальше его не пускаем.
+    private func handleCanvasKeyDown(_ event: NSEvent) -> Bool {
+        // Монитор локальный, но общий для приложения: реагируем только на события окна этого
+        // холста, иначе редактор в фоне съедал бы ⌘C/⌘V у активного окна.
+        guard let host = hostWindow, event.window === host else { return false }
+        guard session.editorMode == .layout else { return false }
+        // Идёт ввод текста (имя коллекции, поля панели) — клавиши не наши.
+        if let responder = host.firstResponder {
+            if responder is NSTextField { return false }
+            if let textView = responder as? NSTextView, textView.isFieldEditor { return false }
+        }
+
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // ⌃ — как просили, ⌘ — привычный маковский вариант.
+        let isCopyModifier = mods.contains(.command) || mods.contains(.control)
+        let key = event.charactersIgnoringModifiers?.lowercased()
+
+        if isCopyModifier, key == "c" || event.keyCode == 8 {
+            guard !session.selectedItemIds.isEmpty else { return false }
+            copySelectedButtons()
+            return true
+        }
+        if isCopyModifier, key == "v" || event.keyCode == 9 {
+            guard onDuplicateElement != nil, clipboard.hasContent else { return false }
+            pasteButtons()
+            return true
+        }
+        // Delete / Backspace — убрать выделенные кнопки с холста.
+        if mods.isEmpty, event.keyCode == 51 || event.keyCode == 117 {
+            guard !removableItemIds(in: session.selectedItemIds).isEmpty else { return false }
+            removeSelectedFromCanvas()
+            return true
+        }
+        return false
+    }
+
     /// Обрабатывает перетаскивание файла-изображения на холст → создаёт карту и кладёт её.
     private func handleMapDrop(_ providers: [NSItemProvider]) -> Bool {
         guard session.editorMode == .layout, let create = onCreatePlayFieldFromURL,
@@ -540,6 +620,7 @@ struct TagFreeLayoutEditorContent: View {
             ForEach(layout.items) { item in
                 itemView(item: item, scale: scale)
                     .position(x: (item.center.x - origin.x) * scale, y: (item.center.y - origin.y) * scale)
+                    .zIndex(editorZIndex(for: item))
             }
 
             // Общий bounding box выделения с ручками размера/поворота (поверх кнопок).
@@ -560,6 +641,40 @@ struct TagFreeLayoutEditorContent: View {
         }
         .frame(width: canvasPixelWidth, height: canvasPixelHeight, alignment: .topLeading)
         .coordinateSpace(name: "canvas")
+        // Объект мог исчезнуть не через холст (удалили сущность в левом столбце) — тогда в выделении
+        // остаётся мёртвый id: рамка висит над пустым местом и её можно таскать.
+        .onChange(of: layout.items.count) { _ in pruneSelectionToExistingItems() }
+    }
+
+    /// Порядок слоёв объектов на холсте редактора — тот же, что в библиотеке (`FreeTagsCanvasView`).
+    ///
+    /// Без него порядок определялся позицией в массиве: карта, добавленная последней, ложилась
+    /// ПОВЕРХ кнопок и перехватывала клики по всей своей рамке — со стороны это выглядело так,
+    /// будто она «ловит нажатия дальше своих границ» (на самом деле — по кнопкам, попавшим на неё).
+    /// Карта — фон-зона под кнопками; выделенный объект поднимаем, чтобы его нельзя было потерять.
+    private func editorZIndex(for item: TagFreeLayoutItem) -> Double {
+        if session.selectedItemIds.contains(item.id) || session.selectedItemId == item.id { return 100 }
+        switch item.kind {
+        case .map:       return 1
+        case .tag:       return 10
+        case .timeEvent: return 20
+        case .clock:     return 25
+        case .label:     return 30
+        }
+    }
+
+    /// Выкидывает из выделения id, которым больше не соответствует ни один объект холста.
+    private func pruneSelectionToExistingItems() {
+        let existing = Set(layout.items.map(\.id))
+        if let selected = session.selectedItemId, !existing.contains(selected) {
+            session.selectedItemId = nil
+        }
+        if !session.selectedItemIds.isSubset(of: existing) {
+            session.selectedItemIds.formIntersection(existing)
+        }
+        if let source = session.bindingSourceId, !existing.contains(source) {
+            session.bindingSourceId = nil
+        }
     }
 
     /// Прямоугольник рамки выделения в пиксельных координатах холста (для отрисовки).
@@ -650,6 +765,7 @@ struct TagFreeLayoutEditorContent: View {
             case .label:     return labels.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             case .timeEvent: return timeEvents.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             case .map:       return playFields.first(where: { $0.id == item.elementId })?.name ?? item.elementId
+            case .clock:     return clocks.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             }
         }()
 
@@ -665,6 +781,8 @@ struct TagFreeLayoutEditorContent: View {
                 return Color(hex: hex).opacity(item.fillOpacity)
             case .map:
                 return Color(NSColor.controlBackgroundColor).opacity(0.4)
+            case .clock:
+                return Color.clear   // счётчику фон не нужен — рисуем только сам циферблат
             }
         }()
 
@@ -699,17 +817,35 @@ struct TagFreeLayoutEditorContent: View {
                                 .clipShape(TagFreeShapeView(shape: item.shape, cornerRadius: cr))
                         } else if item.kind == .map {
                             Image(systemName: "map").font(.system(size: 24 * scale)).foregroundColor(.secondary)
+                        } else if item.kind == .clock, let clock = clocks.first(where: { $0.id == item.elementId }) {
+                            ClockDisplayView(
+                                seconds: clock.mode == .timer ? clock.initialSeconds : 0,
+                                appearance: clock.appearance,
+                                showCentiseconds: clock.showCentiseconds,
+                                style: ClockStyle(
+                                    foreground: item.textColor.map { Color(hex: $0) } ?? .white,
+                                    accent: .accentColor,
+                                    cellBackground: Color.black.opacity(0.55),
+                                    fontWeight: swiftWeight
+                                ),
+                                caption: clock.caption
+                            )
+                            .frame(width: viewSize.width, height: viewSize.height)
+                            .padding(4 * scale)
                         } else if let bm = item.backgroundImageBookmark, let img = PlayFieldImageCache.shared.image(forBookmark: bm) {
                             Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
                                 .frame(width: viewSize.width, height: viewSize.height)
                                 .clipShape(TagFreeShapeView(shape: item.shape, cornerRadius: cr))
                         }
                     }
+                    // Картинка с `.fill` вылезает за рамку объекта; нажатия должны идти только по
+                    // самой кнопке (её `contentShape` ниже), иначе карта ловит клики за своими краями.
+                    .allowsHitTesting(false)
                 )
-                // Подпись поверх — только если включена.
+                // Подпись поверх — только если включена (у карты и счётчика своя отрисовка).
                 .overlay(
                     Group {
-                        if item.kind != .map, item.showLabel {
+                        if item.kind != .map, item.kind != .clock, item.showLabel {
                             Text(displayName)
                                 .font(.system(size: item.fontSize * scale, weight: swiftWeight))
                                 .foregroundColor(textCol)
@@ -888,42 +1024,73 @@ struct TagFreeLayoutEditorContent: View {
                 }
             }
         } else {
-            // Layout mode
-            Button(^String.Titles.keyBindingsCopyAll) {
-                // Если элемент вне выделения — копируем его одного.
-                if !session.selectedItemIds.contains(item.id) {
-                    session.selectedItemIds = [item.id]
-                    session.selectedItemId = item.id
-                }
+            // Layout mode: действия идут по всему выделению, а не только по кнопке под курсором.
+            let targets = contextTargets(for: item)
+            Button(String(format: ^String.Titles.canvasCopyButtons, targets.count)) {
+                selectForContext(item)
                 copySelectedButtons()
             }
-            if onDuplicateElement != nil, CanvasButtonClipboard.shared.hasContent {
-                Button(^String.Titles.keyBindingsPaste) { pasteButtons() }
+            if onDuplicateElement != nil, clipboard.hasContent {
+                Button(String(format: ^String.Titles.canvasPasteButtons, clipboard.items.count)) {
+                    pasteButtons()
+                }
             }
             if let onExport = onExportSelected {
                 Divider()
                 Button(^String.Titles.keyBindingsExportSelected) {
-                    if !session.selectedItemIds.contains(item.id) {
-                        session.selectedItemIds = [item.id]
-                        session.selectedItemId = item.id
-                    }
+                    selectForContext(item)
                     onExport(session.selectedItemIds)
                 }
             }
-            if item.kind == .label || item.kind == .timeEvent || item.kind == .map {
-                Button(^String.Titles.keyBindingsRemoveFromCanvas) {
-                    removePaletteItem(item: item)
+            let removable = removableItemIds(in: targets)
+            if !removable.isEmpty {
+                Divider()
+                Button(String(format: ^String.Titles.canvasRemoveFromCanvas, removable.count), role: .destructive) {
+                    selectForContext(item)
+                    removeSelectedFromCanvas()
                 }
             }
         }
     }
 
-    private func removePaletteItem(item: TagFreeLayoutItem) {
-        layout.items.removeAll { $0.id == item.id }
-        // Remove bindings involving this item
-        layout.bindings.removeAll { $0.sourceButtonKey == item.id || $0.targetButtonKey == item.id }
-        if session.selectedItemId == item.id { session.selectedItemId = nil }
-        session.selectedItemIds.remove(item.id)
+    /// Меню на пустом месте холста — чтобы скопированные кнопки было куда вставлять.
+    @ViewBuilder
+    private var canvasBackgroundContextMenu: some View {
+        if session.editorMode == .layout, onDuplicateElement != nil, clipboard.hasContent {
+            Button(String(format: ^String.Titles.canvasPasteButtons, clipboard.items.count)) {
+                pasteButtons()
+            }
+        }
+    }
+
+    /// Правый клик по кнопке вне выделения работает как выбор её одной.
+    private func contextTargets(for item: TagFreeLayoutItem) -> Set<String> {
+        session.selectedItemIds.contains(item.id) ? session.selectedItemIds : [item.id]
+    }
+
+    private func selectForContext(_ item: TagFreeLayoutItem) {
+        guard !session.selectedItemIds.contains(item.id) else { return }
+        session.selectedItemIds = [item.id]
+        session.selectedItemId = item.id
+    }
+
+    /// Кнопки, которые реально можно убрать с холста. Теги не убираем: нормализация раскладки
+    /// возвращает их обратно (у каждого тега коллекции всегда есть кнопка).
+    private func removableItemIds(in ids: Set<String>) -> Set<String> {
+        Set(layout.items.filter { ids.contains($0.id) && $0.kind != .tag }.map { $0.id })
+    }
+
+    /// Убирает с холста ВСЕ выделенные кнопки (раньше удалялась только одна — та, по которой
+    /// кликнули) вместе с их связками.
+    private func removeSelectedFromCanvas() {
+        let ids = removableItemIds(in: session.selectedItemIds)
+        guard !ids.isEmpty else { return }
+        layout.items.removeAll { ids.contains($0.id) }
+        layout.bindings.removeAll { ids.contains($0.sourceButtonKey) || ids.contains($0.targetButtonKey) }
+        session.selectedItemIds.subtract(ids)
+        if let selected = session.selectedItemId, ids.contains(selected) {
+            session.selectedItemId = session.selectedItemIds.first
+        }
     }
 
     // MARK: - Handles
@@ -1173,6 +1340,7 @@ struct TagFreeLayoutEditorContent: View {
                 labels: labels,
                 timeEvents: timeEvents,
                 playFields: playFields,
+                clocks: clocks,
                 selectedGroupKey: session.selectedGroupKey,
                 focusedSourceKey: session.bindingSourceId,
                 onAddLabel: addLabelToCanvas,
@@ -1190,13 +1358,13 @@ struct TagFreeLayoutEditorContent: View {
     private var layoutModeSettingsPanel: some View {
         ScrollView {
             VStack(spacing: 0) {
-                if session.selectedItemIds.count > 1, let kind = homogeneousSelectedKind {
-                    batchItemSettings(kind: kind)
+                if session.selectedItemIds.count > 1 {
+                    // Внешний вид правится батчем и для смешанного выделения (теги + лейблы):
+                    // поля у всех кнопок общие, вид (kind) влияет только на заголовок и цвет тега.
+                    batchItemSettings(kind: homogeneousSelectedKind)
                 } else if let itemId = session.selectedItemId,
                    let index = layout.items.firstIndex(where: { $0.id == itemId }) {
                     selectedItemSettings(index: index)
-                } else if session.selectedItemIds.count > 1 {
-                    mixedSelectionNote
                 } else {
                     canvasSettings
                 }
@@ -1216,20 +1384,25 @@ struct TagFreeLayoutEditorContent: View {
         return kinds.count == 1 ? kinds.first : nil
     }
 
-    /// Смешанное выделение (теги + лейблы) — батч-настройки внешнего вида недоступны.
-    private var mixedSelectionNote: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("\(session.selectedItemIds.count)").font(.headline)
-                Text(^String.Titles.freeLayoutSelectElement).font(.caption).foregroundColor(.secondary)
-                Spacer()
-                Button(action: { session.selectedItemId = nil; session.selectedItemIds = [] }) {
-                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
-                }.buttonStyle(.plain)
-            }
-            .padding(.top, 4)
-            Divider()
-            copyPasteButtons
+    /// Заголовок батч-панели: «3 Теги» для однородного выделения, «2 Теги + 1 Лейблы» для смешанного.
+    private var batchSelectionTitle: String {
+        let selected = layout.items.filter { session.selectedItemIds.contains($0.id) }
+        let order: [CanvasButtonKind] = [.tag, .label, .timeEvent, .map]
+        let parts = order.compactMap { kind -> String? in
+            let count = selected.filter { $0.kind == kind }.count
+            guard count > 0 else { return nil }
+            return "\(count) \(kindTitle(kind))"
+        }
+        return parts.joined(separator: " + ")
+    }
+
+    private func kindTitle(_ kind: CanvasButtonKind) -> String {
+        switch kind {
+        case .tag:       return ^String.Titles.tags
+        case .label:     return ^String.Titles.labels
+        case .timeEvent: return ^String.Titles.commonEvents
+        case .map:       return ^String.Titles.map
+        case .clock:     return ^String.Titles.clockCountersTitle
         }
     }
 
@@ -1317,11 +1490,13 @@ struct TagFreeLayoutEditorContent: View {
         )
     }
 
-    private func batchItemSettings(kind: CanvasButtonKind) -> some View {
+    /// `kind` = nil — выделены элементы разных видов; настройки внешнего вида применяются ко всем.
+    private func batchItemSettings(kind: CanvasButtonKind?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: itemIcon(for: kind)).foregroundColor(.secondary).frame(width: 14)
-                Text("\(session.selectedItemIds.count) \(kind == .tag ? ^String.Titles.tags : (kind == .label ? ^String.Titles.labels : ^String.Titles.commonEvents))")
+                Image(systemName: kind.map(itemIcon(for:)) ?? "square.on.square")
+                    .foregroundColor(.secondary).frame(width: 14)
+                Text(batchSelectionTitle)
                     .font(.headline).lineLimit(1)
                 Spacer()
                 Button(action: { session.selectedItemId = nil; session.selectedItemIds = [] }) {
@@ -1333,13 +1508,25 @@ struct TagFreeLayoutEditorContent: View {
             Divider()
             copyPasteButtons
 
+            // Удаление всего выделения (теги остаются: их кнопки восстанавливает нормализация).
+            let removableSelected = removableItemIds(in: session.selectedItemIds)
+            if !removableSelected.isEmpty {
+                Button(role: .destructive, action: removeSelectedFromCanvas) {
+                    SwiftUI.Label(String(format: ^String.Titles.canvasRemoveFromCanvas, removableSelected.count),
+                                  systemImage: "trash")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+            }
+
             Divider()
             sectionHeader(^String.Titles.keyBindingsVisibilitySection)
             Toggle(^String.Titles.keyBindingsItemVisible,
                    isOn: batchBinding(\.isVisible, default: true)).font(.caption)
 
-            // Цвет самой кнопки-тега (меняет цвет тега в коллекции). Для лейблов недоступно.
-            if kind == .tag, onSetTagsColor != nil {
+            // Цвет самой кнопки-тега (меняет цвет тега в коллекции). Для лейблов недоступно —
+            // в смешанном выделении применяется только к выделенным тегам.
+            if !selectedTagElementIds.isEmpty, onSetTagsColor != nil {
                 Divider()
                 sectionHeader(^String.Titles.freeLayoutSectionFill)
                 HStack {
@@ -1347,7 +1534,8 @@ struct TagFreeLayoutEditorContent: View {
                     Spacer()
                     ColorPicker("", selection: Binding(
                         get: {
-                            let hex = tags.first(where: { $0.id == primarySelectedElementId })?.color ?? "808080"
+                            guard let firstTagId = selectedTagElementIds.first else { return Color(hex: "808080") }
+                            let hex = tags.first(where: { $0.id == firstTagId })?.color ?? "808080"
                             return Color(hex: hex)
                         },
                         set: { newColor in
@@ -1444,14 +1632,6 @@ struct TagFreeLayoutEditorContent: View {
 
     // MARK: - Copy / paste buttons
 
-    /// elementId первичной выделенной кнопки.
-    private var primarySelectedElementId: String {
-        if let id = session.selectedItemId, let item = layout.items.first(where: { $0.id == id }) {
-            return item.elementId
-        }
-        return layout.items.first(where: { session.selectedItemIds.contains($0.id) })?.elementId ?? ""
-    }
-
     /// elementId выделенных тегов.
     private var selectedTagElementIds: [String] {
         layout.items.filter { session.selectedItemIds.contains($0.id) && $0.kind == .tag }.map { $0.elementId }
@@ -1462,17 +1642,19 @@ struct TagFreeLayoutEditorContent: View {
         let canDuplicate = onDuplicateElement != nil
         HStack(spacing: 6) {
             Button(action: copySelectedButtons) {
-                SwiftUI.Label(^String.Titles.keyBindingsCopyAll, systemImage: "doc.on.doc").font(.caption)
+                SwiftUI.Label(String(format: ^String.Titles.canvasCopyButtons, session.selectedItemIds.count),
+                              systemImage: "doc.on.doc").font(.caption)
             }
             .buttonStyle(.bordered)
             .disabled(session.selectedItemIds.isEmpty)
 
             if canDuplicate {
                 Button(action: pasteButtons) {
-                    SwiftUI.Label(^String.Titles.keyBindingsPaste, systemImage: "doc.on.clipboard").font(.caption)
+                    SwiftUI.Label(String(format: ^String.Titles.canvasPasteButtons, clipboard.items.count),
+                                  systemImage: "doc.on.clipboard").font(.caption)
                 }
                 .buttonStyle(.bordered)
-                .disabled(!CanvasButtonClipboard.shared.hasContent)
+                .disabled(!clipboard.hasContent)
             }
         }
     }
@@ -1486,10 +1668,10 @@ struct TagFreeLayoutEditorContent: View {
 
     /// Вставляет кнопки из буфера: дублирует сущности в коллекции, кладёт новые кнопки со смещением, без связок.
     private func pasteButtons() {
-        guard let duplicate = onDuplicateElement, CanvasButtonClipboard.shared.hasContent else { return }
+        guard let duplicate = onDuplicateElement, clipboard.hasContent else { return }
         let offset: CGFloat = 30
         var newIds = Set<String>()
-        for source in CanvasButtonClipboard.shared.items {
+        for source in clipboard.items {
             guard let newElementId = duplicate(source.kind, source.elementId) else { continue }
             var newItem = source
             newItem.elementId = newElementId
@@ -1516,6 +1698,7 @@ struct TagFreeLayoutEditorContent: View {
             case .label:     return labels.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             case .timeEvent: return timeEvents.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             case .map:       return playFields.first(where: { $0.id == item.elementId })?.name ?? item.elementId
+            case .clock:     return clocks.first(where: { $0.id == item.elementId })?.name ?? item.elementId
             }
         }()
 
@@ -1532,103 +1715,115 @@ struct TagFreeLayoutEditorContent: View {
             .padding(.top, 4)
 
             Divider()
+            copyPasteButtons
+
+            Divider()
 
             // Visibility toggle
             sectionHeader(^String.Titles.keyBindingsVisibilitySection)
             Toggle(^String.Titles.keyBindingsItemVisible, isOn: binding.isVisible)
                 .font(.caption)
 
-            Divider()
-
-            // Shape picker
-            sectionHeader(^String.Titles.freeLayoutSectionShape)
-            shapePickerGrid(binding: binding)
-
-            Divider()
-
-            // Fill
-            sectionHeader(^String.Titles.freeLayoutSectionFill)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(^String.Titles.freeLayoutOpacity).font(.caption)
-                    Spacer()
-                    Text("\(Int(binding.fillOpacity.wrappedValue * 100))%").font(.caption).foregroundColor(.secondary)
-                }
-                Slider(value: binding.fillOpacity, in: 0...1, step: 0.05)
-                HStack(spacing: 4) {
-                    Button(^String.Titles.freeLayoutTransparent) { binding.fillOpacity.wrappedValue = 0 }
-                        .font(.caption2).buttonStyle(.bordered)
-                    Button(^String.Titles.freeLayoutOpaque) { binding.fillOpacity.wrappedValue = 1 }
-                        .font(.caption2).buttonStyle(.bordered)
-                }
-            }
-
-            // Фон-картинка (только для тегов/лейблов; у карты фон — сама карта).
-            if item.kind != .map {
+            // У счётчика оформление своё (вариант циферблата, сотые и т.д.) — в его параметрах.
+            // Общие «внешние» секции ему не подходят: фон/подпись/обводку он не рисует.
+            if item.kind == .clock {
                 Divider()
-                sectionHeader(^String.Titles.freeLayoutBackgroundImage)
-                HStack(spacing: 6) {
-                    Button(item.backgroundImageBookmark == nil ? ^String.Titles.freeLayoutChooseImage : ^String.Titles.freeLayoutReplaceImage) {
-                        pickBackgroundImage(binding: binding)
+                Text(^String.Titles.clockAppearanceInOwnSettings)
+                    .font(.caption).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Divider()
+
+                // Shape picker
+                sectionHeader(^String.Titles.freeLayoutSectionShape)
+                shapePickerGrid(binding: binding)
+
+                Divider()
+
+                // Fill
+                sectionHeader(^String.Titles.freeLayoutSectionFill)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(^String.Titles.freeLayoutOpacity).font(.caption)
+                        Spacer()
+                        Text("\(Int(binding.fillOpacity.wrappedValue * 100))%").font(.caption).foregroundColor(.secondary)
                     }
-                    .font(.caption2).buttonStyle(.bordered)
-                    if item.backgroundImageBookmark != nil {
-                        Button(^String.Titles.reset) { binding.backgroundImageBookmark.wrappedValue = nil }
+                    Slider(value: binding.fillOpacity, in: 0...1, step: 0.05)
+                    HStack(spacing: 4) {
+                        Button(^String.Titles.freeLayoutTransparent) { binding.fillOpacity.wrappedValue = 0 }
+                            .font(.caption2).buttonStyle(.bordered)
+                        Button(^String.Titles.freeLayoutOpaque) { binding.fillOpacity.wrappedValue = 1 }
                             .font(.caption2).buttonStyle(.bordered)
                     }
                 }
-            }
 
-            Divider()
-
-            // Stroke
-            sectionHeader(^String.Titles.freeLayoutSectionStroke)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(^String.Titles.freeLayoutColor).font(.caption)
-                    Spacer()
-                    ColorPicker("", selection: Binding(
-                        get: { binding.strokeColor.wrappedValue.map { Color(hex: $0) } ?? Color.black.opacity(0.3) },
-                        set: { binding.strokeColor.wrappedValue = $0.toHex() ?? "000000" }
-                    )).frame(width: 40, height: 24)
+                // Фон-картинка (только для тегов/лейблов; у карты фон — сама карта).
+                if item.kind != .map {
+                    Divider()
+                    sectionHeader(^String.Titles.freeLayoutBackgroundImage)
+                    HStack(spacing: 6) {
+                        Button(item.backgroundImageBookmark == nil ? ^String.Titles.freeLayoutChooseImage : ^String.Titles.freeLayoutReplaceImage) {
+                            pickBackgroundImage(binding: binding)
+                        }
+                        .font(.caption2).buttonStyle(.bordered)
+                        if item.backgroundImageBookmark != nil {
+                            Button(^String.Titles.reset) { binding.backgroundImageBookmark.wrappedValue = nil }
+                                .font(.caption2).buttonStyle(.bordered)
+                        }
+                    }
                 }
-                HStack {
-                    Text(^String.Titles.freeLayoutThickness).font(.caption)
-                    Spacer()
-                    Text("\(Int(binding.strokeWidth.wrappedValue))pt").font(.caption).foregroundColor(.secondary)
-                    Stepper("", value: binding.strokeWidth, in: 0...10, step: 1).labelsHidden()
-                }
-                HStack(spacing: 4) {
-                    strokeStyleButton(label: ^String.Titles.freeLayoutStrokeSolid, dashed: false, binding: binding.strokeDashed)
-                    strokeStyleButton(label: ^String.Titles.freeLayoutStrokeDashed, dashed: true, binding: binding.strokeDashed)
-                }
-            }
 
-            Divider()
+                Divider()
 
-            // Text
-            sectionHeader(^String.Titles.freeLayoutSectionText)
-            VStack(alignment: .leading, spacing: 6) {
-                Toggle(^String.Titles.freeLayoutShowLabel, isOn: binding.showLabel)
-                if binding.showLabel.wrappedValue {
+                // Stroke
+                sectionHeader(^String.Titles.freeLayoutSectionStroke)
+                VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(^String.Titles.freeLayoutColor).font(.caption)
                         Spacer()
                         ColorPicker("", selection: Binding(
-                            get: { binding.textColor.wrappedValue.map { Color(hex: $0) } ?? Color.white },
-                            set: { binding.textColor.wrappedValue = $0.toHex() ?? "FFFFFF" }
+                            get: { binding.strokeColor.wrappedValue.map { Color(hex: $0) } ?? Color.black.opacity(0.3) },
+                            set: { binding.strokeColor.wrappedValue = $0.toHex() ?? "000000" }
                         )).frame(width: 40, height: 24)
                     }
                     HStack {
-                        Text(^String.Titles.freeLayoutFontSize).font(.caption)
+                        Text(^String.Titles.freeLayoutThickness).font(.caption)
                         Spacer()
-                        Text("\(Int(binding.fontSize.wrappedValue))pt").font(.caption).foregroundColor(.secondary)
-                        Stepper("", value: binding.fontSize, in: 8...32, step: 1).labelsHidden()
+                        Text("\(Int(binding.strokeWidth.wrappedValue))pt").font(.caption).foregroundColor(.secondary)
+                        Stepper("", value: binding.strokeWidth, in: 0...10, step: 1).labelsHidden()
                     }
-                    HStack(spacing: 3) {
-                        fontWeightButton(label: "R", weight: .regular, binding: binding.fontWeight)
-                        fontWeightButton(label: "M", weight: .medium, binding: binding.fontWeight)
-                        fontWeightButton(label: "B", weight: .bold, binding: binding.fontWeight)
+                    HStack(spacing: 4) {
+                        strokeStyleButton(label: ^String.Titles.freeLayoutStrokeSolid, dashed: false, binding: binding.strokeDashed)
+                        strokeStyleButton(label: ^String.Titles.freeLayoutStrokeDashed, dashed: true, binding: binding.strokeDashed)
+                    }
+                }
+
+                Divider()
+
+                // Text
+                sectionHeader(^String.Titles.freeLayoutSectionText)
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle(^String.Titles.freeLayoutShowLabel, isOn: binding.showLabel)
+                    if binding.showLabel.wrappedValue {
+                        HStack {
+                            Text(^String.Titles.freeLayoutColor).font(.caption)
+                            Spacer()
+                            ColorPicker("", selection: Binding(
+                                get: { binding.textColor.wrappedValue.map { Color(hex: $0) } ?? Color.white },
+                                set: { binding.textColor.wrappedValue = $0.toHex() ?? "FFFFFF" }
+                            )).frame(width: 40, height: 24)
+                        }
+                        HStack {
+                            Text(^String.Titles.freeLayoutFontSize).font(.caption)
+                            Spacer()
+                            Text("\(Int(binding.fontSize.wrappedValue))pt").font(.caption).foregroundColor(.secondary)
+                            Stepper("", value: binding.fontSize, in: 8...32, step: 1).labelsHidden()
+                        }
+                        HStack(spacing: 3) {
+                            fontWeightButton(label: "R", weight: .regular, binding: binding.fontWeight)
+                            fontWeightButton(label: "M", weight: .medium, binding: binding.fontWeight)
+                            fontWeightButton(label: "B", weight: .bold, binding: binding.fontWeight)
+                        }
                     }
                 }
             }
@@ -1638,7 +1833,7 @@ struct TagFreeLayoutEditorContent: View {
             // Geometry
             sectionHeader(^String.Titles.freeLayoutSectionGeometry)
             VStack(alignment: .leading, spacing: 6) {
-                if binding.shape.wrappedValue == .square {
+                if item.kind != .clock, binding.shape.wrappedValue == .square {
                     HStack {
                         Text(^String.Titles.freeLayoutCornerRadius).font(.caption)
                         Spacer()
@@ -1667,19 +1862,21 @@ struct TagFreeLayoutEditorContent: View {
                 }
             }
 
-            Divider()
+            if item.kind != .clock {
+                Divider()
 
-            // Shadow
-            sectionHeader(^String.Titles.freeLayoutSectionShadow)
-            VStack(alignment: .leading, spacing: 6) {
-                Toggle(^String.Titles.freeLayoutShadowEnabled, isOn: binding.shadowEnabled)
-                if binding.shadowEnabled.wrappedValue {
-                    HStack {
-                        Text(^String.Titles.freeLayoutShadowIntensity).font(.caption)
-                        Spacer()
-                        Text("\(Int(binding.shadowIntensity.wrappedValue * 100))%").font(.caption).foregroundColor(.secondary)
+                // Shadow
+                sectionHeader(^String.Titles.freeLayoutSectionShadow)
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle(^String.Titles.freeLayoutShadowEnabled, isOn: binding.shadowEnabled)
+                    if binding.shadowEnabled.wrappedValue {
+                        HStack {
+                            Text(^String.Titles.freeLayoutShadowIntensity).font(.caption)
+                            Spacer()
+                            Text("\(Int(binding.shadowIntensity.wrappedValue * 100))%").font(.caption).foregroundColor(.secondary)
+                        }
+                        Slider(value: binding.shadowIntensity, in: 0...1, step: 0.05)
                     }
-                    Slider(value: binding.shadowIntensity, in: 0...1, step: 0.05)
                 }
             }
 
@@ -1718,9 +1915,14 @@ struct TagFreeLayoutEditorContent: View {
             Divider()
 
             // Remove palette item from canvas
-            if item.kind == .label || item.kind == .timeEvent || item.kind == .map {
-                Button(role: .destructive, action: { removePaletteItem(item: item) }) {
-                    SwiftUI.Label(^String.Titles.keyBindingsRemoveFromCanvas, systemImage: "trash")
+            let removableHere = removableItemIds(in: contextTargets(for: item))
+            if !removableHere.isEmpty {
+                Button(role: .destructive, action: {
+                    selectForContext(item)
+                    removeSelectedFromCanvas()
+                }) {
+                    SwiftUI.Label(String(format: ^String.Titles.canvasRemoveFromCanvas, removableHere.count),
+                                  systemImage: "trash")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
@@ -1754,7 +1956,12 @@ struct TagFreeLayoutEditorContent: View {
         case .label:     return "textformat"
         case .timeEvent: return "clock"
         case .map:       return "map"
+        case .clock:     return "stopwatch"
         }
+    }
+
+    func addClockToCanvas(_ clock: ClockEntity) {
+        TagFreeLayoutStorage.addClockToLayout(&layout, clock: clock)
     }
 
     // MARK: - Panel helpers

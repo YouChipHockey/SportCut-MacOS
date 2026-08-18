@@ -11,7 +11,7 @@ import Combine
 class ScreenshotsMetadataManager: ObservableObject {
     static let shared = ScreenshotsMetadataManager()
     
-    @Published var screenshots: [ScreenshotMetadata] = []
+    @Published var screenshots: [ScreenshotMetadata] = [] { didSet { rebuildStampIndex() } }
     private(set) var currentScreenshotsFolder: URL?
 
     /// Имена (без расширения) скриншотов, у которых на диске реально лежит PNG.
@@ -25,7 +25,29 @@ class ScreenshotsMetadataManager: ObservableObject {
     /// обращения к диску не появляется.
     private(set) var existingImageBaseNames: Set<String> = []
 
+    /// id штампа → имена привязанных к нему скриншотов.
+    ///
+    /// Нужен для проверки «это тег рисунка?» в контекстном меню штампа
+    /// (`TimelineLineView.menuForTag`). Раньше там на КАЖДЫЙ штамп шёл перебор всех скриншотов
+    /// с `relatedStampIds.contains`, а меню строится вместе с телом вьюхи. См. TASK-007, 3.4.
+    private var screenshotNamesByStampID: [UUID: Set<String>] = [:]
+
     private init() {}
+
+    /// Привязан ли к штампу скриншот с таким именем — то есть является ли штамп «тегом рисунка».
+    func hasScreenshot(named name: String, relatedTo stampID: UUID) -> Bool {
+        screenshotNamesByStampID[stampID]?.contains(name) ?? false
+    }
+
+    private func rebuildStampIndex() {
+        var index: [UUID: Set<String>] = [:]
+        for screenshot in screenshots {
+            for stampID in screenshot.relatedStampIds {
+                index[stampID, default: []].insert(screenshot.screenshotName)
+            }
+        }
+        screenshotNamesByStampID = index
+    }
 
     /// Есть ли на диске картинка для этой метаданной. Дешёвая проверка по кэшу — звать из `body` можно.
     func hasImageFile(for screenshot: ScreenshotMetadata) -> Bool {

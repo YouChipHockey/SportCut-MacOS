@@ -30,7 +30,7 @@ final class MirroredVideoWindowController: NSWindowController, NSWindowDelegate 
             rootView = AnyView(MirrorSportCutVideoContentView(playerManager: playerManager))
         }
         
-        let hosting = NSHostingController(rootView: rootView)
+        let hosting = FirstMouseHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hosting)
         window.title = ^String.Titles.videoMirrorWindowTitle
         window.tabbingMode = .disallowed

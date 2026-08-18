@@ -992,8 +992,8 @@ class VideoPlayerViewModel: ObservableObject {
         
         let timelineData = TimelineDataManager.shared
         for line in timelineData.lines {
-            // Исключаем таймлайн «Рисунки»
-            if line.id == ScreenshotConstants.screenshotsTimelineID { continue }
+            // Исключаем служебные таймлайны («Рисунки», счётчики)
+            if line.isServiceTimeline { continue }
             for stamp in line.stamps {
                 if videoTime >= stamp.timeStartSeconds && videoTime <= stamp.timeFinishSeconds {
                     // Исключаем тег, если его название совпадает с именем рисунка
@@ -1325,7 +1325,7 @@ class VideoPlayerViewModel: ObservableObject {
         let editorView = EditorView()
             .environmentObject(editorViewModel)
         
-        let hostingController = NSHostingController(rootView: editorView)
+        let hostingController = FirstMouseHostingController(rootView: editorView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.editScreenshot
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
@@ -1339,7 +1339,7 @@ class VideoPlayerViewModel: ObservableObject {
         let polygonEditorView = PolygonEditorView()
             .environmentObject(polygonEditorViewModel)
         
-        let hostingController = NSHostingController(rootView: polygonEditorView)
+        let hostingController = FirstMouseHostingController(rootView: polygonEditorView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "polygonEditorTitle"
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]

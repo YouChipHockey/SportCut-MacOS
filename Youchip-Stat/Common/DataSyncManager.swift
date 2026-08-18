@@ -813,48 +813,55 @@ class DataSyncManager {
     
     // MARK: - Private Methods - Restore
     
-    private func restoreCollections() {
-        guard fileManager.fileExists(atPath: backupCollectionsDirectory.path) else {
-            print("⚠️ DataSync: Collections backup not found")
+    /// Восстановление — это ВОСПОЛНЕНИЕ недостающего, а не откат к бэкапу.
+    ///
+    /// Раньше здесь сносилась вся живая папка и на её место копировалась папка из бэкапа.
+    /// Бэкап пишется по таймеру и легко оказывается старее (а то и пустым — так у нас и было:
+    /// `YouChip-Stat-Backup/YouChip-Stat/Collections` пустовала месяцами). В паре с тем, что
+    /// «есть расхождения» определялось по одной лишь дате плиста, это и давало «после
+    /// обновления коллекции/разметка откатились»: терялись любые правки, сделанные после
+    /// последнего бэкапа, — в том числе флаг `isInterval` у тегов. Поэтому копируем только то,
+    /// чего на месте нет, и никогда ничего не удаляем. См. vault/tasks TASK-008.
+    private func restoreMissingItems(from backupDir: URL, to liveDir: URL, label: String) {
+        guard fileManager.fileExists(atPath: backupDir.path) else {
+            print("⚠️ DataSync: \(label) backup not found")
             return
         }
-        
+
         do {
-            let parentDir = collectionsDirectory.deletingLastPathComponent()
-            fileManager.createDirectoryIfNeeded(url: parentDir)
-            
-            if fileManager.fileExists(atPath: collectionsDirectory.path) {
-                try fileManager.removeItem(at: collectionsDirectory)
+            let backupItems = try fileManager.contentsOfDirectory(
+                at: backupDir,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+            guard !backupItems.isEmpty else {
+                print("⚠️ DataSync: \(label) backup is empty, nothing to restore")
+                return
             }
-            
-            try fileManager.copyItem(at: backupCollectionsDirectory, to: collectionsDirectory)
-            print("✅ DataSync: Collections restored from backup")
+
+            fileManager.createDirectoryIfNeeded(url: liveDir)
+
+            var restored = 0
+            for item in backupItems {
+                let destination = liveDir.appendingPathComponent(item.lastPathComponent)
+                // Живой элемент всегда авторитетнее: он мог быть изменён уже после бэкапа.
+                guard !fileManager.fileExists(atPath: destination.path) else { continue }
+                try fileManager.copyItem(at: item, to: destination)
+                restored += 1
+            }
+            print("✅ DataSync: \(label) restored from backup (added \(restored) of \(backupItems.count))")
         } catch {
-            print("❌ DataSync: Error restoring collections - \(error.localizedDescription)")
+            print("❌ DataSync: Error restoring \(label) - \(error.localizedDescription)")
         }
     }
-    
+
+    private func restoreCollections() {
+        restoreMissingItems(from: backupCollectionsDirectory, to: collectionsDirectory, label: "Collections")
+    }
+
     private func restoreTimelines() {
         let backupTimelinesDir = backupDirectory.appendingPathComponent("Timelines", isDirectory: true)
-        
-        guard fileManager.fileExists(atPath: backupTimelinesDir.path) else {
-            print("⚠️ DataSync: Timelines backup not found")
-            return
-        }
-        
-        do {
-            let parentDir = timelinesDirectory.deletingLastPathComponent()
-            fileManager.createDirectoryIfNeeded(url: parentDir)
-            
-            if fileManager.fileExists(atPath: timelinesDirectory.path) {
-                try fileManager.removeItem(at: timelinesDirectory)
-            }
-            
-            try fileManager.copyItem(at: backupTimelinesDir, to: timelinesDirectory)
-            print("✅ DataSync: Timelines restored from backup")
-        } catch {
-            print("❌ DataSync: Error restoring timelines - \(error.localizedDescription)")
-        }
+        restoreMissingItems(from: backupTimelinesDir, to: timelinesDirectory, label: "Timelines")
     }
     
     private var collectionsBookmarksFile: URL {
@@ -889,14 +896,17 @@ class DataSyncManager {
             return
         }
         
+        // Живой список коллекций не трогаем: он описывает то, что есть на диске сейчас,
+        // а бэкап может быть старее (и тогда часть коллекций просто исчезнет из интерфейса).
+        guard !fileManager.fileExists(atPath: collectionsBookmarksFile.path) else {
+            print("✅ DataSync: CollectionsBookmarks.json exists, keeping the live one")
+            return
+        }
+
         do {
             let parentDir = collectionsBookmarksFile.deletingLastPathComponent()
             fileManager.createDirectoryIfNeeded(url: parentDir)
-            
-            if fileManager.fileExists(atPath: collectionsBookmarksFile.path) {
-                try fileManager.removeItem(at: collectionsBookmarksFile)
-            }
-            
+
             try fileManager.copyItem(at: backupFile, to: collectionsBookmarksFile)
             print("✅ DataSync: CollectionsBookmarks.json restored from backup")
         } catch {
@@ -905,24 +915,7 @@ class DataSyncManager {
     }
     
     private func restorePlayFields() {
-        guard fileManager.fileExists(atPath: backupPlayFieldsDirectory.path) else {
-            print("⚠️ DataSync: PlayFields backup not found")
-            return
-        }
-        
-        do {
-            let parentDir = playFieldsDirectory.deletingLastPathComponent()
-            fileManager.createDirectoryIfNeeded(url: parentDir)
-            
-            if fileManager.fileExists(atPath: playFieldsDirectory.path) {
-                try fileManager.removeItem(at: playFieldsDirectory)
-            }
-            
-            try fileManager.copyItem(at: backupPlayFieldsDirectory, to: playFieldsDirectory)
-            print("✅ DataSync: PlayFields restored from backup")
-        } catch {
-            print("❌ DataSync: Error restoring PlayFields - \(error.localizedDescription)")
-        }
+        restoreMissingItems(from: backupPlayFieldsDirectory, to: playFieldsDirectory, label: "PlayFields")
     }
     
     private func restoreUserDefaults() {
@@ -936,16 +929,20 @@ class DataSyncManager {
         do {
             let data = try Data(contentsOf: backupFile)
             if let backupData = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
-                
-                if let videosData = backupData[videosDataKey] as? Data {
+
+                // Только восполняем пустое. Затирать живые ключи бэкапом нельзя: бэкап пишется
+                // по таймеру и почти всегда старее — так терялись видео и список коллекций.
+                if UserDefaults.standard.data(forKey: videosDataKey) == nil,
+                   let videosData = backupData[videosDataKey] as? Data {
                     UserDefaults.standard.set(videosData, forKey: videosDataKey)
                 }
-                
-                if let collectionsData = backupData[collectionsBookmarksKey] as? Data {
+
+                if UserDefaults.standard.data(forKey: collectionsBookmarksKey) == nil,
+                   let collectionsData = backupData[collectionsBookmarksKey] as? Data {
                     UserDefaults.standard.set(collectionsData, forKey: collectionsBookmarksKey)
                 }
-                
-                print("✅ DataSync: UserDefaults restored from backup")
+
+                print("✅ DataSync: UserDefaults restored from backup (only missing keys)")
             }
         } catch {
             print("❌ DataSync: Error restoring UserDefaults - \(error.localizedDescription)")
@@ -976,9 +973,17 @@ class DataSyncManager {
         do {
             let backupAttributes = try fileManager.attributesOfItem(atPath: backupFile.path)
             let backupModificationDate = backupAttributes[.modificationDate] as? Date ?? Date.distantPast
-            
-            let lastSyncDate = UserDefaults.standard.object(forKey: lastSyncDateKey) as? Date ?? Date.distantPast
-            
+
+            // Нет отметки о синхронизации — это НЕ повод считать бэкап свежее. Раньше здесь
+            // подставлялся `.distantPast`, и на машине без ключа (например, после переустановки
+            // или чистки UserDefaults) каждый запуск тянул восстановление из бэкапа поверх
+            // живых данных. Ставим отметку сейчас и сравниваем со следующего раза.
+            guard let lastSyncDate = UserDefaults.standard.object(forKey: lastSyncDateKey) as? Date else {
+                UserDefaults.standard.set(Date(), forKey: lastSyncDateKey)
+                print("ℹ️ DataSync: No last sync date, treating live data as current")
+                return false
+            }
+
             return backupModificationDate > lastSyncDate
         } catch {
             print("❌ DataSync: Error checking differences - \(error.localizedDescription)")

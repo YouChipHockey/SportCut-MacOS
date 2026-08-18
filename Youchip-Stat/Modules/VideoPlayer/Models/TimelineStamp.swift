@@ -39,6 +39,9 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
     /// — по одной точке на каждую карту (все в одном штампе).
     var mapPositions: [StampMapPosition]
     var comment: String?
+    /// Запись работы счётчика (секундомер/таймер). Есть только у штампов скрытого таймлайна
+    /// счётчиков — см. `ClockTimelineConstants`.
+    var clockInfo: StampClockInfo?
 
     /// Обратная совместимость: одиночная позиция = первая из `mapPositions`.
     var position: CGPoint? { mapPositions.first?.position }
@@ -103,7 +106,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         timeFinishSeconds - timeStartSeconds
     }
     
-    init(id: UUID = UUID(), tagRefs: [StampTagRef], primaryID: String?, timeStartSeconds: Double, timeFinishSeconds: Double, timeStartString: String? = nil, timeFinishString: String? = nil, colorHex: String, label: String, labels: [FullLabelWithGroup], timeEvents: [String] = [], position: CGPoint? = nil, isActiveForMapView: Bool? = nil, comment: String? = nil, mapFieldId: String? = nil, mapPositions: [StampMapPosition]? = nil) {
+    init(id: UUID = UUID(), tagRefs: [StampTagRef], primaryID: String?, timeStartSeconds: Double, timeFinishSeconds: Double, timeStartString: String? = nil, timeFinishString: String? = nil, colorHex: String, label: String, labels: [FullLabelWithGroup], timeEvents: [String] = [], position: CGPoint? = nil, isActiveForMapView: Bool? = nil, comment: String? = nil, mapFieldId: String? = nil, mapPositions: [StampMapPosition]? = nil, clockInfo: StampClockInfo? = nil) {
         self.id = id
         self.primaryID = primaryID
         self.tagRefs = tagRefs
@@ -113,6 +116,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         self.timeEvents = timeEvents
         self.isActiveForMapView = isActiveForMapView
         self.comment = comment
+        self.clockInfo = clockInfo
 
         // Приоритет у массива позиций; иначе — миграция из одиночных position/mapFieldId.
         if let mapPositions {
@@ -130,7 +134,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, tagRefs, idTags, idTag, tagGroupId, primaryID, timeStartSeconds, timeFinishSeconds
         case colorHex, label, isActiveForMapView, labels, timeEvents, position, comment, mapFieldId
-        case mapPositions
+        case mapPositions, clockInfo
     }
 
     func encode(to encoder: Encoder) throws {
@@ -150,6 +154,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(position, forKey: .position)
         try container.encodeIfPresent(mapFieldId, forKey: .mapFieldId)
         try container.encodeIfPresent(comment, forKey: .comment)
+        try container.encodeIfPresent(clockInfo, forKey: .clockInfo)
     }
 
     init(from decoder: Decoder) throws {
@@ -163,6 +168,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         isActiveForMapView = try container.decodeIfPresent(Bool.self, forKey: .isActiveForMapView)
         timeEvents = try container.decodeIfPresent([String].self, forKey: .timeEvents) ?? []
         comment = try container.decodeIfPresent(String.self, forKey: .comment)
+        clockInfo = try container.decodeIfPresent(StampClockInfo.self, forKey: .clockInfo)
 
         // Новый формат — массив; иначе миграция из одиночной точки (position + mapFieldId).
         if let positions = try? container.decode([StampMapPosition].self, forKey: .mapPositions) {
@@ -211,19 +217,42 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
             && lhs.timeEvents == rhs.timeEvents
             && lhs.mapPositions == rhs.mapPositions
             && lhs.comment == rhs.comment
+            && lhs.clockInfo == rhs.clockInfo
     }
     
     /// Порядковый номер среди всех экземпляров того же тега по времени начала (раньше по времени → меньший номер).
+    ///
+    /// Считаем «сколько соседей стоит раньше меня», а не строим отсортированный список: результат
+    /// тот же, но без `flatMap`, `filter` и `sorted`. Это важно, потому что метод зовётся из
+    /// `TimelineMouseTracker.mouseMoved` — то есть до 10 раз в секунду, пока мышь ходит по
+    /// таймлайну. На проекте с ~7000 тегов прежняя версия каждый раз аллоцировала два массива и
+    /// сортировала их. См. TASK-007, 3.8.
     func chronologicalOrdinalAmongSameTag(in lines: [TimelineLine]) -> Int {
-        let peers = lines.flatMap(\.stamps).filter { $0.idTag == idTag }
-        let sorted = peers.sorted {
-            if $0.timeStartSeconds != $1.timeStartSeconds {
-                return $0.timeStartSeconds < $1.timeStartSeconds
+        let myTag = idTag
+        var earlierCount = 0
+        var foundSelf = false
+
+        for line in lines {
+            for other in line.stamps where other.idTag == myTag {
+                if other.id == id {
+                    foundSelf = true
+                    continue
+                }
+                // Тот же порядок сравнения, что и в прежней сортировке: по времени начала,
+                // при равенстве — по строке uuid.
+                let isEarlier: Bool
+                if other.timeStartSeconds != timeStartSeconds {
+                    isEarlier = other.timeStartSeconds < timeStartSeconds
+                } else {
+                    isEarlier = other.id.uuidString < id.uuidString
+                }
+                if isEarlier { earlierCount += 1 }
             }
-            return $0.id.uuidString < $1.id.uuidString
         }
-        guard let idx = sorted.firstIndex(where: { $0.id == id }) else { return 1 }
-        return idx + 1
+
+        // Прежняя версия при отсутствии штампа в списке возвращала 1 — сохраняем.
+        guard foundSelf else { return 1 }
+        return earlierCount + 1
     }
 }
 

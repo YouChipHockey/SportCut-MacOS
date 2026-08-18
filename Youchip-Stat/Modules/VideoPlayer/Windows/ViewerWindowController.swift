@@ -15,7 +15,7 @@ class ViewerWindowController: NSWindowController {
     init(videoID: String) {
         self.videoID = videoID
         let view = ViewerView(videoID: videoID)
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
         window.title = ^String.Titles.view

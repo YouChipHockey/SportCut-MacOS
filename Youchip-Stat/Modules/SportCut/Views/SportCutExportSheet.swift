@@ -260,14 +260,24 @@ private final class SportCutExportBackend {
 
     // MARK: - Progress / completion
 
+    /// Индикатор экспорта показываем только растущим. `AVAssetExportSession.progress` под конец
+    /// клипа (особенно с видео-композицией/Core Animation) прыгает назад, а на этапе упаковки zip
+    /// таймер опроса и zip-колбэк пишут прогресс наперегонки — без монотонности лоадер «отскакивал»
+    /// (напр. 97→77). Значение только увеличиваем.
+    private func reportProgress(_ value: Double) {
+        let clamped = min(max(value, 0), 1)
+        DispatchQueue.main.async {
+            if clamped > self.ui.progress { self.ui.progress = clamped }
+        }
+    }
+
     /// Периодически опрашивает реальный прогресс сессий экспорта и пишет в UI (0…1 через `map`).
     private func startProgressPolling(_ map: @escaping () -> Double) {
         stopProgressPolling()
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
         timer.schedule(deadline: .now() + 0.15, repeating: 0.15)
         timer.setEventHandler { [weak self] in
-            let value = min(max(map(), 0), 1)
-            DispatchQueue.main.async { self?.ui.progress = value }
+            self?.reportProgress(map())
         }
         timer.resume()
         progressTimer = timer
@@ -329,6 +339,22 @@ private final class SportCutExportBackend {
         let duration = playlist.eventDurationOverrides[event.hiddenKey] ?? resolved.duration
         guard start != resolved.startTime || duration != resolved.duration else { return resolved }
         return resolved.withClipRange(start: start, duration: duration)
+    }
+
+    /// Медиа события для экспорта: оригинал источника, а если проект убран из просмотра или
+    /// файл удалён — автономный обрезанный клип из кэша (та же логика, что в плеере, см.
+    /// `SportCutPlayerManager`). Без этого фолбэка экспорт при удалённых проектах оставался
+    /// пустым, хотя плейлисты продолжали играть из кэша. `isCached == true` — клип уже обрезан
+    /// под событие, брать его целиком (без start/duration оверрайдов).
+    private func resolveExportMedia(event: SportCutEvent, session: SportCutSession) -> (url: URL, isCached: Bool)? {
+        if let source = session.sources.first(where: { $0.id == event.sourceID }),
+           let url = source.mediaAccessURL() {
+            return (url, false)
+        }
+        if let cached = SportCutClipCache.cachedClipURL(sessionID: session.id, event: event) {
+            return (cached, true)
+        }
+        return nil
     }
 
     /// Вставляет слайд-события между клипами по `position` (индекс в `playlist.events`).
@@ -1040,7 +1066,7 @@ private final class SportCutExportBackend {
             }
             do {
                 try Self.writeZip(files: producedFiles, to: outputURL) { frac in
-                    DispatchQueue.main.async { self.ui.progress = 0.9 + frac * 0.1 }
+                    self.reportProgress(0.9 + frac * 0.1)
                 }
                 try? FileManager.default.removeItem(at: tempDir)
                 self.finishSuccess()
@@ -1058,8 +1084,8 @@ private final class SportCutExportBackend {
 
             func skip() { failures += 1; exportNext(index + 1) }
 
-            guard let source = session.sources.first(where: { $0.id == event.sourceID }),
-                  let url = source.mediaAccessURL() else { skip(); return }
+            guard let media = resolveExportMedia(event: entry.event, session: session) else { skip(); return }
+            let url = media.url
             let securityURL = url
 
             let asset = AVAsset(url: url)
@@ -1074,9 +1100,15 @@ private final class SportCutExportBackend {
                 _ = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
             }
 
-            let startTime = CMTime(seconds: event.startTime, preferredTimescale: 600)
-            let duration = CMTime(seconds: event.duration, preferredTimescale: 600)
-            let timeRange = CMTimeRange(start: startTime, duration: duration)
+            // Кэш-клип уже обрезан под событие — берём целиком; оригинал режем по событию.
+            let timeRange: CMTimeRange
+            if media.isCached {
+                timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+            } else {
+                let startTime = CMTime(seconds: event.startTime, preferredTimescale: 600)
+                let duration = CMTime(seconds: event.duration, preferredTimescale: 600)
+                timeRange = CMTimeRange(start: startTime, duration: duration)
+            }
 
             if !drawings.isEmpty {
                 insertDrawingsIntoComposition(
@@ -1117,7 +1149,9 @@ private final class SportCutExportBackend {
             if (addWatermark || showLogo), let compVideoTrack = composition.tracks(withMediaType: .video).first {
                 // При выключенном текстовом вотермарке сегменты пустые — рисуется только логотип.
                 var segs: [(text: NSAttributedString, start: CMTime, duration: CMTime)] = []
-                if addWatermark {
+                // Источник может отсутствовать (проект убран из просмотра, играем/пишем из кэша) —
+                // тогда текстовую вотермарку не строим, логотип клуба (ниже) всё равно наносится.
+                if addWatermark, let source = session.sources.first(where: { $0.id == entry.event.sourceID }) {
                     let wmText = watermarkAttributedString(
                         event: entry.event,
                         source: source,
@@ -1299,8 +1333,8 @@ private final class SportCutExportBackend {
                 let event = resolvedEvent(rawEvent, playlist: playlist, session: session)
                 let drawings = playlist.eventDrawings[rawEvent.hiddenKey] ?? []
 
-                guard let source = session.sources.first(where: { $0.id == event.sourceID }),
-                      let url = source.mediaAccessURL() else { continue }
+                guard let media = resolveExportMedia(event: rawEvent, session: session) else { continue }
+                let url = media.url
                 securityURLs.append(url)
 
                 let asset = AVAsset(url: url)
@@ -1308,9 +1342,15 @@ private final class SportCutExportBackend {
                 if firstVideoTrack == nil { firstVideoTrack = vTrack }
                 let aTrack = asset.tracks(withMediaType: .audio).first
 
-                let startTime = CMTime(seconds: event.startTime, preferredTimescale: 600)
-                let duration = CMTime(seconds: event.duration, preferredTimescale: 600)
-                let timeRange = CMTimeRange(start: startTime, duration: duration)
+                // Кэш-клип уже обрезан под событие — берём целиком; оригинал режем по событию.
+                let timeRange: CMTimeRange
+                if media.isCached {
+                    timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+                } else {
+                    let startTime = CMTime(seconds: event.startTime, preferredTimescale: 600)
+                    let duration = CMTime(seconds: event.duration, preferredTimescale: 600)
+                    timeRange = CMTimeRange(start: startTime, duration: duration)
+                }
 
                 let segStart = currentTime
                 eventOrdinal += 1
@@ -1331,13 +1371,15 @@ private final class SportCutExportBackend {
                         if let compAudio = composition.tracks(withMediaType: .audio).first, let aTrack = aTrack {
                             try compAudio.insertTimeRange(timeRange, of: aTrack, at: currentTime)
                         }
-                        currentTime = currentTime + duration
+                        currentTime = currentTime + timeRange.duration
                     } catch { continue }
                 }
 
                 allSegmentTracks.append((start: segStart, duration: CMTimeSubtract(currentTime, segStart), sourceTrack: vTrack))
 
-                if addWatermark {
+                // Источник может отсутствовать (проект убран из просмотра, пишем из кэша) —
+                // тогда текстовую вотермарку для сегмента не строим, логотип клуба всё равно наносится.
+                if addWatermark, let source = session.sources.first(where: { $0.id == rawEvent.sourceID }) {
                     let segDuration = CMTimeSubtract(currentTime, segStart)
                     let wmText = watermarkAttributedString(
                         event: rawEvent,
@@ -1452,8 +1494,8 @@ private final class SportCutExportBackend {
                 let event = resolvedEvent(rawEvent, playlist: playlist, session: session)
                 let drawings = playlist.eventDrawings[rawEvent.hiddenKey] ?? []
 
-                guard let source = session.sources.first(where: { $0.id == event.sourceID }),
-                      let url = source.mediaAccessURL() else { continue }
+                guard let media = resolveExportMedia(event: rawEvent, session: session) else { continue }
+                let url = media.url
                 securityURLs.append(url)
 
                 let asset = AVAsset(url: url)
@@ -1461,9 +1503,15 @@ private final class SportCutExportBackend {
                 if firstVideoTrack == nil { firstVideoTrack = vTrack }
                 let aTrack = asset.tracks(withMediaType: .audio).first
 
-                let startTime = CMTime(seconds: event.startTime, preferredTimescale: 600)
-                let duration = CMTime(seconds: event.duration, preferredTimescale: 600)
-                let timeRange = CMTimeRange(start: startTime, duration: duration)
+                // Кэш-клип уже обрезан под событие — берём целиком; оригинал режем по событию.
+                let timeRange: CMTimeRange
+                if media.isCached {
+                    timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+                } else {
+                    let startTime = CMTime(seconds: event.startTime, preferredTimescale: 600)
+                    let duration = CMTime(seconds: event.duration, preferredTimescale: 600)
+                    timeRange = CMTimeRange(start: startTime, duration: duration)
+                }
 
                 let segStart = currentTime
                 eventOrdinal += 1
@@ -1484,13 +1532,15 @@ private final class SportCutExportBackend {
                         if let compAudio = composition.tracks(withMediaType: .audio).first, let aTrack = aTrack {
                             try compAudio.insertTimeRange(timeRange, of: aTrack, at: currentTime)
                         }
-                        currentTime = currentTime + duration
+                        currentTime = currentTime + timeRange.duration
                     } catch { continue }
                 }
 
                 allSegmentTracks.append((start: segStart, duration: CMTimeSubtract(currentTime, segStart), sourceTrack: vTrack))
 
-                if addWatermark {
+                // Источник может отсутствовать (проект убран из просмотра, пишем из кэша) —
+                // тогда текстовую вотермарку для сегмента не строим, логотип клуба всё равно наносится.
+                if addWatermark, let source = session.sources.first(where: { $0.id == rawEvent.sourceID }) {
                     let segDuration = CMTimeSubtract(currentTime, segStart)
                     let wmText = watermarkAttributedString(
                         event: rawEvent,

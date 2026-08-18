@@ -11,21 +11,47 @@ import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
 
-struct TimelineLineView: View {
-    @ObservedObject var videoManager = VideoPlayerManager.shared
-    @ObservedObject var timelineData = TimelineDataManager.shared
-    
+/// Одна дорожка таймлайна.
+///
+/// **Это значение, а не подписчик.** Раньше строка держала `@ObservedObject` на
+/// `VideoPlayerManager`, `TimelineDataManager` и `TagLibraryManager` — то есть любое изменение
+/// разметки перерисовывало ВСЕ строки, даже если поменялся один тег в одной из них.
+/// Теперь всё, что влияет на картинку, приходит параметрами, а к синглтонам строка обращается
+/// только императивно (seek, мутации по нажатию). Благодаря `Equatable` + `.equatable()` на
+/// вызове SwiftUI пропускает перерисовку строк, у которых данные не изменились.
+///
+/// Если добавляешь сюда чтение изменяемого состояния — заводи параметр и включай его в `==`,
+/// иначе строка начнёт показывать устаревшие данные. См. TASK-007, 3.1/3.2/5.4.
+struct TimelineLineView: View, Equatable {
+
+    /// Обычные ссылки, БЕЗ подписки — только для императивных вызовов.
+    private let videoManager = VideoPlayerManager.shared
+    private let timelineData = TimelineDataManager.shared
+
     let line: TimelineLine
     let scale: CGFloat
     let widthMax: CGFloat
-    
+    /// Длительность видео. Приходит сверху, чтобы строка не читала `AVPlayerItem.duration`.
+    let totalDuration: Double
+    /// Позиция строки и общее число строк — нужны для вертикального переноса штампа.
+    let lineIndex: Int
+    let linesCount: Int
+    /// Выбранный штамп и пачка ⌘-выбора — только то, что относится к отрисовке этой строки.
+    let selectedStampID: UUID?
+    let bulkSelectedStampIDs: Set<UUID>
+
     let isSelected: Bool
     let onSelect: () -> Void
     let onEditLabelsRequest: (UUID) -> Void
     let onEditTimeEventsRequest: (UUID) -> Void
     let onTagDragging: (CGFloat?) -> Void
-    
-    @ObservedObject var tagLibrary = TagLibraryManager.shared
+    /// Листы живут в родителе, а не здесь: `.sheet` на строке означал по два
+    /// presentation-хоста на КАЖДУЮ строку (на 613 таймлайнах — больше тысячи).
+    /// См. TASK-007, 3.5.
+    let onEditComment: (TimelineStamp) -> Void
+    let onPickSession: (TimelineStamp) -> Void
+
+    private let tagLibrary = TagLibraryManager.shared
     @State private var isDraggingOver = false
     private let lineHeight: CGFloat = 30
     
@@ -49,39 +75,58 @@ struct TimelineLineView: View {
     
     // MARK: - drag properties
     @State private var dragOffsetY: CGFloat = 0
+    /// Горизонтальный сдвиг при перетаскивании — штамп двигается и во времени, а не только
+    /// между дорожками.
+    @State private var dragOffsetX: CGFloat = 0
     @State private var draggingStampID: UUID?
 
-    // MARK: - comment sheet
-    @State private var commentEditingStamp: TimelineStamp? = nil
-    @State private var sessionPickerStamp: TimelineStamp? = nil
-    
     enum ResizeEdge {
         case left
         case right
     }
     
-    private func getOverlapCount(stamp: TimelineStamp, stamps: [TimelineStamp], stampIndex: Int) -> Int {
-        var count = 0
-        
-        for i in 0..<stampIndex {
-            let olderStamp = stamps[i]
-            
-            let stampStart = stamp.timeStartSeconds
-            let stampEnd = stamp.timeFinishSeconds
-            let olderStart = olderStamp.timeStartSeconds
-            let olderEnd = olderStamp.timeFinishSeconds
-            
-            if stampStart < olderEnd && olderStart < stampEnd {
+    /// Сравнение для `EquatableView`: перечислено ВСЁ, что влияет на картинку строки.
+    /// Замыкания-колбэки намеренно не сравниваются — они пересоздаются на каждый рендер
+    /// родителя, но на результат отрисовки не влияют. Иначе `==` всегда давал бы `false`
+    /// и вся затея с пропуском перерисовки не работала бы.
+    static func == (lhs: TimelineLineView, rhs: TimelineLineView) -> Bool {
+        lhs.line == rhs.line
+            && lhs.scale == rhs.scale
+            && lhs.widthMax == rhs.widthMax
+            && lhs.totalDuration == rhs.totalDuration
+            && lhs.lineIndex == rhs.lineIndex
+            && lhs.linesCount == rhs.linesCount
+            && lhs.selectedStampID == rhs.selectedStampID
+            && lhs.bulkSelectedStampIDs == rhs.bulkSelectedStampIDs
+            && lhs.isSelected == rhs.isSelected
+    }
+
+    /// Сколько ранее добавленных штампов перекрывается с каждым — по одному разу на строку,
+    /// а не заново на каждый штамп (раньше это давало O(S²) на каждый рендер строки).
+    /// Семантика та же: для штампа с индексом `i` считаем пересечения только с `j < i`,
+    /// то есть порядок в массиве (порядок добавления) важен — от него зависит высота штампа.
+    private func overlapCounts() -> [UUID: Int] {
+        let stamps = line.stamps
+        var counts: [UUID: Int] = [:]
+        counts.reserveCapacity(stamps.count)
+        for i in stamps.indices {
+            let start = stamps[i].timeStartSeconds
+            let end = stamps[i].timeFinishSeconds
+            var count = 0
+            for j in 0..<i where start < stamps[j].timeFinishSeconds && stamps[j].timeStartSeconds < end {
                 count += 1
             }
+            counts[stamps[i].id] = count
         }
-        
-        return count
+        return counts
     }
-    
+
     var body: some View {
-        GeometryReader { geometry in
-            let totalDuration = max(1, videoManager.timelineDuration)
+        // Без `GeometryReader`: его `geometry` здесь не использовался ни разу — размеры строки
+        // известны заранее (`widthMax` × `lineHeight`), а лишний GeometryReader — это лишний
+        // проход лейаута на КАЖДУЮ строку. См. TASK-007, 3.7.
+        Group {
+            let overlaps = overlapCounts()
 
             HStack(alignment: .top, spacing: 0) {
                 ZStack(alignment: .topLeading) {
@@ -110,10 +155,12 @@ struct TimelineLineView: View {
                     ) { time in
                         videoManager.seek(to: time)
                     }
-                    ForEach(Array(line.stamps.enumerated()), id: \.element.id) { index, stamp in
+                    // Идентичность по `stamp.id`, как и была; `Array(enumerated())` больше не
+                    // нужен — перекрытия приходят словарём, посчитанным один раз на строку.
+                    ForEach(line.stamps) { stamp in
                         stampView(
                             stamp: stamp,
-                            index: index,
+                            overlapCount: overlaps[stamp.id] ?? 0,
                             totalDuration: totalDuration,
                             widthMax: widthMax
                         )
@@ -123,31 +170,11 @@ struct TimelineLineView: View {
             }
             .frame(width: widthMax, height: lineHeight)
         }
-        .sheet(item: $commentEditingStamp) { stamp in
-            StampCommentEditSheet(stamp: stamp) { newComment in
-                if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }),
-                   let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stamp.id }) {
-                    timelineData.lines[lineIndex].stamps[stampIndex].comment = newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : newComment
-                    timelineData.updateTimelines()
-                }
-            }
-        }
-        .sheet(item: $sessionPickerStamp) { stamp in
-            SportCutSessionPickerSheet(
-                title: ^String.Titles.viewingToExistingSession,
-                sessions: SportCutSessionManager.shared.sessions
-            ) { sessionID in
-                WindowsManager.shared.appendStampsToSportCutSession(pairs: [(line, stamp)], sessionID: sessionID)
-                sessionPickerStamp = nil
-            } onCancel: {
-                sessionPickerStamp = nil
-            }
-        }
     }
 
     
     @ViewBuilder
-    private func stampView(stamp: TimelineStamp, index: Int, totalDuration: Double, widthMax: CGFloat) -> some View {
+    private func stampView(stamp: TimelineStamp, overlapCount: Int, totalDuration: Double, widthMax: CGFloat) -> some View {
         let isResizing = resizingStampID == stamp.id
         let currentStartTime = isResizing && resizingEdge == .left ? dragStartTime : stamp.timeStartSeconds
         let currentEndTime = isResizing && resizingEdge == .right ? dragStartTime : stamp.timeFinishSeconds
@@ -155,9 +182,10 @@ struct TimelineLineView: View {
 
         let isDragging = draggingStampID == stamp.id
 
-        let currentLineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }) ?? 0
-        let maxYOffset = CGFloat(timelineData.lines.count - 1 - currentLineIndex) * lineHeight
-        let minYOffset = -1 * CGFloat(currentLineIndex) * lineHeight
+        // Индекс строки и их общее число приходят параметрами: раньше здесь на КАЖДЫЙ штамп
+        // шёл `lines.firstIndex(where:)`, то есть линейный поиск по всем строкам.
+        let maxYOffset = CGFloat(linesCount - 1 - lineIndex) * lineHeight
+        let minYOffset = -1 * CGFloat(lineIndex) * lineHeight
         let verticalOffset = isDragging ? max(min(dragOffsetY, maxYOffset), minYOffset) : 0
         
         let startRatio = currentStartTime / totalDuration
@@ -173,10 +201,13 @@ struct TimelineLineView: View {
 
         let stampX = ((isResizing && resizingEdge == .left) ?
                       (visualOffsetX ?? baseStampX) : baseStampX) ?? 0
+        // Во время переноса штамп едет за курсором по обеим осям, не вылезая за таймлайн.
+        let draggedStampX = isDragging
+            ? min(max(stampX + dragOffsetX, 0), max(widthMax - stampWidth, 0))
+            : stampX
         
-        let isSelected = timelineData.selectedStampID == stamp.id
-        let inSportCutBulk = timelineData.stampsSelectedForSportCut.contains(stamp.id)
-        let overlapCount = getOverlapCount(stamp: stamp, stamps: line.stamps, stampIndex: index)
+        let isSelected = selectedStampID == stamp.id
+        let inSportCutBulk = bulkSelectedStampIDs.contains(stamp.id)
         let hasOverlaps = overlapCount > 0
         
         let borderColor: Color = {
@@ -187,7 +218,9 @@ struct TimelineLineView: View {
             return Color.clear
         }()
         let heightReduction = CGFloat(overlapCount * 6)
-        let stampHeight: CGFloat = 25 - heightReduction
+        // Клип сужается на каждое наложение, но не в минус: при 5+ наложениях 25 − 6·N уходило
+        // отрицательным, и SwiftUI сыпал "Invalid frame dimension (negative or non-finite)".
+        let stampHeight: CGFloat = max(7, 25 - heightReduction)
         
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 6)
@@ -240,7 +273,11 @@ struct TimelineLineView: View {
             }
         }
         .frame(width: stampWidth, height: stampHeight)
-        .position(x: clampedCenterX(isDragging: isDragging, stampX: stampX, stampWidth: stampWidth), y: verticalOffset + 15)
+        .position(x: clampedCenterX(isDragging: isDragging, stampX: draggedStampX, stampWidth: stampWidth), y: verticalOffset + 15)
+        .pointingHandCursor()
+        // Подсказка по наведению работает и когда окно таймлайнов неактивно — не нужно
+        // сперва кликать по окну, чтобы узнать, что за тег под курсором.
+        .help(stampTooltip(stamp))
         .onTapGesture(count: 2) {
             if resizingStampID == nil {
                 let stampDuration = max(stamp.timeFinishSeconds - stamp.timeStartSeconds, 1.0)
@@ -273,6 +310,8 @@ struct TimelineLineView: View {
                 }
             }
         }
+        // Свободный перенос штампа: по вертикали — на любую дорожку, по горизонтали — во времени
+        // (длительность сохраняется). Раньше двигалась только вертикаль, время оставалось прежним.
         .gesture(
             (resizingStampID == nil ? DragGesture() : nil)
                 .onChanged { value in
@@ -280,10 +319,31 @@ struct TimelineLineView: View {
                         draggingStampID = stamp.id
                     }
                     dragOffsetY = value.translation.height
+                    dragOffsetX = value.translation.width
+
+                    // Чисто вертикальный перенос (смена дорожки) видео не трогает — направляющая
+                    // и подмотка нужны только когда штамп реально едет во времени.
+                    guard abs(value.translation.width) > 2 else { return }
+
+                    // Направляющая у левого края штампа — как при изменении границ.
+                    let baseX = (stamp.timeStartSeconds / totalDuration) * widthMax
+                    let previewX = min(max(baseX + value.translation.width, 0), widthMax)
+                    onTagDragging(previewX)
+
+                    // Подматываем видео к новому началу штампа — видно, куда он приедет.
+                    let now = Date()
+                    if now.timeIntervalSince(lastSeekTime) >= seekThrottleInterval {
+                        lastSeekTime = now
+                        videoManager.seek(to: (previewX / widthMax) * totalDuration)
+                    }
                 }
                 .onEnded { value in
+                    let offsetX = dragOffsetX
                     dragOffsetY = 0
+                    dragOffsetX = 0
+                    onTagDragging(nil)
                     guard let draggingStampID else { return }
+                    self.draggingStampID = nil
 
                     let lineHeight: CGFloat = lineHeight
                     let sourceLineIndex = timelineData.lines.firstIndex(where: { $0.id == line.id }) ?? 0
@@ -294,15 +354,39 @@ struct TimelineLineView: View {
                     destLineIndex = min(timelineData.lines.count - 1, destLineIndex)
 
                     let destLineID = timelineData.lines[destLineIndex].id
-                    
-                    let stampInfo = StampDragInfo(
-                        lineID: line.id,
-                        stampID: draggingStampID,
-                    )
-                    transferStamp(stampInfo, to: destLineID)
-                    
-                    self.draggingStampID = nil
-                    dragOffsetY = 0
+
+                    // Новое время: сдвигаем весь штамп, длительность не трогаем; за пределы
+                    // видео не выпускаем.
+                    let duration = max(stamp.timeFinishSeconds - stamp.timeStartSeconds, 0)
+                    let deltaTime = widthMax > 0 ? Double(offsetX / widthMax) * totalDuration : 0
+                    let maxStart = max(totalDuration - duration, 0)
+                    let newStart = min(max(stamp.timeStartSeconds + deltaTime, 0), maxStart)
+                    let newFinish = min(newStart + duration, totalDuration)
+                    let movedInTime = abs(newStart - stamp.timeStartSeconds) > 0.01
+
+                    if destLineID != line.id {
+                        let stampInfo = StampDragInfo(
+                            lineID: line.id,
+                            stampID: draggingStampID,
+                        )
+                        transferStamp(
+                            stampInfo,
+                            to: destLineID,
+                            newStart: movedInTime ? newStart : nil,
+                            newFinish: movedInTime ? newFinish : nil
+                        )
+                    } else if movedInTime {
+                        timelineData.updateStampTimeRange(
+                            lineID: line.id,
+                            stampID: draggingStampID,
+                            newStartTime: newStart,
+                            newEndTime: newFinish
+                        )
+                    }
+
+                    if movedInTime {
+                        videoManager.seek(to: newStart)
+                    }
                 }
         )
         .contextMenu {
@@ -563,14 +647,14 @@ struct TimelineLineView: View {
         }
         if !SportCutSessionManager.shared.sessions.isEmpty {
             Button(^String.Titles.viewingToExistingSession) {
-                sessionPickerStamp = stamp
+                onPickSession(stamp)
             }
         }
 
         Divider()
 
         Button(stamp.comment == nil ? ^String.Titles.viewingAddComment : ^String.Titles.viewingEditComment) {
-            commentEditingStamp = stamp
+            onEditComment(stamp)
         }
         if stamp.comment != nil {
             Button(^String.Titles.viewingDeleteComment) {
@@ -596,10 +680,9 @@ struct TimelineLineView: View {
         // 3. Иметь имя, совпадающее с именем скриншота
         let isDrawingsTimeline = line.isDrawingsTimeline
         
-        let isScreenshotTag = isDrawingsTimeline && ScreenshotsMetadataManager.shared.screenshots.contains { screenshot in
-            screenshot.relatedStampIds.contains(stamp.id) &&
-            screenshot.screenshotName == stamp.label
-        }
+        // Через индекс, а не перебором всех скриншотов: это меню строится для каждого штампа.
+        let isScreenshotTag = isDrawingsTimeline
+            && ScreenshotsMetadataManager.shared.hasScreenshot(named: stamp.label, relatedTo: stamp.id)
         
         // Показываем кнопку редактирования лейблов только если это не тег рисунка
         if !isScreenshotTag {
@@ -612,17 +695,42 @@ struct TimelineLineView: View {
         }
     }
     
-    private func transferStamp(_ stampInfo: StampDragInfo, to destLineID: UUID) {
+    /// Переносит штамп на другую дорожку. `newStart`/`newFinish` — если его заодно подвинули
+    /// по времени (перенос идёт копией с новым id, поэтому время задаём прямо здесь).
+    private func transferStamp(
+        _ stampInfo: StampDragInfo,
+        to destLineID: UUID,
+        newStart: Double? = nil,
+        newFinish: Double? = nil
+    ) {
         guard let sourceLineIndex = timelineData.lines.firstIndex(where: { $0.id == stampInfo.lineID }),
               let destLineIndex = timelineData.lines.firstIndex(where: { $0.id == destLineID }),
               let stampIndex = timelineData.lines[sourceLineIndex].stamps.firstIndex(where: { $0.id == stampInfo.stampID }) else {
             return
         }
         
-        let stamp = timelineData.lines[sourceLineIndex].stamps[stampIndex]
+        var stamp = timelineData.lines[sourceLineIndex].stamps[stampIndex]
+        if let newStart, let newFinish {
+            // Показания счётчика внутри штампа тоже должны поехать вместе с ним.
+            var moved = stamp
+            moved.timeStartSeconds = newStart
+            moved.timeFinishSeconds = newFinish
+            if var info = moved.clockInfo {
+                info.rescale(
+                    oldStart: stamp.timeStartSeconds,
+                    oldFinish: stamp.timeFinishSeconds,
+                    newStart: newStart,
+                    newFinish: newFinish
+                )
+                moved.clockInfo = info
+            }
+            stamp = moved
+        }
         
         let newStamp = TimelineStamp(
-            id: UUID(),
+            // id сохраняем: на него ссылаются скриншоты, выделение и пачка выбора — при новом
+            // id перенос штампа на другую дорожку рвал бы эти связи.
+            id: stamp.id,
             tagRefs: stamp.tagRefs,
             primaryID: stamp.primaryID,
             timeStartSeconds: stamp.timeStartSeconds,
@@ -633,7 +741,8 @@ struct TimelineLineView: View {
             timeEvents: stamp.timeEvents,
             isActiveForMapView: stamp.isActiveForMapView,
             comment: stamp.comment,
-            mapPositions: stamp.mapPositions
+            mapPositions: stamp.mapPositions,
+            clockInfo: stamp.clockInfo
         )
 
         timelineData.lines[destLineIndex].stamps.append(newStamp)
@@ -641,6 +750,28 @@ struct TimelineLineView: View {
         timelineData.updateTimelines()
     }
     
+    /// Текст всплывающей подсказки штампа: тег, интервал и лейблы/события, если они есть.
+    private func stampTooltip(_ stamp: TimelineStamp) -> String {
+        var parts = ["\(stamp.label)  \(secondsToTimeString(stamp.timeStartSeconds))–\(secondsToTimeString(stamp.timeFinishSeconds))"]
+
+        let labelNames = stamp.labels.map(\.name).filter { !$0.isEmpty }
+        if !labelNames.isEmpty {
+            parts.append(labelNames.joined(separator: ", "))
+        }
+
+        let eventNames = stamp.timeEvents.compactMap { id in
+            tagLibrary.allTimeEvents.first(where: { $0.id == id })?.name
+        }
+        if !eventNames.isEmpty {
+            parts.append(eventNames.joined(separator: ", "))
+        }
+
+        if let comment = stamp.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !comment.isEmpty {
+            parts.append(comment)
+        }
+        return parts.joined(separator: "\n")
+    }
+
     private func clampedCenterX(isDragging: Bool, stampX: CGFloat, stampWidth: CGFloat) -> CGFloat {
         let baseCenterX = stampX + stampWidth / 2
         var centerX = baseCenterX

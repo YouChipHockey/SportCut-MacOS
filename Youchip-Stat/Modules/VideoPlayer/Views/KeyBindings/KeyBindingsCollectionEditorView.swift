@@ -88,6 +88,7 @@ struct KeyBindingsCollectionEditorView: View {
                         labels: collectionManager.labels,
                         timeEvents: collectionManager.timeEvents,
                         playFields: collectionManager.playFields,
+                        clocks: collectionManager.clocks,
                         pane: .settings,
                         showsModePicker: false,
                         onSetTagsColor: setTagsColor,
@@ -196,6 +197,7 @@ struct KeyBindingsCollectionEditorView: View {
                 labels: collectionManager.labels,
                 timeEvents: collectionManager.timeEvents,
                 playFields: collectionManager.playFields,
+                clocks: collectionManager.clocks,
                 pane: .canvas,
                 showsModePicker: true,
                 onEditElement: requestElementEdit,
@@ -220,7 +222,9 @@ struct KeyBindingsCollectionEditorView: View {
             tags: collectionManager.tags,
             labels: collectionManager.labels,
             timeEvents: collectionManager.timeEvents,
-            playFields: collectionManager.playFields
+            playFields: collectionManager.playFields,
+            clocks: collectionManager.clocks,
+            poolsAreAuthoritative: true
         )
     }
 
@@ -265,6 +269,8 @@ struct KeyBindingsCollectionEditorView: View {
         case .map:
             // Карты (изображения) не дублируем при копипасте кнопок.
             return nil
+        case .clock:
+            return collectionManager.duplicateClock(id: sourceElementId, nameSuffix: suffix)?.id
         }
     }
 

@@ -17,7 +17,8 @@ class TagLibraryWindowController: NSWindowController, NSWindowDelegate {
     init() {
         let view = TagLibraryView()
             .environmentObject(notificationSubscriptions)
-        let hostingController = NSHostingController(rootView: view)
+        // Клик по неактивному окну сразу доходит до тега — см. FirstMouseHosting.
+        let hostingController = FirstMouseHostingController(rootView: view)
         let w = NSWindow(contentViewController: hostingController)
         w.title = ^String.Titles.tagLibrary
         super.init(window: w)

@@ -77,7 +77,12 @@
       "Bash(perl -0pi -e 's/TagLibraryManager\\\\.shared\\\\.allTags\\\\.first\\\\\\(where: \\\\{ \\\\$0\\\\.id == segment\\\\.tagId \\\\}\\\\\\)/TagLibraryManager.shared.findTagById\\(segment.tagId\\)/g' Youchip-Stat/Modules/VideoPlayer/Views/Viewer/OrganizerView.swift)",
       "Bash(perl -0pi -e 's/tagLibrary\\\\.allTags\\\\.first\\\\\\(where: \\\\{ \\\\$0\\\\.id == segment\\\\.stamp\\\\.idTag \\\\}\\\\\\)/tagLibrary.findTagById\\(segment.stamp.idTag\\)/g' Youchip-Stat/Modules/VideoPlayer/Helpers/ExportHelper.swift)",
       "Bash(sort -t: -k2 -rn)",
-      "Bash(grep -v \"^--$\")"
+      "Bash(grep -v \"^--$\")",
+      "Bash(defaults export *)",
+      "Bash(grep -n \"case search$\\\\|case clear$\\\\|case sportCutSelectAll\" Youchip-Stat/Common/Extensions/LocalizedStrings.swift)",
+      "Bash(grep -n \"case map$\" -B3 -A3 Youchip-Stat/Common/Extensions/LocalizedStrings.swift)",
+      "Bash(ls Youchip-Stat/Modules; echo ===; cat vault/knowledge/../*/project_xcode_synced_folders.md 2>/dev/null | head -20; cat ~/.claude/projects/-Users-sergejbekezin-Documents-Projects-YouChip-MacOs-Stat/memory/project_xcode_synced_folders.md 2>/dev/null)",
+      "Bash(grep -n \"\\\\.sheet\\(\\\\|filterSortMenu\\\\|private var.*Menu.*some View\\\\|line.3.horizontal.decrease\\\\|zoomControl\\\\|HStack.*spacing.*{ *$\\\\|private func applyTimelineSort\" Youchip-Stat/Modules/VideoPlayer/Views/FullControlView.swift)"
     ]
   }
 }

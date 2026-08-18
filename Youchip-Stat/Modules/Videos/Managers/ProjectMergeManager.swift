@@ -465,8 +465,9 @@ final class ProjectMergeManager: ObservableObject {
                 }
 
                 let key: String?
-                if line.isDrawingsTimeline {
-                    key = "drawings:\(line.id.uuidString)"       // рисунки всегда в одну дорожку по id
+                if line.isServiceTimeline {
+                    // Служебные линии (рисунки, счётчики) сливаются по id — каждая в свою дорожку.
+                    key = "service:\(line.id.uuidString)"
                 } else if mergedLineNames.contains(line.name) {
                     key = "name:\(line.name)"                    // пользователь выбрал объединить
                 } else {
@@ -505,7 +506,7 @@ final class ProjectMergeManager: ObservableObject {
     static func duplicateLineNames(in sources: [TimelineMergeSource]) -> Set<String> {
         var counts: [String: Int] = [:]
         for source in sources {
-            for line in source.timelines where !line.isDrawingsTimeline {
+            for line in source.timelines where !line.isServiceTimeline {
                 counts[line.name, default: 0] += 1
             }
         }

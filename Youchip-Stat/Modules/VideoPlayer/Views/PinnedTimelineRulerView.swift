@@ -29,6 +29,9 @@ struct PinnedTimelineRulerView: View {
     let band: CGFloat
     /// Высота таймлайнов (для позиционирования меток рисунков; стебли обрезаются по шапке).
     let markersTotalHeight: CGFloat
+    /// Проброс наружу: лист «привязанные теги» открывает окно, а не сама вьюха меток —
+    /// иначе хостов листа было бы столько, сколько экземпляров `ScreenshotMarkersView`.
+    var onEditScreenshotTags: (ScreenshotMetadata) -> Void = { _ in }
 
     private let hitWidth: CGFloat = 16
     @State private var lastScrubVideoPreviewAt = Date.distantPast
@@ -82,7 +85,8 @@ struct PinnedTimelineRulerView: View {
                 gridWidth: gridWidth,
                 totalHeight: markersTotalHeight,
                 headLift: 0,
-                part: .headsOnly
+                part: .headsOnly,
+                onEditRelatedTags: onEditScreenshotTags
             )
             .frame(width: gridWidth, height: band + 30, alignment: .topLeading)
             .offset(x: offsetX)

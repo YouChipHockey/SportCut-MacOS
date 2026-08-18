@@ -30,6 +30,8 @@ class FieldMapVisualizationWindowController: NSWindowController, ObservableObjec
                 self?.updateContent()
             }
         )
+        // Обычный NSHostingController: это окно переприсваивает `rootView` в updateContent(),
+        // а FirstMouseHostingController такие обновления не подхватывает (см. его комментарий).
         let hosting = NSHostingController(rootView: AnyView(content.environmentObject(self)))
         self.window = NSWindow(contentViewController: hosting)
         self.windowContent = hosting

@@ -49,6 +49,12 @@ class SportCutSessionManager: ObservableObject {
     }
 
     func updateSession(_ session: SportCutSession) {
+        updateSession(session, runClipCache: true)
+    }
+
+    /// `runClipCache: false` — для синхронизации разметки: плейлисты (а значит и их клипы)
+    /// при ней не меняются, а автокэш на каждый штамп во время лайва — это лишний обход диска.
+    func updateSession(_ session: SportCutSession, runClipCache: Bool) {
         guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { return }
         // Must replace the whole array: subscript assignment does not reliably
         // trigger @Published, so SwiftUI would not refresh until full re-entry.
@@ -59,6 +65,7 @@ class SportCutSessionManager: ObservableObject {
             currentSession = session
         }
         saveSessions()
+        guard runClipCache else { return }
         // Клипы плейлистов сохраняются автоматически (чтобы играли даже без оригинала),
         // а осиротевшие (после удаления плейлиста/группы/эпизода) — удаляются.
         SportCutClipCache.autoCacheIfNeeded(session: session)
@@ -279,11 +286,23 @@ class SportCutSessionManager: ObservableObject {
               let li = session.sources[si].timelines.firstIndex(where: { $0.id == lineID }),
               let sti = session.sources[si].timelines[li].stamps.firstIndex(where: { $0.id == stampID }) else { return }
         var stamp = session.sources[si].timelines[li].stamps[sti]
+        let previousStart = stamp.timeStartSeconds
+        let previousFinish = stamp.timeFinishSeconds
         if let newStart {
             stamp.timeStartSeconds = min(newStart, stamp.timeFinishSeconds - 0.5)
         }
         if let newEnd {
             stamp.timeFinishSeconds = max(newEnd, stamp.timeStartSeconds + 0.5)
+        }
+        // Штамп счётчика: под новую длину доводим и его показания, сохраняя темп.
+        if var info = stamp.clockInfo {
+            info.rescale(
+                oldStart: previousStart,
+                oldFinish: previousFinish,
+                newStart: stamp.timeStartSeconds,
+                newFinish: stamp.timeFinishSeconds
+            )
+            stamp.clockInfo = info
         }
         session.sources[si].timelines[li].stamps[sti] = stamp
         let lineID = session.sources[si].timelines[li].id

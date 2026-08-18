@@ -15,7 +15,7 @@ class ScreenshotsWindowController: NSWindowController, NSWindowDelegate {
     init(screenshotsFolder: URL) {
         self.screenshotsFolder = screenshotsFolder
         let view = ScreenshotsGalleryView(screenshotsFolder: screenshotsFolder)
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.fullControlButtonScreenshots
         window.tabbingMode = .disallowed
@@ -306,7 +306,7 @@ struct ScreenshotItemView: View {
         let editorView = EditorView()
             .environmentObject(editorViewModel)
             
-        let hostingController = NSHostingController(rootView: editorView)
+        let hostingController = FirstMouseHostingController(rootView: editorView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = ^String.Titles.editScreenshot
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]

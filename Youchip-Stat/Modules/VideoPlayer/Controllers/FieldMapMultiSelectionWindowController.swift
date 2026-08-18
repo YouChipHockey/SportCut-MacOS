@@ -12,7 +12,7 @@ class FieldMapMultiSelectionWindowController: NSWindowController, NSWindowDelega
 
     init(tag: Tag, items: [FieldMapSelectionItem], onSave: @escaping ([String: CGPoint]) -> Void) {
         let view = FieldMapMultiSelectionView(tag: tag, items: items, onSave: onSave)
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "\(^String.Titles.selectMapPositionForTag) \(tag.name)"
         super.init(window: window)

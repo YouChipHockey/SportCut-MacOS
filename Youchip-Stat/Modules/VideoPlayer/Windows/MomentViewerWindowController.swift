@@ -28,7 +28,7 @@ class MomentViewerWindowController: NSWindowController, NSWindowDelegate {
         self.session = session
         
         let view = MomentViewerView(session: session)
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = FirstMouseHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         
         window.title = String.Titles.momentWindowTitlePrefix.format(tagName)

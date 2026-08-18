@@ -13,6 +13,9 @@ struct SportCutFilterSheet: View {
     @Environment(\.presentationMode) var presentationMode
     /// -1 = показать все проекты секциями; иначе индекс `session.sources` — только этот проект.
     @State private var filterProjectTab: Int = -1
+    @State private var searchText: String = ""
+    /// Выбранные теги в результатах поиска по клипам (по умолчанию — все совпавшие).
+    @State private var selectedSearchTagIDs: Set<String> = []
     
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
@@ -140,6 +143,81 @@ struct SportCutFilterSheet: View {
         }.sorted { $0.name < $1.name }
     }
 
+    // MARK: - Сопоставление лейблов между проектами
+    //
+    // Один и тот же лейбл в разных проектах может иметь разные id: у каждого проекта своя копия
+    // коллекции, id разводятся при импорте дублей, а у разметки из сторонних инструментов лейблы
+    // вообще синтетические. Из-за этого отметка лейбла в секции одного проекта отсекала все
+    // события второго — фильтр выглядел как «И» между проектами. Поэтому выбор лейбла
+    // распространяем на все одноимённые лейблы всех проектов сессии; само сопоставление
+    // штампа остаётся «ИЛИ» (`TimelineFilter.matches`).
+
+    /// Индекс лейблов сессии: id → нормализованное имя и нормализованное имя → все его id.
+    private struct LabelNameIndex {
+        var keyByID: [String: String] = [:]
+        var idsByKey: [String: Set<String>] = [:]
+
+        /// Сам id плюс его одноимённые «двойники» из других проектов, и ключи их имён.
+        func equivalents(of id: String) -> (ids: Set<String>, keys: Set<String>) {
+            guard let key = keyByID[id] else { return ([id], []) }
+            return ((idsByKey[key] ?? []).union([id]), [key])
+        }
+
+        func equivalents(of ids: [String]) -> (ids: Set<String>, keys: Set<String>) {
+            var allIDs = Set<String>()
+            var allKeys = Set<String>()
+            for id in ids {
+                let equivalent = equivalents(of: id)
+                allIDs.formUnion(equivalent.ids)
+                allKeys.formUnion(equivalent.keys)
+            }
+            return (allIDs, allKeys)
+        }
+    }
+
+    private static func labelKey(_ name: String) -> String {
+        TimelineFilter.labelKey(name)
+    }
+
+    /// Строится по клику (не на каждый рендер) — один проход по всем штампам сессии.
+    private func labelNameIndex() -> LabelNameIndex {
+        var index = LabelNameIndex()
+        func add(id: String, name: String) {
+            let key = Self.labelKey(name)
+            // Безымянные лейблы (легаси-разметка хранит только id) сопоставлять не по чему.
+            guard !key.isEmpty else { return }
+            index.keyByID[id] = key
+            index.idsByKey[key, default: []].insert(id)
+        }
+        for source in session?.sources ?? [] {
+            for label in source.labels {
+                add(id: label.id, name: label.name)
+            }
+            for line in source.timelines {
+                for stamp in line.stamps {
+                    for label in stamp.labels {
+                        add(id: label.id, name: label.name)
+                    }
+                }
+            }
+        }
+        return index
+    }
+
+    /// Выбор лейбла применяется сразу ко всем его id и к его имени: id покрывают уже загруженные
+    /// проекты (чтобы чекбоксы одноимённых лейблов в секциях проектов были согласованы),
+    /// имя — те, что добавят в сессию позже.
+    private func setLabelsSelected(_ selection: (ids: Set<String>, keys: Set<String>), selected: Bool) {
+        if selected {
+            filter.selectedLabels.formUnion(selection.ids)
+            filter.selectedLabelNames.formUnion(selection.keys)
+        } else {
+            filter.selectedLabels.subtract(selection.ids)
+            filter.selectedLabelNames.subtract(selection.keys)
+        }
+        filter.isFilterActive = filter.hasActiveFilters()
+    }
+
     private func availableEvents(for source: SportCutSource, usedEventIDs: Set<String>) -> [TimeEvent] {
         let fromSource = source.timeEvents.filter { usedEventIDs.contains($0.id) }
         if !fromSource.isEmpty { return fromSource }
@@ -165,7 +243,11 @@ struct SportCutFilterSheet: View {
                 
                 Spacer()
                 
-                Button(^String.Titles.reset) { filter.clearFilters() }
+                Button(^String.Titles.reset) {
+                    filter.clearFilters()
+                    searchText = ""
+                    selectedSearchTagIDs = []
+                }
                     .buttonStyle(PlainButtonStyle())
                     .foregroundColor(.red)
             }
@@ -187,10 +269,19 @@ struct SportCutFilterSheet: View {
                 .padding(.vertical, 6)
                 Divider()
             }
-            
+
+            searchBar
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if filterProjectTab == -1 {
+                    if isSearching {
+                        // Поиск по клипам: строки-теги с подсветкой; выбор → id штампов фильтра.
+                        ClipSearchResultsList(
+                            rows: clipSearchRows(),
+                            query: searchText,
+                            selectedTagIDs: $selectedSearchTagIDs
+                        )
+                    } else if filterProjectTab == -1 {
                         ForEach(activeSources, id: \.id) { source in
                             let usedTags = usedTagIDs(in: [source])
                             let usedLabels = usedLabelIDs(in: [source])
@@ -235,6 +326,117 @@ struct SportCutFilterSheet: View {
             .padding(.bottom)
         }
         .frame(width: 500, height: 500)
+        .onChange(of: searchText) { _ in
+            // Новый запрос — по умолчанию выбраны все совпавшие теги.
+            selectedSearchTagIDs = Set(clipSearchRows().map(\.id))
+        }
+        .onChange(of: selectedSearchTagIDs) { _ in
+            applyClipSearch()
+        }
+    }
+
+    // MARK: - Поиск по фильтрам
+
+    /// Поиск сужает списки тегов/лейблов/событий по подстроке имени; найденное можно отметить
+    /// поштучно или целиком кнопкой «Выбрать все».
+    private var normalizedQuery: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private var isSearching: Bool { !normalizedQuery.isEmpty }
+
+    private func matchesSearch(_ name: String) -> Bool {
+        guard isSearching else { return true }
+        return name.lowercased().contains(normalizedQuery)
+    }
+
+    /// Источники, по которым сейчас идёт поиск: все проекты или выбранная вкладка.
+    private var searchScopeSources: [SportCutSource] {
+        if filterProjectTab == -1 { return activeSources }
+        if filterProjectTab >= 0, filterProjectTab < activeSources.count { return [activeSources[filterProjectTab]] }
+        return []
+    }
+
+    // MARK: - Поиск по клипам (строки-теги)
+
+    /// Строит строки-теги по текущему запросу: тег попадает, если текст встречается в его имени,
+    /// лейбле или общем событии любого из его штампов (в области поиска). Имена резолвим из
+    /// источника (или библиотеки), лейблы берём из штампа.
+    private func clipSearchRows() -> [ClipSearchTagRow] {
+        guard isSearching else { return [] }
+        let tagLib = TagLibraryManager.shared
+        var stamps: [TimelineStamp] = []
+        var nameByStamp: [UUID: String] = [:]
+        var labelsByStamp: [UUID: [String]] = [:]
+        var eventsByStamp: [UUID: [String]] = [:]
+
+        for source in searchScopeSources {
+            for line in source.timelines {
+                for stamp in line.stamps {
+                    stamps.append(stamp)
+                    let tid = stamp.idTag
+                    nameByStamp[stamp.id] = source.tags.first(where: { $0.id == tid })?.name
+                        ?? tagLib.findTagById(tid)?.name
+                        ?? stamp.label
+                    labelsByStamp[stamp.id] = stamp.labels.map(\.name)
+                    eventsByStamp[stamp.id] = stamp.timeEvents.compactMap { eid in
+                        source.timeEvents.first(where: { $0.id == eid })?.name
+                            ?? tagLib.allTimeEvents.first(where: { $0.id == eid })?.name
+                    }
+                }
+            }
+        }
+
+        return ClipSearch.buildRows(
+            stamps: stamps,
+            query: searchText,
+            tagID: { $0.idTag },
+            tagName: { nameByStamp[$0.id] ?? $0.label },
+            labelNames: { labelsByStamp[$0.id] ?? [] },
+            eventNames: { eventsByStamp[$0.id] ?? [] }
+        )
+    }
+
+    /// Применяет выбор поиска по клипам к фильтру (набор id штампов выбранных тегов).
+    private func applyClipSearch() {
+        guard isSearching else {
+            filter.searchQuery = ""
+            filter.searchAllowedStampIDs = nil
+            filter.isFilterActive = filter.hasActiveFilters()
+            return
+        }
+        let allowed = clipSearchRows()
+            .filter { selectedSearchTagIDs.contains($0.id) }
+            .reduce(into: Set<UUID>()) { $0.formUnion($1.stampIDs) }
+        filter.searchQuery = searchText
+        filter.searchAllowedStampIDs = allowed
+        filter.isFilterActive = filter.hasActiveFilters()
+    }
+
+    private var searchBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                TextField(^String.Titles.search, text: $searchText)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .font(.system(size: 12))
+                if isSearching {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.gray.opacity(0.12))
+            .cornerRadius(6)
+        }
+        .padding(.horizontal)
     }
 
     private func filterProjectTabButton(title: String, index: Int) -> some View {
@@ -259,18 +461,22 @@ struct SportCutFilterSheet: View {
         usedEventIDs: Set<String>,
         showSourceHeader: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if showSourceHeader {
-                Text(source.name)
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
-            }
-            let tagGroups = availableTagGroups(for: source, used: usedTagIDs)
-            let tags = availableTags(for: source, used: usedTagIDs)
-            let labelGroups = availableLabelGroups(for: source, used: usedLabelIDs)
-            let labels = availableLabels(for: source, used: usedLabelIDs)
-            let events = availableEvents(for: source, usedEventIDs: usedEventIDs)
+        // При поиске остаются только совпавшие по имени элементы; проект без совпадений скрываем целиком.
+        let tagGroups = availableTagGroups(for: source, used: usedTagIDs).filter { matchesSearch($0.name) }
+        let tags = availableTags(for: source, used: usedTagIDs).filter { matchesSearch($0.name) }
+        let labelGroups = availableLabelGroups(for: source, used: usedLabelIDs).filter { matchesSearch($0.name) }
+        let labels = availableLabels(for: source, used: usedLabelIDs).filter { matchesSearch($0.name) }
+        let events = availableEvents(for: source, usedEventIDs: usedEventIDs).filter { matchesSearch($0.name) }
+        let isEmpty = tagGroups.isEmpty && tags.isEmpty && labelGroups.isEmpty && labels.isEmpty && events.isEmpty
+
+        if !isEmpty {
+            VStack(alignment: .leading, spacing: 16) {
+                if showSourceHeader {
+                    Text(source.name)
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                }
 
                     if !tagGroups.isEmpty {
                         filterSection(title: ^String.Titles.sportCutTagGroups) {
@@ -314,15 +520,10 @@ struct SportCutFilterSheet: View {
                         filterSection(title: ^String.Titles.sportCutLabelGroups) {
                             ForEach(labelGroups, id: \.id) { group in
                                 let groupLabels = group.lables
-                                let allSelected = groupLabels.allSatisfy { filter.selectedLabels.contains($0) }
-                                
+                                let allSelected = groupLabels.allSatisfy { isLabelSelected(id: $0, in: source) }
+
                                 Button(action: {
-                                    if allSelected {
-                                        groupLabels.forEach { filter.selectedLabels.remove($0) }
-                                    } else {
-                                        groupLabels.forEach { filter.selectedLabels.insert($0) }
-                                    }
-                                    filter.isFilterActive = filter.hasActiveFilters()
+                                    setLabelsSelected(labelNameIndex().equivalents(of: groupLabels), selected: !allSelected)
                                 }) {
                                     HStack(spacing: 4) {
                                         Image(systemName: allSelected ? "checkmark.square.fill" : "square")
@@ -355,9 +556,10 @@ struct SportCutFilterSheet: View {
                             }
                         }
                     }
+            }
         }
     }
-    
+
     @ViewBuilder
     private func filterSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -399,15 +601,22 @@ struct SportCutFilterSheet: View {
         .buttonStyle(PlainButtonStyle())
     }
     
+    /// Лейбл считается выбранным и по id, и по имени: тот же лейбл в другом проекте может иметь другой id.
+    private func isLabelSelected(id: String, name: String) -> Bool {
+        filter.selectedLabels.contains(id) || filter.selectedLabelNames.contains(Self.labelKey(name))
+    }
+
+    /// Тот же признак для id из группы лейблов — имя резолвим через библиотеку проекта.
+    private func isLabelSelected(id: String, in source: SportCutSource) -> Bool {
+        if filter.selectedLabels.contains(id) { return true }
+        guard let name = source.labels.first(where: { $0.id == id })?.name else { return false }
+        return filter.selectedLabelNames.contains(Self.labelKey(name))
+    }
+
     private func labelFilterButton(label: Label) -> some View {
-        let isSelected = filter.selectedLabels.contains(label.id)
+        let isSelected = isLabelSelected(id: label.id, name: label.name)
         return Button(action: {
-            if isSelected {
-                filter.selectedLabels.remove(label.id)
-            } else {
-                filter.selectedLabels.insert(label.id)
-            }
-            filter.isFilterActive = filter.hasActiveFilters()
+            setLabelsSelected(labelNameIndex().equivalents(of: label.id), selected: !isSelected)
         }) {
             HStack(spacing: 4) {
                 Image(systemName: isSelected ? "checkmark.square.fill" : "square")

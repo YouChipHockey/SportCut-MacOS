@@ -14,11 +14,19 @@ struct VideoThumbnailView: View {
     var isSelectionMode: Bool = false
     /// Позиция проекта в очереди склейки (1, 2, 3…), nil — не выбран.
     var selectionOrder: Int? = nil
+    /// Отмечен в режиме массового удаления — вместо номера очереди рисуем галочку.
+    var isChecked: Bool = false
     var onToggleSelection: () -> Void = {}
+    /// Идёт режим массового удаления — выбор показываем угловым кружком, без центрального оверлея.
+    var isBulkMode: Bool = false
+    /// Показывать кружок в углу обложки (вход в массовое удаление / отметка в нём).
+    var showBulkSelectCircle: Bool = false
+    /// Клик по кружку в углу: включить режим массового удаления (если надо) и переключить отметку.
+    var onBulkSelectCircleTap: () -> Void = {}
 
     @State private var isHovered = false
 
-    private var isSelected: Bool { selectionOrder != nil }
+    private var isSelected: Bool { selectionOrder != nil || isChecked }
 
     private var isFavorite: Bool {
         file.videoData.isFavorite ?? false
@@ -94,6 +102,12 @@ struct VideoThumbnailView: View {
                         
                         if isSelectionMode {
                             selectionOverlay
+                        } else if isBulkMode {
+                            // Массовое удаление: без затемнения/центрального круга — выбор в угловом
+                            // кружке (ниже). Клик по обложке тоже переключает отметку.
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture { onBulkSelectCircleTap() }
                         } else {
                         ZStack {
                             Rectangle()
@@ -129,7 +143,13 @@ struct VideoThumbnailView: View {
                     .clipShape(
                         RoundedRectangle(cornerRadius: 12)
                     )
-                    
+                    .overlay(alignment: .topLeading) {
+                        if !isSelectionMode && (isBulkMode || showBulkSelectCircle) {
+                            BulkSelectCornerCircle(isSelected: isChecked, action: onBulkSelectCircleTap)
+                                .padding(8)
+                        }
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text(file.name)
@@ -196,6 +216,13 @@ struct VideoThumbnailView: View {
                     .foregroundColor(.white)
                     .frame(width: 46, height: 46)
                     .background(Circle().fill(Color.accentColor))
+                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+            } else if isChecked {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(Color.red))
                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
             } else {
                 Image(systemName: "circle")

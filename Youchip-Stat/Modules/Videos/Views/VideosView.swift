@@ -25,6 +25,14 @@ struct VideosView: View {
     /// Id выбранных проектов в порядке выбора — этот порядок и станет порядком склейки.
     @State private var mergeSelection: [String] = []
     @State private var showMergeSheet = false
+    /// Режим выбора проектов для массового удаления.
+    @State private var isBulkDeleteMode = false
+    @State private var bulkDeleteSelection: Set<String> = []
+    @State private var showBulkDeleteAlert = false
+    /// Прерванная live-сессия, найденная при запуске (видео + разметка лежат в папке восстановления).
+    @State private var pendingRecovery: LiveSessionRecoveryManager.PendingSession?
+    @State private var showRecoveryAlert = false
+    @State private var isRecoveringLive = false
     @StateObject private var importManager = CollectionImportManager()
     
     enum VideoFilter: String, CaseIterable {
@@ -76,6 +84,10 @@ struct VideosView: View {
 
             if isMergeSelectionMode {
                 mergeSelectionBar
+            }
+
+            if isBulkDeleteMode {
+                bulkDeleteBar
             }
 
             if filteredFiles.isEmpty {
@@ -164,6 +176,14 @@ struct VideosView: View {
             )
             .environmentObject(viewModel)
         }
+        .alert(^String.Titles.bulkDeleteConfirmTitle, isPresented: $showBulkDeleteAlert) {
+            Button(^String.Titles.cancelButtonTitle, role: .cancel) { }
+            Button(^String.Titles.deleteButtonTitle, role: .destructive) {
+                deleteSelectedProjects()
+            }
+        } message: {
+            Text(String(format: ^String.Titles.bulkDeleteConfirmMessage, bulkDeleteSelection.count))
+        }
         .alert(^String.Titles.videoUnavailable, isPresented: $viewModel.state.showRebindAlert) {
             Button(^String.Titles.cancelButtonTitle, role: .cancel) {
                 viewModel.state.fileToRebind = nil
@@ -179,6 +199,87 @@ struct VideosView: View {
         .onReceive(viewModel.authManager.$isAuthValid) { isValid in
             viewModel.action.send(.updateLimitInfo)
         }
+        .onAppear {
+            checkPendingLiveRecovery()
+        }
+        .alert(^String.Titles.liveRecoveryFoundTitle, isPresented: $showRecoveryAlert) {
+            Button(^String.Titles.liveRecoveryRestoreButton) {
+                restorePendingLiveSession()
+            }
+            Button(^String.Titles.liveRecoveryLaterButton, role: .cancel) {
+                pendingRecovery = nil
+            }
+            Button(^String.Titles.liveRecoveryDiscardButton, role: .destructive) {
+                if let session = pendingRecovery {
+                    LiveSessionRecoveryManager.shared.discard(session)
+                }
+                pendingRecovery = nil
+            }
+        } message: {
+            if let session = pendingRecovery {
+                Text(String(format: ^String.Titles.liveRecoveryFoundMessage,
+                            session.name,
+                            formatRecoveryDuration(session.duration)))
+            }
+        }
+        .overlay(liveRecoveryOverlay)
+    }
+
+    // MARK: - Live Recovery
+
+    /// Прерванная live-сессия: файл записи и разметка сохранялись каждые 30 секунд, поэтому
+    /// после падения приложения проект можно собрать заново.
+    private var liveRecoveryOverlay: some View {
+        Group {
+            if isRecoveringLive {
+                ZStack {
+                    Color.black.opacity(0.35)
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text(^String.Titles.liveRecoveryProgress)
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .padding(24)
+                    .background(Color(NSColor.windowBackgroundColor))
+                    .cornerRadius(12)
+                }
+                .ignoresSafeArea()
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func checkPendingLiveRecovery() {
+        guard pendingRecovery == nil, !isRecoveringLive, !WindowsManager.shared.isLiveSession else { return }
+        guard let session = LiveSessionRecoveryManager.shared.pendingSessions().first else { return }
+        pendingRecovery = session
+        showRecoveryAlert = true
+    }
+
+    private func restorePendingLiveSession() {
+        guard let session = pendingRecovery else { return }
+        pendingRecovery = nil
+        isRecoveringLive = true
+        LiveSessionRecoveryManager.shared.recover(session) { result in
+            isRecoveringLive = false
+            switch result {
+            case .success:
+                viewModel.action.send(.updateLimitInfo)
+            case .failure:
+                viewModel.action.send(.showError(error: ^String.Titles.liveRecoveryFailed))
+            }
+        }
+    }
+
+    private func formatRecoveryDuration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%d:%02d", minutes, secs)
     }
     
     private var headerView: some View {
@@ -299,6 +400,7 @@ struct VideosView: View {
             if isMergeSelectionMode {
                 exitMergeSelectionMode()
             } else {
+                exitBulkDeleteMode()
                 isMergeSelectionMode = true
             }
         }) {
@@ -360,6 +462,76 @@ struct VideosView: View {
     private func exitMergeSelectionMode() {
         isMergeSelectionMode = false
         mergeSelection.removeAll()
+    }
+
+    // MARK: - Массовое удаление проектов
+
+    /// Панель под шапкой: сколько отмечено и кнопка удаления.
+    private var bulkDeleteBar: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "trash")
+                .foregroundColor(.red)
+
+            Text(String(format: ^String.Titles.bulkDeleteSelectedCount, bulkDeleteSelection.count))
+                .font(.system(size: 13, weight: .medium))
+
+            Text(^String.Titles.bulkDeleteHint)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Button(^String.Titles.sportCutSelectAll) {
+                bulkDeleteSelection = Set(filteredFiles.map(\.videoData.id))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.blue)
+
+            Button(^String.Titles.cancelButtonTitle) {
+                exitBulkDeleteMode()
+            }
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.secondary)
+
+            Button(action: { showBulkDeleteAlert = true }) {
+                Text(String(format: ^String.Titles.bulkDeleteCountButton, bulkDeleteSelection.count))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(bulkDeleteSelection.isEmpty ? Color.gray : Color.red))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(bulkDeleteSelection.isEmpty)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Color.red.opacity(0.08))
+    }
+
+    private func toggleBulkDeleteSelection(for file: FilesFile) {
+        let id = file.videoData.id
+        if bulkDeleteSelection.contains(id) {
+            bulkDeleteSelection.remove(id)
+            // Сняли выбор с последнего проекта — выходим из режима удаления: иначе он висел
+            // активным без единого выбранного проекта.
+            if bulkDeleteSelection.isEmpty { exitBulkDeleteMode() }
+        } else {
+            bulkDeleteSelection.insert(id)
+        }
+    }
+
+    private func exitBulkDeleteMode() {
+        isBulkDeleteMode = false
+        bulkDeleteSelection.removeAll()
+    }
+
+    private func deleteSelectedProjects() {
+        let files = viewModel.state.files.filter { bulkDeleteSelection.contains($0.videoData.id) }
+        for file in files {
+            viewModel.action.send(.deleteFile(file: file))
+        }
+        exitBulkDeleteMode()
     }
 
     private var settingsMenu: some View {
@@ -489,8 +661,19 @@ struct VideosView: View {
                         file: file,
                         viewModel: viewModel,
                         isSelectionMode: isMergeSelectionMode,
-                        selectionOrder: mergeSelection.firstIndex(of: file.videoData.id).map { $0 + 1 },
-                        onToggleSelection: { toggleMergeSelection(for: file) }
+                        selectionOrder: isMergeSelectionMode
+                            ? mergeSelection.firstIndex(of: file.videoData.id).map { $0 + 1 }
+                            : nil,
+                        isChecked: isBulkDeleteMode && bulkDeleteSelection.contains(file.videoData.id),
+                        onToggleSelection: {
+                            toggleMergeSelection(for: file)
+                        },
+                        isBulkMode: isBulkDeleteMode,
+                        showBulkSelectCircle: !isMergeSelectionMode,
+                        onBulkSelectCircleTap: {
+                            if !isBulkDeleteMode { isBulkDeleteMode = true }
+                            toggleBulkDeleteSelection(for: file)
+                        }
                     )
                 }
             }

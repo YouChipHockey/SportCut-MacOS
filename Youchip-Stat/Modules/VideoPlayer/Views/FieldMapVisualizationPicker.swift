@@ -26,9 +26,13 @@ struct FieldMapVisualizationPicker: View {
     private var availableCollections: [CollectionBookmark] {
         collections.filter { collection in
             let manager = CustomCollectionManager()
+            // Годится ЛЮБАЯ карта коллекции с картинкой, не только playFields.first. В
+            // мультикарточных коллекциях размечать могли по не-первой карте (разметка берёт
+            // карты, привязанные к тегу — см. usableMapFields), а старый фильтр смотрел лишь на
+            // первую и ошибочно выкидывал коллекцию → «Нет коллекций с настроенной картой поля».
+            // isVisualizable/collectionTagAndFieldIds ниже уже работают со всеми playFields.
             return manager.loadCollectionFromBookmarks(named: collection.name) &&
-                  manager.playField != nil &&
-                  manager.playField?.imageBookmark != nil
+                  manager.playFields.contains { $0.imageBookmark != nil }
         }
     }
     

@@ -105,12 +105,17 @@ struct TagFreeLayoutStorage {
         tags: [Tag],
         labels: [Label] = [],
         timeEvents: [TimeEvent] = [],
-        playFields: [PlayField] = []
+        playFields: [PlayField] = [],
+        clocks: [ClockEntity] = [],
+        /// true — пулы заведомо загружены (редактор коллекции), можно выкидывать объекты без сущности.
+        /// По умолчанию false: в библиотеке пул может быть ещё не подгружен, и объект дропать нельзя.
+        poolsAreAuthoritative: Bool = false
     ) -> TagFreeLayout {
         let existingTagIds = Set(tags.map { $0.id })
         let existingLabelIds = Set(labels.map { $0.id })
         let existingTimeEventIds = Set(timeEvents.map { $0.id })
         let existingPlayFieldIds = Set(playFields.map { $0.id })
+        let existingClockIds = Set(clocks.map { $0.id })
 
         // Filter items: keep tags that still exist and labels that still exist
         var filteredItems = layout.items.filter { item in
@@ -118,9 +123,12 @@ struct TagFreeLayoutStorage {
             case .tag:       return existingTagIds.contains(item.elementId)
             case .label:     return existingLabelIds.contains(item.elementId)
             case .timeEvent: return existingTimeEventIds.contains(item.elementId)
-            // Карты не выкидываем, пока список карт не загружен (иначе на переключениях
-            // экранов карта пропадала из-за временно пустого playFields).
+            // Карты/счётчики не выкидываем, пока их пул не загружен (иначе на переключениях
+            // экранов элемент пропадал из-за временно пустого списка).
             case .map:       return existingPlayFieldIds.isEmpty ? true : existingPlayFieldIds.contains(item.elementId)
+            case .clock:
+                if poolsAreAuthoritative { return existingClockIds.contains(item.elementId) }
+                return existingClockIds.isEmpty ? true : existingClockIds.contains(item.elementId)
             }
         }
 
@@ -237,6 +245,29 @@ struct TagFreeLayoutStorage {
             showLabel: false,
             cornerRadius: 6,
             aspectRatioLocked: true
+        )
+        layout.items.append(newItem)
+    }
+
+    static func addClockToLayout(_ layout: inout TagFreeLayout, clock: ClockEntity) {
+        guard !layout.items.contains(where: { $0.elementId == clock.id && $0.kind == .clock }) else { return }
+        let maxY = layout.items.map { $0.center.y + $0.size.height / 2 }.max() ?? 100
+        // Дефолт под сегментный вид (см. resizeClockItem в CanvasElementEditSheet).
+        let size = CGSize(width: 240, height: 64)
+        let newItem = TagFreeLayoutItem(
+            elementId: clock.id,
+            kind: .clock,
+            center: CGPoint(x: layout.canvasWidth / 2, y: maxY + 80 + size.height / 2),
+            size: size,
+            rotation: 0,
+            shape: .square,
+            fillOpacity: 1.0,
+            strokeWidth: 1.0,
+            textColor: "FFFFFF",
+            fontSize: 14,
+            fontWeight: .bold,
+            showLabel: false,
+            cornerRadius: 8
         )
         layout.items.append(newItem)
     }

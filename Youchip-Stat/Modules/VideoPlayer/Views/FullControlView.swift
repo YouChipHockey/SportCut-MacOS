@@ -251,6 +251,9 @@ struct FullControlView: View {
     @State private var showCSVExport = false
     @State private var hoveredStampInfo: AttributedString? = nil
     @State private var showZoomPopover = false
+    /// Поиск по клипам в разметке: прячет на таймлайне все штампы, кроме найденных/выбранных.
+    @StateObject private var clipFilter = TimelineFilter()
+    @State private var showClipSearchSheet = false
 
     @State private var isLoading = false
     @State private var availableTags: [Tag] = []
@@ -296,6 +299,9 @@ struct FullControlView: View {
                             timelineContent(proxy: scrollProxy)
                         }
                     }
+                    // Система координат для измерителя вертикального смещения (см.
+                    // `timelineScrollOffsetTracker` и `visibleLineRange`).
+                    .coordinateSpace(name: "vTimelineScroll")
                     .scrollIndicators(.hidden)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(alignment: .top) { pinnedTimelineHeaderOverlay }
@@ -334,6 +340,9 @@ struct FullControlView: View {
                             timelineContent(proxy: scrollProxy)
                         }
                     }
+                    // Та же система координат, что и в ветке macOS 13+ — окно видимости строк
+                    // должно работать в обеих.
+                    .coordinateSpace(name: "vTimelineScroll")
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(alignment: .top) { pinnedTimelineHeaderOverlay }
                     .background(
@@ -601,9 +610,126 @@ struct FullControlView: View {
         return max(0.0, min(time, duration))
     }
     
+    // MARK: - Окно видимости строк (ручная виртуализация)
+    //
+    // `LazyVStack` сам по себе правую колонку НЕ виртуализует: дорожки лежат внутри вложенного
+    // горизонтального `ScrollView`, и внешний вертикальный скролл считает её контентом
+    // фиксированной высоты — материализуются все строки. Поэтому окно считаем руками и применяем
+    // к ОБЕИМ колонкам один и тот же диапазон, чтобы имена не разъехались с дорожками.
+    //
+    // Сверху и снизу вместо невидимых строк ставим `Color.clear` точной высоты — тогда общая
+    // высота контента и, значит, диапазон вертикального скролла остаются прежними.
+    //
+    // Безопасно, потому что вертикального `scrollTo` в коде нет (горизонтальный идёт через
+    // `timelineScrollController`). Появится — окно придётся учитывать и там.
+
+    private static let timelineRowHeight: CGFloat = 30
+    /// Запас строк за пределами вьюпорта — чтобы при быстром скролле не мигала пустота.
+    private static let timelineWindowBuffer = 12
+
+    @State private var timelineVerticalOffset: CGFloat = 0
+
+    /// Штамп вместе со своей линией — для листов, поднятых из строки в окно (TASK-007, 3.5).
+    /// `id` берём у штампа: он уникален, а `.sheet(item:)` пересоздаёт лист при его смене.
+    struct StampInLine: Identifiable {
+        let line: TimelineLine
+        let stamp: TimelineStamp
+        var id: UUID { stamp.id }
+    }
+
+    @State private var stampForCommentEdit: StampInLine?
+    @State private var stampForSessionPick: StampInLine?
+
+    /// `ScreenshotMetadata` не `Identifiable`, а `.sheet(item:)` этого требует — оборачиваем.
+    struct ScreenshotEditTarget: Identifiable {
+        let screenshot: ScreenshotMetadata
+        var id: String { screenshot.screenshotName }
+    }
+
+    @State private var screenshotForTagEditing: ScreenshotEditTarget?
+
+    /// Строка вместе со своим индексом в общем списке — индекс нужен строке для вертикального
+    /// переноса штампа, а идентичность для `ForEach` остаётся по `line.id`.
+    struct WindowedLine: Identifiable {
+        let index: Int
+        let line: TimelineLine
+        var id: UUID { line.id }
+    }
+
+    /// Строки для отрисовки с учётом поиска по клипам: число строк не меняется (иначе разъедется
+    /// с колонкой имён) — фильтруем только штампы внутри строк. Без активного поиска отдаём
+    /// исходные строки без копий (быстрый путь).
+    private var displayLines: [TimelineLine] {
+        // visibleLines, а не lines: служебный таймлайн счётчиков скрыт, пока его не позвали ⌘⌃0.
+        let all = timelineData.visibleLines
+        guard clipFilter.hasActiveFilters() else { return all }
+        return all.map { line in
+            var copy = line
+            copy.stamps = line.stamps.filter { clipFilter.matches(stamp: $0) }
+            return copy
+        }
+    }
+
+    /// Видимое окно строк в виде массива с индексами. Аллокация здесь безобидна: элементов
+    /// столько, сколько строк на экране (~30), а не сколько их в проекте.
+    private func windowedLines(range: Range<Int>, in lines: [TimelineLine]) -> [WindowedLine] {
+        range.map { WindowedLine(index: $0, line: lines[$0]) }
+    }
+
+    /// Штампы этой строки, попавшие в ⌘-выбор. Передаём в строку именно подмножество, а не весь
+    /// `stampsSelectedForSportCut`: иначе выбор в одной строке менял бы параметр у ВСЕХ строк и
+    /// ломал сравнение, из-за которого они и пропускают перерисовку.
+    private func bulkSelectionIDs(in line: TimelineLine) -> Set<UUID> {
+        let selected = timelineData.stampsSelectedForSportCut
+        guard !selected.isEmpty else { return [] }
+        var result: Set<UUID> = []
+        for stamp in line.stamps where selected.contains(stamp.id) {
+            result.insert(stamp.id)
+        }
+        return result
+    }
+
+    private func visibleLineRange(count: Int) -> Range<Int> {
+        guard count > 0 else { return 0..<0 }
+        let rowHeight = Self.timelineRowHeight
+        let viewportHeight = max(parentWindowHeight, rowHeight)
+        let firstVisible = Int(max(0, timelineVerticalOffset) / rowHeight)
+        let visibleCount = Int(viewportHeight / rowHeight) + 1
+
+        let lower = max(0, firstVisible - Self.timelineWindowBuffer)
+        let upper = min(count, firstVisible + visibleCount + Self.timelineWindowBuffer)
+        return lower..<max(lower, upper)
+    }
+
+    /// Невидимый измеритель вертикального смещения. Живёт в `.background` контента, поэтому
+    /// не влияет ни на высоту, ни на попадания мыши.
+    private var timelineScrollOffsetTracker: some View {
+        GeometryReader { geo in
+            let offset = -geo.frame(in: .named("vTimelineScroll")).minY
+            Color.clear
+                .onAppear { updateTimelineVerticalOffset(offset) }
+                .onChange(of: offset) { updateTimelineVerticalOffset($0) }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// Пишем `@State` только при смещении хотя бы на половину строки. Без этого порога каждый
+    /// кадр скролла инвалидировал бы body — то есть виртуализация съела бы сама себя.
+    private func updateTimelineVerticalOffset(_ offset: CGFloat) {
+        let clamped = max(0, offset)
+        guard abs(clamped - timelineVerticalOffset) >= Self.timelineRowHeight / 2 else { return }
+        timelineVerticalOffset = clamped
+    }
+
     @ViewBuilder
     private func timelineNameRows() -> some View {
-        ForEach(timelineData.lines) { line in
+        let lines = timelineData.visibleLines
+        let range = visibleLineRange(count: lines.count)
+
+        Color.clear
+            .frame(width: 195, height: CGFloat(range.lowerBound) * Self.timelineRowHeight)
+
+        ForEach(lines[range]) { line in
             if markupMode == .standard {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -765,6 +891,10 @@ struct FullControlView: View {
                 .id("name-\(line.id)")
             }
         }
+
+        Color.clear
+            .frame(width: 195,
+                   height: CGFloat(lines.count - range.upperBound) * Self.timelineRowHeight)
     }
 
     @ViewBuilder
@@ -776,32 +906,46 @@ struct FullControlView: View {
                 duration: duration,
                 interval: interval / 5,
                 width: gridWidth,
-                height: 30 * CGFloat(timelineData.lines.count + 1)
+                height: 30 * CGFloat(timelineData.visibleLines.count + 1)
             )
             .padding(.top, markerHeadBand)
             
             VStack(spacing: 0) {
-                TimelineTimestampsHeaderView(
-                    duration: duration,
-                    interval: interval,
-                    width: gridWidth
-                )
-                .frame(height: 30)
-                .timelineTapToSeek(
-                    gridWidth: gridWidth,
-                    duration: duration,
-                    onShortPress: { timelineData.selectStamp(stampID: nil) }
-                ) { time in
-                    videoManager.seek(to: time)
-                }
+                // Здесь была ВТОРАЯ копия линейки времени. Она всегда полностью скрыта под
+                // закреплённой шапкой (`pinnedTimelineHeaderOverlay` перекрывает ровно
+                // markerHeadBand + 30 сверху вьюпорта, а при скролле линейка уезжает под неё),
+                // то есть 240 `Text` строились вхолостую на каждый пересчёт. Оставлена только
+                // распорка той же высоты — на ней держится выравнивание дорожек.
+                // Тап по линейке (seek + снятие выделения) работает через закреплённую копию.
+                // См. TASK-007, 2.4.
+                Color.clear
+                    .frame(width: gridWidth, height: 30)
+                // Тот же диапазон, что и у колонки имён (`timelineNameRows`) — иначе колонки
+                // разъедутся. Пустоты сверху/снизу держат общую высоту неизменной.
+                // `displayLines` = строки с отфильтрованными по поиску штампами (число строк то же,
+                // поэтому выравнивание с колонкой имён сохраняется).
+                let lines = displayLines
+                let range = visibleLineRange(count: lines.count)
 
-                ForEach(timelineData.lines) { line in
+                Color.clear
+                    .frame(height: CGFloat(range.lowerBound) * Self.timelineRowHeight)
+
+                // Идентичность — по `line.id`, как и была. Через индекс нельзя: при
+                // переупорядочивании строк SwiftUI переиспользовал бы `@State` не той строки
+                // (активный ресайз штампа, подсветка drop-таргета).
+                ForEach(windowedLines(range: range, in: lines)) { item in
+                    let line = item.line
                     TimelineLineView(
-                        videoManager: VideoPlayerManager.shared,
-                        timelineData: TimelineDataManager.shared,
                         line: line,
                         scale: effectiveScale,
                         widthMax: gridWidth,
+                        totalDuration: max(1, duration),
+                        lineIndex: item.index,
+                        linesCount: lines.count,
+                        selectedStampID: timelineData.selectedStampID,
+                        // Только id из ЭТОЙ строки: иначе ⌘-выбор в одной строке ломал бы
+                        // равенство у всех остальных и они бы перерисовывались зря.
+                        bulkSelectedStampIDs: bulkSelectionIDs(in: line),
                         isSelected: (line.id == timelineData.selectedLineID),
                         onSelect: { timelineData.selectLine(line.id) },
                         onEditLabelsRequest: { stampID in
@@ -821,14 +965,38 @@ struct FullControlView: View {
                         onTagDragging: { tagEdgePosition in
                             self.tagEdgePosition = tagEdgePosition
                         },
-                        tagLibrary: TagLibraryManager.shared
+                        onEditComment: { stamp in
+                            stampForCommentEdit = StampInLine(line: line, stamp: stamp)
+                        },
+                        onPickSession: { stamp in
+                            stampForSessionPick = StampInLine(line: line, stamp: stamp)
+                        }
                     )
+                    // `.equatable()` обязателен: SwiftUI НЕ использует `==` у View сам по себе,
+                    // только через `EquatableView`. Без этого вызова конформанс `Equatable`
+                    // у `TimelineLineView` ни на что не влияет и строки перерисовываются все.
+                    .equatable()
                     .frame(height: 30)
                     .id("timeline-\(line.id)")
                 }
 
+                Color.clear
+                    .frame(height: CGFloat(lines.count - range.upperBound) * Self.timelineRowHeight)
             }
             .padding(.bottom, 15) // for scroll indicator to not overlap timelines
+            .padding(.top, markerHeadBand)
+
+            // Интервальные теги, которые пишутся прямо сейчас: растущий штамп появляется на
+            // дорожке сразу по старту записи, а не по её окончании. Слой пустой (и ни на что
+            // не подписан), пока ничего не пишется. См. `IntervalRecordingPreviewOverlay`.
+            IntervalRecordingPreviewOverlay(
+                duration: duration,
+                gridWidth: gridWidth,
+                lines: displayLines,
+                selectedLineID: timelineData.selectedLineID,
+                rowHeight: Self.timelineRowHeight,
+                topInset: 30
+            )
             .padding(.top, markerHeadBand)
 
             // Ни одного чтения времени/позиции плейхеда в этом body: и `playheadDragController`,
@@ -851,7 +1019,7 @@ struct FullControlView: View {
             ScreenshotMarkersView(
                 duration: duration,
                 gridWidth: gridWidth,
-                totalHeight: 30 * CGFloat(timelineData.lines.count + 1),
+                totalHeight: 30 * CGFloat(timelineData.visibleLines.count + 1),
                 part: .stemsOnly
             )
             .padding(.top, markerHeadBand)
@@ -860,7 +1028,7 @@ struct FullControlView: View {
             TimelineMouseTracker(
                 duration: duration,
                 gridWidth: gridWidth,
-                lines: timelineData.lines,
+                lines: displayLines,
                 tagLibrary: TagLibraryManager.shared,
                 onStampUpdate: { stampInfo, location in
                     NotificationCenter.default.post(
@@ -980,6 +1148,9 @@ struct FullControlView: View {
         // Костыль: при уменьшении окна добавляем внизу списка пустоту, равную тому, насколько окно
         // стало меньше стартового — чтобы скролл всегда долистывался до последней дорожки.
         .padding(.bottom, extraScrollBottomPadding)
+        // Измеритель вертикального смещения для окна видимости строк. Именно `.background`:
+        // так он получает геометрию контента и при этом не влияет ни на высоту, ни на попадания.
+        .background(timelineScrollOffsetTracker)
     }
 
     /// Насколько окно уменьшилось относительно стартового размера (0, если больше/равно).
@@ -1268,7 +1439,10 @@ struct FullControlView: View {
                     interval: interval,
                     viewportWidth: rightWidth,
                     band: markerHeadBand,
-                    markersTotalHeight: 30 * CGFloat(timelineData.lines.count + 1)
+                    markersTotalHeight: 30 * CGFloat(timelineData.visibleLines.count + 1),
+                    onEditScreenshotTags: { screenshot in
+                        screenshotForTagEditing = ScreenshotEditTarget(screenshot: screenshot)
+                    }
                 )
             }
             .frame(width: geo.size.width, height: markerHeadBand + 30, alignment: .topLeading)
@@ -1510,7 +1684,7 @@ struct FullControlView: View {
         // Collect all stamps from non-drawings timelines, sorted by start time
         var allStamps: [(stamp: TimelineStamp, tagName: String, labelNames: [String], colorHex: String)] = []
         for line in timelineData.lines {
-            if line.isDrawingsTimeline { continue }
+            if line.isServiceTimeline { continue }
             for stamp in line.stamps {
                 let tag = tagLibrary.findTagById(stamp.idTag)
                 let tagName = tag?.name ?? stamp.label
@@ -1689,6 +1863,8 @@ struct FullControlView: View {
 
             timelineFilterMenuButton
 
+            clipSearchButton
+
             clipAutoSaveButton
 
             clipAutoExportToggle
@@ -1838,6 +2014,32 @@ struct FullControlView: View {
         .help(^String.Titles.clipAutoExportBadge)
     }
 
+    /// Поиск по клипам: открывает лист поиска; подсвечивается, когда фильтр активен, рядом — сброс.
+    private var clipSearchButton: some View {
+        HStack(spacing: 4) {
+            Button(action: { showClipSearchSheet = true }) {
+                Image(systemName: clipFilter.hasActiveFilters() ? "magnifyingglass.circle.fill" : "magnifyingglass.circle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(clipFilter.hasActiveFilters() ? .blue : .primary)
+                    .padding(6)
+                    .background(Color.gray.opacity(0.12))
+                    .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+            .help(^String.Titles.clipSearchTitle)
+
+            if clipFilter.hasActiveFilters() {
+                Button(action: { clipFilter.clearFilters() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.reset)
+            }
+        }
+    }
+
     private var timelineFilterMenuButton: some View {
         Menu {
             Button(^String.Titles.viewingSortReset) {
@@ -1958,10 +2160,11 @@ struct FullControlView: View {
             }
         }
 
-        // Drawings timeline always stays at the top
+        // Служебные линии всегда сверху и в фиксированном порядке: рисунки, под ними счётчики.
         let drawings = timelineData.lines.filter { $0.isDrawingsTimeline }
-        let rest = timelineData.lines.filter { !$0.isDrawingsTimeline }
-        timelineData.lines = drawings + rest
+        let clocks = timelineData.lines.filter { $0.isClocksTimeline }
+        let rest = timelineData.lines.filter { !$0.isServiceTimeline }
+        timelineData.lines = drawings + clocks + rest
     }
     
     /// Proxy for "date added": the finish time of the most recently marked tag in the line.
@@ -2078,6 +2281,53 @@ struct FullControlView: View {
         .sheet(isPresented: $showAddLineSheet) {
             AddLineSheet { newLineName in
                 timelineData.addLine(name: newLineName)
+            }
+        }
+        .sheet(isPresented: $showClipSearchSheet) {
+            MarkupClipSearchSheet(filter: clipFilter)
+        }
+        // Оба листа подняты из `TimelineLineView` сюда: на строке они означали по два
+        // presentation-хоста на каждую строку. См. TASK-007, 3.5.
+        .sheet(item: $stampForCommentEdit) { item in
+            StampCommentEditSheet(stamp: item.stamp) { newComment in
+                let trimmed = newComment.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let lineIndex = timelineData.lines.firstIndex(where: { $0.id == item.line.id }),
+                   let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == item.stamp.id }) {
+                    timelineData.lines[lineIndex].stamps[stampIndex].comment = trimmed.isEmpty ? nil : newComment
+                    timelineData.updateTimelines()
+                }
+                stampForCommentEdit = nil
+            }
+        }
+        // Один лист на окно вместо одного на каждый экземпляр `ScreenshotMarkersView`.
+        // Костыль с двойным `asyncAfter` («переоткрыть лист, чтобы обновились данные») больше не
+        // нужен: `.sheet(item:)` строит содержимое в момент установки item'а, то есть по свежим
+        // данным. См. TASK-007, 4.3.
+        .sheet(item: $screenshotForTagEditing) { target in
+            ScreenshotTagEditorSheet(
+                screenshot: target.screenshot,
+                onSave: { updatedStampIds in
+                    ScreenshotsMetadataManager.shared.updateScreenshotRelatedStamps(
+                        screenshotName: target.screenshot.screenshotName,
+                        relatedStampIds: updatedStampIds
+                    )
+                    screenshotForTagEditing = nil
+                },
+                onCancel: { screenshotForTagEditing = nil }
+            )
+        }
+        .sheet(item: $stampForSessionPick) { item in
+            SportCutSessionPickerSheet(
+                title: ^String.Titles.viewingToExistingSession,
+                sessions: SportCutSessionManager.shared.sessions
+            ) { sessionID in
+                WindowsManager.shared.appendStampsToSportCutSession(
+                    pairs: [(item.line, item.stamp)],
+                    sessionID: sessionID
+                )
+                stampForSessionPick = nil
+            } onCancel: {
+                stampForSessionPick = nil
             }
         }
         .sheet(item: $stampItemsEditSheetType) { sheetType in
@@ -2851,8 +3101,13 @@ struct TimelineMouseTracker: NSViewRepresentable {
                 removeTrackingArea(trackingArea)
             }
             
+            // .activeAlways (не .activeInKeyWindow): наведение на штамп должно показывать
+            // строчку с инфой сразу, даже если окно таймлайнов ещё не активно — иначе
+            // пользователю приходится сначала кликом активировать окно, потом наводить.
+            // Клик по штампу и так проходит сразу (FirstMouseHostingController), наведение
+            // должно вести себя так же.
             let options: NSTrackingArea.Options = [
-                .activeInKeyWindow,
+                .activeAlways,
                 .mouseMoved,
                 .inVisibleRect
             ]
@@ -3045,9 +3300,10 @@ struct ScreenshotMarkersView: View {
     @ObservedObject var tagLibrary = TagLibraryManager.shared
 
     @State private var hoveredScreenshot: String? = nil
-    @State private var showScreenshotTagEditor: Bool = false
-    @State private var editingScreenshot: ScreenshotMetadata? = nil
-    @State private var isFirstOpen: Bool = true
+    /// Лист редактирования привязанных тегов живёт в окне, а не здесь: эта вьюха создаётся
+    /// ДВАЖДЫ (стебли в скролле + головы в закреплённой шапке), то есть было два хоста листа
+    /// на один лист. См. TASK-007, 4.3.
+    var onEditRelatedTags: (ScreenshotMetadata) -> Void = { _ in }
     
     private func getCurrentFile() -> FilesFile? {
         guard let videoId = timelineData.currentVideoId else {
@@ -3085,37 +3341,6 @@ struct ScreenshotMarkersView: View {
                 // пересчёт body вызывался `FileManager.fileExists` на каждый скриншот.
                 if screenshotsManager.hasImageFile(for: screenshot) {
                     screenshotMarker(for: screenshot)
-                }
-            }
-        }
-        .sheet(isPresented: $showScreenshotTagEditor) {
-            if let screenshot = editingScreenshot {
-                ScreenshotTagEditorSheet(
-                    screenshot: screenshot,
-                    onSave: { updatedStampIds in
-                        screenshotsManager.updateScreenshotRelatedStamps(
-                            screenshotName: screenshot.screenshotName,
-                            relatedStampIds: updatedStampIds
-                        )
-                        showScreenshotTagEditor = false
-                        editingScreenshot = nil
-                    },
-                    onCancel: {
-                        showScreenshotTagEditor = false
-                        editingScreenshot = nil
-                    }
-                )
-            }
-        }
-        .onChange(of: showScreenshotTagEditor) { isShowing in
-            // При первом открытии делаем мгновенное переоткрытие для обновления данных
-            if isShowing && isFirstOpen {
-                isFirstOpen = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                    // showScreenshotTagEditor = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                        showScreenshotTagEditor = true
-                    }
                 }
             }
         }
@@ -3163,8 +3388,7 @@ struct ScreenshotMarkersView: View {
                 let availableStamps = getAvailableStampsForScreenshot(screenshot)
                 if !availableStamps.isEmpty {
                     Button(^String.Titles.fullControlEditBoundTags) {
-                        editingScreenshot = screenshot
-                        showScreenshotTagEditor = true
+                        onEditRelatedTags(screenshot)
                     }
                 }
 
@@ -3244,7 +3468,7 @@ struct ScreenshotMarkersView: View {
         var availableStamps: [(line: TimelineLine, stamp: TimelineStamp)] = []
         
         for line in timelineData.lines {
-            if line.isDrawingsTimeline { continue }
+            if line.isServiceTimeline { continue }
             
             for stamp in line.stamps {
                 let screenshotTime = screenshot.videoTime
@@ -3361,7 +3585,7 @@ struct ScreenshotTagEditorSheet: View {
         var stamps: [(line: TimelineLine, stamp: TimelineStamp)] = []
         
         for line in timelineData.lines {
-            if line.isDrawingsTimeline { continue }
+            if line.isServiceTimeline { continue }
             
             for stamp in line.stamps {
                 // Проверяем пересечение времени

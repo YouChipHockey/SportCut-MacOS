@@ -159,16 +159,14 @@ private struct FieldMapSelectionRow: View {
                         }
                     )
                     .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onEnded { value in
-                                guard imageSize.width > 0, imageSize.height > 0,
-                                      value.location.x >= 0, value.location.x <= imageSize.width,
-                                      value.location.y >= 0, value.location.y <= imageSize.height else { return }
-                                onPick(CGPoint(x: value.location.x / imageSize.width,
-                                               y: value.location.y / imageSize.height))
-                            }
-                    )
+                    // Первый клик по неактивному окну должен сразу ставить точку — см. FirstMouseHosting.
+                    .onFirstMouseTap(location: { point in
+                        guard imageSize.width > 0, imageSize.height > 0,
+                              point.x >= 0, point.x <= imageSize.width,
+                              point.y >= 0, point.y <= imageSize.height else { return }
+                        onPick(CGPoint(x: point.x / imageSize.width,
+                                       y: point.y / imageSize.height))
+                    })
                     .background(Color.black.opacity(0.05))
                     .cornerRadius(8)
             } else {

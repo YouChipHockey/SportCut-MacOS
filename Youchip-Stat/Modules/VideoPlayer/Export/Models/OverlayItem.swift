@@ -13,6 +13,9 @@ struct ExportWatermarkOptions {
     var showComment: Bool = true
     /// Наносить ли логотип клуба (настраивается в настройках приложения).
     var showClubLogo: Bool = false
+    /// Счётчики (штампы скрытого таймлайна), которые нужно нанести на экспорт. Пусто — без них.
+    /// Показания берутся из записи разметки, поэтому в файле счётчик идёт ровно как шёл вживую.
+    var clockStampIDs: Set<UUID> = []
 
     static let `default` = ExportWatermarkOptions()
 }

@@ -26,17 +26,51 @@ struct CanvasElementEditSheet: View {
     @State private var labelDescription = ""
     @State private var eventName = ""
 
+    // Поля секундомера/таймера.
+    @State private var clockName = ""
+    @State private var clockCaption = ""
+    @State private var clockMode: ClockMode = .stopwatch
+    @State private var clockAppearance: ClockAppearance = .segments
+    @State private var clockShowOnVideo = false
+    @State private var clockShowCentiseconds = true
+    @State private var clockInitialMinutes = 10
+    @State private var clockInitialSecs = 0
+    @State private var clockZeroAction: ClockZeroAction = .stop
+    @State private var clockFiresBindingsOnZero = false
+    /// Тип при открытии — чтобы подгонять размер объекта только при смене типа.
+    @State private var loadedClockAppearance: ClockAppearance = .segments
+
     private enum Tab: Hashable { case parameters, appearance }
+
+    /// Редактируем счётчик — у него только собственные параметры, общей «внешности» нет.
+    private var isClock: Bool { target.kind == .clock }
+
+    /// Ввод целого времени руками (минуты/секунды), без отрицательных.
+    private static let intFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .none
+        f.allowsFloats = false
+        f.minimum = 0
+        f.maximum = 5999
+        return f
+    }()
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Picker("", selection: $tab) {
-                    Text(^String.Titles.canvasEditTabParameters).tag(Tab.parameters)
-                    Text(^String.Titles.canvasEditTabAppearance).tag(Tab.appearance)
+                // У счётчика вкладки «Внешний вид» нет: его оформление (вариант циферблата, сотые)
+                // живёт в собственных параметрах, а общие настройки кнопки ему не подходят.
+                if isClock {
+                    Text(^String.Titles.clockCountersTitle)
+                        .font(.headline)
+                } else {
+                    Picker("", selection: $tab) {
+                        Text(^String.Titles.canvasEditTabParameters).tag(Tab.parameters)
+                        Text(^String.Titles.canvasEditTabAppearance).tag(Tab.appearance)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 360)
                 }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 360)
 
                 Spacer()
 
@@ -57,9 +91,11 @@ struct CanvasElementEditSheet: View {
                 parametersTab
                     .opacity(tab == .parameters ? 1 : 0)
                     .allowsHitTesting(tab == .parameters)
-                appearanceTab
-                    .opacity(tab == .appearance ? 1 : 0)
-                    .allowsHitTesting(tab == .appearance)
+                if !isClock {
+                    appearanceTab
+                        .opacity(tab == .appearance ? 1 : 0)
+                        .allowsHitTesting(tab == .appearance)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -73,6 +109,19 @@ struct CanvasElementEditSheet: View {
             }
             if let event = collectionManager.timeEvents.first(where: { $0.id == target.elementId }) {
                 eventName = event.name
+            }
+            if let clock = collectionManager.clocks.first(where: { $0.id == target.elementId }) {
+                clockName = clock.name
+                clockMode = clock.mode
+                clockAppearance = clock.appearance
+                clockShowOnVideo = clock.showOnVideo
+                clockShowCentiseconds = clock.showCentiseconds
+                clockInitialMinutes = Int(clock.initialSeconds) / 60
+                clockInitialSecs = Int(clock.initialSeconds) % 60
+                clockCaption = clock.caption
+                clockZeroAction = clock.zeroAction
+                clockFiresBindingsOnZero = clock.firesBindingsOnZero
+                loadedClockAppearance = clock.appearance
             }
         }
     }
@@ -94,7 +143,115 @@ struct CanvasElementEditSheet: View {
             eventForm
         case .map:
             mapForm
+        case .clock:
+            clockForm
         }
+    }
+
+    private var clockForm: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    field(title: ^String.Titles.canvasEditName, text: $clockName)
+                    field(title: ^String.Titles.clockCaptionTitle, text: $clockCaption)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(^String.Titles.clockModeTitle).font(.caption).foregroundColor(.secondary)
+                        Picker("", selection: $clockMode) {
+                            Text(^String.Titles.clockModeStopwatch).tag(ClockMode.stopwatch)
+                            Text(^String.Titles.clockModeTimer).tag(ClockMode.timer)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    if clockMode == .timer {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(^String.Titles.clockInitialValue).font(.caption).foregroundColor(.secondary)
+                            HStack(spacing: 12) {
+                                HStack(spacing: 4) {
+                                    TextField("", value: $clockInitialMinutes, formatter: Self.intFormatter)
+                                        .textFieldStyle(.roundedBorder)
+                                        .frame(width: 64)
+                                        .multilineTextAlignment(.trailing)
+                                    Text(^String.Titles.clockMinutesShort).foregroundColor(.secondary)
+                                }
+                                HStack(spacing: 4) {
+                                    TextField("", value: $clockInitialSecs, formatter: Self.intFormatter)
+                                        .textFieldStyle(.roundedBorder)
+                                        .frame(width: 64)
+                                        .multilineTextAlignment(.trailing)
+                                    Text(^String.Titles.clockSecondsShort).foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(^String.Titles.clockZeroActionTitle).font(.caption).foregroundColor(.secondary)
+                            Picker("", selection: $clockZeroAction) {
+                                ForEach(ClockZeroAction.allCases, id: \.self) { action in
+                                    Text(NSLocalizedString(action.localizationKey.capitalizeFirstLetter(), comment: "")).tag(action)
+                                }
+                            }
+                            .pickerStyle(.menu)
+
+                            Toggle(^String.Titles.clockFiresBindingsOnZero, isOn: $clockFiresBindingsOnZero)
+                            Text(^String.Titles.clockFiresBindingsOnZeroHint)
+                                .font(.caption2).foregroundColor(.secondary)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(^String.Titles.clockAppearanceTitle).font(.caption).foregroundColor(.secondary)
+                        Picker("", selection: $clockAppearance) {
+                            ForEach(ClockAppearance.allCases, id: \.self) { a in
+                                Text(NSLocalizedString(a.localizationKey.capitalizeFirstLetter(), comment: "")).tag(a)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    Toggle(^String.Titles.clockShowOnVideo, isOn: $clockShowOnVideo)
+                    Toggle(^String.Titles.clockShowCentiseconds, isOn: $clockShowCentiseconds)
+                }
+                .padding(24)
+            }
+            Divider()
+            saveCancelBar {
+                let total = Double(clockInitialMinutes * 60 + clockInitialSecs)
+                let updated = ClockEntity(
+                    id: target.elementId,
+                    name: clockName.isEmpty ? (clockMode == .timer ? ^String.Titles.clockModeTimer : ^String.Titles.clockModeStopwatch) : clockName,
+                    mode: clockMode,
+                    initialSeconds: total,
+                    appearance: clockAppearance,
+                    showOnVideo: clockShowOnVideo,
+                    showCentiseconds: clockShowCentiseconds,
+                    zeroAction: clockZeroAction,
+                    firesBindingsOnZero: clockFiresBindingsOnZero,
+                    caption: clockCaption
+                )
+                collectionManager.updateClock(updated)
+                _ = collectionManager.saveCollectionToFiles()
+                ClockRuntimeManager.shared.register(collectionManager.clocks)
+                resizeClockItem(to: clockAppearance, showCentis: clockShowCentiseconds)
+            }
+        }
+    }
+
+    /// Подгоняет размер объекта-счётчика на холсте под выбранный тип (только при смене типа,
+    /// чтобы не затирать ручной ресайз). Segments — широкий, analog/ring — квадрат, text — средний.
+    private func resizeClockItem(to appearance: ClockAppearance, showCentis: Bool) {
+        guard appearance != loadedClockAppearance,
+              let idx = layout.items.firstIndex(where: { $0.elementId == target.elementId && $0.kind == .clock }) else { return }
+        let size: CGSize
+        switch appearance {
+        case .segments: size = CGSize(width: showCentis ? 240 : 190, height: 64)
+        case .text:     size = CGSize(width: showCentis ? 170 : 140, height: 52)
+        case .analog:   size = CGSize(width: 96, height: 96)
+        case .ring:     size = CGSize(width: 96, height: 96)
+        }
+        layout.items[idx].size = size
+        loadedClockAppearance = appearance
     }
 
     private var mapForm: some View {

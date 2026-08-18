@@ -236,6 +236,8 @@
 "ExportAs" = "匯出為:";  // ^String.Titles.exportAs
 "ExportWithDrawings" = "匯出時包含繪圖";  // ^String.Titles.exportWithDrawings
 "ExportWithDrawingsHelp" = "開啟後，繪圖將插入到視頻的相應時刻。每個繪圖的顯示時長在建立時設定。";  // ^String.Titles.exportWithDrawingsHelp
+"ExportWithClocks" = "匯出時包含計數器";
+"ExportWithClocksHelp" = "把標註時正在執行的計數器燒錄到影片中。";
 "ExportAddEpisodeNumbering" = "新增集數編號";  // ^String.Titles.exportAddEpisodeNumbering
 "ExportAddTagAndLabels" = "新增標籤名稱、標籤和事件";  // ^String.Titles.exportAddTagAndLabels
 "ExportAddComment" = "新增註釋";  // ^String.Titles.exportAddComment
@@ -945,6 +947,7 @@
 "SportCutLabelsColumn" = "標註";
 "SportCutEventsColumn" = "事件";
 "SportCutFilters" = "篩選";
+"SportCutFilterFound" = "找到"; // ^String.Titles.sportCutFilterFound
 "SportCutReset" = "重置";
 "SportCutTagGroups" = "標籤組";
 "SportCutTags" = "標籤";
@@ -1152,6 +1155,8 @@
 "KeyBindingTypeActivation" = "啟用";
 "KeyBindingTypeDeactivation" = "停用";
 "KeyBindingTypeIntervalInversion" = "區間反轉";
+"KeyBindingTypeClockReset" = "重設計數器";
+"KeyBindingsClockResetHint" = "按下按鈕時觸發（關聯的任一方向）：計數器停止並回到初始值。Ctrl+點擊僅執行重設，不執行按鈕的一般動作。";
 "KeyBindingTypeVisibility" = "顯示";
 "KeyBindingTypeInvisibility" = "隱藏";
 "KeyBindingTypeVisibilityInversion" = "可見性反轉";
@@ -1234,6 +1239,43 @@
 "HeatMapControlShowMarkers" = "顯示標記";
 
 // Project Merge
+"BulkDeleteButton" = "批次刪除"; // ^String.Titles.bulkDeleteButton
+"BulkDeleteHint" = "點擊卡片進行選擇"; // ^String.Titles.bulkDeleteHint
+"BulkDeleteSelectedCount" = "已選擇：%d"; // ^String.Titles.bulkDeleteSelectedCount
+"BulkDeleteConfirmTitle" = "刪除所選？"; // ^String.Titles.bulkDeleteConfirmTitle
+"BulkDeleteConfirmMessage" = "將刪除 %d 項，且無法復原。"; // ^String.Titles.bulkDeleteConfirmMessage
+"BulkDeleteCountButton" = "刪除 %d 個項目"; // ^String.Titles.bulkDeleteCountButton
+"ClipSearchTitle" = "片段搜尋"; // ^String.Titles.clipSearchTitle
+"ClipSearchPrompt" = "輸入任意文字——我們會顯示包含它的標籤（名稱、標籤或事件中）。"; // ^String.Titles.clipSearchPrompt
+"ClockCountersTitle" = "計數器";
+"ClockCaptionTitle" = "標註";
+"ClockTimelineName" = "計數器";
+"ClockModeTitle" = "模式";
+"ClockModeStopwatch" = "碼錶";
+"ClockModeTimer" = "計時器";
+"ClockInitialValue" = "初始值";
+"ClockMinutesShort" = "分";
+"ClockSecondsShort" = "秒";
+"ClockAppearanceTitle" = "外觀";
+"ClockShowOnVideo" = "在影片上顯示";
+"ClockShowCentiseconds" = "顯示百分之一秒";
+"ClockAddStopwatch" = "碼錶";
+"ClockAddTimer" = "計時器";
+"ClockTabHint" = "即時計數器：像標籤一樣以點擊或按鍵組合啟動。";
+"ClockNoCounters" = "尚無計數器";
+"ClockAddToCanvas" = "新增至畫布";
+"ClockAppearanceSegments" = "8 段數字";
+"ClockAppearanceAnalog" = "類比時鐘";
+"ClockAppearanceRing" = "進度環";
+"ClockAppearanceText" = "文字";
+"ClockZeroActionTitle" = "歸零時";
+"ClockOverlayDragHelp" = "拖曳可移動；拖角可調整大小；按兩下可復位";
+"ClockAppearanceInOwnSettings" = "計數器的外觀在它自己的設定中調整：按兩下該物件。";
+"ClockZeroActionStop" = "停在零";
+"ClockZeroActionReset" = "重設並停止";
+"ClockZeroActionRestart" = "重新開始（循環）";
+"ClockFiresBindingsOnZero" = "歸零時觸發關聯";
+"ClockFiresBindingsOnZeroHint" = "計時器作為來源：歸零時執行其發出的關聯。";
 "MergeProjectsButton" = "合併";
 "MergeProjectsExitSelection" = "退出選擇";
 "MergeProjectsHelp" = "將多個專案合併為一個";
@@ -1375,3 +1417,19 @@
 "VideoFormat" = "影片格式";
 "VideoTitle" = "影片標題";
 "VideoURL" = "影片網址";
+
+
+// MARK: - Live Recovery
+"LiveRecoveryFoundTitle" = "發現未完成的錄製";
+"LiveRecoveryFoundMessage" = "「%1$@」——已錄製約 %2$@。應用程式在儲存前被關閉。是否復原包含影片與標記的專案？";
+"LiveRecoveryRestoreButton" = "復原";
+"LiveRecoveryDiscardButton" = "刪除";
+"LiveRecoveryLaterButton" = "稍後";
+"LiveRecoveryProgress" = "正在復原錄製...";
+"LiveQuitSaving" = "正在結束前儲存錄製內容，請勿關閉電腦...";
+"LiveRecoveryFailed" = "無法復原中斷的錄製";
+
+// MARK: - Canvas copy / paste
+"CanvasCopyButtons" = "複製按鈕 (%d)";
+"CanvasPasteButtons" = "貼上按鈕 (%d)";
+"CanvasRemoveFromCanvas" = "從畫布移除 (%d)";

@@ -236,6 +236,8 @@
 "ExportAs" = "Export as:";  // ^String.Titles.exportAs
 "ExportWithDrawings" = "Export with drawings";  // ^String.Titles.exportWithDrawings
 "ExportWithDrawingsHelp" = "When enabled, drawings will be inserted at corresponding video moments. The display duration of each drawing is set when it is created.";  // ^String.Titles.exportWithDrawingsHelp
+"ExportWithClocks" = "Export with counters";
+"ExportWithClocksHelp" = "Burns in the counters that were running at that point in the markup.";
 "ExportAddEpisodeNumbering" = "Add episode numbering";  // ^String.Titles.exportAddEpisodeNumbering
 "ExportAddTagAndLabels" = "Add tag name, labels and events";  // ^String.Titles.exportAddTagAndLabels
 "ExportAddComment" = "Add comment";  // ^String.Titles.exportAddComment
@@ -983,6 +985,7 @@
 "SportCutLabelsColumn" = "Labels";
 "SportCutEventsColumn" = "Events";
 "SportCutFilters" = "Filters";
+"SportCutFilterFound" = "Found"; // ^String.Titles.sportCutFilterFound
 "SportCutReset" = "Reset";
 "SportCutTagGroups" = "Tag groups";
 "SportCutTags" = "Tags";
@@ -1193,6 +1196,8 @@
 "KeyBindingTypeActivation" = "Activation";
 "KeyBindingTypeDeactivation" = "Deactivation";
 "KeyBindingTypeIntervalInversion" = "Interval Inversion";
+"KeyBindingTypeClockReset" = "Reset Counter";
+"KeyBindingsClockResetHint" = "Fires when the button is pressed (in either direction of the link): the counter stops and returns to its initial value. Ctrl+click performs only the reset, without the button's normal action.";
 "KeyBindingTypeVisibility" = "Show";
 "KeyBindingTypeInvisibility" = "Hide";
 "KeyBindingTypeVisibilityInversion" = "Visibility Inversion";
@@ -1275,6 +1280,43 @@
 "HeatMapControlShowMarkers" = "Show markers";
 
 // Project Merge
+"BulkDeleteButton" = "Delete several"; // ^String.Titles.bulkDeleteButton
+"BulkDeleteHint" = "Click the cards to select them"; // ^String.Titles.bulkDeleteHint
+"BulkDeleteSelectedCount" = "Selected: %d"; // ^String.Titles.bulkDeleteSelectedCount
+"BulkDeleteConfirmTitle" = "Delete selected?"; // ^String.Titles.bulkDeleteConfirmTitle
+"BulkDeleteConfirmMessage" = "%d items will be deleted. This cannot be undone."; // ^String.Titles.bulkDeleteConfirmMessage
+"BulkDeleteCountButton" = "Delete %d projects"; // ^String.Titles.bulkDeleteCountButton
+"ClipSearchTitle" = "Clip search"; // ^String.Titles.clipSearchTitle
+"ClipSearchPrompt" = "Type any text — we'll show the tags where it appears (in the name, a label, or an event)."; // ^String.Titles.clipSearchPrompt
+"ClockCountersTitle" = "Counters";
+"ClockCaptionTitle" = "Caption";
+"ClockTimelineName" = "Counters";
+"ClockModeTitle" = "Mode";
+"ClockModeStopwatch" = "Stopwatch";
+"ClockModeTimer" = "Timer";
+"ClockInitialValue" = "Initial value";
+"ClockMinutesShort" = "min";
+"ClockSecondsShort" = "sec";
+"ClockAppearanceTitle" = "Appearance";
+"ClockShowOnVideo" = "Show on video";
+"ClockShowCentiseconds" = "Show centiseconds";
+"ClockAddStopwatch" = "Stopwatch";
+"ClockAddTimer" = "Timer";
+"ClockTabHint" = "Real-time counters: activated by click or binding, like a tag.";
+"ClockNoCounters" = "No counters yet";
+"ClockAddToCanvas" = "Add to canvas";
+"ClockAppearanceSegments" = "8 segments";
+"ClockAppearanceAnalog" = "Analog clock";
+"ClockAppearanceRing" = "Progress ring";
+"ClockAppearanceText" = "Text";
+"ClockZeroActionTitle" = "When it reaches zero";
+"ClockOverlayDragHelp" = "Drag to move; corner handle to resize; double-click to reset";
+"ClockAppearanceInOwnSettings" = "The counter's look is configured in its own settings: double-click the object.";
+"ClockZeroActionStop" = "Stop at zero";
+"ClockZeroActionReset" = "Reset and stop";
+"ClockZeroActionRestart" = "Start over (loop)";
+"ClockFiresBindingsOnZero" = "Trigger bindings at zero";
+"ClockFiresBindingsOnZeroHint" = "The timer acts as a source: its outgoing bindings run when it reaches zero.";
 "MergeProjectsButton" = "Merge";
 "MergeProjectsExitSelection" = "Exit selection";
 "MergeProjectsHelp" = "Merge several projects into one";
@@ -1374,3 +1416,19 @@
 "FreeLayoutReplaceImage" = "Replace image";
 
 "ClipAutoExportBadge" = "Auto-export clips";
+
+
+// MARK: - Live Recovery
+"LiveRecoveryFoundTitle" = "Unfinished recording found";
+"LiveRecoveryFoundMessage" = "“%1$@” — about %2$@ recorded. The app closed before saving. Restore the project with video and markup?";
+"LiveRecoveryRestoreButton" = "Restore";
+"LiveRecoveryDiscardButton" = "Delete";
+"LiveRecoveryLaterButton" = "Later";
+"LiveRecoveryProgress" = "Restoring recording...";
+"LiveQuitSaving" = "Saving the recording before quitting. Please don't shut down the computer...";
+"LiveRecoveryFailed" = "Failed to restore the interrupted recording";
+
+// MARK: - Canvas copy / paste
+"CanvasCopyButtons" = "Copy buttons (%d)";
+"CanvasPasteButtons" = "Paste buttons (%d)";
+"CanvasRemoveFromCanvas" = "Remove from canvas (%d)";

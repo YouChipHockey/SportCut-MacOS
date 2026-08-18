@@ -16,7 +16,7 @@ class FieldMapConfigurationWindowController: NSWindowController, NSWindowDelegat
         super.init(window: NSWindow())
         
         let content = FieldMapConfigurationView()
-        let hosting = NSHostingController(rootView: AnyView(content))
+        let hosting = FirstMouseHostingController(rootView: AnyView(content))
         self.window = NSWindow(contentViewController: hosting)
         self.windowContent = hosting
         self.window?.title = ^String.Titles.fieldMapVisualizationSettings

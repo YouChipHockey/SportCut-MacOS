@@ -17,6 +17,9 @@ enum CanvasButtonKind: String, Codable, CaseIterable {
     /// Карта (PlayField) прямо на холсте: зона, по которой кликают, ставя позицию на карте.
     /// Работает как лейбл (со всеми тегами, кроме эксклюзивных связок), но добавляет позицию.
     case map
+    /// Секундомер/таймер (`ClockEntity`): самостоятельный счётчик реального времени. Активируется
+    /// как тег (клик/связка), но следа на таймлайне не оставляет. См. ClockRuntimeManager.
+    case clock
 }
 
 // MARK: - Binding type
@@ -31,6 +34,8 @@ enum KeyBindingType: String, Codable, CaseIterable {
     case deactivation
     /// Инверсия состояния интервального тега: зажат — отжат, отжат — зажат.
     case intervalInversion
+    /// Сброс счётчика (секундомер — в 0, таймер — к стартовому значению). Только для целей-счётчиков.
+    case clockReset
     /// Делает суб-кнопку видимой.
     case visibility
     /// Делает суб-кнопку невидимой.
@@ -135,10 +140,28 @@ extension KeyBindingType {
         case .activation:         return "keyBindingTypeActivation"
         case .deactivation:       return "keyBindingTypeDeactivation"
         case .intervalInversion:  return "keyBindingTypeIntervalInversion"
+        case .clockReset:         return "keyBindingTypeClockReset"
         case .visibility:         return "keyBindingTypeVisibility"
         case .invisibility:       return "keyBindingTypeInvisibility"
         case .visibilityInversion: return "keyBindingTypeVisibilityInversion"
         case .exclusive:          return "keyBindingTypeExclusive"
+        }
+    }
+
+    /// Типы, предлагаемые в пикере для конкретной пары кнопок. «Сброс счётчика» осмыслен только
+    /// там, где ОДНА из сторон — счётчик (направление стрелки для сброса не важно: связку рисуют
+    /// и от тега к счётчику, и наоборот).
+    /// `current` всегда остаётся в списке, иначе пикер потеряет уже выбранное значение.
+    static func options(
+        source: CanvasButtonKind,
+        target: CanvasButtonKind,
+        current: KeyBindingType
+    ) -> [KeyBindingType] {
+        allCases.filter { type in
+            if type == .clockReset {
+                return source == .clock || target == .clock || current == .clockReset
+            }
+            return true
         }
     }
 }

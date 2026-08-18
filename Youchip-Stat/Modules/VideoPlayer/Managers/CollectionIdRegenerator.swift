@@ -29,6 +29,7 @@ enum CollectionIdRegenerator {
         var labels: [Label]
         var timeEvents: [TimeEvent]
         var playFields: [PlayField]
+        var clocks: [ClockEntity]
         var layout: TagFreeLayout?
     }
 
@@ -47,6 +48,7 @@ enum CollectionIdRegenerator {
             data.timeEvents.forEach { result.insert($0.id) }
             let fields: [PlayField] = data.playFields ?? (data.playField.map { field in [field] } ?? [])
             fields.forEach { result.insert($0.id) }
+            data.clocks?.forEach { result.insert($0.id) }
         }
 
         // Стандартные коллекции тоже попадают в общий пул, поэтому пересечение с ними так же вредно.
@@ -69,6 +71,7 @@ enum CollectionIdRegenerator {
         labels: [Label],
         timeEvents: [TimeEvent],
         playFields: [PlayField],
+        clocks: [ClockEntity] = [],
         occupied: Set<String>
     ) -> Bool {
         guard !occupied.isEmpty else { return false }
@@ -78,6 +81,7 @@ enum CollectionIdRegenerator {
         if labelGroups.contains(where: { occupied.contains($0.id) }) { return true }
         if timeEvents.contains(where: { occupied.contains($0.id) }) { return true }
         if playFields.contains(where: { occupied.contains($0.id) }) { return true }
+        if clocks.contains(where: { occupied.contains($0.id) }) { return true }
         return false
     }
 
@@ -94,6 +98,7 @@ enum CollectionIdRegenerator {
         labels srcLabels: [Label],
         timeEvents srcTimeEvents: [TimeEvent],
         playFields srcPlayFields: [PlayField],
+        clocks srcClocks: [ClockEntity] = [],
         layout srcLayout: TagFreeLayout?,
         collectionName: String? = nil
     ) -> Result {
@@ -162,13 +167,23 @@ enum CollectionIdRegenerator {
             TagGroup(id: UUID().uuidString, name: g.name, tags: g.tags.compactMap { tagIdMap[$0] })
         }
 
+        var clockIdMap: [String: String] = [:]
+        let newClocks = srcClocks.map { clock -> ClockEntity in
+            let nid = UUID().uuidString
+            clockIdMap[clock.id] = nid
+            var copy = clock
+            copy.id = nid
+            return copy
+        }
+
         let newLayout = srcLayout.map { layout in
             remapLayout(
                 layout,
                 tagIdMap: tagIdMap,
                 labelIdMap: labelIdMap,
                 timeEventIdMap: timeEventIdMap,
-                playFieldIdMap: playFieldIdMap
+                playFieldIdMap: playFieldIdMap,
+                clockIdMap: clockIdMap
             )
         }
 
@@ -179,6 +194,7 @@ enum CollectionIdRegenerator {
             labels: newLabels,
             timeEvents: newTimeEvents,
             playFields: newPlayFields,
+            clocks: newClocks,
             layout: newLayout
         )
     }
@@ -193,7 +209,8 @@ enum CollectionIdRegenerator {
         tagIdMap: [String: String],
         labelIdMap: [String: String],
         timeEventIdMap: [String: String],
-        playFieldIdMap: [String: String]
+        playFieldIdMap: [String: String],
+        clockIdMap: [String: String]
     ) -> TagFreeLayout {
         func mapped(_ id: String, kind: CanvasButtonKind) -> String? {
             switch kind {
@@ -201,6 +218,7 @@ enum CollectionIdRegenerator {
             case .label:     return labelIdMap[id]
             case .timeEvent: return timeEventIdMap[id]
             case .map:       return playFieldIdMap[id]
+            case .clock:     return clockIdMap[id]
             }
         }
 

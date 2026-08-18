@@ -14,6 +14,10 @@ struct ImageEditorHomeView: View {
     @ObservedObject private var manager = ImageEditorProjectsManager.shared
     @State private var renamingProject: ImageEditorProjectMeta?
     @State private var renameText: String = ""
+    /// Режим выбора проектов для массового удаления.
+    @State private var isBulkDeleteMode = false
+    @State private var bulkDeleteSelection: Set<UUID> = []
+    @State private var showBulkDeleteAlert = false
 
     private let columns = [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 16)]
 
@@ -21,6 +25,14 @@ struct ImageEditorHomeView: View {
         homeContent
             .sheet(item: $renamingProject) { project in
                 renameSheet(project)
+            }
+            .alert(^String.Titles.bulkDeleteConfirmTitle, isPresented: $showBulkDeleteAlert) {
+                Button(^String.Titles.cancelButtonTitle, role: .cancel) { }
+                Button(^String.Titles.deleteButtonTitle, role: .destructive) {
+                    deleteSelectedProjects()
+                }
+            } message: {
+                Text(String(format: ^String.Titles.bulkDeleteConfirmMessage, bulkDeleteSelection.count))
             }
     }
 
@@ -43,6 +55,10 @@ struct ImageEditorHomeView: View {
             .padding()
 
             Divider()
+
+            if isBulkDeleteMode {
+                bulkDeleteBar
+            }
 
             if manager.projects.isEmpty {
                 VStack(spacing: 12) {
@@ -70,7 +86,8 @@ struct ImageEditorHomeView: View {
     }
 
     private func projectCard(_ project: ImageEditorProjectMeta) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let isChecked = bulkDeleteSelection.contains(project.id)
+        return VStack(alignment: .leading, spacing: 6) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.controlBackgroundColor))
                 if let thumb = NSImage(contentsOf: manager.thumbnailURL(project.id)) {
@@ -82,13 +99,29 @@ struct ImageEditorHomeView: View {
                 }
             }
             .frame(height: 150)
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(NSColor.separatorColor), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .stroke(isChecked ? Color.red : Color(NSColor.separatorColor), lineWidth: isChecked ? 2.5 : 1))
+            .overlay(alignment: .topLeading) {
+                // Кружок выбора в левом-верхнем углу — вход и отметка для массового удаления
+                // (без центрального оверлея, выделение не «прыгает» в центр).
+                BulkSelectCornerCircle(isSelected: isChecked) {
+                    if !isBulkDeleteMode { isBulkDeleteMode = true }
+                    toggleBulkDeleteSelection(for: project.id)
+                }
+                .padding(8)
+            }
 
             Text(project.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
             Text(project.updatedAt, style: .date).font(.system(size: 11)).foregroundColor(.secondary)
         }
         .contentShape(Rectangle())
-        .onTapGesture { openProject(project.id) }
+        .onTapGesture {
+            if isBulkDeleteMode {
+                toggleBulkDeleteSelection(for: project.id)
+            } else {
+                openProject(project.id)
+            }
+        }
         .contextMenu {
             Button(^String.Titles.open) { openProject(project.id) }
             Button(^String.Titles.download) { downloadProject(project) }
@@ -121,6 +154,72 @@ struct ImageEditorHomeView: View {
             }
         }
         .padding(24)
+    }
+
+    // MARK: - Массовое удаление проектов
+
+    private var bulkDeleteBar: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "trash")
+                .foregroundColor(.red)
+
+            Text(String(format: ^String.Titles.bulkDeleteSelectedCount, bulkDeleteSelection.count))
+                .font(.system(size: 13, weight: .medium))
+
+            Text(^String.Titles.bulkDeleteHint)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Button(^String.Titles.sportCutSelectAll) {
+                bulkDeleteSelection = Set(manager.projects.map(\.id))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.blue)
+
+            Button(^String.Titles.cancelButtonTitle) {
+                exitBulkDeleteMode()
+            }
+            .buttonStyle(PlainButtonStyle())
+            .foregroundColor(.secondary)
+
+            Button(action: { showBulkDeleteAlert = true }) {
+                Text(String(format: ^String.Titles.bulkDeleteCountButton, bulkDeleteSelection.count))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(bulkDeleteSelection.isEmpty ? Color.gray : Color.red))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(bulkDeleteSelection.isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.red.opacity(0.08))
+    }
+
+    private func toggleBulkDeleteSelection(for id: UUID) {
+        if bulkDeleteSelection.contains(id) {
+            bulkDeleteSelection.remove(id)
+            // Сняли выбор с последнего проекта — выходим из режима удаления.
+            if bulkDeleteSelection.isEmpty { exitBulkDeleteMode() }
+        } else {
+            bulkDeleteSelection.insert(id)
+        }
+    }
+
+    private func exitBulkDeleteMode() {
+        isBulkDeleteMode = false
+        bulkDeleteSelection.removeAll()
+    }
+
+    private func deleteSelectedProjects() {
+        for id in bulkDeleteSelection {
+            manager.deleteProject(id)
+        }
+        exitBulkDeleteMode()
     }
 
     // MARK: - Действия

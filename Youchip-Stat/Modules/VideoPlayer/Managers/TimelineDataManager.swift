@@ -25,6 +25,21 @@ class TimelineDataManager: ObservableObject {
     }
     @Published var selectedLineID: UUID? = nil
     @Published var selectedStampID: UUID? = nil
+    /// Показывать ли служебный таймлайн счётчиков (⌘⌃0). По умолчанию он скрыт: пользователю
+    /// интересна разметка тегами, а отрезки секундомеров/таймеров нужны экспорту и пересмотру.
+    @Published var showClocksTimeline: Bool = false
+
+    /// Линии для ОТРИСОВКИ. Данные (сохранение, экспорт, пересмотр) всегда работают с `lines`,
+    /// скрывается только показ.
+    var visibleLines: [TimelineLine] {
+        showClocksTimeline ? lines : lines.filter { !$0.isClocksTimeline }
+    }
+
+    /// ⌘⌃0 — показать/скрыть таймлайн счётчиков (только если он вообще есть).
+    func toggleClocksTimelineVisibility() {
+        showClocksTimeline.toggle()
+        updateTimelines()
+    }
     /// Последний добавленный на таймлайн штамп (id) — независимо от линии/режима разметки.
     /// Используется для привязки лейблов простым ЛКМ к «последнему по времени добавления» тегу.
     private(set) var lastAddedStampID: UUID? = nil
@@ -95,11 +110,19 @@ class TimelineDataManager: ObservableObject {
             }
         }
         let wasSelected = (selectedLineID == lineID)
+        let tagIdForMode = line.tagIdForMode
         lines.removeAll { $0.id == lineID }
         if wasSelected {
             selectedLineID = nil
         }
         updateTimelines()
+        // Дорожки больше нет — интервальные теги, которые в неё писались, должны оборваться.
+        // Иначе тег продолжал «писаться» невидимо, а на стопе штамп улетал в никуда
+        // (в `standard` — вообще молча, из-за `guard let selectedLineID`).
+        NotificationCenter.default.post(
+            name: .timelineLineRemoved,
+            object: RemovedTimelineLine(lineID: lineID, tagIdForMode: tagIdForMode, wasSelected: wasSelected)
+        )
     }
 
     func removeStamp(lineID: UUID, stampID: UUID) {
@@ -411,17 +434,20 @@ class TimelineDataManager: ObservableObject {
         }
         
         var stamp = lines[lineIndex].stamps[stampIndex]
-        
+        let previousStart = stamp.timeStartSeconds
+        let previousFinish = stamp.timeFinishSeconds
+
         if let newStartTime = newStart {
             let limitedStart = min(newStartTime, stamp.timeFinishSeconds - 0.5)
             stamp.timeStartSeconds = limitedStart
         }
-        
+
         if let newEndTime = newEnd {
             let limitedEnd = max(newEndTime, stamp.timeStartSeconds + 0.5)
             stamp.timeFinishSeconds = limitedEnd
         }
-        
+
+        rescaleClockInfo(of: &stamp, oldStart: previousStart, oldFinish: previousFinish)
         lines[lineIndex].stamps[stampIndex] = stamp
         if persistChanges {
             updateTimelines()
@@ -498,11 +524,30 @@ class TimelineDataManager: ObservableObject {
     func updateStampTimeRange(lineID: UUID, stampID: UUID, newStartTime: Double, newEndTime: Double) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }),
               let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }
-        
-        lines[lineIndex].stamps[stampIndex].timeStartSeconds = newStartTime
-        lines[lineIndex].stamps[stampIndex].timeFinishSeconds = newEndTime
-        
+
+        var stamp = lines[lineIndex].stamps[stampIndex]
+        let previousStart = stamp.timeStartSeconds
+        let previousFinish = stamp.timeFinishSeconds
+        stamp.timeStartSeconds = newStartTime
+        stamp.timeFinishSeconds = newEndTime
+        rescaleClockInfo(of: &stamp, oldStart: previousStart, oldFinish: previousFinish)
+        lines[lineIndex].stamps[stampIndex] = stamp
+
         updateTimelines()
+    }
+
+    /// Границы штампа счётчика поехали (потянули за край) — доводим показания под новую длину,
+    /// сохраняя темп счётчика. Для обычных штампов — no-op.
+    private func rescaleClockInfo(of stamp: inout TimelineStamp, oldStart: Double, oldFinish: Double) {
+        guard var info = stamp.clockInfo,
+              stamp.timeStartSeconds != oldStart || stamp.timeFinishSeconds != oldFinish else { return }
+        info.rescale(
+            oldStart: oldStart,
+            oldFinish: oldFinish,
+            newStart: stamp.timeStartSeconds,
+            newFinish: stamp.timeFinishSeconds
+        )
+        stamp.clockInfo = info
     }
     
     private func checkAndUnlinkScreenshotsOutsideStamp(
