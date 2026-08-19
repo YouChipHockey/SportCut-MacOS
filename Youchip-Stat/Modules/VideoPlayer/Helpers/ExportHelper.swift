@@ -303,10 +303,11 @@ class ExportHelper: ObservableObject {
                     // В этот блок вклеены стоп-кадры рисунков, поэтому время внутри него уже не
                     // линейно времени исходника: счётчик привязываем к началу блока.
                     clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
-                        selectedStampIDs: watermarkOptions.clockStampIDs,
+                        enabled: watermarkOptions.showClocks,
                         lines: timelineData.lines,
                         sourceRange: segment.timeRange,
-                        compositionStart: CMTimeGetSeconds(timeBefore)
+                        compositionStart: CMTimeGetSeconds(timeBefore),
+                        momentPrimaryClockIds: ClockExportOverlayBuilder.momentPrimaryClockIds(for: segment.stamp)
                     ))
                     continue
                 }
@@ -341,10 +342,11 @@ class ExportHelper: ObservableObject {
             }
 
             clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
-                selectedStampIDs: watermarkOptions.clockStampIDs,
+                enabled: watermarkOptions.showClocks,
                 lines: timelineData.lines,
                 sourceRange: segment.timeRange,
-                compositionStart: CMTimeGetSeconds(currentTime - segment.timeRange.duration)
+                compositionStart: CMTimeGetSeconds(currentTime - segment.timeRange.duration),
+                momentPrimaryClockIds: ClockExportOverlayBuilder.momentPrimaryClockIds(for: segment.stamp)
             ))
         }
         
@@ -592,10 +594,11 @@ class ExportHelper: ObservableObject {
             let tag = tagLibrary.findTagById(segment.stamp.idTag)
                 ?? Tag.syntheticDrawingTag(for: segment.stamp)
             let clipClockPlacements = ClockExportOverlayBuilder.placements(
-                selectedStampIDs: watermarkOptions.clockStampIDs,
+                enabled: watermarkOptions.showClocks,
                 lines: timelineData.lines,
                 sourceRange: segment.timeRange,
-                compositionStart: 0
+                compositionStart: 0,
+                momentPrimaryClockIds: ClockExportOverlayBuilder.momentPrimaryClockIds(for: segment.stamp)
             )
             if let tag {
                 let overlayItem = OverlayItem(

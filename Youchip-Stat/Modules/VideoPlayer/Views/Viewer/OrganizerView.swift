@@ -586,10 +586,11 @@ struct OrganizerView: View {
                 )
                 overlayItems.append(overlayItem)
                 clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
-                    selectedStampIDs: watermarkOptions.clockStampIDs,
+                    enabled: watermarkOptions.showClocks,
                     lines: TimelineDataManager.shared.lines,
                     sourceRange: segment.timeRange,
-                    compositionStart: CMTimeGetSeconds(timeBefore)
+                    compositionStart: CMTimeGetSeconds(timeBefore),
+                    momentPrimaryClockIds: ClockExportOverlayBuilder.momentPrimaryClockIds(for: stamp)
                 ))
                 continue
             }
@@ -617,10 +618,11 @@ struct OrganizerView: View {
             )
             overlayItems.append(overlayItem)
             clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
-                selectedStampIDs: watermarkOptions.clockStampIDs,
+                enabled: watermarkOptions.showClocks,
                 lines: TimelineDataManager.shared.lines,
                 sourceRange: segment.timeRange,
-                compositionStart: CMTimeGetSeconds(currentTime - segment.timeRange.duration)
+                compositionStart: CMTimeGetSeconds(currentTime - segment.timeRange.duration),
+                momentPrimaryClockIds: ClockExportOverlayBuilder.momentPrimaryClockIds(for: stamp)
             ))
         }
         
@@ -743,10 +745,11 @@ struct OrganizerView: View {
                 compositionDuration: composition.duration,
                 // Клип = ровно один сегмент, его шкала начинается с нуля.
                 clockPlacements: ClockExportOverlayBuilder.placements(
-                    selectedStampIDs: watermarkOptions.clockStampIDs,
+                    enabled: watermarkOptions.showClocks,
                     lines: TimelineDataManager.shared.lines,
                     sourceRange: segment.timeRange,
-                    compositionStart: 0
+                    compositionStart: 0,
+                    momentPrimaryClockIds: ClockExportOverlayBuilder.momentPrimaryClockIds(for: stamp)
                 )
             )
             

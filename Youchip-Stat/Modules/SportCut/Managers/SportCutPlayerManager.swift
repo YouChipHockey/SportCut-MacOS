@@ -64,6 +64,11 @@ class SportCutPlayerManager: ObservableObject {
     
     private var sources: [SportCutSource] = []
     private var loadedAssets: [UUID: AVAsset] = [:]
+    /// Склейка сегментов лайва: собирается ДОБАВЛЕНИЕМ новых сегментов, а не пересборкой —
+    /// на часовой записи их сотни, и полный обход на каждую ротацию вешал бы главный поток.
+    private var liveComposition: AVMutableComposition?
+    /// Сколько сегментов уже влито в склейку.
+    private var liveCompositionSegments: Int = 0
     private var timeObserver: Any?
     private var endObserver: Any?
     private var cancellables = Set<AnyCancellable>()
@@ -143,6 +148,68 @@ class SportCutPlayerManager: ObservableObject {
         clipLocalTimeFromPlayerSeconds(currentTime)
     }
 
+    /// Счётчики, попавшие под ТЕКУЩУЮ позицию воспроизведения, — для оверлея на кадре.
+    ///
+    /// Считаем от абсолютного времени ИСХОДНИКА (`absoluteVideoTimelineTime`), поэтому работает
+    /// одинаково и для одиночного клипа, и для последовательного плейлиста, и для единого фильма,
+    /// и после ресайза клипа: границы клипа сдвигаются, а запись счётчика лежит на своей шкале —
+    /// пересчитывать её не нужно. Показания берутся из записи разметки (`StampClockInfo`), то есть
+    /// на кадре счётчик идёт ровно так, как шёл вживую.
+    func currentClockOverlayItems() -> [ClockOverlayItem] {
+        guard let sourceID = currentSourceID,
+              let t = absoluteVideoTimelineTime(forSourceID: sourceID),
+              let timelines = timelinesForOverlay(sourceID: sourceID) else { return [] }
+
+        // Primary Counter тега ТЕКУЩЕГО момента (события) — его счётчик виден даже без флага.
+        // Именно момента, а не всех тегов под плейхедом: иначе в командных видах на кадр лезли бы
+        // счётчики соседних тегов. Штамп события ищем в дорожках источника по его id.
+        var primarySet = Set<String>()
+        if let event = currentEvent {
+            for line in timelines where !line.isServiceTimeline {
+                if let stamp = line.stamps.first(where: { $0.id == event.stampID }) {
+                    if let pc = stamp.primaryClockId ?? TagLibraryManager.shared.findTagById(stamp.idTag)?.primaryClockId,
+                       !pc.isEmpty {
+                        primarySet.insert(pc)
+                    }
+                    break
+                }
+            }
+        }
+
+        var result: [ClockOverlayItem] = []
+        var seen = Set<String>()
+        for stamp in timelines.clockStamps {
+            guard let info = stamp.clockInfo,
+                  info.showOnVideo || primarySet.contains(info.clockId),
+                  t >= stamp.timeStartSeconds, t <= stamp.timeFinishSeconds,
+                  !seen.contains(info.clockId) else { continue }
+            seen.insert(info.clockId)
+            result.append(
+                ClockOverlayItem(
+                    clockId: info.clockId,
+                    seconds: info.value(atVideoTime: t, start: stamp.timeStartSeconds, finish: stamp.timeFinishSeconds),
+                    appearance: info.appearance,
+                    showCentiseconds: info.showCentiseconds,
+                    caption: info.caption,
+                    progress: nil
+                )
+            )
+        }
+        // Порядок стабильный (по clockId) — иначе стопка не-позиционированных прыгала бы.
+        return result.sorted { $0.clockId < $1.clockId }
+    }
+
+    /// Дорожки исходника: сначала из сессии (там свежие правки — ресайз штампа пересчитывает
+    /// показания счётчика), и только потом из локальной копии, снятой в `configure`.
+    private func timelinesForOverlay(sourceID: UUID) -> [TimelineLine]? {
+        if let sessionID,
+           let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+           let source = session.sources.first(where: { $0.id == sourceID }) {
+            return source.timelines
+        }
+        return sources.first(where: { $0.id == sourceID })?.timelines
+    }
+
     /// Плеер временно на полном исходнике из‑за превью ресайза края плейлиста (см. `seekPreviewForPlaylistResize`).
     var isPlaylistRawResizePreviewActive: Bool { previewSourceID != nil }
 
@@ -161,6 +228,76 @@ class SportCutPlayerManager: ObservableObject {
     func configure(sources: [SportCutSource]) {
         self.sources = sources
         loadedAssets.removeAll()
+        liveComposition = nil
+        liveCompositionSegments = 0
+    }
+
+    /// Источник события. Список у плеера мог устареть (панель разметки конфигурирует его сама,
+    /// а сессия могла с тех пор получить источники других проектов) — тогда добираем из сессии,
+    /// иначе клип чужого проекта молча пропускался бы как «источник не найден».
+    private func source(for event: SportCutEvent) -> SportCutSource? {
+        if let known = sources.first(where: { $0.id == event.sourceID }) { return known }
+        guard let sessionID,
+              let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+              let fresh = session.sources.first(where: { $0.id == event.sourceID }) else { return nil }
+        sources = session.sources
+        return fresh
+    }
+
+    // MARK: - Медиа проекта, который пишется в лайве
+
+    /// У живого проекта файла ещё нет — есть только записанные сегменты. Играем их так же,
+    /// как пересмотр: композицией из уже закрытых сегментов (`allSegmentURLs`), где время
+    /// совпадает со временем разметки. Композиция пересобирается по `reviewFileVersion` —
+    /// тому же сигналу, по которому обновляется пересмотр.
+    private func liveAsset(for source: SportCutSource) -> AVAsset? {
+        // Живой источник — тот, у которого ещё нет файла (закладка пустая).
+        guard source.videoBookmark.isEmpty else { return nil }
+        let live = LiveStreamManager.shared
+        guard live.isLive else { return nil }
+
+        let segments = live.allSegmentURLs
+        guard !segments.isEmpty else { return nil }
+
+        // Началась новая запись (сегментов стало меньше) — склейку собираем заново.
+        if segments.count < liveCompositionSegments {
+            liveComposition = nil
+            liveCompositionSegments = 0
+        }
+
+        let composition: AVMutableComposition
+        if let existing = liveComposition {
+            composition = existing
+        } else {
+            composition = AVMutableComposition()
+            liveComposition = composition
+            liveCompositionSegments = 0
+        }
+
+        let videoTrack = composition.tracks(withMediaType: .video).first
+            ?? composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
+        guard let videoTrack else { return nil }
+
+        var insertTime = composition.duration
+        for url in segments.dropFirst(liveCompositionSegments) {
+            // Сегменты пишутся фрагментированным MOV — без точного разбора длительность
+            // может прочитаться нулевой, и сегмент молча выпадет из склейки.
+            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            let duration = asset.duration
+            guard duration.isValid, !duration.isIndefinite, duration.seconds > 0,
+                  let track = asset.tracks(withMediaType: .video).first else { continue }
+            try? videoTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: duration),
+                of: track,
+                at: insertTime
+            )
+            insertTime = CMTimeAdd(insertTime, duration)
+        }
+        liveCompositionSegments = segments.count
+        guard composition.duration.seconds > 0 else { return nil }
+
+        // Отдаём копию: плеер держит ссылку на ассет, а мастер-склейка продолжает расти.
+        return (composition.copy() as? AVComposition) ?? composition
     }
     
     // MARK: - Single event playback
@@ -669,17 +806,21 @@ class SportCutPlayerManager: ObservableObject {
             return
         }
 
-        guard let url = source.resolveVideoURL() else {
-            previewSeekInFlight = false
-            processNextPreviewSeekIfNeeded()
-            return
-        }
         let asset: AVAsset
-        if let cached = loadedAssets[request.sourceID] {
-            asset = cached
+        if let liveAsset = liveAsset(for: source) {
+            asset = liveAsset
         } else {
-            asset = AVAsset(url: url)
-            loadedAssets[request.sourceID] = asset
+            guard let url = source.resolveVideoURL() else {
+                previewSeekInFlight = false
+                processNextPreviewSeekIfNeeded()
+                return
+            }
+            if let cached = loadedAssets[request.sourceID] {
+                asset = cached
+            } else {
+                asset = AVAsset(url: url)
+                loadedAssets[request.sourceID] = asset
+            }
         }
 
         currentSourceID = request.sourceID
@@ -766,8 +907,10 @@ class SportCutPlayerManager: ObservableObject {
             // Титульный слайд — отдельное видео без аудио.
             // Пока оригинал доступен — играем из источника (учитываются правки start/duration);
             // если оригинал удалён/проект убран из сессии — берём автономный клип из кэша (обрезанный файл целиком).
-            let sourceURL: URL? = ev.isSlide ? nil : sources.first(where: { $0.id == ev.sourceID })?.resolveVideoURL()
-            let cachedClipURL: URL? = (ev.isSlide || sourceURL != nil)
+            let evSource = ev.isSlide ? nil : source(for: ev)
+            let evLiveAsset = evSource.flatMap { self.liveAsset(for: $0) }
+            let sourceURL: URL? = evLiveAsset == nil ? evSource?.resolveVideoURL() : nil
+            let cachedClipURL: URL? = (ev.isSlide || evLiveAsset != nil || sourceURL != nil)
                 ? nil
                 : sessionID.flatMap { SportCutClipCache.cachedClipURL(sessionID: $0, event: ev) }
             let isCachedClip = cachedClipURL != nil
@@ -779,16 +922,20 @@ class SportCutPlayerManager: ObservableObject {
             } else {
                 resolvedURL = sourceURL ?? cachedClipURL
             }
-            guard let url = resolvedURL else { continue }
-
             let asset: AVAsset
-            if treatAsWholeFile {
-                asset = AVAsset(url: url)
-            } else if let cached = loadedAssets[ev.sourceID] {
-                asset = cached
+            if let evLiveAsset {
+                // Живой проект: файла нет, играем склейку уже записанных сегментов.
+                asset = evLiveAsset
             } else {
-                asset = AVAsset(url: url)
-                loadedAssets[ev.sourceID] = asset
+                guard let url = resolvedURL else { continue }
+                if treatAsWholeFile {
+                    asset = AVAsset(url: url)
+                } else if let cached = loadedAssets[ev.sourceID] {
+                    asset = cached
+                } else {
+                    asset = AVAsset(url: url)
+                    loadedAssets[ev.sourceID] = asset
+                }
             }
 
             let assetDuration = CMTimeGetSeconds(asset.duration)
@@ -1027,25 +1174,32 @@ class SportCutPlayerManager: ObservableObject {
         shownDrawingNames.removeAll()
 
         // Пока исходное видео доступно — играем из него (учитываются правки start/duration).
+        // Если проект пишется в лайве — из склейки записанных сегментов (как пересмотр).
         // Если оригинал удалён/проект убран из сессии — берём автономный клип из кэша (обрезанный файл целиком).
-        let sourceURL = sources.first(where: { $0.id == event.sourceID })?.resolveVideoURL()
-        let cachedClipURL = sourceURL == nil ? sessionID.flatMap { SportCutClipCache.cachedClipURL(sessionID: $0, event: event) } : nil
+        let eventSource = source(for: event)
+        let liveAsset = eventSource.flatMap { self.liveAsset(for: $0) }
+        let sourceURL = liveAsset == nil ? eventSource?.resolveVideoURL() : nil
+        let cachedClipURL = (liveAsset == nil && sourceURL == nil)
+            ? sessionID.flatMap { SportCutClipCache.cachedClipURL(sessionID: $0, event: event) }
+            : nil
         let isCachedClip = cachedClipURL != nil
 
-        let resolvedURL: URL? = sourceURL ?? cachedClipURL
-        guard let url = resolvedURL else {
-            advanceToNextEvent()
-            return
-        }
-
         let asset: AVAsset
-        if isCachedClip {
-            asset = AVAsset(url: url)
-        } else if let cached = loadedAssets[event.sourceID] {
-            asset = cached
+        if let liveAsset {
+            asset = liveAsset
         } else {
-            asset = AVAsset(url: url)
-            loadedAssets[event.sourceID] = asset
+            guard let url = sourceURL ?? cachedClipURL else {
+                advanceToNextEvent()
+                return
+            }
+            if isCachedClip {
+                asset = AVAsset(url: url)
+            } else if let cached = loadedAssets[event.sourceID] {
+                asset = cached
+            } else {
+                asset = AVAsset(url: url)
+                loadedAssets[event.sourceID] = asset
+            }
         }
 
         currentSourceID = event.sourceID

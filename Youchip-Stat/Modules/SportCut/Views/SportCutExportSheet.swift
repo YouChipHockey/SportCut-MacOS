@@ -31,6 +31,11 @@ struct SportCutExportSheet: View {
         session?.playlistGroups.flatMap(\.playlists) ?? []
     }
 
+    /// Есть ли в сессии хоть одна запись счётчика — иначе тумблер экспорта со счётчиками не нужен.
+    private var hasClockRecords: Bool {
+        session?.sources.contains { !$0.timelines.clockStamps.isEmpty } ?? false
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -128,6 +133,14 @@ struct SportCutExportSheet: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
                         }
+                    }
+
+                    // Счётчики: один тумблер, без выбора записей — в файл идёт ровно то, что
+                    // видно на кадре в этот момент. Появляется, только если в сессии они есть.
+                    if hasClockRecords {
+                        Toggle(^String.Titles.exportWithClocks, isOn: $watermarkOptions.showClocks)
+                            .font(.system(size: 13))
+                            .help(^String.Titles.exportWithClocksHelp)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -319,13 +332,12 @@ private final class SportCutExportBackend {
 
     /// Событие в том виде, в каком его надо экспортировать.
     ///
-    /// `timelineResolvedEvent` пересобирает событие из ТЕКУЩЕЙ разметки — то есть возвращает тег
-    /// ровно с теми границами, что лежат в проекте разметки. Границы, изменённые ресайзом клипа
-    /// уже в режиме просмотра, живут отдельно — в оверрайдах плейлиста, и без их наложения
-    /// экспорт писал исходный вариант тега, хотя плеер и плейлист показывали изменённый
-    /// (плеер их учитывает, см. SportCutPlayerManager).
+    /// Клип плейлиста самостоятелен: его границы — это сохранённая при добавлении копия плюс
+    /// пользовательские оверрайды ресайза (`eventStartOverrides` / `eventDurationOverrides`).
+    /// Без наложения оверрайдов экспорт писал исходный вариант тега, хотя плеер и плейлист
+    /// показывали изменённый (плеер их учитывает, см. SportCutPlayerManager).
     ///
-    /// Порядок тот же, что в плеере: оверрайд плейлиста важнее, иначе — свежее значение из разметки.
+    /// Порядок тот же, что в плеере: оверрайд плейлиста важнее сохранённой копии.
     private func resolvedEvent(
         _ event: SportCutEvent,
         playlist: SportCutPlaylist,
@@ -339,6 +351,19 @@ private final class SportCutExportBackend {
         let duration = playlist.eventDurationOverrides[event.hiddenKey] ?? resolved.duration
         guard start != resolved.startTime || duration != resolved.duration else { return resolved }
         return resolved.withClipRange(start: start, duration: duration)
+    }
+
+    /// Primary Counter тега события (момента): по штампу события из дорожек его источника.
+    /// Только этот счётчик наносится на клип/сегмент без флага «Показывать на видео» — не все
+    /// счётчики соседних тегов, попавших под окно.
+    private func momentPrimaryClockIds(for event: SportCutEvent, session: SportCutSession) -> Set<String> {
+        guard let source = session.sources.first(where: { $0.id == event.sourceID }) else { return [] }
+        for line in source.timelines {
+            if let stamp = line.stamps.first(where: { $0.id == event.stampID }) {
+                return ClockExportOverlayBuilder.momentPrimaryClockIds(for: stamp)
+            }
+        }
+        return []
     }
 
     /// Медиа события для экспорта: оригинал источника, а если проект убран из просмотра или
@@ -466,10 +491,11 @@ private final class SportCutExportBackend {
         videoTrack: AVAssetTrack,
         compositionVideoTrack: AVMutableCompositionTrack,
         compositionDuration: CMTime,
-        allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)]? = nil
+        allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)]? = nil,
+        clockPlacements: [ClockExportPlacement] = []
     ) -> AVVideoComposition? {
-        // Композицию строим, если есть текстовые сегменты ИЛИ включён логотип клуба.
-        guard !segments.isEmpty || showLogo else { return nil }
+        // Композицию строим, если есть текстовые сегменты, логотип клуба ИЛИ счётчики.
+        guard !segments.isEmpty || showLogo || !clockPlacements.isEmpty else { return nil }
 
         // Compute render size: max across all segment tracks, or from single videoTrack
         let renderSize: CGSize
@@ -613,6 +639,15 @@ private final class SportCutExportBackend {
                let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
                 parentLayer.addSublayer(logoLayer)
             }
+
+            // Счётчики: те же слои, что и в экспорте разметки (кадры циферблата + дискретная
+            // анимация). Рисуются AppKit'ом, поэтому только здесь, на главном потоке.
+            ClockExportOverlayBuilder.addLayers(
+                placements: clockPlacements,
+                to: parentLayer,
+                renderSize: renderSize,
+                totalDuration: total
+            )
         }
 
         if Thread.isMainThread {
@@ -1146,7 +1181,25 @@ private final class SportCutExportBackend {
             exportSession.outputURL = clipURL
             exportSession.outputFileType = .mp4
 
-            if (addWatermark || showLogo), let compVideoTrack = composition.tracks(withMediaType: .video).first {
+            // Счётчики клипа: берём записи исходника, пересечённые окном события. Клип в
+            // композиции лежит один, поэтому его начало — 0.
+            let clockPlacements: [ClockExportPlacement] = {
+                guard watermarkOptions.showClocks,
+                      let source = session.sources.first(where: { $0.id == entry.event.sourceID }) else { return [] }
+                return ClockExportOverlayBuilder.placements(
+                    enabled: true,
+                    lines: source.timelines,
+                    sourceRange: CMTimeRange(
+                        start: CMTime(seconds: event.startTime, preferredTimescale: 600),
+                        duration: CMTime(seconds: event.duration, preferredTimescale: 600)
+                    ),
+                    compositionStart: 0,
+                    momentPrimaryClockIds: momentPrimaryClockIds(for: entry.event, session: session)
+                )
+            }()
+
+            if (addWatermark || showLogo || !clockPlacements.isEmpty),
+               let compVideoTrack = composition.tracks(withMediaType: .video).first {
                 // При выключенном текстовом вотермарке сегменты пустые — рисуется только логотип.
                 var segs: [(text: NSAttributedString, start: CMTime, duration: CMTime)] = []
                 // Источник может отсутствовать (проект убран из просмотра, играем/пишем из кэша) —
@@ -1165,7 +1218,8 @@ private final class SportCutExportBackend {
                     segments: segs,
                     videoTrack: videoTrack,
                     compositionVideoTrack: compVideoTrack,
-                    compositionDuration: composition.duration
+                    compositionDuration: composition.duration,
+                    clockPlacements: clockPlacements
                 ) {
                     exportSession.videoComposition = vc
                 }
@@ -1316,6 +1370,7 @@ private final class SportCutExportBackend {
         var currentTime = CMTime.zero
         var securityURLs: [URL] = []
         var wmSegments: [(text: NSAttributedString, start: CMTime, duration: CMTime)] = []
+        var clockPlacements: [ClockExportPlacement] = []
         var firstVideoTrack: AVAssetTrack?
         var eventOrdinal = 0
         var allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)] = []
@@ -1377,6 +1432,22 @@ private final class SportCutExportBackend {
 
                 allSegmentTracks.append((start: segStart, duration: CMTimeSubtract(currentTime, segStart), sourceTrack: vTrack))
 
+                // Счётчики сегмента: записи исходника, пересечённые окном события, сдвинутые в
+                // место сегмента на шкале фильма.
+                if watermarkOptions.showClocks,
+                   let clockSource = session.sources.first(where: { $0.id == rawEvent.sourceID }) {
+                    clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
+                        enabled: true,
+                        lines: clockSource.timelines,
+                        sourceRange: CMTimeRange(
+                            start: CMTime(seconds: event.startTime, preferredTimescale: 600),
+                            duration: CMTime(seconds: event.duration, preferredTimescale: 600)
+                        ),
+                        compositionStart: CMTimeGetSeconds(segStart),
+                        momentPrimaryClockIds: momentPrimaryClockIds(for: rawEvent, session: session)
+                    ))
+                }
+
                 // Источник может отсутствовать (проект убран из просмотра, пишем из кэша) —
                 // тогда текстовую вотермарку для сегмента не строим, логотип клуба всё равно наносится.
                 if addWatermark, let source = session.sources.first(where: { $0.id == rawEvent.sourceID }) {
@@ -1410,7 +1481,7 @@ private final class SportCutExportBackend {
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .mp4
 
-        if ((addWatermark && !wmSegments.isEmpty) || showLogo),
+        if ((addWatermark && !wmSegments.isEmpty) || showLogo || !clockPlacements.isEmpty),
            let vTrack = firstVideoTrack,
            let compVideoTrack = composition.tracks(withMediaType: .video).first {
             if let vc = watermarkVideoComposition(
@@ -1418,7 +1489,8 @@ private final class SportCutExportBackend {
                 videoTrack: vTrack,
                 compositionVideoTrack: compVideoTrack,
                 compositionDuration: composition.duration,
-                allSegmentTracks: allSegmentTracks
+                allSegmentTracks: allSegmentTracks,
+                clockPlacements: clockPlacements
             ) {
                 exportSession.videoComposition = vc
             }
@@ -1479,6 +1551,7 @@ private final class SportCutExportBackend {
             var currentTime = CMTime.zero
             var securityURLs: [URL] = []
             var wmSegments: [(text: NSAttributedString, start: CMTime, duration: CMTime)] = []
+            var clockPlacements: [ClockExportPlacement] = []
             var firstVideoTrack: AVAssetTrack?
             var eventOrdinal = 0
             var allSegmentTracks: [(start: CMTime, duration: CMTime, sourceTrack: AVAssetTrack)] = []
@@ -1538,6 +1611,22 @@ private final class SportCutExportBackend {
 
                 allSegmentTracks.append((start: segStart, duration: CMTimeSubtract(currentTime, segStart), sourceTrack: vTrack))
 
+                // Счётчики сегмента: записи исходника, пересечённые окном события, сдвинутые в
+                // место сегмента на шкале фильма.
+                if watermarkOptions.showClocks,
+                   let clockSource = session.sources.first(where: { $0.id == rawEvent.sourceID }) {
+                    clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
+                        enabled: true,
+                        lines: clockSource.timelines,
+                        sourceRange: CMTimeRange(
+                            start: CMTime(seconds: event.startTime, preferredTimescale: 600),
+                            duration: CMTime(seconds: event.duration, preferredTimescale: 600)
+                        ),
+                        compositionStart: CMTimeGetSeconds(segStart),
+                        momentPrimaryClockIds: momentPrimaryClockIds(for: rawEvent, session: session)
+                    ))
+                }
+
                 // Источник может отсутствовать (проект убран из просмотра, пишем из кэша) —
                 // тогда текстовую вотермарку для сегмента не строим, логотип клуба всё равно наносится.
                 if addWatermark, let source = session.sources.first(where: { $0.id == rawEvent.sourceID }) {
@@ -1569,7 +1658,7 @@ private final class SportCutExportBackend {
             exportSession.outputURL = filmURL
             exportSession.outputFileType = .mp4
 
-            if ((addWatermark && !wmSegments.isEmpty) || showLogo),
+            if ((addWatermark && !wmSegments.isEmpty) || showLogo || !clockPlacements.isEmpty),
                let vTrack = firstVideoTrack,
                let compVideoTrack = composition.tracks(withMediaType: .video).first {
                 if let vc = watermarkVideoComposition(
@@ -1577,7 +1666,8 @@ private final class SportCutExportBackend {
                     videoTrack: vTrack,
                     compositionVideoTrack: compVideoTrack,
                     compositionDuration: composition.duration,
-                    allSegmentTracks: allSegmentTracks
+                    allSegmentTracks: allSegmentTracks,
+                    clockPlacements: clockPlacements
                 ) {
                     exportSession.videoComposition = vc
                 }
