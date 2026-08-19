@@ -169,6 +169,9 @@
 "FullControlButtonMap" = "Display on Map";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "Add Timeline";  // ^String.Titles.fullControlButtonAddTimeline
 "FullControlButtonMergeTimelines" = "Merge timelines";
+"FullControlButtonSyncViewing" = "Refresh markup in viewing mode";
+"FullControlSyncViewingDone" = "Markup refreshed in viewing";
+"FullControlSyncViewingNothing" = "Viewing already has the latest markup";
 "FullControlMergeTimelinesHint" = "Select timelines to merge";
 "CollectionCopyGroup" = "Copy group";
 "CollectionPasteGroup" = "Paste group";
@@ -1196,6 +1199,7 @@
 "KeyBindingTypeActivation" = "Activation";
 "KeyBindingTypeDeactivation" = "Deactivation";
 "KeyBindingTypeIntervalInversion" = "Interval Inversion";
+"KeyBindingTypeStateSync" = "State Sync";
 "KeyBindingTypeClockReset" = "Reset Counter";
 "KeyBindingsClockResetHint" = "Fires when the button is pressed (in either direction of the link): the counter stops and returns to its initial value. Ctrl+click performs only the reset, without the button's normal action.";
 "KeyBindingTypeVisibility" = "Show";
@@ -1432,3 +1436,31 @@
 "CanvasCopyButtons" = "Copy buttons (%d)";
 "CanvasPasteButtons" = "Paste buttons (%d)";
 "CanvasRemoveFromCanvas" = "Remove from canvas (%d)";
+"CanvasDeleteElements" = "Delete (%d)";
+"CanvasDeleteConfirmMessage" = "Delete the selected objects from the collection (%d)? This cannot be undone.";
+"EditorUndo" = "Undo";
+"EditorRedo" = "Redo";
+
+// MARK: - Плейлисты просмотра в разметке
+"MarkupPlaylistsTitle" = "Playlists";
+"MarkupPlaylistsButton" = "Viewing playlists";
+"MarkupPlaylistsButtonLiveDisabled" = "Viewing playlists are unavailable during a live session";
+"MarkupPlaylistsBackToSessions" = "Back to sessions";
+"MarkupPlaylistsReturnToMarkup" = "Back to markup";
+"MarkupPlaylistsPickSession" = "Select a viewing session for this project or create a new one.";
+"MarkupPlaylistsNoSessions" = "No viewing sessions with this project yet.";
+"MarkupPlaylistsSessionSubtitle" = "Playlists: %d";
+"MarkupPlaylistsAddToCurrent" = "Add to current playlist";
+"MarkupPlaylistsAddToPlaylist" = "Add to playlist…";
+"MarkupPlaylistsPickPlaylistTitle" = "Add to playlist";
+"MarkupPlaylistsCreateNewPlaylist" = "Create new playlist";
+"MarkupPlaylistsNewPlaylistNamePlaceholder" = "Playlist name (optional)";
+"MarkupPlaylistsNoPlaylists" = "No playlists in this session yet";
+"MarkupTimelineTabMarkup" = "Markup";
+"MarkupTimelineTabPlaylist" = "Playlist";
+"MarkupAnchorLive" = "Live markup";
+"MarkupAnchorReview" = "Review markup";
+"MarkupAnchorHelp" = "Where tags are added: live or review playhead (Opt+W)";
+"TagPrimaryCounter" = "Primary Counter";
+"TagPrimaryCounterNone" = "None";
+"TagPrimaryCounterHint" = "This counter is always shown on video for this tag's moment (review/export), even without the «Show on video» flag.";

@@ -73,13 +73,11 @@ final class InMemoryStorageManager {
         // и тогда Timer молча не сработал бы (не к тому раннлупу).
         timelineIOQueue.asyncAfter(deadline: .now() + timelineFlushDelay, execute: work)
 
-        // Единственная точка, через которую проходит ЛЮБОЕ изменение разметки проекта —
-        // отсюда о нём узнаёт режим просмотра (см. SportCutMarkupSyncManager).
-        NotificationCenter.default.post(
-            name: .projectTimelinesDidChange,
-            object: nil,
-            userInfo: ["videoId": videoId, "timelines": timelines]
-        )
+        // Раньше отсюда уходило уведомление .projectTimelinesDidChange, по которому режим
+        // просмотра пересинкивал все свои сессии под этот проект. Убрано намеренно: идущий
+        // счётчик обновляет свой штамп раз в секунду, и такой посекундный пересинк (со записью
+        // на диск) давал рывок на больших проектах. Просмотр теперь догоняет разметку в явных
+        // точках — см. SportCutMarkupSyncManager.
     }
 
     /// Синхронно доводит отложенный снимок до диска. Для выхода из приложения и для мест,
@@ -130,11 +128,21 @@ final class InMemoryStorageManager {
         if let pending { return pending }
 
         let key = "timeline_\(videoId)"
-        guard let data = userDefaults.data(forKey: key),
-              let timelines = try? JSONDecoder().decode([TimelineLine].self, from: data) else {
-            return loadTimelinesFromFile(for: videoId)
+        if let data = userDefaults.data(forKey: key),
+           let timelines = Self.decodeTimelinesLenient(data) {
+            return timelines
         }
-        return timelines
+        return loadTimelinesFromFile(for: videoId)
+    }
+
+    /// Разбор таймлайнов, устойчивый к битой строке: сперва целиком, иначе построчно (битая
+    /// строка → пропуск, а не потеря всего проекта). nil — данных нет/совсем не разобрались.
+    static func decodeTimelinesLenient(_ data: Data) -> [TimelineLine]? {
+        if let t = try? JSONDecoder().decode([TimelineLine].self, from: data) { return t }
+        if let lenient = try? JSONDecoder().decode([FailableLine].self, from: data) {
+            return lenient.compactMap(\.value)
+        }
+        return nil
     }
 
     func deleteTimelines(for videoId: String) {
@@ -265,7 +273,7 @@ final class InMemoryStorageManager {
         let fileURL = getTimelinesDirectory().appendingPathComponent("\(videoId).json")
         guard fileManager.fileExists(atPath: fileURL.path),
               let data = try? Data(contentsOf: fileURL),
-              let timelines = try? JSONDecoder().decode([TimelineLine].self, from: data) else {
+              let timelines = Self.decodeTimelinesLenient(data) else {
             return []
         }
         
@@ -465,5 +473,13 @@ struct CollectionData: Codable {
         self.playFields = playFields ?? playField.map { [$0] }
         self.playField = self.playFields?.first ?? playField
         self.clocks = clocks
+    }
+}
+
+/// Обёртка для «мягкого» декодирования строки таймлайна: битая строка → nil, а не падение всего массива.
+private struct FailableLine: Decodable {
+    let value: TimelineLine?
+    init(from decoder: Decoder) throws {
+        value = try? TimelineLine(from: decoder)
     }
 }

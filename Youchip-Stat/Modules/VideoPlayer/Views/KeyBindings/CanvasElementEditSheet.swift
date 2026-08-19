@@ -24,6 +24,8 @@ struct CanvasElementEditSheet: View {
     // Локальные поля для лейбла/события (у тега — свой полноценный редактор).
     @State private var labelName = ""
     @State private var labelDescription = ""
+    @State private var labelHotkey: String? = nil
+    @State private var isCapturingLabelHotkey = false
     @State private var eventName = ""
 
     // Поля секундомера/таймера.
@@ -31,8 +33,10 @@ struct CanvasElementEditSheet: View {
     @State private var clockCaption = ""
     @State private var clockMode: ClockMode = .stopwatch
     @State private var clockAppearance: ClockAppearance = .segments
-    @State private var clockShowOnVideo = false
     @State private var clockShowCentiseconds = true
+    @State private var clockShowOnVideo = false
+    @State private var clockHotkey: String? = nil
+    @State private var isCapturingClockHotkey = false
     @State private var clockInitialMinutes = 10
     @State private var clockInitialSecs = 0
     @State private var clockZeroAction: ClockZeroAction = .stop
@@ -106,6 +110,7 @@ struct CanvasElementEditSheet: View {
             if let label = collectionManager.labels.first(where: { $0.id == target.elementId }) {
                 labelName = label.name
                 labelDescription = label.description
+                labelHotkey = label.hotkey
             }
             if let event = collectionManager.timeEvents.first(where: { $0.id == target.elementId }) {
                 eventName = event.name
@@ -114,8 +119,9 @@ struct CanvasElementEditSheet: View {
                 clockName = clock.name
                 clockMode = clock.mode
                 clockAppearance = clock.appearance
-                clockShowOnVideo = clock.showOnVideo
                 clockShowCentiseconds = clock.showCentiseconds
+                clockShowOnVideo = clock.showOnVideo
+                clockHotkey = clock.hotkey
                 clockInitialMinutes = Int(clock.initialSeconds) / 60
                 clockInitialSecs = Int(clock.initialSeconds) % 60
                 clockCaption = clock.caption
@@ -210,8 +216,10 @@ struct CanvasElementEditSheet: View {
                         .pickerStyle(.menu)
                     }
 
-                    Toggle(^String.Titles.clockShowOnVideo, isOn: $clockShowOnVideo)
                     Toggle(^String.Titles.clockShowCentiseconds, isOn: $clockShowCentiseconds)
+                    Toggle(^String.Titles.clockShowOnVideo, isOn: $clockShowOnVideo)
+
+                    hotkeyRow(hotkey: $clockHotkey, isCapturing: $isCapturingClockHotkey)
                 }
                 .padding(24)
             }
@@ -224,15 +232,19 @@ struct CanvasElementEditSheet: View {
                     mode: clockMode,
                     initialSeconds: total,
                     appearance: clockAppearance,
-                    showOnVideo: clockShowOnVideo,
                     showCentiseconds: clockShowCentiseconds,
+                    showOnVideo: clockShowOnVideo,
                     zeroAction: clockZeroAction,
                     firesBindingsOnZero: clockFiresBindingsOnZero,
-                    caption: clockCaption
+                    caption: clockCaption,
+                    hotkey: normalizedHotkey(clockHotkey)
                 )
                 collectionManager.updateClock(updated)
                 _ = collectionManager.saveCollectionToFiles()
                 ClockRuntimeManager.shared.register(collectionManager.clocks)
+                HotKeyManager.shared.registerCanvasElementHotkeys(
+                    labels: collectionManager.labels, clocks: collectionManager.clocks
+                )
                 resizeClockItem(to: clockAppearance, showCentis: clockShowCentiseconds)
             }
         }
@@ -276,12 +288,60 @@ struct CanvasElementEditSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     field(title: ^String.Titles.canvasEditName, text: $labelName)
                     field(title: ^String.Titles.description, text: $labelDescription)
+                    hotkeyRow(hotkey: $labelHotkey, isCapturing: $isCapturingLabelHotkey)
                 }
                 .padding(24)
             }
             Divider()
             saveCancelBar {
-                collectionManager.updateLabel(id: target.elementId, name: labelName, description: labelDescription)
+                collectionManager.updateLabel(
+                    id: target.elementId,
+                    name: labelName,
+                    description: labelDescription,
+                    hotkey: normalizedHotkey(labelHotkey)
+                )
+                _ = collectionManager.saveCollectionToFiles()
+                HotKeyManager.shared.registerCanvasElementHotkeys(
+                    labels: collectionManager.labels, clocks: collectionManager.clocks
+                )
+            }
+        }
+    }
+
+    /// Пустую строку хоткея нормализуем в nil, чтобы не хранить «пустой» хоткей.
+    private func normalizedHotkey(_ value: String?) -> String? {
+        guard let v = value, !v.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return v
+    }
+
+    /// Захват горячей клавиши — тот же UI, что у тега (см. CollectionTagEditorSheets.hotkeySection).
+    /// Хоткей = просто способ нажатия элемента в разметке; вся логика после нажатия не меняется.
+    private func hotkeyRow(hotkey: Binding<String?>, isCapturing: Binding<Bool>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(^String.Titles.hotkeys).font(.caption).foregroundColor(.secondary)
+            HStack(spacing: 8) {
+                ZStack {
+                    Button(action: { isCapturing.wrappedValue = true }) {
+                        HStack {
+                            Image(systemName: "keyboard")
+                            Text(hotkey.wrappedValue ?? ^String.Titles.assign)
+                        }
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.controlBackgroundColor)))
+                    }
+                    .buttonStyle(.plain)
+                    if isCapturing.wrappedValue {
+                        KeyCaptureView(keyString: hotkey, isCapturing: isCapturing)
+                            .allowsHitTesting(false)
+                    }
+                }
+                if let hk = hotkey.wrappedValue, !hk.isEmpty, !isCapturing.wrappedValue {
+                    Button(action: { hotkey.wrappedValue = nil }) {
+                        Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(^String.Titles.reset)
+                }
             }
         }
     }

@@ -31,6 +31,10 @@ struct Tag: Identifiable, Codable, Equatable {
     /// Ids карт (PlayField), на которых нужно отметить точку для этого тега. Пусто/nil —
     /// используется `mapFieldId`, а если и он пуст — первая карта коллекции.
     var mapFieldIds: [String]? = nil
+    /// Id счётчика-«Primary Counter»: его запись ВСЕГДА выводится на видео для момента этого тега
+    /// (пересмотр по дабл-клику, экспорт из разметки, просмотр/экспорт клипа), даже если у самого
+    /// счётчика нет флага «Показывать на видео» — при условии, что запись счётчика пересекает тег.
+    var primaryClockId: String? = nil
 
     /// Эффективный список карт тега: сперва `mapFieldIds`, затем одиночный `mapFieldId`.
     /// Пустой список означает «первая карта коллекции» (обратная совместимость).
@@ -118,6 +122,8 @@ struct Label: Codable, Identifiable, Equatable, Hashable {
     let id: String
     let name: String
     let description: String
+    /// Горячая клавиша для нажатия лейбла в режиме разметки (как у тега — просто способ нажатия).
+    var hotkey: String? = nil
 }
 
 struct LabelGroupData: Codable, Identifiable, Hashable {
@@ -207,12 +213,19 @@ struct TimelineLine: Identifiable, Codable, Equatable {
     var name: String
     var stamps: [TimelineStamp] = []
     var tagIdForMode: String = ""
-    
+    /// Линия счётчика: id секундомера/таймера, который на неё пишется. У обычных линий — nil.
+    /// Каждый счётчик получает СВОЮ линию (как тег в режиме «таймлайн на тег»), имя линии —
+    /// подпись счётчика, а если её нет — название. Опционал декодируется через
+    /// `decodeIfPresent`, поэтому старые проекты (одна общая линия счётчиков) читаются как есть —
+    /// их узнаёт легаси-ветка в `isClocksTimeline`.
+    var clockId: String? = nil
+
     static func == (lhs: TimelineLine, rhs: TimelineLine) -> Bool {
         return lhs.id == rhs.id &&
                lhs.name == rhs.name &&
                lhs.stamps == rhs.stamps &&
-               lhs.tagIdForMode == rhs.tagIdForMode
+               lhs.tagIdForMode == rhs.tagIdForMode &&
+               lhs.clockId == rhs.clockId
     }
 }
 

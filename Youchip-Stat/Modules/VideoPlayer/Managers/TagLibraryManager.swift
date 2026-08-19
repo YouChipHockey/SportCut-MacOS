@@ -167,6 +167,7 @@ class TagLibraryManager: ObservableObject {
         
         cacheLock.lock()
         loadedCollectionsCache.removeAll()
+        diskPrimaryClockIndex = nil
         cacheLock.unlock()
         
         if case .user(let collectionName) = currentCollectionType,
@@ -362,6 +363,44 @@ class TagLibraryManager: ObservableObject {
         tagsByID[id] ?? allTagsByID[id]
     }
 
+    /// Primary Counter тега — счётчик, чья запись всегда выводится на видео для момента этого тега.
+    ///
+    /// Смотрим ОБА пула и берём первый непустой: снимок выбранной коллекции (`tags`) мог быть снят
+    /// до того, как тегу назначили счётчик, и хранить nil, тогда как глобальный пул (`allTags`)
+    /// уже пересобран. Обычный `findTagById` в таком случае возвращал устаревший тег и primary
+    /// молча пропадал из пересмотра и экспорта.
+    func primaryClockId(forTagId id: String) -> String? {
+        if let value = tagsByID[id]?.primaryClockId, !value.isEmpty { return value }
+        if let value = allTagsByID[id]?.primaryClockId, !value.isEmpty { return value }
+        // Последний рубеж — сами файлы коллекций. Пулы в памяти могли быть собраны до того, как
+        // тегу назначили счётчик (или пересобраны из устаревшего кэша), а на диске значение уже
+        // есть. Путь холодный: срабатывает, только когда оба пула промахнулись, и кэшируется.
+        return diskPrimaryClockId(forTagId: id)
+    }
+
+    /// tagId → primaryClockId по файлам всех коллекций. Строится один раз и сбрасывается вместе
+    /// с кэшем коллекций.
+    private var diskPrimaryClockIndex: [String: String]? = nil
+
+    private func diskPrimaryClockId(forTagId id: String) -> String? {
+        cacheLock.lock()
+        let cached = diskPrimaryClockIndex
+        cacheLock.unlock()
+        if let cached { return cached[id] }
+
+        var index: [String: String] = [:]
+        for info in CollectionsBookmarksManager.shared.loadCollections() {
+            guard let collection = InMemoryStorageManager.shared.loadCollection(id: info.id) else { continue }
+            for tag in collection.tags {
+                if let value = tag.primaryClockId, !value.isEmpty { index[tag.id] = value }
+            }
+        }
+        cacheLock.lock()
+        diskPrimaryClockIndex = index
+        cacheLock.unlock()
+        return index[id]
+    }
+
     func findLabelById(_ id: String) -> Label? {
         labelsByID[id] ?? allLabelsByID[id]
     }
@@ -410,6 +449,7 @@ class TagLibraryManager: ObservableObject {
     func invalidateCollectionCache(for name: String) {
         cacheLock.lock()
         loadedCollectionsCache.removeValue(forKey: name)
+        diskPrimaryClockIndex = nil
         cacheLock.unlock()
     }
     

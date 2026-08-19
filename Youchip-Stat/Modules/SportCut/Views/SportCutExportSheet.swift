@@ -32,8 +32,16 @@ struct SportCutExportSheet: View {
     }
 
     /// Есть ли в сессии хоть одна запись счётчика — иначе тумблер экспорта со счётчиками не нужен.
+    /// Есть ли счётчики хоть где-то: в разметке источников ИЛИ пришитые к клипам плейлистов.
+    /// Второе обязательно: у клипа разметки-источника может уже не быть, а таймеры на нём есть.
     private var hasClockRecords: Bool {
-        session?.sources.contains { !$0.timelines.clockStamps.isEmpty } ?? false
+        guard let session else { return false }
+        if session.sources.contains(where: { !$0.timelines.clockStamps.isEmpty }) { return true }
+        return session.playlistGroups.contains { group in
+            group.playlists.contains { playlist in
+                playlist.events.contains { !($0.clockRecords?.isEmpty ?? true) }
+            }
+        }
     }
 
     var body: some View {
@@ -353,17 +361,14 @@ private final class SportCutExportBackend {
         return resolved.withClipRange(start: start, duration: duration)
     }
 
-    /// Primary Counter тега события (момента): по штампу события из дорожек его источника.
-    /// Только этот счётчик наносится на клип/сегмент без флага «Показывать на видео» — не все
-    /// счётчики соседних тегов, попавших под окно.
-    private func momentPrimaryClockIds(for event: SportCutEvent, session: SportCutSession) -> Set<String> {
-        guard let source = session.sources.first(where: { $0.id == event.sourceID }) else { return [] }
-        for line in source.timelines {
-            if let stamp = line.stamps.first(where: { $0.id == event.stampID }) {
-                return ClockExportOverlayBuilder.momentPrimaryClockIds(for: stamp)
-            }
-        }
-        return []
+    /// Записи счётчиков клипа для экспорта: свежие из разметки источника, а если её больше нет
+    /// (проект удалён, разметка снесена) — снимок, пришитый к самому клипу. Клип плейлиста обязан
+    /// экспортироваться со всем, что на нём есть, и без исходного проекта.
+    private func clockRecords(for event: SportCutEvent, session: SportCutSession) -> [ClockRecordSnapshot] {
+        SportCutClockSnapshotBuilder.resolvedRecords(
+            for: event,
+            source: session.sources.first(where: { $0.id == event.sourceID })
+        )
     }
 
     /// Медиа события для экспорта: оригинал источника, а если проект убран из просмотра или
@@ -635,9 +640,13 @@ private final class SportCutExportBackend {
             }
 
             // Логотип клуба — статично на весь ролик, поверх текстового оверлея.
-            if welf.showLogo,
-               let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
-                parentLayer.addSublayer(logoLayer)
+            if welf.showLogo {
+                if let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
+                    parentLayer.addSublayer(logoLayer)
+                    ExportDiagnosticsLog.log("логотип клуба нанесён: frame=\(logoLayer.frame) кадр=\(Int(renderSize.width))x\(Int(renderSize.height))")
+                } else {
+                    ExportDiagnosticsLog.log("⚠️ логотип клуба включён, но слой не построен (картинка не задана или не читается)")
+                }
             }
 
             // Счётчики: те же слои, что и в экспорте разметки (кадры циферблата + дискретная
@@ -815,7 +824,7 @@ private final class SportCutExportBackend {
                     }
                     currentTime = CMTimeAdd(currentTime, videoRange.duration)
                 } catch {
-                    print("SportCut export: error inserting video before drawing: \(error)")
+                    ExportDiagnosticsLog.error("вставка видео перед рисунком (\(ExportDiagnosticsLog.fmt(videoRange.start)) + \(ExportDiagnosticsLog.fmt(videoRange.duration)))", error)
                 }
             }
 
@@ -831,7 +840,7 @@ private final class SportCutExportBackend {
 
                 let waitResult = semaphore.wait(timeout: .now() + 30)
                 if waitResult == .timedOut {
-                    print("SportCut export: drawing video creation timed out for '\(drawing.imageName)'")
+                    ExportDiagnosticsLog.log("⚠️ рендер видео из рисунка «\(drawing.imageName)» не уложился в 30 c — рисунок пропущен")
                 } else if let videoURL = drawingVideoURL,
                           let drawingAsset = try? AVURLAsset(url: videoURL),
                           let drawingVideoTrack = drawingAsset.tracks(withMediaType: .video).first {
@@ -844,7 +853,7 @@ private final class SportCutExportBackend {
                         currentTime = CMTimeAdd(currentTime, drawingAsset.duration)
                         try? FileManager.default.removeItem(at: videoURL)
                     } catch {
-                        print("SportCut export: error inserting drawing video: \(error)")
+                        ExportDiagnosticsLog.error("вставка видео рисунка «\(drawing.imageName)»", error)
                     }
                 }
             }
@@ -867,7 +876,7 @@ private final class SportCutExportBackend {
                 }
                 currentTime = CMTimeAdd(currentTime, videoRange.duration)
             } catch {
-                print("SportCut export: error inserting remaining video: \(error)")
+                ExportDiagnosticsLog.error("вставка остатка видео после рисунков (\(ExportDiagnosticsLog.fmt(videoRange.start)) + \(ExportDiagnosticsLog.fmt(videoRange.duration)))", error)
             }
         }
 
@@ -1072,6 +1081,8 @@ private final class SportCutExportBackend {
     /// Клипы экспортируются ПОСЛЕДОВАТЕЛЬНО (не все разом) — иначе десятки параллельных
     /// AVAssetExportSession (особенно с вотермаркой) перегружают систему и «вешают» экспорт.
     private func exportAsClips(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession) {
+        ExportDiagnosticsLog.begin("ПРОСМОТР · экспорт КЛИПАМИ · сессия «\(session.name)»")
+        ExportDiagnosticsLog.log("плейлистов=\(playlists.count) вотермарка=\(addWatermark) лого=\(showLogo) счётчики=\(watermarkOptions.showClocks)")
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let drawingsFolder = SportCutPlayerManager.drawingsFolder(sessionID: session.id)
@@ -1173,6 +1184,7 @@ private final class SportCutExportBackend {
             let clipName = "\(prefix)_\(index + 1).mp4"
             let clipURL = tempDir.appendingPathComponent(clipName)
 
+            composition.removeEmptyTracks()
             let preset = Self.bestPreset(for: composition)
             guard let exportSession = AVAssetExportSession(asset: composition, presetName: preset) else {
                 securityURL.stopAccessingSecurityScopedResource(); skip(); return
@@ -1184,17 +1196,15 @@ private final class SportCutExportBackend {
             // Счётчики клипа: берём записи исходника, пересечённые окном события. Клип в
             // композиции лежит один, поэтому его начало — 0.
             let clockPlacements: [ClockExportPlacement] = {
-                guard watermarkOptions.showClocks,
-                      let source = session.sources.first(where: { $0.id == entry.event.sourceID }) else { return [] }
+                guard watermarkOptions.showClocks else { return [] }
                 return ClockExportOverlayBuilder.placements(
                     enabled: true,
-                    lines: source.timelines,
+                    records: clockRecords(for: entry.event, session: session),
                     sourceRange: CMTimeRange(
                         start: CMTime(seconds: event.startTime, preferredTimescale: 600),
                         duration: CMTime(seconds: event.duration, preferredTimescale: 600)
                     ),
-                    compositionStart: 0,
-                    momentPrimaryClockIds: momentPrimaryClockIds(for: entry.event, session: session)
+                    compositionStart: 0
                 )
             }()
 
@@ -1225,12 +1235,14 @@ private final class SportCutExportBackend {
                 }
             }
 
+            ExportDiagnosticsLog.log("клип #\(index + 1) «\(event.tagName)» счётчиков=\(clockPlacements.count) лого=\(showLogo) \(ExportDiagnosticsLog.describe(videoComposition: exportSession.videoComposition))")
             prog.setSession(exportSession)
             exportSession.exportAsynchronously {
                 securityURL.stopAccessingSecurityScopedResource()
                 if exportSession.status == .completed {
                     producedFiles.append(clipURL)
                 } else {
+                    ExportDiagnosticsLog.error("клип #\(index + 1) «\(event.tagName)» (status=\(exportSession.status.rawValue))", exportSession.error)
                     failures += 1
                 }
                 prog.markCompleted()
@@ -1358,6 +1370,8 @@ private final class SportCutExportBackend {
     }
 
     private func exportAsFilmBuild(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession, slideURLs: [UUID: URL]) {
+        ExportDiagnosticsLog.begin("ПРОСМОТР · экспорт ФИЛЬМОМ · сессия «\(session.name)»")
+        ExportDiagnosticsLog.log("плейлистов=\(playlists.count) вотермарка=\(addWatermark) лого=\(showLogo) счётчики=\(watermarkOptions.showClocks) слайдов отрендерено=\(slideURLs.count)")
         let drawingsFolder = SportCutPlayerManager.drawingsFolder(sessionID: session.id)
         let composition = AVMutableComposition()
 
@@ -1388,14 +1402,21 @@ private final class SportCutExportBackend {
                 let event = resolvedEvent(rawEvent, playlist: playlist, session: session)
                 let drawings = playlist.eventDrawings[rawEvent.hiddenKey] ?? []
 
-                guard let media = resolveExportMedia(event: rawEvent, session: session) else { continue }
+                guard let media = resolveExportMedia(event: rawEvent, session: session) else {
+                    ExportDiagnosticsLog.log("⚠️ пропущено «\(rawEvent.tagName)»: нет медиа (нет источника и нет клипа в кэше)")
+                    continue
+                }
                 let url = media.url
                 securityURLs.append(url)
 
                 let asset = AVAsset(url: url)
-                guard let vTrack = asset.tracks(withMediaType: .video).first else { continue }
+                guard let vTrack = asset.tracks(withMediaType: .video).first else {
+                    ExportDiagnosticsLog.log("⚠️ пропущено «\(rawEvent.tagName)»: в файле нет видеодорожки — \(url.lastPathComponent)")
+                    continue
+                }
                 if firstVideoTrack == nil { firstVideoTrack = vTrack }
                 let aTrack = asset.tracks(withMediaType: .audio).first
+                ExportDiagnosticsLog.log("сегмент «\(rawEvent.tagName)» файл=\(url.lastPathComponent) кэш=\(media.isCached) длит.файла=\(ExportDiagnosticsLog.fmt(asset.duration)) звук=\(aTrack != nil) \(ExportDiagnosticsLog.describe(track: vTrack))")
 
                 // Кэш-клип уже обрезан под событие — берём целиком; оригинал режем по событию.
                 let timeRange: CMTimeRange
@@ -1427,24 +1448,29 @@ private final class SportCutExportBackend {
                             try compAudio.insertTimeRange(timeRange, of: aTrack, at: currentTime)
                         }
                         currentTime = currentTime + timeRange.duration
-                    } catch { continue }
+                    } catch {
+                        ExportDiagnosticsLog.error("вставка сегмента «\(rawEvent.tagName)» (\(ExportDiagnosticsLog.fmt(timeRange.start)) + \(ExportDiagnosticsLog.fmt(timeRange.duration)))", error)
+                        continue
+                    }
                 }
 
-                allSegmentTracks.append((start: segStart, duration: CMTimeSubtract(currentTime, segStart), sourceTrack: vTrack))
+                let insertedDuration = CMTimeSubtract(currentTime, segStart)
+                if CMTimeGetSeconds(insertedDuration) <= 0 {
+                    ExportDiagnosticsLog.log("⚠️ сегмент «\(rawEvent.tagName)» встал НУЛЕВОЙ длины — инструкция видео-композиции будет битой")
+                }
+                allSegmentTracks.append((start: segStart, duration: insertedDuration, sourceTrack: vTrack))
 
                 // Счётчики сегмента: записи исходника, пересечённые окном события, сдвинутые в
                 // место сегмента на шкале фильма.
-                if watermarkOptions.showClocks,
-                   let clockSource = session.sources.first(where: { $0.id == rawEvent.sourceID }) {
+                if watermarkOptions.showClocks {
                     clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
                         enabled: true,
-                        lines: clockSource.timelines,
+                        records: clockRecords(for: rawEvent, session: session),
                         sourceRange: CMTimeRange(
                             start: CMTime(seconds: event.startTime, preferredTimescale: 600),
                             duration: CMTime(seconds: event.duration, preferredTimescale: 600)
                         ),
-                        compositionStart: CMTimeGetSeconds(segStart),
-                        momentPrimaryClockIds: momentPrimaryClockIds(for: rawEvent, session: session)
+                        compositionStart: CMTimeGetSeconds(segStart)
                     ))
                 }
 
@@ -1470,9 +1496,13 @@ private final class SportCutExportBackend {
             return
         }
 
+        composition.removeEmptyTracks()
         let preset = Self.bestPreset(for: composition)
+        ExportDiagnosticsLog.log(ExportDiagnosticsLog.describe(composition: composition))
+        ExportDiagnosticsLog.log("сегментов в фильме=\(allSegmentTracks.count) preset=\(preset) совместимые=\(AVAssetExportSession.exportPresets(compatibleWith: composition).joined(separator: ","))")
         guard let exportSession = AVAssetExportSession(asset: composition, presetName: preset) else {
             securityURLs.forEach { $0.stopAccessingSecurityScopedResource() }
+            ExportDiagnosticsLog.log("❌ не удалось создать AVAssetExportSession (preset=\(preset))")
             finishError(^String.Titles.exportErrorFailedGeneric)
             return
         }
@@ -1480,6 +1510,7 @@ private final class SportCutExportBackend {
         try? FileManager.default.removeItem(at: outputURL)
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .mp4
+        ExportDiagnosticsLog.log("выход: \(outputURL.path) тип=mp4 поддерживаемые типы=\(exportSession.supportedFileTypes.map(\.rawValue).joined(separator: ","))")
 
         if ((addWatermark && !wmSegments.isEmpty) || showLogo || !clockPlacements.isEmpty),
            let vTrack = firstVideoTrack,
@@ -1503,15 +1534,19 @@ private final class SportCutExportBackend {
             }
         }
 
+        ExportDiagnosticsLog.log(ExportDiagnosticsLog.describe(videoComposition: exportSession.videoComposition))
         startProgressPolling { Double(exportSession.progress) }
         exportSession.exportAsynchronously {
             securityURLs.forEach { $0.stopAccessingSecurityScopedResource() }
             switch exportSession.status {
             case .completed:
+                ExportDiagnosticsLog.log("✅ фильм готов: \(outputURL.lastPathComponent)")
                 self.finishSuccess()
             case .failed, .cancelled:
+                ExportDiagnosticsLog.error("экспорт фильма (status=\(exportSession.status.rawValue))", exportSession.error)
                 self.finishError(exportSession.error?.localizedDescription ?? (^String.Titles.exportErrorFailedGeneric))
             default:
+                ExportDiagnosticsLog.log("❌ экспорт фильма завершился со status=\(exportSession.status.rawValue)")
                 self.finishError(^String.Titles.exportErrorFailedGeneric)
             }
         }
@@ -1527,6 +1562,8 @@ private final class SportCutExportBackend {
     }
 
     private func exportAsFilmPerPlaylistBuild(playlists: [SportCutPlaylist], outputURL: URL, session: SportCutSession, slideURLs: [UUID: URL]) {
+        ExportDiagnosticsLog.begin("ПРОСМОТР · экспорт ФИЛЬМ НА КАЖДЫЙ ПЛЕЙЛИСТ · сессия «\(session.name)»")
+        ExportDiagnosticsLog.log("плейлистов=\(playlists.count) вотермарка=\(addWatermark) лого=\(showLogo) счётчики=\(watermarkOptions.showClocks)")
         _ = ui
         let parentDir = outputURL.deletingLastPathComponent()
         let baseName = outputURL.deletingPathExtension().lastPathComponent
@@ -1613,17 +1650,15 @@ private final class SportCutExportBackend {
 
                 // Счётчики сегмента: записи исходника, пересечённые окном события, сдвинутые в
                 // место сегмента на шкале фильма.
-                if watermarkOptions.showClocks,
-                   let clockSource = session.sources.first(where: { $0.id == rawEvent.sourceID }) {
+                if watermarkOptions.showClocks {
                     clockPlacements.append(contentsOf: ClockExportOverlayBuilder.placements(
                         enabled: true,
-                        lines: clockSource.timelines,
+                        records: clockRecords(for: rawEvent, session: session),
                         sourceRange: CMTimeRange(
                             start: CMTime(seconds: event.startTime, preferredTimescale: 600),
                             duration: CMTime(seconds: event.duration, preferredTimescale: 600)
                         ),
-                        compositionStart: CMTimeGetSeconds(segStart),
-                        momentPrimaryClockIds: momentPrimaryClockIds(for: rawEvent, session: session)
+                        compositionStart: CMTimeGetSeconds(segStart)
                     ))
                 }
 
@@ -1648,6 +1683,7 @@ private final class SportCutExportBackend {
             let filmURL = parentDir.appendingPathComponent("\(baseName)_\(String(safePlaylist.prefix(120))).mp4")
             try? FileManager.default.removeItem(at: filmURL)
 
+            composition.removeEmptyTracks()
             let preset = Self.bestPreset(for: composition)
             guard let exportSession = AVAssetExportSession(asset: composition, presetName: preset) else {
                 securityURLs.forEach { $0.stopAccessingSecurityScopedResource() }
@@ -1681,12 +1717,16 @@ private final class SportCutExportBackend {
             }
 
             sessions.append(exportSession)
+            ExportDiagnosticsLog.log("плейлист «\(playlist.name)»: сегментов=\(allSegmentTracks.count) счётчиков=\(clockPlacements.count)")
+            ExportDiagnosticsLog.log(ExportDiagnosticsLog.describe(composition: composition))
+            ExportDiagnosticsLog.log(ExportDiagnosticsLog.describe(videoComposition: exportSession.videoComposition))
             exportSession.exportAsynchronously {
                 securityURLs.forEach { $0.stopAccessingSecurityScopedResource() }
                 resultLock.lock()
                 if exportSession.status == .completed {
                     succeeded += 1
                 } else {
+                    ExportDiagnosticsLog.error("фильм плейлиста «\(playlist.name)» (status=\(exportSession.status.rawValue))", exportSession.error)
                     lastError = exportSession.error?.localizedDescription ?? lastError
                 }
                 resultLock.unlock()

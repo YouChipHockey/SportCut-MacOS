@@ -7,6 +7,106 @@
 
 ---
 
+## 2026-08-19 — Панель плейлистов просмотра выключена в лайве
+- **Просили:** отключить кнопку открытия плейлистов именно в режиме лайва.
+- **Как правил:** кнопка «Плейлисты просмотра» в шапке таймлайнов `FullControlView` получает
+  `.disabled(videoManager.isLiveMode)` с приглушением и своей подсказкой
+  (`markupPlaylistsButtonLiveDisabled`, переводы на 7 языков). Плюс запрет в единой точке —
+  `MarkupPlaylistPanelStore.openPanel()` выходит сразу, если `isLiveMode` (панель играет клипы в
+  окне видео, а там идёт живая запись).
+
+## 2026-08-19 — Счётчики убраны из выбора экспорта по тегам и из фильтров
+- **Просили:** по «тегам»-счётчикам нельзя ни фильтровать, ни экспортировать (в плейлист добавлять
+  можно — это остаётся). Убрать их из выбора «экспорт по тегам» в разметке и из фильтров просмотра.
+- **Как правил:** везде, где список тегов/лейблов/событий собирается обходом дорожек, добавлен
+  пропуск `line.isClocksTimeline`:
+  `FullControlView` (`uniqueTagsFromTimelines`, `uniqueLabelsFromTimelines`, `labelsForTag`,
+  `tagsForLabel` — они кормят листы выбора экспорта), `ExportHelper.getSegmentsForExport`
+  (все ветки + `.currentTimeline`, если выбранной оказалась дорожка счётчика),
+  `SportCutFilterSheet` (`usedTagIDs`/`usedLabelIDs`/`usedEventIDs` и все фолбэки по штампам),
+  `TimelineFilterSheet` в окне просмотра-органайзера. `SportCutSession.allEvents` НЕ трогали —
+  через него счётчики добавляются в плейлист, и это по задумке.
+
+## 2026-08-19 — «Operation Stopped» в экспорте просмотра = ПУСТАЯ аудио-дорожка
+- **Симптом:** экспорт фильмом из режима просмотра давно падал с «Operation Stopped», текст ошибки
+  ничего не объяснял.
+- **Диагноз (по новому `exportDiagnostics.log`):** у всех исходников пользователя нет звука
+  (`звук=false`), а композиция всё равно заводит аудио-дорожку заранее — она остаётся без
+  сегментов (`track soun segments=0 duration=invalid`). `AVAssetExportSession` на такой композиции
+  падает: `AVFoundationErrorDomain -11838` → внутри `OSStatus -16976`. Инструкции видео-композиции
+  при этом были корректны (7 штук, подряд, без нулевых).
+- **Как правил:** `AVMutableComposition.removeEmptyTracks()` (в `ExportDiagnosticsLog.swift`) —
+  удаляет дорожки без сегментов перед созданием сессии экспорта. Вызывается во ВСЕХ путях:
+  просмотр (фильм, фильм-на-плейлист, клипы), разметка (`ExportHelper` фильм и клипы),
+  плейлист-органайзер (`OrganizerView` фильм и клипы).
+- **Побочно замечено:** `SportCutSessions_v1` в UserDefaults весит ~27 МБ при лимите CFPreferences
+  4 МБ (в консоли ругань «Attempting to store >= 4194304 bytes … is invalid»). Каждое изменение
+  сессии переписывает весь блоб. Кандидат на перенос в файл, как таймлайны.
+
+## 2026-08-19 — Primary Counter в экспорте + журнал экспорта в файл
+- **Просили:** (1) в экспорте разметки всё ещё не наносятся счётчики, назначенные тегу Primary
+  Counter'ом — только те, что с флагом «Показывать на видео»; (2) добавить отладку экспорта из
+  режима просмотра: экспорт фильмом падает с «Operation Stopped», по тексту ничего не понять.
+- **Найденная причина (1):** `TimelineDataManager.addStampToSelectedLine` клал `primaryClockId`
+  в штамп ТОЛЬКО в ветке обычной разметки; в режиме «таймлайн на тег» (и в связках клавиш) ветка
+  создания штампа его не передавала — все штампы уходили с `primaryClockId = nil`. Дальше
+  оставался только резолв тега из пулов, а он мог промахнуться на устаревшем снимке коллекции.
+- **Сделано:**
+  - Ветка «таймлайн на тег» теперь тоже пишет `primaryClockId` в штамп.
+  - `TimelineDataManager.backfillPrimaryClockIds()` — при открытии проекта дописывает Primary
+    Counter во все штампы, где его нет (старые проекты чинятся сами).
+  - `TagLibraryManager.primaryClockId(forTagId:)` получил третий рубеж: индекс по ФАЙЛАМ коллекций
+    (`diskPrimaryClockIndex`), если оба пула в памяти промахнулись. Сбрасывается вместе с кэшем.
+  - **Журнал экспорта в файл** `ExportDiagnosticsLog` →
+    `…/Application Support/YouChip-Stat/exportDiagnostics.log` (кольцевой, 2 МБ). Пишут оба
+    экспорта: разметка (`ExportHelper`, `ClockExportOverlayBuilder` — резолв primary, какие записи
+    наносятся и почему пропущены, слои и кадры, факт нанесения логотипа) и просмотр
+    (`SportCutExportSheet` — каждый сегмент с описанием дорожки, композиция, preset, инструкции
+    видео-композиции с пометками «нулевая длительность»/«разрыв», статус и цепочка
+    `NSUnderlyingError`). Именно по нему разбирается «Operation Stopped».
+- **Файлы:** `ExportDiagnosticsLog.swift` (новый), `TimelineDataManager.swift`,
+  `TagLibraryManager.swift`, `WindowsManager.swift`, `ClockExportOverlayBuilder.swift`,
+  `ExportHelper.swift`, `SportCutExportSheet.swift`.
+
+## 2026-08-19 — Таймеры на клипах плейлиста, экспорт (лого/счётчики), синк разметки → просмотр
+- **Просили:** (1) клипы плейлиста должны нести таймеры С СОБОЙ — снесли разметку, а таймер на
+  клипе обязан работать («клип сохраняется всегда и со всем, только длину нельзя менять без
+  исходника»); (2) в экспорте разметки не работает логотип клуба ни при каком экспорте;
+  (3) в фильм наносится только счётчик с флагом «Показывать на видео», Primary Counter — нет;
+  (4) при экспорте по клипам счётчиков нет вовсе; (5) убрать живой синк разметки с просмотром —
+  из-за него посекундный рывок, оставить синк в 4 явных точках.
+- **Сделано:**
+  - **Клип несёт счётчики.** Новый `ClockRecordSnapshot` (показания `StampClockInfo` + границы в
+    исходнике + флаг Primary) и `SportCutEvent.clockRecords: [ClockRecordSnapshot]?`. Снимок
+    ставится в `SportCutEvent.from(...)` и обновляется на каждом `updateSession`
+    (`SportCutSessionManager.refreshedClockSnapshots`, по одному проходу на источник — дёшево),
+    плюс до-заполняется при открытии сессии (`syncAllProjectSources`). Читатели ходят через
+    `SportCutClockSnapshotBuilder.resolvedRecords`: свежие записи источника, а если их не стало —
+    снимок клипа. Переведены `SportCutPlayerManager.currentClockOverlayItems` и все три места
+    экспорта в `SportCutExportSheet`; тумблер «со счётчиками» теперь виден и когда счётчики
+    остались только на клипах.
+  - **Экспорт разметки.** Логотип клуба и счётчики больше не зависят от того, нашёлся ли тег
+    штампа: `videoCompositionWithTextOverlay(..., watermarkOptions:)` получает опции отдельным
+    параметром (раньше фильм читал их из `overlayItems.first`), а экспорт по клипам строит
+    видео-композицию и без тега (раньше `if let tag` → `nil`, то есть ни лого, ни таймеров).
+    Primary Counter резолвится через новый `TagLibraryManager.primaryClockId(forTagId:)` — оба
+    пула, первый непустой (устаревший снимок выбранной коллекции ронял primary в nil). Клипы
+    экспортируются с переходом на главный поток между клипами (слои/кадры счётчика — AppKit),
+    zip ушёл в фон. Добавлены диагностические `print` (placements/лого/тег) на случай повтора.
+  - **Синк разметки → просмотр только в 4 точках** (решение пользователя): вход в сессию
+    просмотра, вход в проект разметки, выход из него (после `ClockRuntimeManager.finalizeAll()`),
+    кнопка «Обновить разметку в режиме просмотра» (иконка в `FullControlView`, с подсказкой).
+    Подписка на `.projectTimelinesDidChange` удалена вместе с самим постом уведомления —
+    посекундный пересинк всех сессий под проект был главным расходом при работе счётчиков.
+    `SportCutMarkupSyncManager` стал явным API (`syncCurrentMarkupProject` / `syncMarkupProject`).
+- **Файлы:** `ClockModels.swift`, `VideoPlayerWindowModel.swift` (`clockRecordSnapshots`),
+  `ClockExportOverlayBuilder.swift` (placements по снимкам + robust primary), `ExportHelper.swift`,
+  `OrganizerView.swift`, `MomentViewerView.swift`, `TagLibraryManager.swift`,
+  `SportCutModels.swift`, `SportCutClockSnapshot.swift` (новый), `SportCutSessionManager.swift`,
+  `SportCutPlayerManager.swift`, `SportCutExportSheet.swift`, `SportCutMarkupSyncManager.swift`,
+  `WindowsManager.swift`, `InMemoryStorageManager.swift`, `FullControlView.swift`, локализации.
+  См. [[knowledge/modules/SportCut]], [[knowledge/modules/VideoPlayer]].
+
 ## 2026-08-19 — Счётчики: Primary Counter = только тега МОМЕНТА (просмотр + экспорт)
 - **Задача:** в просмотре момента/клипа на кадр лезли ВСЕ счётчики, а не «с флагом Показывать
   на видео + Primary Counter тега этого момента». Тот же баг в экспорте: фильм наносил все

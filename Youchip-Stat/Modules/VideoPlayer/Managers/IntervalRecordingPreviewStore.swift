@@ -31,11 +31,47 @@ final class IntervalRecordingPreviewStore: ObservableObject {
         /// Левый край будущего штампа: время нажатия минус «время до» тега — ровно там,
         /// где окажется готовый штамп, чтобы при остановке ничего не прыгало.
         let visualStart: Double
+        /// Запись идёт по плейхеду ПЕРЕСМОТРА (бирюзовому). Якорь фиксируется на старте: если
+        /// посреди записи переключить «Разметка лайва / пересмотра», штамп продолжает расти за
+        /// тем плейхедом, с которого начали, — как и его будущие границы.
+        var usesReviewTime: Bool = false
+        /// Явная дорожка для превью. Счётчики пишутся каждый на свою линию, там незачем искать
+        /// строку по тегу/выделению. У тегов — nil.
+        var lineID: UUID? = nil
     }
 
     static let shared = IntervalRecordingPreviewStore()
 
+    /// Пишущиеся интервальные ТЕГИ (полностью пересобираются из `TagLibraryView.sync`).
     @Published private(set) var items: [Item] = []
+    /// Пишущиеся СЧЁТЧИКИ — отдельный список: `sync` их не видит и не должен затирать.
+    @Published private(set) var clockItems: [Item] = []
+
+    /// Всё, что рисует оверлей.
+    var allItems: [Item] { items + clockItems }
+
+    // MARK: - Счётчики
+
+    /// Счётчик запустили: показать растущий штамп на его линии.
+    func beginClockRecording(_ item: Item) {
+        if let index = clockItems.firstIndex(where: { $0.id == item.id }) {
+            guard clockItems[index] != item else { return }
+            clockItems[index] = item
+        } else {
+            clockItems.append(item)
+        }
+    }
+
+    /// Счётчик сбросили: превью снимаем — вместо него на дорожке появляется готовый штамп.
+    func endClockRecording(clockId: String) {
+        guard clockItems.contains(where: { $0.id == clockId }) else { return }
+        clockItems.removeAll { $0.id == clockId }
+    }
+
+    func resetClockRecordings() {
+        guard !clockItems.isEmpty else { return }
+        clockItems = []
+    }
 
     /// Дорожки, заведённые ради превью (режим «таймлайн на тег»): tagId → lineID.
     /// Нужны только чтобы убрать пустую дорожку, если запись отменили.
@@ -67,6 +103,9 @@ final class IntervalRecordingPreviewStore: ObservableObject {
     }
 
     /// Полный сброс — при выходе из проекта/закрытии окна разметки.
+    /// Полный сброс ТЕГОВЫХ превью. Счётчики сюда не входят: они переживают закрытие окна
+    /// разметки (продолжают идти), и при следующем открытии их растущие штампы должны быть на
+    /// месте. Счётчики снимает `ClockTimelineRecorder` — по сбросу или финализации.
     func reset() {
         autoCreatedLines.removeAll()
         guard !items.isEmpty else { return }

@@ -42,6 +42,9 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
     /// Запись работы счётчика (секундомер/таймер). Есть только у штампов скрытого таймлайна
     /// счётчиков — см. `ClockTimelineConstants`.
     var clockInfo: StampClockInfo?
+    /// Primary Counter тега этого штампа (копия `Tag.primaryClockId` на момент постановки) — чтобы
+    /// пересмотр/просмотр/экспорт знали его без загруженной коллекции.
+    var primaryClockId: String?
 
     /// Обратная совместимость: одиночная позиция = первая из `mapPositions`.
     var position: CGPoint? { mapPositions.first?.position }
@@ -106,7 +109,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         timeFinishSeconds - timeStartSeconds
     }
     
-    init(id: UUID = UUID(), tagRefs: [StampTagRef], primaryID: String?, timeStartSeconds: Double, timeFinishSeconds: Double, timeStartString: String? = nil, timeFinishString: String? = nil, colorHex: String, label: String, labels: [FullLabelWithGroup], timeEvents: [String] = [], position: CGPoint? = nil, isActiveForMapView: Bool? = nil, comment: String? = nil, mapFieldId: String? = nil, mapPositions: [StampMapPosition]? = nil, clockInfo: StampClockInfo? = nil) {
+    init(id: UUID = UUID(), tagRefs: [StampTagRef], primaryID: String?, timeStartSeconds: Double, timeFinishSeconds: Double, timeStartString: String? = nil, timeFinishString: String? = nil, colorHex: String, label: String, labels: [FullLabelWithGroup], timeEvents: [String] = [], position: CGPoint? = nil, isActiveForMapView: Bool? = nil, comment: String? = nil, mapFieldId: String? = nil, mapPositions: [StampMapPosition]? = nil, clockInfo: StampClockInfo? = nil, primaryClockId: String? = nil) {
         self.id = id
         self.primaryID = primaryID
         self.tagRefs = tagRefs
@@ -117,6 +120,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         self.isActiveForMapView = isActiveForMapView
         self.comment = comment
         self.clockInfo = clockInfo
+        self.primaryClockId = primaryClockId
 
         // Приоритет у массива позиций; иначе — миграция из одиночных position/mapFieldId.
         if let mapPositions {
@@ -134,7 +138,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, tagRefs, idTags, idTag, tagGroupId, primaryID, timeStartSeconds, timeFinishSeconds
         case colorHex, label, isActiveForMapView, labels, timeEvents, position, comment, mapFieldId
-        case mapPositions, clockInfo
+        case mapPositions, clockInfo, primaryClockId
     }
 
     func encode(to encoder: Encoder) throws {
@@ -155,6 +159,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(mapFieldId, forKey: .mapFieldId)
         try container.encodeIfPresent(comment, forKey: .comment)
         try container.encodeIfPresent(clockInfo, forKey: .clockInfo)
+        try container.encodeIfPresent(primaryClockId, forKey: .primaryClockId)
     }
 
     init(from decoder: Decoder) throws {
@@ -169,6 +174,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
         timeEvents = try container.decodeIfPresent([String].self, forKey: .timeEvents) ?? []
         comment = try container.decodeIfPresent(String.self, forKey: .comment)
         clockInfo = try container.decodeIfPresent(StampClockInfo.self, forKey: .clockInfo)
+        primaryClockId = try container.decodeIfPresent(String.self, forKey: .primaryClockId)
 
         // Новый формат — массив; иначе миграция из одиночной точки (position + mapFieldId).
         if let positions = try? container.decode([StampMapPosition].self, forKey: .mapPositions) {
@@ -218,6 +224,7 @@ struct TimelineStamp: Identifiable, Codable, Equatable {
             && lhs.mapPositions == rhs.mapPositions
             && lhs.comment == rhs.comment
             && lhs.clockInfo == rhs.clockInfo
+            && lhs.primaryClockId == rhs.primaryClockId
     }
     
     /// Порядковый номер среди всех экземпляров того же тега по времени начала (раньше по времени → меньший номер).

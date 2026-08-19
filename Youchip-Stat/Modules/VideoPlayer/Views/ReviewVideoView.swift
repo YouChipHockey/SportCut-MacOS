@@ -68,6 +68,11 @@ struct ReviewVideoView: View {
                     .transition(.opacity)
                 }
 
+                // Счётчики: пишущиеся ПО ПЛЕЙХЕДУ ПЕРЕСМОТРА и записи, пересечённые им —
+                // пересматриваешь момент, где шёл секундомер, и он идёт на кадре.
+                ClockVideoOverlayView(usesReviewTime: true)
+                    .zIndex(7)
+
                 // Version badge
                 VStack {
                     HStack {

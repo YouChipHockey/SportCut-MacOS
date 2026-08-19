@@ -177,6 +177,9 @@ extension String {
         case fullControlButtonAddTimeline
         case fullControlHelpAddTimeline
         case fullControlButtonMergeTimelines
+        case fullControlButtonSyncViewing
+        case fullControlSyncViewingDone
+        case fullControlSyncViewingNothing
         case fullControlMergeTimelinesHint
         case collectionCopyGroup
         case collectionPasteGroup
@@ -874,6 +877,34 @@ extension String {
         case canvasCopyButtons
         case canvasPasteButtons
         case canvasRemoveFromCanvas
+        case canvasDeleteElements
+        case canvasDeleteConfirmMessage
+        case editorUndo
+        case editorRedo
+
+        // Плейлисты просмотра в окне разметки
+        case markupPlaylistsTitle
+        case markupPlaylistsButton
+        case markupPlaylistsButtonLiveDisabled
+        case markupPlaylistsBackToSessions
+        case markupPlaylistsReturnToMarkup
+        case markupPlaylistsPickSession
+        case markupPlaylistsNoSessions
+        case markupPlaylistsSessionSubtitle
+        case markupPlaylistsAddToCurrent
+        case markupPlaylistsAddToPlaylist
+        case markupPlaylistsPickPlaylistTitle
+        case markupPlaylistsCreateNewPlaylist
+        case markupPlaylistsNewPlaylistNamePlaceholder
+        case markupPlaylistsNoPlaylists
+        case markupTimelineTabMarkup
+        case markupTimelineTabPlaylist
+        case markupAnchorLive
+        case markupAnchorReview
+        case markupAnchorHelp
+        case tagPrimaryCounter
+        case tagPrimaryCounterNone
+        case tagPrimaryCounterHint
         
         // Data Sync & Backup
         case dataManagementTitle

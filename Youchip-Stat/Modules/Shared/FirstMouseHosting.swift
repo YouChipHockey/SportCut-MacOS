@@ -226,6 +226,72 @@ extension View {
     }
 }
 
+// MARK: - Пинч-зум в неактивном окне
+
+/// Пинч-зум, работающий, когда окно не в фокусе.
+///
+/// `MagnificationGesture` — такой же SwiftUI-жест, как остальные: в неключевом окне он событий
+/// не получает, поэтому зум требовал сперва «взять окно в фокус». Панорама колесом этим не
+/// страдала, потому что слушает `NSEvent` напрямую — здесь делаем ровно то же самое для `.magnify`.
+///
+/// Колбэки повторяют семантику `MagnificationGesture`: в них приходит масштаб ОТНОСИТЕЛЬНО
+/// начала жеста (1.0 — без изменений), так что вызывающий код можно переносить один в один.
+private struct FirstMouseMagnifyModifier: ViewModifier {
+
+    let onChanged: (CGFloat) -> Void
+    let onEnded: (CGFloat) -> Void
+
+    @State private var monitor: Any?
+    @State private var isHovering = false
+    /// Накопленный масштаб текущего жеста: `NSEvent.magnification` — приращение, а не итог.
+    @State private var accumulated: CGFloat = 1
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { isHovering = $0 }
+            .onAppear { install() }
+            .onDisappear { remove() }
+    }
+
+    private func install() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .magnify) { event in
+            // Жест адресован тому, над чем курсор, — как и панорама колесом.
+            guard isHovering else { return event }
+            switch event.phase {
+            case .began:
+                accumulated = 1
+            case .ended, .cancelled:
+                let final = accumulated
+                accumulated = 1
+                onEnded(final)
+                return nil
+            default:
+                break
+            }
+            accumulated *= (1 + event.magnification)
+            onChanged(accumulated)
+            return nil
+        }
+    }
+
+    private func remove() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+    }
+}
+
+extension View {
+    /// Пинч-зум, срабатывающий и в неактивном окне (замена `MagnificationGesture`).
+    /// В колбэки приходит масштаб относительно начала жеста, как у SwiftUI-жеста.
+    func onFirstMouseMagnify(
+        onChanged: @escaping (CGFloat) -> Void,
+        onEnded: @escaping (CGFloat) -> Void = { _ in }
+    ) -> some View {
+        modifier(FirstMouseMagnifyModifier(onChanged: onChanged, onEnded: onEnded))
+    }
+}
+
 // MARK: - Перетаскивание с первого клика
 
 /// Перетаскивание, работающее в НЕактивном окне с первого нажатия.

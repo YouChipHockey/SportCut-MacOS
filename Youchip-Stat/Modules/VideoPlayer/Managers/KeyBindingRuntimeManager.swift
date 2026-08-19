@@ -88,10 +88,16 @@ final class KeyBindingRuntimeManager: ObservableObject {
     var isIntervalTagActive: IsIntervalActiveCallback?
     /// Секундомеры/таймеры как цели связок (активация/деактивация/инверсия → старт/стоп/toggle,
     /// отдельный тип связки `.clockReset` → сброс).
+    /// Включить счётчик (пуск простаивающего или снятие с СВОЕЙ паузы).
     var onStartClock: ((_ clockId: String) -> Void)?
-    var onStopClock: ((_ clockId: String) -> Void)?
+    /// Поставить счётчик на СВОЮ паузу (значение замирает, счётчик остаётся активным/пишется).
+    var onPauseClock: ((_ clockId: String) -> Void)?
+    /// Сброс счётчика — единственное, что прекращает запись.
     var onResetClock: ((_ clockId: String) -> Void)?
+    /// Активен ли счётчик (идёт ИЛИ на своей паузе — пишется).
     var isClockActive: ((_ clockId: String) -> Bool)?
+    /// Идёт ли счётчик прямо сейчас (не на своей паузе).
+    var isClockRunning: ((_ clockId: String) -> Bool)?
     var onAttachLabelsToAnchor: AttachLabelsToAnchorCallback?
     var onAttachLabelsToLastStamp: AttachLabelsToLastStampCallback?
     var onAttachLabelsIfTagMatches: AttachLabelsIfTagMatchesCallback?
@@ -298,6 +304,8 @@ final class KeyBindingRuntimeManager: ObservableObject {
             applyIncomingExclusiveBindings(kind: .tag, elementId: elementId)
             // Эксклюзив тег↔лейбл: нажатие тега подсвечивает его эксклюзивные лейблы (выбор партнёра).
             highlightExclusiveLabelPartners(ofTag: elementId)
+            // Синхронизация состояния (stateSync) НЕ здесь: она зеркалит по факту смены состояния
+            // (старт/финиш интервальной записи), а не по нажатию — см. notifyStateChanged.
         }
 
         return true
@@ -515,23 +523,25 @@ final class KeyBindingRuntimeManager: ObservableObject {
 
     // MARK: - Clock tap (секундомер / таймер)
 
-    /// Клик по счётчику на холсте. Ведёт себя как интервальный тег: активация запускает счётчик
-    /// И его цепочку связок; повторное нажатие по идущему счётчику — просто остановка (связки
-    /// не отрабатываем, как и у интервального тега, чтобы выключение не «дёргало» партнёров).
-    /// Следа на таймлайне счётчик не оставляет — цепочка идёт от него как от обычного источника.
+    /// Клик по счётчику на холсте. Три состояния (как договорено): простаивает → ПУСК (+ цепочка
+    /// связок); идёт → на СВОЮ ПАУЗУ (значение замирает, но счётчик активен и пишется); на паузе →
+    /// СНЯТЬ с паузы. Полностью останавливает запись только СБРОС (Ctrl+клик / связка «Сброс»).
+    /// Связки отрабатываем только на свежем пуске — пауза/снятие партнёров не «дёргают».
     func handleClockTap(clockId: String) {
         let buttonKey = "\(CanvasButtonKind.clock.rawValue):\(clockId)"
         let wasActive = isClockActive?(clockId) ?? false
+        let wasRunning = isClockRunning?(clockId) ?? false
         didCompleteHighlightPair = false
 
-        KeyBindingLog.log("handleClockTap \(buttonKey) | активен=\(wasActive), исходящих=\(bindings.filter { $0.sourceButtonKey == buttonKey }.count)")
+        KeyBindingLog.log("handleClockTap \(buttonKey) | активен=\(wasActive), идёт=\(wasRunning)")
 
         // Нажатие счётчика — уход из текущей цепочки подсветки (в т.ч. если счётчик сам подсвечен:
         // пара считается отработанной). Гасим ДО связок — они могут поднять свою подсветку.
         if highlightModeActive { clearHighlight() }
 
         if wasActive {
-            onStopClock?(clockId)
+            // Идёт → пауза; на паузе → снятие с паузы. Ни то, ни другое цепочку не запускает.
+            if wasRunning { onPauseClock?(clockId) } else { onStartClock?(clockId) }
             return
         }
 
@@ -752,8 +762,9 @@ final class KeyBindingRuntimeManager: ObservableObject {
                 KeyBindingLog.log("    ↳ deactivation \(binding.targetId): onStopIntervalTag \(onStopIntervalTag == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok"), сейчас активен=\(isIntervalTagActive?(binding.targetId) ?? false)")
                 onStopIntervalTag?(binding.targetId)
             } else if binding.targetKind == .clock {
-                KeyBindingLog.log("    ↳ deactivation счётчика \(binding.targetId): onStopClock \(onStopClock == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok")")
-                onStopClock?(binding.targetId)
+                // Деактивация счётчика = его СВОЯ пауза (значение замирает, запись продолжается).
+                KeyBindingLog.log("    ↳ deactivation счётчика \(binding.targetId): onPauseClock \(onPauseClock == nil ? "НЕ ПОДКЛЮЧЁН ❌" : "ok")")
+                onPauseClock?(binding.targetId)
             }
 
         case .clockReset:
@@ -764,10 +775,11 @@ final class KeyBindingRuntimeManager: ObservableObject {
 
         case .intervalInversion:
             if binding.targetKind == .clock {
-                let isActive = isClockActive?(binding.targetId) ?? false
-                KeyBindingLog.log("    ↳ инверсия счётчика \(binding.targetId): активен=\(isActive)")
-                if isActive {
-                    onStopClock?(binding.targetId)
+                // Инверсия счётчика: идёт → на паузу; на паузе/простое → включить.
+                let isRunning = isClockRunning?(binding.targetId) ?? false
+                KeyBindingLog.log("    ↳ инверсия счётчика \(binding.targetId): идёт=\(isRunning)")
+                if isRunning {
+                    onPauseClock?(binding.targetId)
                 } else {
                     startClockAndContinueChain(clockId: binding.targetId, visited: &visited)
                 }
@@ -791,6 +803,13 @@ final class KeyBindingRuntimeManager: ObservableObject {
                     )
                 }
             }
+
+        case .stateSync:
+            // Синхронизация состояния зеркалится по ФАКТУ смены состояния (старт/финиш интервала,
+            // старт/стоп счётчика) через `notifyStateChanged`, а не по прохождению обычной цепочки
+            // связок — иначе выключение интервала/счётчика (оно не идёт через handleButtonTap) и
+            // старт из других связок не отражались бы. Здесь — no-op.
+            break
 
         case .visibility:
             runtimeVisibility[targetKey] = true
@@ -842,7 +861,8 @@ final class KeyBindingRuntimeManager: ObservableObject {
         case .tag:
             if isIntervalTagActive?(id) == true { onStopIntervalTag?(id) }
         case .clock:
-            if isClockActive?(id) == true { onStopClock?(id) }
+            // Эксклюзив гасит партнёра его ПАУЗОЙ (как шахматные часы), а не сбросом.
+            if isClockRunning?(id) == true { onPauseClock?(id) }
         default:
             break
         }
@@ -856,6 +876,79 @@ final class KeyBindingRuntimeManager: ObservableObject {
             && isStatefulKind(binding.sourceKind) && isStatefulKind(binding.targetKind)
             && binding.targetButtonKey == buttonKey {
             deactivateExclusivePartner(kind: binding.sourceKind, id: binding.sourceId)
+        }
+    }
+
+    // MARK: - Синхронизация состояния (двунаправленная)
+
+    /// Идёт ли сейчас каскад синхронизации. Старт/стоп, вызванные самой синхронизацией, приходят
+    /// обратно в `notifyStateChanged` (через те же колбэки старта/стопа) — этот флаг не даёт им
+    /// запустить новый каскад, только помечает посещённое.
+    private var stateSyncInProgress = false
+    private var stateSyncVisited: Set<String> = []
+
+    /// ЕДИНАЯ точка синхронизации: интервальный тег/счётчик реально поменял состояние — любым путём
+    /// (прямой тап, связка активации/деактивации/инверсии, эксклюзив, достижение нуля таймером).
+    /// Зеркалим статус на stateSync-партнёров в обе стороны. Вызывается из мест, где состояние уже
+    /// изменилось: старт/финиш интервальной записи и `ClockRuntimeManager.onStateChanged`.
+    func notifyStateChanged(kind: CanvasButtonKind, elementId: String, activated: Bool) {
+        guard isStatefulKind(kind) else { return }
+        let key = "\(kind.rawValue):\(elementId)"
+        if stateSyncInProgress {
+            // Этот старт/стоп — следствие уже идущего каскада: помечаем и выходим.
+            stateSyncVisited.insert(key)
+            return
+        }
+        guard bindings.contains(where: { $0.type == .stateSync }) else { return }
+        stateSyncInProgress = true
+        stateSyncVisited = [key]
+        propagateStateSync(kind: kind, elementId: elementId, activate: activated)
+        stateSyncInProgress = false
+        stateSyncVisited = []
+    }
+
+    /// Партнёры кнопки по связкам «синхронизация состояния» — оба конца учитываются (связка
+    /// двунаправленная, направление стрелки не важно).
+    private func stateSyncPartners(of buttonKey: String) -> [(kind: CanvasButtonKind, id: String)] {
+        var result: [(kind: CanvasButtonKind, id: String)] = []
+        for binding in bindings where binding.type == .stateSync {
+            if binding.sourceButtonKey == buttonKey {
+                result.append((binding.targetKind, binding.targetId))
+            } else if binding.targetButtonKey == buttonKey {
+                result.append((binding.sourceKind, binding.sourceId))
+            }
+        }
+        return result
+    }
+
+    private func propagateStateSync(kind: CanvasButtonKind, elementId: String, activate: Bool) {
+        let buttonKey = "\(kind.rawValue):\(elementId)"
+        for partner in stateSyncPartners(of: buttonKey) {
+            let partnerKey = "\(partner.kind.rawValue):\(partner.id)"
+            guard stateSyncVisited.insert(partnerKey).inserted else { continue }
+            switch partner.kind {
+            case .tag:
+                let isActive = isIntervalTagActive?(partner.id) ?? false
+                if activate {
+                    if !isActive { onStartIntervalTag?(partner.id) }
+                } else {
+                    if isActive { onStopIntervalTag?(partner.id) }
+                }
+            case .clock:
+                // Плей=активация, ПАУЗА=деактивация (сброс — это отдельно, здесь его нет).
+                let running = isClockRunning?(partner.id) ?? false
+                if activate {
+                    // Включаем, если партнёр не идёт (простаивает ИЛИ на паузе — тогда снимаем с паузы).
+                    if !running { onStartClock?(partner.id) }
+                } else {
+                    // Зеркалим деактивацию ПАУЗОЙ (не сбросом — тот обнулил бы счётчик).
+                    if running { onPauseClock?(partner.id) }
+                }
+            default:
+                continue
+            }
+            // Каскад: партнёр сам мог быть связан синхронизацией с другими.
+            propagateStateSync(kind: partner.kind, elementId: partner.id, activate: activate)
         }
     }
 

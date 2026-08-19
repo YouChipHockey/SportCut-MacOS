@@ -50,6 +50,14 @@ struct TimelineLineView: View, Equatable {
     /// См. TASK-007, 3.5.
     let onEditComment: (TimelineStamp) -> Void
     let onPickSession: (TimelineStamp) -> Void
+    /// Открыть лист «Добавить в плейлист…» для тега (или ⌘-пачки, если тег в неё входит).
+    /// Лист живёт в родителе (перф: не по хосту на строку), поэтому это колбэк.
+    var onAddToPlaylist: (TimelineLine, TimelineStamp) -> Void = { _, _ in }
+
+    /// Состояние Shift для drag-and-drop тега в плейлист. `@ObservedObject` обновляет строку при
+    /// переключении Shift, но в `==` не входит (сравниваются только `let`-данные), так что на
+    /// обычные перерисовки не влияет. См. [[TimelineDnDModifierMonitor]].
+    @ObservedObject private var dndModifier = TimelineDnDModifierMonitor.shared
 
     private let tagLibrary = TagLibraryManager.shared
     @State private var isDraggingOver = false
@@ -293,6 +301,8 @@ struct TimelineLineView: View, Equatable {
         }
         .onTapGesture(count: 1) {
             if resizingStampID == nil {
+                // Играли клипы плейлиста в окне видео — клик по обычному тегу возвращает разметку.
+                MarkupPlaylistPanelStore.shared.returnToMarkupOnMarkupInteraction()
                 let commandDown = NSEvent.modifierFlags.contains(.command)
                 if commandDown {
                     timelineData.toggleSportCutExportSelection(stampID: stamp.id)
@@ -310,10 +320,11 @@ struct TimelineLineView: View, Equatable {
                 }
             }
         }
-        // Свободный перенос штампа: по вертикали — на любую дорожку, по горизонтали — во времени
-        // (длительность сохраняется). Раньше двигалась только вертикаль, время оставалось прежним.
+        // Перетаскивание тега: ПЛЕЙЛИСТ по обычному ЛКМ (системный `.onDrag` ниже), а перенос по
+        // ТАЙМЛАЙНАМ — при зажатом Shift. Поэтому жест переноса включаем ТОЛЬКО когда зажат Shift;
+        // без него он отключён (nil), и срабатывает `.onDrag` — тег(и) уходят в панель плейлистов.
         .gesture(
-            (resizingStampID == nil ? DragGesture() : nil)
+            ((resizingStampID == nil && isTimelineMoveDrag()) ? DragGesture() : nil)
                 .onChanged { value in
                     if draggingStampID == nil {
                         draggingStampID = stamp.id
@@ -642,6 +653,19 @@ struct TimelineLineView: View, Equatable {
             )
         }
 
+        // Панель плейлистов открыта и плейлист выбран — быстрый путь «в текущий плейлист».
+        if MarkupPlaylistPanelStore.shared.canAddToCurrentPlaylist {
+            Button(^String.Titles.markupPlaylistsAddToCurrent) {
+                MarkupPlaylistPanelStore.shared.addStampsToCurrentPlaylist(line: line, stamp: stamp)
+            }
+        }
+        // Выбрана сессия просмотра в правой панели — лист с выбором любого её плейлиста (или создать новый).
+        if MarkupPlaylistPanelStore.shared.hasSelectedSession {
+            Button(^String.Titles.markupPlaylistsAddToPlaylist) {
+                onAddToPlaylist(line, stamp)
+            }
+        }
+
         Button(^String.Titles.viewingNewSession) {
             WindowsManager.shared.openSportCutFromTimelineStamps([(line, stamp)], forceNewSession: true)
         }
@@ -695,6 +719,12 @@ struct TimelineLineView: View, Equatable {
         }
     }
     
+    /// Двигаем ли тег по ТАЙМЛАЙНАМ (а не тащим в плейлист): только при зажатом Shift. Без Shift
+    /// обычный ЛКМ уходит в `.onDrag` — перенос в панель плейлистов (одиночный или вся ⌘-пачка).
+    private func isTimelineMoveDrag() -> Bool {
+        dndModifier.isShiftDown
+    }
+
     /// Переносит штамп на другую дорожку. `newStart`/`newFinish` — если его заодно подвинули
     /// по времени (перенос идёт копией с новым id, поэтому время задаём прямо здесь).
     private func transferStamp(
@@ -742,7 +772,8 @@ struct TimelineLineView: View, Equatable {
             isActiveForMapView: stamp.isActiveForMapView,
             comment: stamp.comment,
             mapPositions: stamp.mapPositions,
-            clockInfo: stamp.clockInfo
+            clockInfo: stamp.clockInfo,
+            primaryClockId: stamp.primaryClockId
         )
 
         timelineData.lines[destLineIndex].stamps.append(newStamp)

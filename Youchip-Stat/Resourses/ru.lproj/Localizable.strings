@@ -168,6 +168,9 @@
 "FullControlButtonMap" = "Отобразить на карте";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "Добавить таймлайн";  // ^String.Titles.fullControlButtonAddTimeline
 "FullControlButtonMergeTimelines" = "Объединить таймлайны";
+"FullControlButtonSyncViewing" = "Обновить разметку в режиме просмотра";
+"FullControlSyncViewingDone" = "Разметка обновлена в просмотре";
+"FullControlSyncViewingNothing" = "В просмотре уже актуальная разметка";
 "FullControlMergeTimelinesHint" = "Выберите таймлайны для объединения";
 "CollectionCopyGroup" = "Копировать группу";
 "CollectionPasteGroup" = "Вставить группу";
@@ -1204,6 +1207,7 @@
 "KeyBindingTypeActivation" = "Активация";
 "KeyBindingTypeDeactivation" = "Деактивация";
 "KeyBindingTypeIntervalInversion" = "Инверсия интервала";
+"KeyBindingTypeStateSync" = "Синхронизация состояния";
 "KeyBindingTypeClockReset" = "Сброс счётчика";
 "KeyBindingsClockResetHint" = "Срабатывает при нажатии кнопки (в любую сторону связки): счётчик останавливается и возвращается к исходному значению. Ctrl+ЛКМ — только сброс, без обычного действия кнопки.";
 "KeyBindingTypeVisibility" = "Показать";
@@ -1433,3 +1437,31 @@
 "CanvasCopyButtons" = "Копировать кнопки (%d)";
 "CanvasPasteButtons" = "Вставить кнопки (%d)";
 "CanvasRemoveFromCanvas" = "Убрать с холста (%d)";
+"CanvasDeleteElements" = "Удалить (%d)";
+"CanvasDeleteConfirmMessage" = "Удалить выбранные объекты из коллекции (%d)? Отменить это действие нельзя.";
+"EditorUndo" = "Отменить";
+"EditorRedo" = "Вернуть";
+
+// MARK: - Плейлисты просмотра в разметке
+"MarkupPlaylistsTitle" = "Плейлисты";
+"MarkupPlaylistsButton" = "Плейлисты просмотра";
+"MarkupPlaylistsButtonLiveDisabled" = "Плейлисты просмотра недоступны во время трансляции";
+"MarkupPlaylistsBackToSessions" = "К выбору сессии";
+"MarkupPlaylistsReturnToMarkup" = "Вернуться к разметке";
+"MarkupPlaylistsPickSession" = "Выберите сессию просмотра для этого проекта или создайте новую.";
+"MarkupPlaylistsNoSessions" = "Сессий просмотра с этим проектом пока нет.";
+"MarkupPlaylistsSessionSubtitle" = "Плейлистов: %d";
+"MarkupPlaylistsAddToCurrent" = "Добавить в текущий плейлист";
+"MarkupPlaylistsAddToPlaylist" = "Добавить в плейлист…";
+"MarkupPlaylistsPickPlaylistTitle" = "Добавить в плейлист";
+"MarkupPlaylistsCreateNewPlaylist" = "Создать новый плейлист";
+"MarkupPlaylistsNewPlaylistNamePlaceholder" = "Название плейлиста (необязательно)";
+"MarkupPlaylistsNoPlaylists" = "В сессии пока нет плейлистов";
+"MarkupTimelineTabMarkup" = "Разметка";
+"MarkupTimelineTabPlaylist" = "Плейлист";
+"MarkupAnchorLive" = "Разметка лайва";
+"MarkupAnchorReview" = "Разметка пересмотра";
+"MarkupAnchorHelp" = "Куда добавлять теги: по плейхеду лайва или пересмотра (Opt+W)";
+"TagPrimaryCounter" = "Primary Counter";
+"TagPrimaryCounterNone" = "Нет";
+"TagPrimaryCounterHint" = "Счётчик всегда выводится на видео для момента этого тега (пересмотр/экспорт), даже без флага «Показывать на видео».";

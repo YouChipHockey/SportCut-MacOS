@@ -61,14 +61,28 @@ enum ClockExportRecords {
 enum ClockExportOverlayBuilder {
 
     /// Primary Counter тега момента по его штампу: сначала сохранённый в штампе id (работает без
-    /// коллекции, в т.ч. в просмотре), иначе резолвим тег из текущей коллекции (старые штампы).
+    /// коллекции, в т.ч. в просмотре), иначе резолвим по тегам штампа.
+    ///
+    /// Тег ищем и в текущей коллекции, и в глобальном пуле, беря ПЕРВЫЙ непустой primary
+    /// (`TagLibraryManager.primaryClockId(forTagId:)`): снимок выбранной коллекции мог быть снят
+    /// до того, как тегу назначили счётчик, — тогда в нём nil, а в пуле уже есть. Раньше из-за
+    /// этого primary молча пропадал из экспорта и пересмотра.
     static func momentPrimaryClockIds(for stamp: TimelineStamp?) -> Set<String> {
         guard let stamp else { return [] }
-        if let pc = stamp.primaryClockId ?? TagLibraryManager.shared.findTagById(stamp.idTag)?.primaryClockId,
-           !pc.isEmpty {
-            return [pc]
+        if let pc = stamp.primaryClockId, !pc.isEmpty { return [pc] }
+        // У штампа может быть несколько тегов (мульти-тег) — годится primary любого из них.
+        var result = Set<String>()
+        for tagId in stamp.idTags {
+            if let pc = TagLibraryManager.shared.primaryClockId(forTagId: tagId), !pc.isEmpty {
+                result.insert(pc)
+            }
         }
-        return []
+        if result.isEmpty {
+            ExportDiagnosticsLog.log("primary: «\(stamp.label)» tags=\(stamp.idTags.joined(separator: ",")) — НЕ НАЙДЕН (в штампе нет, в коллекциях у тега пусто)")
+        } else {
+            ExportDiagnosticsLog.log("primary: «\(stamp.label)» → \(result.joined(separator: ","))")
+        }
+        return result
     }
 
     /// Шаг перерисовки. С сотыми — чаще (иначе счётчик выглядит замершим), без них хватает секунды.
@@ -96,54 +110,66 @@ enum ClockExportOverlayBuilder {
         momentPrimaryClockIds: Set<String> = []
     ) -> [ClockExportPlacement] {
         guard enabled else { return [] }
-        // У каждого счётчика своя линия — собираем записи со всех.
-        let clockStamps = lines.clockStamps
-        guard !clockStamps.isEmpty else { return [] }
+        return placements(
+            enabled: true,
+            records: lines.clockRecordSnapshots(primaryClockIds: momentPrimaryClockIds),
+            sourceRange: sourceRange,
+            compositionStart: compositionStart
+        )
+    }
+
+    /// То же, но по ГОТОВЫМ записям, оторванным от разметки (`ClockRecordSnapshot`). Так считают
+    /// счётчики клипы плейлиста просмотра: они несут свои записи с собой и работают без проекта.
+    static func placements(
+        enabled: Bool,
+        records: [ClockRecordSnapshot],
+        sourceRange: CMTimeRange,
+        compositionStart: Double
+    ) -> [ClockExportPlacement] {
+        guard enabled, !records.isEmpty else { return [] }
 
         let srcStart = CMTimeGetSeconds(sourceRange.start)
         let srcDuration = CMTimeGetSeconds(sourceRange.duration)
         let srcFinish = srcStart + srcDuration
         guard srcDuration > 0 else { return [] }
 
-        let primarySet = momentPrimaryClockIds
-
         var result: [ClockExportPlacement] = []
         var stackIndex = 0
+        var report: [String] = []
 
-        for stamp in clockStamps {
-            guard let info = stamp.clockInfo else { continue }
-            guard info.showOnVideo || primarySet.contains(info.clockId) else { continue }
-            let overlapStart = max(stamp.timeStartSeconds, srcStart)
-            let overlapFinish = min(stamp.timeFinishSeconds, srcFinish)
-            guard overlapFinish - overlapStart > 0.05 else { continue }
-
-            let valueStart = info.value(
-                atVideoTime: overlapStart,
-                start: stamp.timeStartSeconds,
-                finish: stamp.timeFinishSeconds
-            )
-            let valueEnd = info.value(
-                atVideoTime: overlapFinish,
-                start: stamp.timeStartSeconds,
-                finish: stamp.timeFinishSeconds
-            )
+        for record in records.sorted(by: { $0.start < $1.start }) {
+            let name = record.info.caption.isEmpty ? record.info.name : record.info.caption
+            guard record.isVisibleOnVideo else {
+                report.append("«\(name)» пропущен: нет флага «на видео» и не primary момента")
+                continue
+            }
+            let overlapStart = max(record.start, srcStart)
+            let overlapFinish = min(record.finish, srcFinish)
+            guard overlapFinish - overlapStart > 0.05 else {
+                report.append(String(format: "«%@» пропущен: запись %.2f–%.2f не пересекает кусок %.2f–%.2f", name, record.start, record.finish, srcStart, srcFinish))
+                continue
+            }
+            report.append(String(format: "«%@» наносится %.2f–%.2f (primary=%@, флаг=%@)", name, overlapStart, overlapFinish, record.isPrimary ? "да" : "нет", record.info.showOnVideo ? "да" : "нет"))
 
             result.append(
                 ClockExportPlacement(
-                    info: info,
-                    recordStart: stamp.timeStartSeconds,
-                    recordFinish: stamp.timeFinishSeconds,
+                    info: record.info,
+                    recordStart: record.start,
+                    recordFinish: record.finish,
                     // Сегмент лежит в композиции подряд, поэтому смещение внутри него сохраняется.
                     visibleStart: compositionStart + (overlapStart - srcStart),
                     visibleDuration: overlapFinish - overlapStart,
                     sampleStart: overlapStart,
                     sampleFinish: overlapFinish,
-                    valueAtStart: valueStart,
-                    valueAtEnd: valueEnd,
+                    valueAtStart: record.value(atVideoTime: overlapStart),
+                    valueAtEnd: record.value(atVideoTime: overlapFinish),
                     stackIndex: stackIndex
                 )
             )
             stackIndex += 1
+        }
+        if !report.isEmpty {
+            ExportDiagnosticsLog.log(String(format: "счётчики на куске %.2f–%.2f: ", srcStart, srcFinish) + report.joined(separator: "; "))
         }
         return result
     }
@@ -175,7 +201,14 @@ enum ClockExportOverlayBuilder {
             )
 
             let frames = renderFrames(for: placement, size: size)
-            guard !frames.isEmpty else { continue }
+            guard !frames.isEmpty else {
+                ExportDiagnosticsLog.log("⚠️ не отрисовались кадры счётчика «\(placement.info.name)» (size=\(Int(size.width))x\(Int(size.height)))")
+                continue
+            }
+            ExportDiagnosticsLog.log(String(format: "слой счётчика «%@»: кадров=%d размер=%dx%d видим %.2f–%.2f из %.2f",
+                                            placement.info.caption.isEmpty ? placement.info.name : placement.info.caption,
+                                            frames.count, Int(size.width), Int(size.height),
+                                            placement.visibleStart, placement.visibleStart + placement.visibleDuration, totalDuration))
 
             let layer = CALayer()
             layer.contentsGravity = .resizeAspect

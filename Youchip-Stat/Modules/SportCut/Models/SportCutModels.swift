@@ -33,15 +33,20 @@ struct SportCutSession: Identifiable, Codable {
         }
     }
 
-    /// Rebuilds a playlist/table event from the current timelines so times and labels match live markup.
+    /// Клип плейлиста — САМОСТОЯТЕЛЬНЫЙ объект: с момента добавления он живёт отдельно от
+    /// разметки. Менять его границы может только пользователь в режиме просмотра
+    /// (`eventStartOverrides` / `eventDurationOverrides`), а правки разметки проекта его не
+    /// касаются — даже если исходный штамп подвинули, переименовали или удалили.
+    ///
+    /// Раньше здесь событие пересобиралось из текущих таймлайнов; после того как разметка стала
+    /// подтягиваться в просмотр непрерывно (`SportCutMarkupSyncManager`), это означало бы, что
+    /// уже нарезанные клипы уезжают под пользователем. Метод оставлен единой точкой, через
+    /// которую проходят все пути воспроизведения и экспорта, — правило описано здесь одним местом.
+    ///
+    /// Таблица и таймлайны самого проекта разметку по-прежнему показывают свежую: они строятся
+    /// напрямую из `sources[].timelines` (см. `allEvents`), а не через этот метод.
     func timelineResolvedEvent(for event: SportCutEvent) -> SportCutEvent {
-        guard let source = sources.first(where: { $0.id == event.sourceID }) else { return event }
-        for line in source.timelines {
-            if let stamp = line.stamps.first(where: { $0.id == event.stampID }) {
-                return SportCutEvent.from(stamp: stamp, line: line, source: source)
-            }
-        }
-        return event
+        event
     }
 }
 
@@ -133,6 +138,15 @@ struct SportCutEvent: Identifiable, Codable, Equatable {
     let eventIDs: [String]
     /// Если задан — это не клип, а титульный слайд (заставка), встроенный в фильм плейлиста.
     var slideID: UUID? = nil
+    /// Счётчики (секундомеры/таймеры), пришитые К САМОМУ КЛИПУ.
+    ///
+    /// Клип плейлиста обязан работать всегда и со всем — даже если проект/разметку, откуда его
+    /// вытащили, снесли (менять можно только длину, для неё нужен исходник). Записи счётчиков
+    /// живут в разметке, поэтому здесь лежит их копия в «плоском» виде: показания, границы в
+    /// времени исходника и признак Primary Counter момента. Пока источник в сессии жив, снимок
+    /// обновляется вместе с разметкой; когда исходника не стало — играем и экспортируем по нему.
+    /// Optional (а не пустой массив) намеренно: старые сессии декодируются без этого ключа.
+    var clockRecords: [ClockRecordSnapshot]? = nil
 
     var isSlide: Bool { slideID != nil }
 
@@ -176,7 +190,8 @@ struct SportCutEvent: Identifiable, Codable, Equatable {
             tagGroupName: tagGroupName,
             labelIDs: labelIDs,
             eventIDs: eventIDs,
-            slideID: slideID
+            slideID: slideID,
+            clockRecords: clockRecords
         )
     }
 
@@ -200,7 +215,14 @@ struct SportCutEvent: Identifiable, Codable, Equatable {
             color: tag?.color ?? stamp.colorHex,
             tagGroupName: tagGroup?.name,
             labelIDs: stamp.labelIDs,
-            eventIDs: stamp.timeEvents
+            eventIDs: stamp.timeEvents,
+            // Клип сразу забирает счётчики с собой — чтобы играть и экспортироваться без проекта.
+            clockRecords: SportCutClockSnapshotBuilder.records(
+                forStamp: stamp,
+                source: source,
+                clipStart: stamp.timeStartSeconds,
+                clipFinish: stamp.timeFinishSeconds
+            )
         )
     }
     

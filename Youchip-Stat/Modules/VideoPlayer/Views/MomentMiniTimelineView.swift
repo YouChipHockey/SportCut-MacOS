@@ -28,7 +28,9 @@ struct MomentMiniTimelineView: View {
     @StateObject private var scrollController = TimelineScrollController()
     @StateObject private var dragState = MomentMiniTimelineDragState()
 
-    @GestureState private var magnifyScale: CGFloat = 1.0
+    /// Живой масштаб пинч-жеста. Не `@GestureState`: зум ловится AppKit-монитором,
+    /// чтобы работать и в неактивном окне (см. `onFirstMouseMagnify`).
+    @State private var magnifyScale: CGFloat = 1.0
     /// Последний `layoutEpoch`, для которого уже выставили стартовый масштаб (при появлении `stamp`).
     @State private var lastAppliedInitialLayoutEpoch: Int?
 
@@ -197,14 +199,12 @@ struct MomentMiniTimelineView: View {
                     }
                     .frame(width: reserveChevronSlots ? chevronSlot : 0)
                 }
-                .gesture(
-                    MagnificationGesture()
-                        .updating($magnifyScale) { state, gestureState, _ in
-                            gestureState = max(1.0, state)
-                        }
-                        .onEnded { value in
-                            finishMagnificationZoom(value: value)
-                        }
+                .onFirstMouseMagnify(
+                    onChanged: { magnifyScale = max(1.0, $0) },
+                    onEnded: { value in
+                        magnifyScale = 1.0
+                        finishMagnificationZoom(value: value)
+                    }
                 )
                 .onAppear {
                     lastLayoutFullWidth = max(W, 1)

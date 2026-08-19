@@ -299,6 +299,9 @@ struct SportCutListView: View {
     private func openSession(_ session: SportCutSession) {
         WindowsManager.shared.sportCutWindow?.close()
         WindowsManager.shared.sportCutWindow = nil
+        // Разметка проектов могла уйти вперёд, пока сессия была закрыта — догоняем перед открытием.
+        SportCutSessionManager.shared.syncAllProjectSources(sessionID: session.id)
+        let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == session.id }) ?? session
         let controller = SportCutWindowController(session: session)
         WindowsManager.shared.sportCutWindow = controller
         controller.showWindow(nil)

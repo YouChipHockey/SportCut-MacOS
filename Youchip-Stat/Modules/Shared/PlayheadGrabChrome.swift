@@ -25,6 +25,8 @@ struct PlayheadStemWithGrabHead: View {
     /// Minimum width of the triangle base (also caps stem visual alignment).
     var headBaseWidth: CGFloat = 12
     var compact: Bool = false
+    /// Цвет плейхеда. По умолчанию белый (основной плейхед); бирюзовый — плейхед пересмотра.
+    var tint: Color = .white
 
     var body: some View {
         GeometryReader { geo in
@@ -40,7 +42,7 @@ struct PlayheadStemWithGrabHead: View {
 
             VStack(spacing: 0) {
                 PlayheadGrabTriangleShape()
-                    .fill(Color.white)
+                    .fill(tint)
                     .frame(width: baseW, height: headH)
                     .overlay(
                         PlayheadGrabTriangleShape()
@@ -49,7 +51,7 @@ struct PlayheadStemWithGrabHead: View {
                     .shadow(color: .black.opacity(0.45), radius: compact ? 1 : 1.5, y: 1)
 
                 Rectangle()
-                    .fill(Color.white)
+                    .fill(tint)
                     .frame(width: stemWidth, height: stemH)
                     .shadow(color: .black.opacity(0.55), radius: compact ? 0.8 : 1.5, x: 0, y: 0)
             }

@@ -16,6 +16,9 @@ struct SportCutPlaylistsView: View {
     let sessionID: UUID
     @ObservedObject var playerManager: SportCutPlayerManager
     @ObservedObject var sessionManager = SportCutSessionManager.shared
+    /// Сообщает наружу, какой плейлист сейчас открыт. Нужно панели плейлистов в окне разметки
+    /// для пункта «Добавить в текущий плейлист»; в самом просмотре не задаётся.
+    var onSelectedPlaylistChanged: ((UUID?) -> Void)? = nil
     
     @State private var selectedGroupIndex = 0
     @State private var selectedPlaylistID: UUID?
@@ -55,6 +58,8 @@ struct SportCutPlaylistsView: View {
             groupSelector
             trashDropZone
         }
+        .onChange(of: selectedPlaylistID) { onSelectedPlaylistChanged?($0) }
+        .onAppear { onSelectedPlaylistChanged?(selectedPlaylistID) }
         .sheet(isPresented: $showNewPlaylistSheet) { newPlaylistSheet }
         .sheet(isPresented: $showNewGroupSheet) { newGroupSheet }
         .sheet(isPresented: $showRenameSheet) { renamePlaylistSheet }

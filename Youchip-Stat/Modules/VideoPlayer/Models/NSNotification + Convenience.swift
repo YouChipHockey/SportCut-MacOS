@@ -22,6 +22,8 @@ extension NSNotification.Name {
     static let stampCountsChanged = NSNotification.Name("stampCountsChanged")
     /// Разметка проекта записана на диск. userInfo: "videoId" (String), "timelines" ([TimelineLine]).
     /// Слушает режим просмотра — чтобы таблица/таймлайны сессии всегда показывали свежую разметку.
+    /// Больше никем не отправляется: живой синк разметки с просмотром убран из-за посекундных
+    /// рывков (см. SportCutMarkupSyncManager). Имя оставлено — на случай возврата точечного канала.
     static let projectTimelinesDidChange = NSNotification.Name("projectTimelinesDidChange")
     static let timelineStampHoverChanged = NSNotification.Name("timelineStampHoverChanged")
     static let editorModeChanged = NSNotification.Name("editorModeChanged")
@@ -31,6 +33,10 @@ extension NSNotification.Name {
     static let editorUndoKeyPressed = NSNotification.Name("editorUndoKeyPressed")
     static let screenshotDisplayChanged = NSNotification.Name("screenshotDisplayChanged")
     static let textBoxEditingChanged = NSNotification.Name("textBoxEditingChanged")
+    /// Нажат хоткей лейбла на холсте связок (режим разметки). object = labelId (String).
+    static let canvasLabelHotkeyPressed = NSNotification.Name("canvasLabelHotkeyPressed")
+    /// Нажат хоткей счётчика на холсте связок (режим разметки). object = clockId (String).
+    static let canvasClockHotkeyPressed = NSNotification.Name("canvasClockHotkeyPressed")
     /// Пробел play/pause в окне режима просмотра (SportCut). Обрабатывается в `SportCutMainView`.
     static let sportCutTogglePlayPause = NSNotification.Name("sportCutTogglePlayPause")
     static let sportCutSeekBackward = NSNotification.Name("sportCutSeekBackward")
@@ -47,6 +53,11 @@ extension NSNotification.Name {
     static let videoIdDidChange = NSNotification.Name("videoIdDidChange")
     /// Запись с камеры завершается — открытые интервальные теги нужно закрыть по текущему времени.
     static let liveRecordingWillStop = NSNotification.Name("liveRecordingWillStop")
+    /// Пересмотр вот-вот закроется. Рассылается СИНХРОННО, пока `isReviewMode` ещё true и
+    /// позиция пересмотра актуальна: всё, что пишется по бирюзовому плейхеду (интервальные теги,
+    /// счётчики), обязано в этот момент закрыться и лечь на таймлайн — плейхеда, по которому его
+    /// писали, дальше не будет.
+    static let reviewModeWillClose = NSNotification.Name("reviewModeWillClose")
     /// Дорожку таймлайна удалили. object = `RemovedTimelineLine`. Слушает `TagLibraryView`:
     /// интервальные теги, которые писались в эту дорожку, надо оборвать.
     static let timelineLineRemoved = NSNotification.Name("timelineLineRemoved")

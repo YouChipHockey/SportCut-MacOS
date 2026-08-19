@@ -20,7 +20,9 @@ struct ZoomableVideoPlayerView<Native: View>: View {
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var lastDrag: CGSize = .zero
-    @GestureState private var pinch: CGFloat = 1.0
+    /// Масштаб текущего пинч-жеста. Не `@GestureState`: зум ловится AppKit-монитором, чтобы
+    /// работать и в неактивном окне (см. `onFirstMouseMagnify`), а сбросом управляем сами.
+    @State private var pinch: CGFloat = 1.0
 
     private let minScale: CGFloat = 1.0
     private let maxScale: CGFloat = 4.0
@@ -48,7 +50,13 @@ struct ZoomableVideoPlayerView<Native: View>: View {
                 }
             }
             .contentShape(Rectangle())
-            .simultaneousGesture(magnifyGesture)
+            .onFirstMouseMagnify(
+                onChanged: { pinch = $0 },
+                onEnded: { value in
+                    setScale(scale * value)
+                    pinch = 1.0
+                }
+            )
             .clipped()
             .overlay(alignment: .bottomTrailing) {
                 zoomControls
@@ -94,14 +102,6 @@ struct ZoomableVideoPlayerView<Native: View>: View {
     }
 
     // MARK: - Gestures
-
-    private var magnifyGesture: some Gesture {
-        MagnificationGesture()
-            .updating($pinch) { value, state, _ in state = value }
-            .onEnded { value in
-                setScale(scale * value)
-            }
-    }
 
     private func dragGesture(size: CGSize) -> some Gesture {
         DragGesture()

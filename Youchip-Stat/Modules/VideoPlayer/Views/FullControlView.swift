@@ -55,7 +55,9 @@ struct FullControlView: View {
     // Effective scale at the time of the last zoom, so a new zoom can be
     // anchored on the playhead (see handleZoomChanged).
     @State private var previousEffectiveScale: CGFloat = 1.0
-    @GestureState private var magnifyScale: CGFloat = 1.0
+    /// Живой масштаб пинч-жеста. Не `@GestureState`: зум ловится AppKit-монитором, чтобы
+    /// работать и в неактивном окне (см. `onFirstMouseMagnify`), сбрасываем его сами.
+    @State private var magnifyScale: CGFloat = 1.0
     @State private var keyEventMonitor: Any?
     @State private var tagEdgePosition: CGFloat? = nil
     /// Ширина правой колонки таймлайнов, измеряется фоновым `GeometryReader` (а не оборачивающим),
@@ -69,6 +71,9 @@ struct FullControlView: View {
     @State private var currentWindowHeight: CGFloat = 0
     @StateObject private var timelineScrollController = TimelineScrollController()
     @StateObject private var playheadDragController = PlayheadEdgeScrollController()
+    /// Свой контроллер перетаскивания у бирюзового плейхеда пересмотра — два плейхеда тянутся
+    /// независимо друг от друга.
+    @StateObject private var reviewPlayheadDragController = PlayheadEdgeScrollController()
     
     @State private var isEditorModeActive = false
     @State private var isScreenshotDisplayActive = false
@@ -255,6 +260,11 @@ struct FullControlView: View {
     @StateObject private var clipFilter = TimelineFilter()
     @State private var showClipSearchSheet = false
 
+    /// Панель плейлистов просмотра справа от таймлайнов.
+    @ObservedObject private var playlistPanel = MarkupPlaylistPanelStore.shared
+    /// Ширина панели плейлистов (тянется разделителем).
+    @State private var playlistPanelWidth: CGFloat = 320
+
     @State private var isLoading = false
     @State private var availableTags: [Tag] = []
     @State private var availableLabels: [Label] = []
@@ -286,6 +296,56 @@ struct FullControlView: View {
         }
     }
     
+    /// Нижняя зона окна: обычные таймлайны разметки или таймлайны плейлиста (вторая вкладка).
+    @ViewBuilder
+    private var timelineArea: some View {
+        if playlistPanel.isPanelOpen,
+           playlistPanel.timelineTab == .playlist,
+           let sessionID = playlistPanel.sessionID {
+            // Та же вьюха, что и в просмотре, — сразу на вкладке плейлистов.
+            SportCutTimelineView(
+                sessionID: sessionID,
+                playerManager: playlistPanel.playerManager,
+                initialSourceTab: SportCutTimelineSourceTab.playlists
+            )
+        } else {
+            scrollBlock()
+        }
+    }
+
+    /// Переключатель «Разметка / Плейлист» — появляется, когда панель плейлистов открыта.
+    private var timelineTabPicker: some View {
+        Picker("", selection: Binding(
+            get: { playlistPanel.timelineTab },
+            set: { playlistPanel.timelineTab = $0 }
+        )) {
+            Text(^String.Titles.markupTimelineTabMarkup).tag(MarkupPlaylistPanelStore.TimelineTab.markup)
+            Text(^String.Titles.markupTimelineTabPlaylist).tag(MarkupPlaylistPanelStore.TimelineTab.playlist)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(width: 260)
+    }
+
+    /// Разделитель между таймлайнами и панелью плейлистов.
+    private func playlistPanelResizeHandle(availableWidth: CGFloat) -> some View {
+        Rectangle()
+            .fill(Color(NSColor.separatorColor))
+            .frame(width: 1)
+            .padding(.horizontal, 3)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        let maxWidth = max(260, availableWidth - 420)
+                        playlistPanelWidth = min(max(260, playlistPanelWidth - value.translation.width), maxWidth)
+                    }
+            )
+    }
+
     @ViewBuilder
     private func scrollBlock() -> some View {
         ZStack(alignment: .topTrailing) {
@@ -319,18 +379,20 @@ struct FullControlView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
-                    .gesture(
-                        MagnificationGesture()
-                            .updating($magnifyScale) { currentState, gestureState, _ in
-                                gestureState = max(1.0, currentState)
-                            }
-                            .onEnded { value in
-                                let newScale = timelineScale * value
-                                let duration = effectiveVideoDuration
-                                // Ограничиваем зум так, чтобы деления не стали мельче ~0.5с.
-                                let maxScale = max(1.0, duration / 10.0)
-                                timelineScale = min(max(1.0, newScale), maxScale)
-                            }
+                    .onFirstMouseMagnify(
+                        onChanged: { value in
+                            guard !isEditorModeActive, !isScreenshotDisplayActive else { return }
+                            magnifyScale = max(1.0, value)
+                        },
+                        onEnded: { value in
+                            magnifyScale = 1.0
+                            guard !isEditorModeActive, !isScreenshotDisplayActive else { return }
+                            let newScale = timelineScale * value
+                            let duration = effectiveVideoDuration
+                            // Ограничиваем зум так, чтобы деления не стали мельче ~0.5с.
+                            let maxScale = max(1.0, duration / 10.0)
+                            timelineScale = min(max(1.0, newScale), maxScale)
+                        }
                     )
                     .disabled(isEditorModeActive || isScreenshotDisplayActive)
                     .opacity(isEditorModeActive || isScreenshotDisplayActive ? 0.5 : 1.0)
@@ -359,18 +421,20 @@ struct FullControlView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
-                    .gesture(
-                        MagnificationGesture()
-                            .updating($magnifyScale) { currentState, gestureState, _ in
-                                gestureState = max(1.0, currentState)
-                            }
-                            .onEnded { value in
-                                let newScale = timelineScale * value
-                                let duration = effectiveVideoDuration
-                                // Ограничиваем зум так, чтобы деления не стали мельче ~0.5с.
-                                let maxScale = max(1.0, duration / 10.0)
-                                timelineScale = min(max(1.0, newScale), maxScale)
-                            }
+                    .onFirstMouseMagnify(
+                        onChanged: { value in
+                            guard !isEditorModeActive, !isScreenshotDisplayActive else { return }
+                            magnifyScale = max(1.0, value)
+                        },
+                        onEnded: { value in
+                            magnifyScale = 1.0
+                            guard !isEditorModeActive, !isScreenshotDisplayActive else { return }
+                            let newScale = timelineScale * value
+                            let duration = effectiveVideoDuration
+                            // Ограничиваем зум так, чтобы деления не стали мельче ~0.5с.
+                            let maxScale = max(1.0, duration / 10.0)
+                            timelineScale = min(max(1.0, newScale), maxScale)
+                        }
                     )
                     .disabled(isEditorModeActive || isScreenshotDisplayActive)
                     .opacity(isEditorModeActive || isScreenshotDisplayActive ? 0.5 : 1.0)
@@ -416,6 +480,13 @@ struct FullControlView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
+            // Выбрана сессия просмотра в правой панели — та же кнопка «в плейлист…», что и в ПКМ.
+            if MarkupPlaylistPanelStore.shared.hasSelectedSession {
+                Button(^String.Titles.markupPlaylistsAddToPlaylist) {
+                    addToPlaylistRequest = AddToPlaylistRequest(source: .selection)
+                }
+                .controlSize(.small)
+            }
             let existingSessions = sportCutSessionManager.sessions
             if !existingSessions.isEmpty {
                 Menu {
@@ -639,6 +710,14 @@ struct FullControlView: View {
 
     @State private var stampForCommentEdit: StampInLine?
     @State private var stampForSessionPick: StampInLine?
+
+    /// Запрос листа «Добавить в плейлист…». Обёртка нужна, т.к. `.sheet(item:)` требует Identifiable,
+    /// а источник (тег/⌘-выборка) сам по себе им не является.
+    struct AddToPlaylistRequest: Identifiable {
+        let id = UUID()
+        let source: MarkupPlaylistPanelStore.AddToPlaylistSource
+    }
+    @State private var addToPlaylistRequest: AddToPlaylistRequest?
 
     /// `ScreenshotMetadata` не `Identifiable`, а `.sheet(item:)` этого требует — оборачиваем.
     struct ScreenshotEditTarget: Identifiable {
@@ -970,6 +1049,9 @@ struct FullControlView: View {
                         },
                         onPickSession: { stamp in
                             stampForSessionPick = StampInLine(line: line, stamp: stamp)
+                        },
+                        onAddToPlaylist: { line, stamp in
+                            addToPlaylistRequest = AddToPlaylistRequest(source: .stamp(line: line, stamp: stamp))
                         }
                     )
                     // `.equatable()` обязателен: SwiftUI НЕ использует `==` у View сам по себе,
@@ -1012,6 +1094,19 @@ struct FullControlView: View {
                 isResizingTag: videoManager.isResizingTag
             )
             .padding(.top, markerHeadBand)
+
+            // Второй (бирюзовый) плейхэд — позиция пересмотра в лайве. Только когда идёт пересмотр.
+            // Полноценный плейхед: тянется, скраббит видео пересмотра, «голова» — в шапке.
+            if videoManager.isReviewMode {
+                ReviewPlayheadView(
+                    dragController: reviewPlayheadDragController,
+                    scrollController: timelineScrollController,
+                    gridWidth: gridWidth,
+                    duration: duration
+                )
+                .padding(.top, markerHeadBand)
+                .zIndex(videoManager.markupUsesReviewTime ? 1 : 0)
+            }
 
             // Стебли меток рисунков — синяя полоска на всю высоту всех дорожек (как плейхед).
             // «Головы»-карандаши вынесены в закреплённую шапку (`PinnedTimelineRulerView`),
@@ -1383,8 +1478,50 @@ struct FullControlView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .help(^String.Titles.viewingReviewHelp)
+
+                // Пока идёт пересмотр — куда добавлять разметку: по плейхеду лайва или пересмотра (Opt+W).
+                if videoManager.isReviewMode {
+                    Divider().frame(height: 12)
+                    markupAnchorSwitch()
+                }
             }
         }
+    }
+
+    private let reviewTint = Color(red: 0.00, green: 0.70, blue: 0.75)
+
+    /// Переключатель «Разметка лайва / Разметка пересмотра». Также тоглится Opt+W.
+    @ViewBuilder
+    private func markupAnchorSwitch() -> some View {
+        HStack(spacing: 4) {
+            markupAnchorButton(
+                title: ^String.Titles.markupAnchorLive,
+                active: !videoManager.markupUsesReviewTime,
+                tint: .red
+            ) { videoManager.markupUsesReviewTime = false }
+
+            markupAnchorButton(
+                title: ^String.Titles.markupAnchorReview,
+                active: videoManager.markupUsesReviewTime,
+                tint: reviewTint
+            ) { videoManager.markupUsesReviewTime = true }
+        }
+        .help(^String.Titles.markupAnchorHelp)
+    }
+
+    private func markupAnchorButton(title: String, active: Bool, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(active ? .white : .secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(active ? tint : Color.gray.opacity(0.15))
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
     
     @ViewBuilder
@@ -1434,6 +1571,10 @@ struct FullControlView: View {
                     controller: timelineScrollController,
                     videoManager: videoManager,
                     dragController: playheadDragController,
+                    reviewDragController: reviewPlayheadDragController,
+                    showReviewPlayhead: videoManager.isReviewMode,
+                    reviewMarkupActive: videoManager.markupUsesReviewTime,
+                    tagEdgePosition: tagEdgePosition,
                     duration: effectiveVideoDuration,
                     gridWidth: gridWidth,
                     interval: interval,
@@ -1450,6 +1591,15 @@ struct FullControlView: View {
         }
         .frame(height: markerHeadBand + 30)
         .allowsHitTesting(!isEditorModeActive && !isScreenshotDisplayActive)
+    }
+
+    /// Отдаёт текущую разметку проекта в сессии просмотра, где он есть, и подтверждает тостом.
+    private func syncMarkupToViewing() {
+        let changed = SportCutMarkupSyncManager.shared.syncCurrentMarkupProject()
+        ClipSaveToastPresenter.shared.show(
+            changed ? ^String.Titles.fullControlSyncViewingDone : ^String.Titles.fullControlSyncViewingNothing,
+            style: changed ? .success : .info
+        )
     }
 
     private func timelineTableCornerControls() -> some View {
@@ -1480,6 +1630,19 @@ struct FullControlView: View {
                 }
                 .buttonStyle(.plain)
                 .help(^String.Titles.fullControlButtonMergeTimelines)
+
+                // Ручное обновление разметки в режиме просмотра. Живого посекундного синка нет
+                // (он тормозил разметку) — просмотр догоняет разметку по этой кнопке и на
+                // входе/выходе из проектов, см. SportCutMarkupSyncManager.
+                Button {
+                    syncMarkupToViewing()
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.orange)
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.fullControlButtonSyncViewing)
             }
 
             if !timelineData.isMergeSelectionActive {
@@ -1895,6 +2058,19 @@ struct FullControlView: View {
                 timelineToolsIconButton(systemImage: "map", helpText: ^String.Titles.map) {
                     WindowsManager.shared.showFieldMapVisualizationPicker()
                 }
+                // Плейлисты просмотра прямо здесь: панель справа, таймлайны съезжают влево.
+                // В ЛАЙВЕ кнопка выключена: панель играет клипы плейлиста в окне видео, а там
+                // идёт живая запись — подменять её воспроизведением нельзя.
+                timelineToolsIconButton(
+                    systemImage: playlistPanel.isPanelOpen ? "sidebar.trailing" : "list.and.film",
+                    helpText: videoManager.isLiveMode
+                        ? ^String.Titles.markupPlaylistsButtonLiveDisabled
+                        : ^String.Titles.markupPlaylistsButton
+                ) {
+                    playlistPanel.togglePanel()
+                }
+                .disabled(videoManager.isLiveMode)
+                .opacity(videoManager.isLiveMode ? 0.35 : 1)
                 Menu {
                     Button(^String.Titles.viewingNewSession) {
                         WindowsManager.shared.showSportCutNewSessionFromMarkup()
@@ -2188,9 +2364,21 @@ struct FullControlView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 12) {
-                    inlineControlsBar
-                    scrollBlock()
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        inlineControlsBar
+                        if playlistPanel.isPanelOpen, playlistPanel.sessionID != nil {
+                            timelineTabPicker
+                        }
+                        timelineArea
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    if playlistPanel.isPanelOpen {
+                        playlistPanelResizeHandle(availableWidth: geo.size.width)
+                        MarkupPlaylistPanelView()
+                            .frame(width: playlistPanelWidth)
+                    }
                 }
                 
                 // Unlinked screenshot popups at the top center
@@ -2328,6 +2516,11 @@ struct FullControlView: View {
                 stampForSessionPick = nil
             } onCancel: {
                 stampForSessionPick = nil
+            }
+        }
+        .sheet(item: $addToPlaylistRequest) { request in
+            MarkupPlaylistPickerSheet(source: request.source) {
+                addToPlaylistRequest = nil
             }
         }
         .sheet(item: $stampItemsEditSheetType) { sheetType in
@@ -2692,7 +2885,8 @@ struct FullControlView: View {
     func uniqueLabelsFromTimelines() -> [Label] {
         var result: [Label] = []
         var seen = Set<String>()
-        for line in timelineData.lines {
+        // Записи счётчиков — служебные: по ним нельзя фильтровать и экспортировать.
+        for line in timelineData.lines where !line.isClocksTimeline {
             for stamp in line.stamps {
                 for item in stamp.labels where seen.insert(item.id).inserted {
                     if let label = resolvedLabel(item) { result.append(label) }
@@ -2705,7 +2899,7 @@ struct FullControlView: View {
     func labelsForTag(_ tag: Tag) -> [Label] {
         var result: [Label] = []
         var seen = Set<String>()
-        for line in timelineData.lines {
+        for line in timelineData.lines where !line.isClocksTimeline {
             for stamp in line.stamps where stamp.idTags.contains(tag.id) {
                 for item in stamp.labels where seen.insert(item.id).inserted {
                     if let label = resolvedLabel(item) { result.append(label) }
@@ -2718,7 +2912,7 @@ struct FullControlView: View {
     func tagsForLabel(_ label: Label) -> [Tag] {
         var result: [Tag] = []
         var seen = Set<String>()
-        for line in timelineData.lines {
+        for line in timelineData.lines where !line.isClocksTimeline {
             for stamp in line.stamps where stamp.labelIDs.contains(label.id) {
                 // Process the main tag first so its name (stamp.label) matches when synthesized.
                 let orderedIds = [stamp.idTag] + stamp.idTags.filter { $0 != stamp.idTag }
@@ -2733,7 +2927,8 @@ struct FullControlView: View {
     func uniqueTagsFromTimelines() -> [Tag] {
         var result: [Tag] = []
         var seen = Set<String>()
-        for line in timelineData.lines {
+        // Счётчики в списке «экспорт по тегам» не нужны — это не разметка тегами.
+        for line in timelineData.lines where !line.isClocksTimeline {
             for stamp in line.stamps {
                 let orderedIds = [stamp.idTag] + stamp.idTags.filter { $0 != stamp.idTag }
                 for tagId in orderedIds where !tagId.isEmpty && seen.insert(tagId).inserted {

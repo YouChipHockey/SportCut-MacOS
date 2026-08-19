@@ -169,6 +169,9 @@
 "FullControlButtonMap" = "在地圖上顯示";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "新增時間線";  // ^String.Titles.fullControlButtonAddTimeline
 "FullControlButtonMergeTimelines" = "合併時間軸";
+"FullControlButtonSyncViewing" = "在觀看模式中更新標記";
+"FullControlSyncViewingDone" = "觀看模式的標記已更新";
+"FullControlSyncViewingNothing" = "觀看模式中的標記已是最新";
 "FullControlMergeTimelinesHint" = "選擇要合併的時間軸";
 "CollectionCopyGroup" = "複製分組";
 "CollectionPasteGroup" = "貼上分組";
@@ -1155,6 +1158,7 @@
 "KeyBindingTypeActivation" = "啟用";
 "KeyBindingTypeDeactivation" = "停用";
 "KeyBindingTypeIntervalInversion" = "區間反轉";
+"KeyBindingTypeStateSync" = "狀態同步";
 "KeyBindingTypeClockReset" = "重設計數器";
 "KeyBindingsClockResetHint" = "按下按鈕時觸發（關聯的任一方向）：計數器停止並回到初始值。Ctrl+點擊僅執行重設，不執行按鈕的一般動作。";
 "KeyBindingTypeVisibility" = "顯示";
@@ -1433,3 +1437,31 @@
 "CanvasCopyButtons" = "複製按鈕 (%d)";
 "CanvasPasteButtons" = "貼上按鈕 (%d)";
 "CanvasRemoveFromCanvas" = "從畫布移除 (%d)";
+"CanvasDeleteElements" = "刪除 (%d)";
+"CanvasDeleteConfirmMessage" = "從合集中刪除選取的物件 (%d)？此操作無法復原。";
+"EditorUndo" = "復原";
+"EditorRedo" = "重做";
+
+// MARK: - Плейлисты просмотра в разметке
+"MarkupPlaylistsTitle" = "播放清單";
+"MarkupPlaylistsButton" = "觀看播放清單";
+"MarkupPlaylistsButtonLiveDisabled" = "直播錄製期間無法使用觀看播放清單";
+"MarkupPlaylistsBackToSessions" = "返回工作階段";
+"MarkupPlaylistsReturnToMarkup" = "返回標記";
+"MarkupPlaylistsPickSession" = "為此專案選擇觀看工作階段，或建立新的。";
+"MarkupPlaylistsNoSessions" = "尚無包含此專案的觀看工作階段。";
+"MarkupPlaylistsSessionSubtitle" = "播放清單：%d";
+"MarkupPlaylistsAddToCurrent" = "加入目前播放清單";
+"MarkupPlaylistsAddToPlaylist" = "加入播放清單…";
+"MarkupPlaylistsPickPlaylistTitle" = "加入播放清單";
+"MarkupPlaylistsCreateNewPlaylist" = "建立新播放清單";
+"MarkupPlaylistsNewPlaylistNamePlaceholder" = "播放清單名稱（可選）";
+"MarkupPlaylistsNoPlaylists" = "此工作階段尚無播放清單";
+"MarkupTimelineTabMarkup" = "標記";
+"MarkupTimelineTabPlaylist" = "播放清單";
+"MarkupAnchorLive" = "直播標記";
+"MarkupAnchorReview" = "回看標記";
+"MarkupAnchorHelp" = "標籤加入位置：直播或回看播放頭（Opt+W）";
+"TagPrimaryCounter" = "Primary Counter";
+"TagPrimaryCounterNone" = "無";
+"TagPrimaryCounterHint" = "此計數器始終在此標籤時刻的影片上顯示（回看/匯出），即使沒有「在影片上顯示」標記。";

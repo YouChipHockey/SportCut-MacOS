@@ -60,8 +60,10 @@ class WindowsManager: NSObject, NSWindowDelegate {
     
     /// Tracks whether the current session is a live stream
     private(set) var isLiveSession: Bool = false
-    private var liveVideoId: String?
-    private var liveFileName: String?
+    /// id и имя проекта, который пишется в лайве. Читаются панелью плейлистов разметки:
+    /// во время записи проекта в библиотеке ещё нет, а сессию просмотра создать уже можно.
+    private(set) var liveVideoId: String?
+    private(set) var liveFileName: String?
     
     /// Whether the current live session is appending to an existing video project.
     private var isAppendingToFile: Bool = false
@@ -169,8 +171,13 @@ class WindowsManager: NSObject, NSWindowDelegate {
     func closeAll() {
         tagLibraryWindow?.cancelNotificationSubscriptions()
 
-        // Выход из проекта — счётчики (секундомеры/таймеры) замирают, а не тикают в фоне.
-        ClockRuntimeManager.shared.pauseAll()
+        // Выход из проекта — активные счётчики финализируем (дописываем их отрезки на таймлайн).
+        ClockRuntimeManager.shared.finalizeAll()
+        // ...и сразу отдаём готовую разметку в сессии просмотра: живого синка нет, это один из
+        // четырёх моментов, когда просмотр догоняет разметку (см. SportCutMarkupSyncManager).
+        SportCutMarkupSyncManager.shared.syncCurrentMarkupProject()
+        // Панель плейлистов просмотра живёт вместе с окном таймлайнов.
+        MarkupPlaylistPanelStore.shared.resetForProjectClose()
 
         // Дописываем позиции окон разметки ДО того, как снимем делегатов и закроем окна:
         // stopTracking() делает flush() и отписывается, иначе последняя позиция не сохранится.
@@ -501,7 +508,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
         }
 
         tagLibraryWindow?.cancelNotificationSubscriptions()
-        ClockRuntimeManager.shared.pauseAll()
+        ClockRuntimeManager.shared.finalizeAll()
         // Позиции окон разметки дописываем до выхода — как в `closeAll()`.
         MarkupWindowLayoutStore.shared.stopTracking()
         HotKeyManager.shared.clearHotkeys()
@@ -524,6 +531,9 @@ class WindowsManager: NSObject, NSWindowDelegate {
     /// Stops live stream, finalizes recording and switches current windows to normal markup mode.
     func stopLiveSessionAndSwitchToMarkupMode() {
         guard isLiveSession else { return }
+        // Конец лайва: активные счётчики (идут ИЛИ на паузе) сбрасываем и дописываем на таймлайн
+        // ДО снимка таймлайнов — иначе их штампы не попадут в импортируемый проект.
+        ClockRuntimeManager.shared.finalizeAll()
         let timelines = TimelineDataManager.shared.lines
         let liveId = liveVideoId ?? ""
         let fileName = liveFileName ?? "Live_\(Date().timeIntervalSince1970)"
@@ -566,6 +576,8 @@ class WindowsManager: NSObject, NSWindowDelegate {
                     VideoFilesManager.shared.updateVideoURL(for: existing, newURL: finalURL)
                     VideoFilesManager.shared.saveTimelines(timelines, for: existing.id)
                     LiveSessionRecoveryManager.shared.finishSession()
+                    // Проект мог быть добавлен в просмотр ещё до дозаписи — обновляем там файл и разметку.
+                    self.rebindViewingSources(oldProjectID: existing.id, newProjectID: existing.id)
 
                     self.currentVideoId = existing.id
                     TimelineDataManager.shared.currentBookmark = existing.videoData.bookmark
@@ -591,6 +603,9 @@ class WindowsManager: NSObject, NSWindowDelegate {
                     with: timelines
                 )
                 LiveSessionRecoveryManager.shared.finishSession()
+                // Лайв мог быть добавлен в просмотр прямо во время записи — переводим источник
+                // с временного id живой сессии на импортированный проект (с видео и разметкой).
+                self.rebindViewingSources(oldProjectID: liveId, newProjectID: importedFile.videoData.id)
                 self.copyLiveScreenshotsToImportedVideo(
                     liveVideoId: liveId,
                     importedScreenshotsFolder: importedFile.screenshotsFolder
@@ -634,6 +649,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
                         )
                         self.copyLiveScreenshotsToImportedVideo(liveVideoId: videoId, importedScreenshotsFolder: filesFile.screenshotsFolder)
                         LiveSessionRecoveryManager.shared.finishSession()
+                        self.rebindViewingSources(oldProjectID: videoId, newProjectID: filesFile.videoData.id)
                         print("WindowsManager: Live recording imported as '\(fileName)' with \(timelines.count) timelines")
                     } else {
                         LiveSessionRecoveryManager.shared.keepSessionForRecovery()
@@ -673,6 +689,7 @@ class WindowsManager: NSObject, NSWindowDelegate {
                     // Save the merged timelines back to the existing project's ID.
                     VideoFilesManager.shared.saveTimelines(timelines, for: existingFile.id)
                     LiveSessionRecoveryManager.shared.finishSession()
+                    self.rebindViewingSources(oldProjectID: existingFile.id, newProjectID: existingFile.id)
                     print("WindowsManager: Append session finalized for '\(existingFile.name)' with \(timelines.count) timelines")
                 } else {
                     print("WindowsManager: Append session finalization failed - no file produced")
@@ -840,8 +857,8 @@ class WindowsManager: NSObject, NSWindowDelegate {
         }
 
         VideoPlayerManager.shared.player?.pause()
-        // Открыли редактор коллекции — счётчики разметки замирают (вернёмся к ним как оставили).
-        ClockRuntimeManager.shared.pauseAll()
+        // Видео на паузе → счётчики (привязаны ко времени видео) замирают САМИ; активные не
+        // финализируем — вернёмся к ним как оставили.
 
         let view: AnyView
 
@@ -977,6 +994,18 @@ class WindowsManager: NSObject, NSWindowDelegate {
         videoWindow?.showWindow(nil)
         controlWindow?.showWindow(nil)
         tagLibraryWindow?.showWindow(nil)
+
+        // Штампы, у которых Primary Counter не сохранён (старые проекты, режим «таймлайн на тег»
+        // до фикса), дописываем один раз при открытии — дальше он едет вместе со штампом и не
+        // зависит от того, загружена ли коллекция.
+        let filled = TimelineDataManager.shared.backfillPrimaryClockIds()
+        if filled > 0 {
+            ExportDiagnosticsLog.log("открытие проекта \(id): Primary Counter дописан в \(filled) штампов")
+        }
+
+        // Вход в проект разметки — актуализируем его разметку в сессиях просмотра, куда он добавлен.
+        // Живого посекундного синка больше нет (см. SportCutMarkupSyncManager).
+        SportCutMarkupSyncManager.shared.syncMarkupProject(projectID: id, timelines: TimelineDataManager.shared.lines)
     }
 
     func showFieldMapSelection(tag: Tag, imageBookmark: Data, lockWindows: Bool = true, onSave: @escaping (CGPoint) -> Void) {
@@ -1141,8 +1170,32 @@ class WindowsManager: NSObject, NSWindowDelegate {
     }
 
     /// Creates a new viewing session with the current markup project (previous behavior).
+    ///
+    /// Во время лайва проекта в библиотеке ещё нет — добавляем его как «живой» источник:
+    /// разметка в просмотре пополняется по ходу записи, а на финализации источник
+    /// перепривязывается к готовому проекту (см. `rebindViewingSources`).
     func showSportCutNewSessionFromMarkup() {
         VideoPlayerManager.shared.player?.pause()
+
+        if isLiveSession, let liveId = liveVideoId {
+            sportCutWindow?.close()
+            sportCutWindow = nil
+
+            let name = liveFileName ?? ""
+            var session = SportCutSessionManager.shared.createSession(name: name)
+            SportCutSessionManager.shared.addLiveProjectSource(
+                to: &session,
+                projectID: liveId,
+                name: name,
+                timelines: TimelineDataManager.shared.lines
+            )
+            if session.playlistGroups.isEmpty {
+                SportCutSessionManager.shared.addPlaylistGroup(to: &session, name: ^String.Titles.sportCutDefaultGroupName)
+            }
+            sportCutWindow = SportCutWindowController(session: session)
+            sportCutWindow?.showWindow(nil)
+            return
+        }
 
         guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else {
             return
@@ -1170,14 +1223,43 @@ class WindowsManager: NSObject, NSWindowDelegate {
     func openSportCutSessionFromMarkup(existingSessionID: UUID) {
         VideoPlayerManager.shared.player?.pause()
 
-        guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }),
-              var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == existingSessionID }) else { return }
-        SportCutSessionManager.shared.syncProjectSource(from: filesFile, in: &session)
+        guard var session = SportCutSessionManager.shared.sessions.first(where: { $0.id == existingSessionID }) else { return }
+
+        if isLiveSession, let liveId = liveVideoId {
+            // Лайв ещё пишется: если проекта в сессии нет — добавляем «живым» источником,
+            // если уже есть — просто подтягиваем текущую разметку.
+            let lines = TimelineDataManager.shared.lines
+            if session.sources.contains(where: { $0.projectID == liveId }) {
+                SportCutSessionManager.shared.syncProjectTimelines(projectID: liveId, timelines: lines)
+            } else {
+                SportCutSessionManager.shared.addLiveProjectSource(
+                    to: &session,
+                    projectID: liveId,
+                    name: liveFileName ?? "",
+                    timelines: lines
+                )
+            }
+        } else {
+            guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == currentVideoId }) else { return }
+            SportCutSessionManager.shared.syncProjectSource(from: filesFile, in: &session)
+        }
+
         guard let refreshed = SportCutSessionManager.shared.sessions.first(where: { $0.id == existingSessionID }) else { return }
         sportCutWindow?.close()
         sportCutWindow = nil
         sportCutWindow = SportCutWindowController(session: refreshed)
         sportCutWindow?.showWindow(nil)
+    }
+
+    /// После окончания лайва/дозаписи перепривязывает источники просмотра к готовому проекту:
+    /// у новой записи меняется id проекта и появляется файл видео, у дозаписи — файл становится
+    /// длиннее. Сессии, куда проект добавили ещё во время записи, продолжают работать.
+    private func rebindViewingSources(oldProjectID: String, newProjectID: String) {
+        guard !oldProjectID.isEmpty else { return }
+        // Отложенная синхронизация могла ещё не примениться — доводим её до конца, потом перепривязываем.
+        SportCutMarkupSyncManager.shared.flushNow()
+        guard let file = VideoFilesManager.shared.files.first(where: { $0.videoData.id == newProjectID }) else { return }
+        SportCutSessionManager.shared.rebindProjectSources(oldProjectID: oldProjectID, to: file)
     }
 
     /// Добавляет новый плейлист с тегами из разметки в указанную сессию и открывает окно SportCut.

@@ -1736,7 +1736,8 @@ struct CreateCustomCollectionsView: View {
                         collectionManager.updateLabel(
                             id: label.id,
                             name: editingName,
-                            description: label.description
+                            description: label.description,
+                            hotkey: label.hotkey
                         )
                         newLabelName = editingName
                         

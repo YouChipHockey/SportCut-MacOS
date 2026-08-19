@@ -169,6 +169,9 @@
 "FullControlButtonMap" = "Afficher sur la carte";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "Ajouter une chronologie";  // ^String.Titles.fullControlButtonAddTimeline
 "FullControlButtonMergeTimelines" = "Fusionner les timelines";
+"FullControlButtonSyncViewing" = "Actualiser le marquage en mode visionnage";
+"FullControlSyncViewingDone" = "Marquage actualisé dans le visionnage";
+"FullControlSyncViewingNothing" = "Le visionnage a déjà le marquage à jour";
 "FullControlMergeTimelinesHint" = "Sélectionnez les timelines à fusionner";
 "CollectionCopyGroup" = "Copier le groupe";
 "CollectionPasteGroup" = "Coller le groupe";
@@ -1155,6 +1158,7 @@
 "KeyBindingTypeActivation" = "Activation";
 "KeyBindingTypeDeactivation" = "Désactivation";
 "KeyBindingTypeIntervalInversion" = "Inversion d'intervalle";
+"KeyBindingTypeStateSync" = "Synchronisation d'état";
 "KeyBindingTypeClockReset" = "Réinitialiser le compteur";
 "KeyBindingsClockResetHint" = "Se déclenche à l'appui du bouton (dans les deux sens de la liaison) : le compteur s'arrête et revient à sa valeur initiale. Ctrl+clic ne fait que la réinitialisation, sans l'action normale du bouton.";
 "KeyBindingTypeVisibility" = "Afficher";
@@ -1433,3 +1437,31 @@
 "CanvasCopyButtons" = "Copier les boutons (%d)";
 "CanvasPasteButtons" = "Coller les boutons (%d)";
 "CanvasRemoveFromCanvas" = "Retirer du canevas (%d)";
+"CanvasDeleteElements" = "Supprimer (%d)";
+"CanvasDeleteConfirmMessage" = "Supprimer les objets sélectionnés de la collection (%d) ? Cette action est irréversible.";
+"EditorUndo" = "Annuler l'action";
+"EditorRedo" = "Rétablir";
+
+// MARK: - Плейлисты просмотра в разметке
+"MarkupPlaylistsTitle" = "Playlists";
+"MarkupPlaylistsButton" = "Playlists de visionnage";
+"MarkupPlaylistsButtonLiveDisabled" = "Les playlists de visionnage sont indisponibles pendant le direct";
+"MarkupPlaylistsBackToSessions" = "Retour aux sessions";
+"MarkupPlaylistsReturnToMarkup" = "Retour au marquage";
+"MarkupPlaylistsPickSession" = "Choisissez une session de visionnage pour ce projet ou créez-en une.";
+"MarkupPlaylistsNoSessions" = "Aucune session de visionnage avec ce projet pour l'instant.";
+"MarkupPlaylistsSessionSubtitle" = "Playlists : %d";
+"MarkupPlaylistsAddToCurrent" = "Ajouter à la playlist actuelle";
+"MarkupPlaylistsAddToPlaylist" = "Ajouter à une playlist…";
+"MarkupPlaylistsPickPlaylistTitle" = "Ajouter à une playlist";
+"MarkupPlaylistsCreateNewPlaylist" = "Créer une nouvelle playlist";
+"MarkupPlaylistsNewPlaylistNamePlaceholder" = "Nom de la playlist (facultatif)";
+"MarkupPlaylistsNoPlaylists" = "Aucune playlist dans cette session";
+"MarkupTimelineTabMarkup" = "Marquage";
+"MarkupTimelineTabPlaylist" = "Playlist";
+"MarkupAnchorLive" = "Marquage direct";
+"MarkupAnchorReview" = "Marquage relecture";
+"MarkupAnchorHelp" = "Où ajouter les tags : tête de lecture directe ou relecture (Opt+W)";
+"TagPrimaryCounter" = "Primary Counter";
+"TagPrimaryCounterNone" = "Aucun";
+"TagPrimaryCounterHint" = "Ce compteur est toujours affiché sur la vidéo pour le moment de ce tag (relecture/export), même sans « Afficher sur la vidéo ».";

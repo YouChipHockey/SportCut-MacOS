@@ -106,7 +106,7 @@ enum CollectionIdRegenerator {
         let newLabels = srcLabels.map { lbl -> Label in
             let nid = UUID().uuidString
             labelIdMap[lbl.id] = nid
-            return Label(id: nid, name: lbl.name, description: lbl.description)
+            return Label(id: nid, name: lbl.name, description: lbl.description, hotkey: lbl.hotkey)
         }
 
         var labelGroupIdMap: [String: String] = [:]

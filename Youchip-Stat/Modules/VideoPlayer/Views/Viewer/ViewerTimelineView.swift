@@ -16,7 +16,9 @@ struct ViewerTimelineView: View {
     
     @StateObject private var filter = TimelineFilter()
     @State private var timelineScale: CGFloat = 1.0
-    @GestureState private var magnifyScale: CGFloat = 1.0
+    /// Живой масштаб пинч-жеста. Не `@GestureState`: зум ловится AppKit-монитором,
+    /// чтобы работать и в неактивном окне (см. `onFirstMouseMagnify`).
+    @State private var magnifyScale: CGFloat = 1.0
     @State private var showFilterSheet = false
     @State private var displayMode: TimelineDisplayMode = .timeline
     
@@ -152,24 +154,22 @@ struct ViewerTimelineView: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                .gesture(
-                    MagnificationGesture()
-                        .updating($magnifyScale) { currentState, gestureState, _ in
-                            gestureState = max(1.0, currentState)
+                .onFirstMouseMagnify(
+                    onChanged: { magnifyScale = max(1.0, $0) },
+                    onEnded: { value in
+                        magnifyScale = 1.0
+                        let newScale = timelineScale * value
+                        let duration = max(1.0, videoManager.timelineDuration)
+                        let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
+
+                        if potentialInterval >= 0.5 {
+                            timelineScale = max(1.0, newScale)
+                        } else {
+                            let baseInterval = 5.0
+                            let maxScale = baseInterval / 0.5
+                            timelineScale = maxScale
                         }
-                        .onEnded { value in
-                            let newScale = timelineScale * value
-                            let duration = max(1.0, videoManager.timelineDuration)
-                            let potentialInterval = calculateTimeGridInterval(scale: newScale, totalDuration: duration)
-                            
-                            if potentialInterval >= 0.5 {
-                                timelineScale = max(1.0, newScale)
-                            } else {
-                                let baseInterval = 5.0
-                                let maxScale = baseInterval / 0.5
-                                timelineScale = maxScale
-                            }
-                        }
+                    }
                 )
             } else {
                 ViewerTableView(
@@ -673,7 +673,8 @@ struct TimelineFilterSheet: View {
     @Environment(\.presentationMode) var presentationMode
     
     private var availableTags: [Tag] {
-        let tagIDs = TimelineDataManager.shared.lines.flatMap { line in
+        // Дорожки счётчиков — служебные, фильтровать по ним нечего.
+        let tagIDs = TimelineDataManager.shared.lines.filter { !$0.isClocksTimeline }.flatMap { line in
             line.stamps.flatMap { $0.idTags }
         }
         let uniqueTagIDs = Array(Set(tagIDs))
@@ -681,7 +682,7 @@ struct TimelineFilterSheet: View {
     }
     
     private var availableLabels: [Label] {
-        let labelIDs = TimelineDataManager.shared.lines.flatMap { line in
+        let labelIDs = TimelineDataManager.shared.lines.filter { !$0.isClocksTimeline }.flatMap { line in
             line.stamps.flatMap { $0.labelIDs }
         }
         let uniqueLabelIDs = Array(Set(labelIDs))
@@ -689,7 +690,7 @@ struct TimelineFilterSheet: View {
     }
     
     private var availableEvents: [TimeEvent] {
-        let eventIDs = TimelineDataManager.shared.lines.flatMap { line in
+        let eventIDs = TimelineDataManager.shared.lines.filter { !$0.isClocksTimeline }.flatMap { line in
             line.stamps.flatMap { $0.timeEvents }
         }
         let uniqueEventIDs = Array(Set(eventIDs))

@@ -169,6 +169,9 @@
 "FullControlButtonMap" = "Xaritada ko'rsatish";  // ^String.Titles.fullControlButtonMap
 "FullControlButtonAddTimeline" = "Vaqt chiziqi qo'shish";  // ^String.Titles.fullControlButtonAddTimeline
 "FullControlButtonMergeTimelines" = "Vaqt chiziqlarini birlashtirish";
+"FullControlButtonSyncViewing" = "Ko‘rish rejimidagi belgilashni yangilash";
+"FullControlSyncViewingDone" = "Ko‘rishda belgilash yangilandi";
+"FullControlSyncViewingNothing" = "Ko‘rishda belgilash allaqachon dolzarb";
 "FullControlMergeTimelinesHint" = "Birlashtirish uchun vaqt chiziqlarini tanlang";
 "CollectionCopyGroup" = "Guruhdan nusxa olish";
 "CollectionPasteGroup" = "Guruhni joylash";
@@ -1155,6 +1158,7 @@
 "KeyBindingTypeActivation" = "Faollashtirish";
 "KeyBindingTypeDeactivation" = "O'chirish";
 "KeyBindingTypeIntervalInversion" = "Interval inversiyasi";
+"KeyBindingTypeStateSync" = "Holatni sinxronlash";
 "KeyBindingTypeClockReset" = "Hisoblagichni tiklash";
 "KeyBindingsClockResetHint" = "Tugma bosilganda ishlaydi (bog'lanishning har ikki yo'nalishida): hisoblagich to'xtaydi va boshlang'ich qiymatiga qaytadi. Ctrl+chap tugma — faqat tiklash, tugmaning odatiy amalisiz.";
 "KeyBindingTypeVisibility" = "Ko'rsatish";
@@ -1433,3 +1437,31 @@
 "CanvasCopyButtons" = "Tugmalarni nusxalash (%d)";
 "CanvasPasteButtons" = "Tugmalarni joylash (%d)";
 "CanvasRemoveFromCanvas" = "Kanvasdan olib tashlash (%d)";
+"CanvasDeleteElements" = "O'chirish (%d)";
+"CanvasDeleteConfirmMessage" = "Tanlangan obyektlar to'plamdan o'chirilsinmi (%d)? Bu amalni bekor qilib bo'lmaydi.";
+"EditorUndo" = "Bekor qilish";
+"EditorRedo" = "Qaytarish";
+
+// MARK: - Плейлисты просмотра в разметке
+"MarkupPlaylistsTitle" = "Pleylistlar";
+"MarkupPlaylistsButton" = "Ko'rish pleylistlari";
+"MarkupPlaylistsButtonLiveDisabled" = "Jonli yozuv paytida ko‘rish pleylistlari mavjud emas";
+"MarkupPlaylistsBackToSessions" = "Sessiyalarga qaytish";
+"MarkupPlaylistsReturnToMarkup" = "Belgilashga qaytish";
+"MarkupPlaylistsPickSession" = "Ushbu loyiha uchun ko'rish sessiyasini tanlang yoki yangisini yarating.";
+"MarkupPlaylistsNoSessions" = "Bu loyiha bilan ko'rish sessiyalari hali yo'q.";
+"MarkupPlaylistsSessionSubtitle" = "Pleylistlar: %d";
+"MarkupPlaylistsAddToCurrent" = "Joriy pleylistga qo'shish";
+"MarkupPlaylistsAddToPlaylist" = "Pleylistga qo'shish…";
+"MarkupPlaylistsPickPlaylistTitle" = "Pleylistga qo'shish";
+"MarkupPlaylistsCreateNewPlaylist" = "Yangi pleylist yaratish";
+"MarkupPlaylistsNewPlaylistNamePlaceholder" = "Pleylist nomi (ixtiyoriy)";
+"MarkupPlaylistsNoPlaylists" = "Bu sessiyada hali pleylistlar yo'q";
+"MarkupTimelineTabMarkup" = "Belgilash";
+"MarkupTimelineTabPlaylist" = "Pleylist";
+"MarkupAnchorLive" = "Jonli belgilash";
+"MarkupAnchorReview" = "Ko'rib chiqish belgilash";
+"MarkupAnchorHelp" = "Teglar qayerga qo'shiladi: jonli yoki ko'rib chiqish pleyxedi (Opt+W)";
+"TagPrimaryCounter" = "Primary Counter";
+"TagPrimaryCounterNone" = "Yo'q";
+"TagPrimaryCounterHint" = "Bu hisoblagich shu tegning momenti uchun videoda doim ko'rsatiladi (ko'rib chiqish/eksport), «Videoda ko'rsatish» belgisisiz ham.";

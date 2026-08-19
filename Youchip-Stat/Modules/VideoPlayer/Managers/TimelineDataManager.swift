@@ -25,9 +25,10 @@ class TimelineDataManager: ObservableObject {
     }
     @Published var selectedLineID: UUID? = nil
     @Published var selectedStampID: UUID? = nil
-    /// Показывать ли служебный таймлайн счётчиков (⌘⌃0). По умолчанию он скрыт: пользователю
-    /// интересна разметка тегами, а отрезки секундомеров/таймеров нужны экспорту и пересмотру.
-    @Published var showClocksTimeline: Bool = false
+    /// Показывать ли линии счётчиков (у каждого секундомера/таймера своя). По умолчанию показаны —
+    /// работа счётчиков такая же разметка, как интервальные теги; ⌘⌃0 скрывает их все разом,
+    /// когда нужно видеть только теги.
+    @Published var showClocksTimeline: Bool = true
 
     /// Линии для ОТРИСОВКИ. Данные (сохранение, экспорт, пересмотр) всегда работают с `lines`,
     /// скрывается только показ.
@@ -35,7 +36,7 @@ class TimelineDataManager: ObservableObject {
         showClocksTimeline ? lines : lines.filter { !$0.isClocksTimeline }
     }
 
-    /// ⌘⌃0 — показать/скрыть таймлайн счётчиков (только если он вообще есть).
+    /// ⌘⌃0 — показать/скрыть ВСЕ линии счётчиков разом.
     func toggleClocksTimelineVisibility() {
         showClocksTimeline.toggle()
         updateTimelines()
@@ -266,7 +267,9 @@ class TimelineDataManager: ObservableObject {
             timeEvents: stamp.timeEvents,
             isActiveForMapView: stamp.isActiveForMapView,
             comment: stamp.comment,
-            mapPositions: stamp.mapPositions
+            mapPositions: stamp.mapPositions,
+            clockInfo: stamp.clockInfo,
+            primaryClockId: stamp.primaryClockId
         )
     }
 
@@ -315,7 +318,12 @@ class TimelineDataManager: ObservableObject {
         mapPositions: [StampMapPosition]? = nil,
         timeEvents: [String]? = nil
     ) {
+        // Пользователь снова размечает — окно видео должно уйти из просмотра клипов плейлиста.
+        MarkupPlaylistPanelStore.shared.returnToMarkupOnMarkupInteraction()
         let selectedEvents = timeEvents ?? Array(TagLibraryManager.shared.selectedTimeEvents)
+        // Primary Counter тега кладём В штамп — чтобы пересмотр/просмотр/экспорт знали его и без
+        // загруженной коллекции (в режиме просмотра её может не быть).
+        let primaryClockId = TagLibraryManager.shared.findTagById(tagRefs.first?.id ?? "")?.primaryClockId
         var addedStampID: UUID? = nil
         // Итоговый набор позиций: приоритет у массива (мультикарта), иначе одиночная точка.
         let resolvedMapPositions: [StampMapPosition]? = {
@@ -339,7 +347,8 @@ class TimelineDataManager: ObservableObject {
                 labels: labels,
                 timeEvents: selectedEvents,
                 isActiveForMapView: hasAnyPosition,
-                mapPositions: resolvedMapPositions
+                mapPositions: resolvedMapPositions,
+                primaryClockId: primaryClockId
             )
             lines[idx].stamps.append(stamp)
             lastAddedStampID = stamp.id
@@ -360,7 +369,10 @@ class TimelineDataManager: ObservableObject {
                         labels: labels,
                         timeEvents: selectedEvents,
                         isActiveForMapView: hasAnyPosition,
-                        mapPositions: resolvedMapPositions
+                        mapPositions: resolvedMapPositions,
+                        // В режиме «таймлайн на тег» этого не было: штампы уходили БЕЗ Primary
+                        // Counter, и пересмотр/экспорт/просмотр не знали, какой счётчик показать.
+                        primaryClockId: primaryClockId
                     )
                     lines[idx].stamps.append(stamp)
                     lastAddedStampID = stamp.id
@@ -379,6 +391,35 @@ class TimelineDataManager: ObservableObject {
         }
     }
     
+    /// Дописывает Primary Counter в штампы, которые его не несут (старые проекты и штампы из
+    /// режима «таймлайн на тег», где он раньше не сохранялся). Тег резолвим один раз на id.
+    /// Возвращает число дописанных штампов. Вызывается при открытии проекта.
+    @discardableResult
+    func backfillPrimaryClockIds() -> Int {
+        var resolved: [String: String?] = [:]
+        var filled = 0
+        for lineIndex in lines.indices where !lines[lineIndex].isServiceTimeline {
+            for stampIndex in lines[lineIndex].stamps.indices {
+                let stamp = lines[lineIndex].stamps[stampIndex]
+                guard stamp.primaryClockId == nil else { continue }
+                let tagId = stamp.idTag
+                guard !tagId.isEmpty else { continue }
+                let value: String?
+                if let cached = resolved[tagId] {
+                    value = cached
+                } else {
+                    value = TagLibraryManager.shared.primaryClockId(forTagId: tagId)
+                    resolved[tagId] = value
+                }
+                guard let value, !value.isEmpty else { continue }
+                lines[lineIndex].stamps[stampIndex].primaryClockId = value
+                filled += 1
+            }
+        }
+        if filled > 0 { updateTimelines() }
+        return filled
+    }
+
     func updateStampLabels(lineID: UUID, stampID: UUID, newLabels: [FullLabelWithGroup]) {
         guard let lineIndex = lines.firstIndex(where: { $0.id == lineID }) else { return }
         guard let stampIndex = lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID }) else { return }

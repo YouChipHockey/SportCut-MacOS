@@ -240,12 +240,13 @@ class CustomCollectionManager: ObservableObject {
         }
     }
     
-    func updateLabel(id: String, name: String, description: String) {
+    func updateLabel(id: String, name: String, description: String, hotkey: String? = nil) {
         if let index = labels.firstIndex(where: { $0.id == id }) {
             labels[index] = Label(
                 id: id,
                 name: name,
-                description: description
+                description: description,
+                hotkey: hotkey
             )
             objectWillChange.send()
         }
@@ -726,6 +727,16 @@ class CustomCollectionManager: ObservableObject {
         return true
     }
 
+    /// Назначает тегу «Primary Counter» — счётчик, чья запись всегда выводится на видео для момента
+    /// этого тега (пересмотр/экспорт), даже без флага «Показывать на видео». nil — снять.
+    @discardableResult
+    func updateTagPrimaryClock(id: String, clockId: String?) -> Bool {
+        guard let index = tags.firstIndex(where: { $0.id == id }) else { return false }
+        tags[index].primaryClockId = (clockId?.isEmpty == true) ? nil : clockId
+        objectWillChange.send()
+        return true
+    }
+
     /// Назначает тегу набор карт (PlayField) для разметки. При разметке точку нужно
     /// поставить на каждой карте — на каждую создаётся отдельный штамп.
     @discardableResult
@@ -1151,7 +1162,11 @@ class CustomCollectionManager: ObservableObject {
                 hotkey: hotkey,
                 labelHotkeys: labelHotkeys,
                 mapEnabled: mapEnabled,
-                isInterval: isInterval
+                isInterval: isInterval,
+                // Не теряем при правке остальных настроек — их задают отдельные методы.
+                mapFieldId: originalTag.mapFieldId,
+                mapFieldIds: originalTag.mapFieldIds,
+                primaryClockId: originalTag.primaryClockId
             )
             
             for i in 0..<tagGroups.count {

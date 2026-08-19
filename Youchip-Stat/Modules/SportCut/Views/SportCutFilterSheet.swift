@@ -31,9 +31,11 @@ struct SportCutFilterSheet: View {
         return []
     }
 
+    /// Дорожки счётчиков в фильтре не участвуют: их «теги» — это сами секундомеры/таймеры,
+    /// по ним нельзя ни фильтровать, ни экспортировать (в плейлист их добавлять при этом можно).
     private func usedTagIDs(in sources: [SportCutSource]) -> Set<String> {
         Set(sources.flatMap { source in
-            source.timelines.flatMap { line in
+            source.timelines.filter { !$0.isClocksTimeline }.flatMap { line in
                 line.stamps.flatMap(\.idTags)
             }
         })
@@ -41,7 +43,7 @@ struct SportCutFilterSheet: View {
 
     private func usedLabelIDs(in sources: [SportCutSource]) -> Set<String> {
         Set(sources.flatMap { source in
-            source.timelines.flatMap { line in
+            source.timelines.filter { !$0.isClocksTimeline }.flatMap { line in
                 line.stamps.flatMap(\.labelIDs)
             }
         })
@@ -57,7 +59,7 @@ struct SportCutFilterSheet: View {
         // Fallback 2: build synthetic tags directly from stamp data
         var seen = Set<String>()
         var result: [Tag] = []
-        for line in source.timelines {
+        for line in source.timelines where !line.isClocksTimeline {
             for stamp in line.stamps {
                 for tagId in stamp.idTags where used.contains(tagId) && seen.insert(tagId).inserted {
                     result.append(Tag(
@@ -98,7 +100,7 @@ struct SportCutFilterSheet: View {
         // Fallback: build labels from stamp data
         var seen = Set<String>()
         var result: [Label] = []
-        for line in source.timelines {
+        for line in source.timelines where !line.isClocksTimeline {
             for stamp in line.stamps {
                 for lbl in stamp.labels where used.contains(lbl.id) && seen.insert(lbl.id).inserted {
                     result.append(Label(id: lbl.id, name: lbl.name, description: lbl.description))
@@ -124,7 +126,7 @@ struct SportCutFilterSheet: View {
         // Fallback: build label groups from stamp data — только группы с настоящим именем из библиотеки.
         var groupMap: [String: Set<String>] = [:] // groupId -> label IDs
         var groupNames: [String: String] = [:]
-        for line in source.timelines {
+        for line in source.timelines where !line.isClocksTimeline {
             for stamp in line.stamps {
                 for lbl in stamp.labels where used.contains(lbl.id) {
                     let gid = lbl.lableGroupId
@@ -193,7 +195,7 @@ struct SportCutFilterSheet: View {
             for label in source.labels {
                 add(id: label.id, name: label.name)
             }
-            for line in source.timelines {
+            for line in source.timelines where !line.isClocksTimeline {
                 for stamp in line.stamps {
                     for label in stamp.labels {
                         add(id: label.id, name: label.name)
@@ -229,7 +231,7 @@ struct SportCutFilterSheet: View {
 
     private func usedEventIDs(in sources: [SportCutSource]) -> Set<String> {
         Set(sources.flatMap { source in
-            source.timelines.flatMap { line in
+            source.timelines.filter { !$0.isClocksTimeline }.flatMap { line in
                 line.stamps.flatMap(\.timeEvents)
             }
         })
@@ -371,7 +373,7 @@ struct SportCutFilterSheet: View {
         var eventsByStamp: [UUID: [String]] = [:]
 
         for source in searchScopeSources {
-            for line in source.timelines {
+            for line in source.timelines where !line.isClocksTimeline {
                 for stamp in line.stamps {
                     stamps.append(stamp)
                     let tid = stamp.idTag

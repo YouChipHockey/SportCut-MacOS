@@ -17,6 +17,10 @@ class HotKeyManager: ObservableObject {
     private var localMonitorForKeyEvents: Any?
     var registeredHotkeys: [String: Tag] = [:]
     var registeredLabelHotkeys: [String: (labelId: String, tagId: String)] = [:]
+    /// Хоткеи лейблов и счётчиков на холсте связок (режим разметки). Хоткей — просто способ
+    /// нажатия элемента: логика после нажатия та же, что при клике (см. TagLibraryView).
+    var registeredCanvasLabelHotkeys: [String: String] = [:]   // hotkey → labelId
+    var registeredCanvasClockHotkeys: [String: String] = [:]   // hotkey → clockId
     
     @Published var isEnabled = true
     @Published var hotKeySelectedTag: Tag? = nil
@@ -234,7 +238,7 @@ class HotKeyManager: ObservableObject {
                 }
                 return nil
             }
-            // ⌘⌃0 в окне разметки — показать/скрыть служебный таймлайн счётчиков.
+            // ⌘⌃0 в окне разметки — скрыть/показать ВСЕ линии счётчиков (по умолчанию показаны).
             if event.keyCode == 29 /* 0 */,
                event.modifierFlags.contains(.command),
                event.modifierFlags.contains(.control),
@@ -273,13 +277,32 @@ class HotKeyManager: ObservableObject {
                 ClipAutoSaveManager.shared.saveSelectedStampClip()
                 return nil
             }
+            // Opt+W в лайве с пересмотром — переключатель «Разметка лайва / Разметка пересмотра».
+            if event.keyCode == 13 /* W */,
+               event.modifierFlags.contains(.option),
+               !event.modifierFlags.contains(.command),
+               !event.modifierFlags.contains(.control),
+               !event.modifierFlags.contains(.shift),
+               VideoPlayerManager.shared.isReviewMode,
+               ActiveWindowManager.shared.isMarkerWindowActive() || WindowsManager.shared.isReviewWindowKey(),
+               self.isEnabled,
+               !self.blockedSheetActive,
+               !self.isEditingTextBox,
+               !FocusStateManager.shared.isAnyTextFieldFocused {
+                VideoPlayerManager.shared.markupUsesReviewTime.toggle()
+                return nil
+            }
             // Пробел = play/pause: окно видео / таймлайна / библиотеки тегов или окно «Пересмотр» (key window, не кэш уведомлений).
             if event.keyCode == 49,
                ActiveWindowManager.shared.isMarkerWindowActive() || WindowsManager.shared.isReviewWindowKey(),
                self.isEnabled,
                !self.blockedSheetActive,
                !self.shouldPassThroughSpaceForTextInput() {
-                if VideoPlayerManager.shared.isReviewMode {
+                if MarkupPlaylistPanelStore.shared.isPlaybackActive {
+                    // В окне видео идут клипы плейлиста — пробел управляет их плеером,
+                    // основной плеер разметки не трогаем, пока играют клипы.
+                    MarkupPlaylistPanelStore.shared.playerManager.togglePlayPause()
+                } else if VideoPlayerManager.shared.isReviewMode {
                     VideoPlayerManager.shared.toggleReviewPlayPause()
                 } else {
                     VideoPlayerManager.shared.togglePlayPause()
@@ -333,6 +356,9 @@ class HotKeyManager: ObservableObject {
             
             if isViewerMode {
                 NotificationCenter.default.post(name: .toggleViewerPlayer, object: nil)
+            } else if MarkupPlaylistPanelStore.shared.isPlaybackActive {
+                // В окне видео идут клипы плейлиста — пробел управляет их плеером.
+                MarkupPlaylistPanelStore.shared.playerManager.togglePlayPause()
             } else if VideoPlayerManager.shared.isReviewMode {
                 VideoPlayerManager.shared.toggleReviewPlayPause()
             } else if isEditorModeActive {
@@ -349,7 +375,7 @@ class HotKeyManager: ObservableObject {
         // Shift+arrows теперь обрабатываются до guard isEditorModeActive в keyDown мониторе.
         
         let hotkeyString = hotkeyStringFromEvent(event)
-        
+
         if isLabelHotkeyMode {
             if let labelInfo = registeredLabelHotkeys[hotkeyString] {
                 hotKeySelectedLabelId = labelInfo.labelId
@@ -357,6 +383,15 @@ class HotKeyManager: ObservableObject {
                 return true
             }
         } else {
+            // Хоткеи холста связок (лейбл/счётчик): просто «нажимаем» элемент — обработка в TagLibraryView.
+            if let labelId = registeredCanvasLabelHotkeys[hotkeyString] {
+                NotificationCenter.default.post(name: .canvasLabelHotkeyPressed, object: labelId)
+                return true
+            }
+            if let clockId = registeredCanvasClockHotkeys[hotkeyString] {
+                NotificationCenter.default.post(name: .canvasClockHotkeyPressed, object: clockId)
+                return true
+            }
             if let tag = registeredHotkeys[hotkeyString] {
                 DispatchQueue.main.async {
                     self.selectTag(tag)
@@ -385,9 +420,28 @@ class HotKeyManager: ObservableObject {
         }
     }
     
+    /// Регистрирует хоткеи лейблов и счётчиков холста связок (режим разметки). Вызывается после
+    /// `registerHotkeys(from:for:)` при загрузке пользовательской коллекции.
+    func registerCanvasElementHotkeys(labels: [Label], clocks: [ClockEntity]) {
+        registeredCanvasLabelHotkeys.removeAll()
+        registeredCanvasClockHotkeys.removeAll()
+        for label in labels {
+            if let hk = label.hotkey, !hk.isEmpty {
+                registeredCanvasLabelHotkeys[hk.lowercased()] = label.id
+            }
+        }
+        for clock in clocks {
+            if let hk = clock.hotkey, !hk.isEmpty {
+                registeredCanvasClockHotkeys[hk.lowercased()] = clock.id
+            }
+        }
+    }
+
     func clearHotkeys() {
         registeredHotkeys.removeAll()
         registeredLabelHotkeys.removeAll()
+        registeredCanvasLabelHotkeys.removeAll()
+        registeredCanvasClockHotkeys.removeAll()
     }
     
     func suspendKeyboardMonitoring() {

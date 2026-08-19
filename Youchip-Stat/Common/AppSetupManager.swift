@@ -33,6 +33,8 @@ class AppSetupManager {
         LanguageManager.shared.setupAtLaunch()
         TimelineMigrationManager.shared.migrateIfNeeded()
         DataSyncManager.shared.synchronizeOnAppLaunch()
+        // Режим просмотра должен видеть свежую разметку проектов — подписка на её изменения.
+        SportCutMarkupSyncManager.shared.start()
         FirebaseApp.configure()
         setupMenu()
         setupBaseAppearence()

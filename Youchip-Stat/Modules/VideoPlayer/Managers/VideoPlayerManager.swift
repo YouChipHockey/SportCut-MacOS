@@ -39,14 +39,41 @@ class VideoPlayerManager: ObservableObject {
     /// Тоже не `@Published` — по той же причине, что и `currentTime` (10 Гц × все окна).
     /// Реактивных потребителей нет: значение читают только императивно (`VideoPlayerViewModel`),
     /// а на экране время review-плеера показывается через `PlaybackClock`.
-    var reviewCurrentTime: Double = 0
+    var reviewCurrentTime: Double = 0 {
+        didSet { ReviewPlaybackClock.shared.update(reviewCurrentTime) }
+    }
     @Published var reviewPlaybackSpeed: Double = 1.0
+    /// В лайве с активным пересмотром: куда добавлять теги/разметку — по плейхеду ЛАЙВА (false) или
+    /// по плейхеду ПЕРЕСМОТРА (true). Переключатель «Разметка лайва / Разметка пересмотра» (Opt+W).
+    /// Вне пересмотра всегда лайв. Сбрасывается на выходе из пересмотра.
+    @Published var markupUsesReviewTime: Bool = false
+
+    /// Время, к которому привязывается новая разметка (тег/интервал/лейбл). В режиме «Разметка
+    /// пересмотра» — позиция пересмотра, иначе — текущее время (лайв/обычное видео).
+    var markupTime: Double {
+        (isReviewMode && markupUsesReviewTime) ? reviewCurrentTime : currentTime
+    }
+
+    /// Время разметки для КОНКРЕТНОГО якоря, а не для текущего режима. Интервальная запись
+    /// запоминает, с какого плейхеда стартовала, и им же заканчивается — даже если посреди записи
+    /// переключили «Разметку лайва / пересмотра» (Opt+W). Иначе интервал склеивал бы два разных
+    /// времени и получался кусок «из ниоткуда».
+    func markupTime(usesReview: Bool) -> Double {
+        (isReviewMode && usesReview) ? reviewCurrentTime : currentTime
+    }
+
+    /// Каким плейхедом сейчас ведут разметку — снимок для новой записи (см. `markupTime(usesReview:)`).
+    var markupAnchorUsesReview: Bool { isReviewMode && markupUsesReviewTime }
 
     // MARK: - Review Screenshot Overlay
     @Published var reviewScreenshotImage: NSImage?
     @Published var isShowingReviewScreenshot: Bool = false
 
     private var reviewTimeObserver: Any?
+    /// Пока активен — 10-герцовый observer пересмотра не перезаписывает `reviewCurrentTime`.
+    /// Нужен на время seek'а: иначе бирюзовый плейхед во время перетаскивания дёргается назад,
+    /// пока плеер не доехал до новой позиции (аналог `scrubTimelinePreviewSuppressUntil`).
+    private var reviewSeekSuppressUntil: Date?
     private var reviewFileVersionCancellable: AnyCancellable?
     private var reviewItemStatusObserver: AnyCancellable?
     /// Strong reference that keeps the pending review player alive until it reaches readyToPlay and is swapped in.
@@ -93,12 +120,12 @@ class VideoPlayerManager: ObservableObject {
         player = nil // No AVPlayer in live mode - we use preview layer
         currentTime = 0.0
         
-        // Observe live duration to update currentTime (skipped in review mode — review player drives currentTime then)
+        // `currentTime` следует за живой записью ДАЖЕ во время пересмотра — основной плейхед и
+        // разметка остаются на лайве, пока пересмотр живёт своей позицией (см. review time observer).
         liveDurationCancellable = LiveStreamManager.shared.$liveDuration
             .receive(on: DispatchQueue.main)
             .sink { [weak self] duration in
                 guard let self = self, self.isLiveMode, self.isBroadcastActive else { return }
-                guard !self.isReviewMode else { return }
                 self.currentTime = duration
             }
     }
@@ -122,6 +149,14 @@ class VideoPlayerManager: ObservableObject {
     }
     
     func exitReviewMode() {
+        // ДО сброса флага: записи, начатые по плейхеду пересмотра, закрываем по нему же и кладём
+        // на таймлайн — иначе они бы «дописывались» лайвом или потерялись. Синхронно, чтобы
+        // штампы успели лечь до того, как позиция пересмотра обнулится.
+        if isReviewMode {
+            NotificationCenter.default.post(name: .reviewModeWillClose, object: nil)
+            ClockRuntimeManager.shared.finalizeReviewAnchored()
+        }
+
         isReviewMode = false
         shouldSeekReviewToEndOnNextReady = false
         reviewFileVersionCancellable?.cancel()
@@ -136,7 +171,10 @@ class VideoPlayerManager: ObservableObject {
         reviewPlayer?.pause()
         reviewPlayer = nil
         pendingReviewPlayer = nil
+        reviewSeekSuppressUntil = nil
         reviewCurrentTime = 0
+        // Пересмотр закрыт — разметка снова только по лайву, бирюзовый плейхед в 0.
+        markupUsesReviewTime = false
         isRefreshingReview = false
         reviewScreenshotImage = nil
         isShowingReviewScreenshot = false
@@ -144,15 +182,48 @@ class VideoPlayerManager: ObservableObject {
         LiveStreamManager.shared.stopReviewRefresher()
     }
     
-    func seekReview(to time: Double) {
+    func seekReview(to time: Double, resumePlaybackAfterSeek: Bool = false) {
         guard let player = reviewPlayer else { return }
-        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        let clamped = max(0, min(time, reviewDuration > 0 ? reviewDuration : time))
+        // Позицию проставляем сразу: observer пересмотра тикает 10 Гц, и без этого бирюзовый
+        // плейхед после отпускания «отскакивал» назад на старое значение.
+        reviewCurrentTime = clamped
+        reviewSeekSuppressUntil = Date().addingTimeInterval(0.3)
+        let cmTime = CMTime(seconds: clamped, preferredTimescale: 600)
+        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            guard let self = self else { return }
+            self.reviewSeekSuppressUntil = nil
+            if resumePlaybackAfterSeek, finished, self.isReviewMode {
+                self.reviewPlayer?.play()
+                self.reviewPlayer?.rate = Float(self.reviewPlaybackSpeed)
+            }
+        }
+    }
+
+    /// Длительность склейки пересмотра (кадры, записанные к этому моменту).
+    var reviewDuration: Double {
+        let d = reviewPlayer?.currentItem?.duration.seconds ?? 0
+        return d.isFinite ? d : 0
+    }
+
+    /// Быстрый превью-seek бирюзового плейхеда во время перетаскивания: с допуском (чтобы кадр
+    /// поспевал за курсором) и с мгновенным обновлением позиции — аналог
+    /// `seekForTimelineScrubPreview` для основного плейхеда.
+    func seekReviewForTimelineScrubPreview(to time: Double) {
+        guard let player = reviewPlayer else { return }
+        let dur = reviewDuration
+        guard dur > 0 else { return }
+        let t = max(0, min(time, dur))
+        reviewCurrentTime = t
+        reviewSeekSuppressUntil = Date().addingTimeInterval(0.14)
+        let cm = CMTime(seconds: t, preferredTimescale: 600)
+        let tol = CMTime(seconds: 0.06, preferredTimescale: 600)
+        player.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
     }
     
     func seekReview(by seconds: Double) {
         let target = reviewCurrentTime + seconds
-        let duration = reviewPlayer?.currentItem?.duration.seconds ?? 0
+        let duration = reviewDuration
         let clamped = max(0, min(target, duration))
         seekReview(to: clamped)
     }
@@ -290,9 +361,17 @@ class VideoPlayerManager: ObservableObject {
         let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         reviewTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self, self.isReviewMode else { return }
+            // Идёт наш собственный seek — позицию уже проставили вручную, не откатываем её назад.
+            if let until = self.reviewSeekSuppressUntil {
+                if Date() < until { return }
+                self.reviewSeekSuppressUntil = nil
+            }
             let seconds = CMTimeGetSeconds(time)
+            // Пересмотр НЕ трогает `currentTime` (он держит позицию ЛАЙВА, чтобы разметка и
+            // основной плейхед оставались на живой записи). Позицию пересмотра публикует
+            // `didSet` у `reviewCurrentTime` — её читает бирюзовый плейхед и записи, начатые
+            // по нему (`markupTime(usesReview:)`).
             self.reviewCurrentTime = seconds
-            self.currentTime = seconds
         }
     }
     

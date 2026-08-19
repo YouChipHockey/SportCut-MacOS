@@ -107,6 +107,8 @@ class ExportHelper: ObservableObject {
     }
     
     private func performExportWithAsset(_ asset: AVAsset, segments: [ExportSegment], selectedType: CutsExportType, mode: ExportMode, effectiveWithScreenshots: Bool, watermarkOptions: ExportWatermarkOptions = .default, completion: @escaping (Error?) -> Void) {
+        ExportDiagnosticsLog.begin("РАЗМЕТКА · экспорт \(mode == .film ? "ФИЛЬМОМ" : "КЛИПАМИ") · сегментов=\(segments.count)")
+        ExportDiagnosticsLog.log("счётчики=\(watermarkOptions.showClocks) лого=\(watermarkOptions.showClubLogo) (задано=\(ClubLogoWatermarkManager.shared.hasLogo)) рисунки=\(effectiveWithScreenshots) записей счётчиков в проекте=\(timelineData.lines.clockStamps.count)")
         if mode == .film {
             exportFilm(segments: segments, asset: asset, type: selectedType, withScreenshots: effectiveWithScreenshots, watermarkOptions: watermarkOptions) { result in
                 DispatchQueue.main.async {
@@ -405,7 +407,10 @@ class ExportHelper: ObservableObject {
             completion(.failure(error.localizedDescription))
         }
         
-        let overlayVideoComposition = videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clockPlacements)
+        // Та же защита, что и в просмотре: дорожка, в которую ничего не вставили, роняет экспорт.
+        composition.removeEmptyTracks()
+        ExportDiagnosticsLog.log("ИТОГ фильма: счётчиков к нанесению=\(clockPlacements.count) тумблер счётчиков=\(watermarkOptions.showClocks) лого=\(watermarkOptions.showClubLogo) лого задано=\(ClubLogoWatermarkManager.shared.hasLogo) текстовых оверлеев=\(overlayItems.count) длительность=\(ExportDiagnosticsLog.fmt(composition.duration))")
+        let overlayVideoComposition = videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clockPlacements, watermarkOptions: watermarkOptions)
         
         let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
         exportSession?.outputURL = outputURL
@@ -415,14 +420,17 @@ class ExportHelper: ObservableObject {
         addExportSession(exportSession)
         startProgressTimer(exportSession: exportSession)
         
+        ExportDiagnosticsLog.log(ExportDiagnosticsLog.describe(videoComposition: overlayVideoComposition))
         exportSession?.exportAsynchronously { [weak self] in
             self?.removeExportSession(exportSession)
             self?.stopProgressTimer()
             if exportSession?.status == .completed {
+                ExportDiagnosticsLog.log("✅ фильм разметки готов: \(outputURL.lastPathComponent)")
                 completion(.success(outputURL))
             } else if exportSession?.status == .cancelled {
                 completion(.failure(ExportHelper.exportCancelledError))
             } else {
+                ExportDiagnosticsLog.error("экспорт фильма разметки", exportSession?.error)
                 completion(.failure(exportSession?.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])))
             }
         }
@@ -465,7 +473,12 @@ class ExportHelper: ObservableObject {
             } else if exportedURLs.isEmpty {
                 completion(.failure(NSError(domain: "Export", code: -3, userInfo: [NSLocalizedDescriptionKey: "No valid segments were exported"])))
             } else {
-                self.compressFiles(urls: exportedURLs, completion: completion)
+                // Упаковка zip блокирует поток (waitUntilExit) — уводим с главного: сборка клипов
+                // теперь идёт через главный поток (см. exportNext), и finish() может прилететь с него.
+                let urls = exportedURLs
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    self?.compressFiles(urls: urls, completion: completion)
+                }
             }
         }
 
@@ -600,22 +613,31 @@ class ExportHelper: ObservableObject {
                 compositionStart: 0,
                 momentPrimaryClockIds: ClockExportOverlayBuilder.momentPrimaryClockIds(for: segment.stamp)
             )
-            if let tag {
-                let overlayItem = OverlayItem(
-                    tag: tag,
+            ExportDiagnosticsLog.log("клип #\(index + 1) «\(segment.tagName)»: счётчиков=\(clipClockPlacements.count) лого=\(watermarkOptions.showClubLogo) лого задано=\(ClubLogoWatermarkManager.shared.hasLogo) тег=\(tag?.name ?? "не найден")")
+            // Оверлей строим и БЕЗ тега: тег нужен только для текстовой плашки, а счётчики и
+            // логотип клуба от него не зависят. Раньше нерезолвнутый тег (импорт, коллекция не
+            // загружена) убивал в клипе всё сразу — и таймеры, и лого.
+            let clipOverlayItems: [OverlayItem] = tag.map { resolvedTag in
+                [OverlayItem(
+                    tag: resolvedTag,
                     stamp: segment.stamp,
                     selectedLabelGroups: OverlayLabelGroupItem.labelGroupItems(forStamp: segment.stamp),
                     start: .zero,
                     duration: segment.timeRange.duration,
                     videoSize: videoSize,
                     watermarkOptions: watermarkOptions
-                )
-                overlayVideoComposition = videoCompositionWithTextOverlay(overlayItem: overlayItem, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clipClockPlacements)
-            } else {
+                )]
+            } ?? []
+            if clipOverlayItems.isEmpty && clipClockPlacements.isEmpty && !watermarkOptions.showClubLogo {
                 overlayVideoComposition = nil
+            } else if let overlayItem = clipOverlayItems.first {
+                overlayVideoComposition = videoCompositionWithTextOverlay(overlayItem: overlayItem, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clipClockPlacements, watermarkOptions: watermarkOptions)
+            } else {
+                overlayVideoComposition = videoCompositionWithTextOverlay(overlayItems: [], videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clipClockPlacements, watermarkOptions: watermarkOptions)
             }
             
             
+            composition.removeEmptyTracks()
             guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
                 exportError = NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not create export session"])
                 exportNext(index + 1)
@@ -632,10 +654,14 @@ class ExportHelper: ObservableObject {
                 if exportSession.status == .completed {
                     exportedURLs.append(clipOutputURL)
                 } else if self?.isExportCancelled != true {
+                    ExportDiagnosticsLog.error("экспорт клипа #\(index + 1) (status=\(exportSession.status.rawValue))", exportSession.error)
                     exportError = exportSession.error ?? NSError(domain: "Export", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown export error"])
                 }
                 self?.processSegment(segmentsCount: segments.count)
-                exportNext(index + 1)
+                // Следующий клип собираем НА ГЛАВНОМ потоке: его оверлей — дерево CALayer, а
+                // счётчики в нём рисуются AppKit'ом (NSHostingView). Раньше цепочка продолжалась
+                // прямо в колбэке экспорта (фон), и слои строились через вложенный main.sync.
+                DispatchQueue.main.async { exportNext(index + 1) }
             }
         }
 
@@ -677,7 +703,9 @@ class ExportHelper: ObservableObject {
         switch type {
         case .currentTimeline:
             if let lineID = timelineData.selectedLineID,
-               let line = timelineData.lines.first(where: { $0.id == lineID }) {
+               let line = timelineData.lines.first(where: { $0.id == lineID }),
+               // Выбранной может оказаться дорожка счётчика — по ней экспорта нет.
+               !line.isClocksTimeline {
                 for stamp in line.stamps {
                     guard let correctedTime = correctTimeRange(
                         startSeconds: stamp.timeStartSeconds,
@@ -742,7 +770,8 @@ class ExportHelper: ObservableObject {
         case .tag(let selectedTag):
             let possibleGroup = tagLibrary.allTagGroups.first(where: { $0.tags.contains(selectedTag.id) })
             
-            for line in timelineData.lines {
+            // Дорожки счётчиков — служебные: нарезать клипы по ним нельзя.
+            for line in timelineData.lines where !line.isClocksTimeline {
                 for stamp in line.stamps {
                     guard stamp.idTags.contains(selectedTag.id) else {
                         continue
@@ -785,7 +814,8 @@ class ExportHelper: ObservableObject {
                 }
             }
         case .timeEvent(let selectedEvent):
-            for line in timelineData.lines {
+            // Дорожки счётчиков — служебные: нарезать клипы по ним нельзя.
+            for line in timelineData.lines where !line.isClocksTimeline {
                 for stamp in line.stamps {
                     if stamp.timeEvents.contains(selectedEvent.id) {
                         guard let correctedTime = correctTimeRange(
@@ -824,7 +854,8 @@ class ExportHelper: ObservableObject {
                 }
             }
             
-            for line in timelineData.lines {
+            // Дорожки счётчиков — служебные: нарезать клипы по ним нельзя.
+            for line in timelineData.lines where !line.isClocksTimeline {
                 for stamp in line.stamps {
                     if stamp.labelIDs.contains(selectedLabel.id) {
                         guard let correctedTime = correctTimeRange(
@@ -857,7 +888,8 @@ class ExportHelper: ObservableObject {
             
         case .tagWithLabels(let selectedTag, let selectedLabels):
             let labelIDs = Set(selectedLabels.map { $0.id })
-            for line in timelineData.lines {
+            // Дорожки счётчиков — служебные: нарезать клипы по ним нельзя.
+            for line in timelineData.lines where !line.isClocksTimeline {
                 for stamp in line.stamps {
                     if stamp.idTags.contains(selectedTag.id) && !Set(stamp.labelIDs).isDisjoint(with: labelIDs) {
                         guard let correctedTime = correctTimeRange(
@@ -898,7 +930,8 @@ class ExportHelper: ObservableObject {
             }
             
             let tagIDs = Set(selectedTags.map { $0.id })
-            for line in timelineData.lines {
+            // Дорожки счётчиков — служебные: нарезать клипы по ним нельзя.
+            for line in timelineData.lines where !line.isClocksTimeline {
                 for stamp in line.stamps {
                     if stamp.labelIDs.contains(selectedLabel.id) && !tagIDs.isDisjoint(with: stamp.idTags) {
                         guard let correctedTime = correctTimeRange(
@@ -1013,13 +1046,19 @@ class ExportHelper: ObservableObject {
         return result
     }
 
+    /// - Parameter watermarkOptions: опции экспорта САМИ ПО СЕБЕ, не через `overlayItems`.
+    ///   Логотип клуба и счётчики не должны зависеть от того, удалось ли собрать текстовые
+    ///   оверлеи: если тег штампа не нашёлся в коллекции, `overlayItems` пуст — и логотип раньше
+    ///   молча не наносился.
     func videoCompositionWithTextOverlay(
         overlayItems: [OverlayItem],
         videoTrack: AVAssetTrack,
         compositionVideoTrack: AVMutableCompositionTrack,
         compositionDuration: CMTime,
-        clockPlacements: [ClockExportPlacement] = []
+        clockPlacements: [ClockExportPlacement] = [],
+        watermarkOptions: ExportWatermarkOptions? = nil
     ) -> AVVideoComposition {
+        let effectiveOptions = watermarkOptions ?? overlayItems.first?.watermarkOptions ?? .default
         let videoComposition = AVMutableVideoComposition()
 
         let transform = videoTrack.preferredTransform
@@ -1112,9 +1151,13 @@ class ExportHelper: ObservableObject {
             )
 
             // Логотип клуба — статично на весь клип, поверх текстового оверлея.
-            if overlayItems.first?.watermarkOptions.showClubLogo == true,
-               let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
-                parentLayer.addSublayer(logoLayer)
+            if effectiveOptions.showClubLogo {
+                if let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
+                    parentLayer.addSublayer(logoLayer)
+                    ExportDiagnosticsLog.log("логотип клуба нанесён: frame=\(logoLayer.frame) кадр=\(Int(renderSize.width))x\(Int(renderSize.height))")
+                } else {
+                    ExportDiagnosticsLog.log("⚠️ логотип клуба включён, но слой не построен (картинка не задана или не читается)")
+                }
             }
         }
 
@@ -1137,8 +1180,10 @@ class ExportHelper: ObservableObject {
         videoTrack: AVAssetTrack,
         compositionVideoTrack: AVMutableCompositionTrack,
         compositionDuration: CMTime,
-        clockPlacements: [ClockExportPlacement] = []
+        clockPlacements: [ClockExportPlacement] = [],
+        watermarkOptions: ExportWatermarkOptions? = nil
     ) -> AVVideoComposition {
+        let effectiveOptions = watermarkOptions ?? overlayItem.watermarkOptions
         let videoComposition = AVMutableVideoComposition()
 
         let transform = videoTrack.preferredTransform
@@ -1210,9 +1255,13 @@ class ExportHelper: ObservableObject {
             )
 
             // Логотип клуба — статично на весь клип, поверх текстового оверлея.
-            if overlayItem.watermarkOptions.showClubLogo,
-               let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
-                parentLayer.addSublayer(logoLayer)
+            if effectiveOptions.showClubLogo {
+                if let logoLayer = ClubLogoWatermarkManager.shared.makeLogoLayer(renderSize: renderSize) {
+                    parentLayer.addSublayer(logoLayer)
+                    ExportDiagnosticsLog.log("логотип клуба нанесён на клип: frame=\(logoLayer.frame) кадр=\(Int(renderSize.width))x\(Int(renderSize.height))")
+                } else {
+                    ExportDiagnosticsLog.log("⚠️ логотип клуба включён, но слой не построен (картинка не задана или не читается)")
+                }
             }
         }
 

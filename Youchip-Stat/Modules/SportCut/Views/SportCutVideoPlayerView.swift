@@ -159,6 +159,10 @@ struct SportCutVideoPlayerView: View {
 
             SportCutWatermarkOverlay(playerManager: playerManager)
 
+            // Счётчики: записи разметки, попавшие под текущую позицию клипа. Как и в разметке —
+            // прямо на кадре, с перетаскиванием и изменением размера.
+            SportCutClockOverlayView(playerManager: playerManager)
+
             if playerManager.isShowingDrawing, let drawingImage = playerManager.displayedDrawingImage {
                 ZStack {
                     Color.black.ignoresSafeArea()

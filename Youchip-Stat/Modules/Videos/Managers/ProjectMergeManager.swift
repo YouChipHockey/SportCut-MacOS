@@ -465,8 +465,12 @@ final class ProjectMergeManager: ObservableObject {
                 }
 
                 let key: String?
-                if line.isServiceTimeline {
-                    // Служебные линии (рисунки, счётчики) сливаются по id — каждая в свою дорожку.
+                if let clockId = line.clockId {
+                    // Линии счётчиков сливаются по id СЧЁТЧИКА: у одного и того же счётчика в
+                    // разных проектах свои id дорожек, а дорожка должна получиться одна.
+                    key = "clock:\(clockId)"
+                } else if line.isServiceTimeline {
+                    // Прочие служебные линии (рисунки, легаси-счётчики) — по id дорожки.
                     key = "service:\(line.id.uuidString)"
                 } else if mergedLineNames.contains(line.name) {
                     key = "name:\(line.name)"                    // пользователь выбрал объединить

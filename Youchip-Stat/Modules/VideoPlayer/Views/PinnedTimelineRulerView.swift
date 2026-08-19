@@ -21,6 +21,18 @@ struct PinnedTimelineRulerView: View {
     /// Контроллер перетаскивания плейхеда — тот же, что и у стебля в скролле, чтобы «голову» в
     /// закреплённой шапке можно было хватать и тянуть (раньше шапка перекрывала стебель и хват пропадал).
     @ObservedObject var dragController: PlayheadEdgeScrollController
+    /// Второй (бирюзовый) плейхед пересмотра: его «голова» живёт в этой же шапке, со своим
+    /// контроллером перетаскивания. Показывается только в режиме пересмотра.
+    @ObservedObject var reviewDragController: PlayheadEdgeScrollController
+    @ObservedObject private var reviewClock = ReviewPlaybackClock.shared
+    var showReviewPlayhead: Bool = false
+    /// Разметка сейчас идёт по плейхеду пересмотра — тогда его «голова» перехватывает хват
+    /// первой (лежит выше основной), ведь именно ею пользуются.
+    var reviewMarkupActive: Bool = false
+    /// Позиция края тега при его перетаскивании/ресайзе (в координатах контента). Плейхед должен
+    /// следовать за ней МГНОВЕННО — как стебель в скролле (`TimelinePlayheadView`), иначе «голова»
+    /// в шапке отстаёт от стебля, пока подтянется `clock.time` через дросселированный seek.
+    var tagEdgePosition: CGFloat? = nil
     let duration: Double
     let gridWidth: CGFloat
     let interval: Double
@@ -37,32 +49,51 @@ struct PinnedTimelineRulerView: View {
     @State private var lastScrubVideoPreviewAt = Date.distantPast
     private let scrubVideoPreviewMinInterval: TimeInterval = 0.033
     @State private var wasPlayingBeforePlayheadDrag = false
+    @State private var lastReviewScrubPreviewAt = Date.distantPast
+    @State private var wasReviewPlayingBeforeDrag = false
 
     /// Экранная (во вьюпорте шапки) X плейхеда с учётом горизонтального скролла.
     private var playheadViewportX: CGFloat {
         let offsetX = -controller.liveScrollX
+        // Приоритет тот же, что у стебля: край тега → перетаскивание плейхеда → живое время.
+        if let tagPos = tagEdgePosition { return tagPos + offsetX }
         let base = duration > 0 ? (clock.time / duration) * gridWidth : 0
-        // Во время перетаскивания показываем позицию из dragController (в координатах контента).
         let contentX = dragController.isDragging ? dragController.dragX : base
+        return contentX + offsetX
+    }
+
+    /// Экранная X «головы» плейхеда ПЕРЕСМОТРА (во вьюпорте шапки).
+    private var reviewPlayheadViewportX: CGFloat {
+        let offsetX = -controller.liveScrollX
+        let base = duration > 0 ? (reviewClock.time / duration) * gridWidth : 0
+        let contentX = reviewDragController.isDragging ? reviewDragController.dragX : base
         return contentX + offsetX
     }
 
     var body: some View {
         let offsetX = -controller.liveScrollX
         let playheadX = duration > 0 ? (clock.time / duration) * gridWidth : 0
+        // Край тега при drag/resize перекрывает все прочие источники позиции — синхронно со стеблем.
+        let headContentX = tagEdgePosition ?? (dragController.isDragging ? dragController.dragX : playheadX)
 
         ZStack(alignment: .topLeading) {
             TimelineTimestampsHeaderView(duration: duration, interval: interval, width: gridWidth)
                 .frame(width: gridWidth, height: 30, alignment: .leading)
                 .timelineTapToSeek(gridWidth: gridWidth, duration: duration) { time in
-                    videoManager.seek(to: time)
+                    // В пересмотре клик по линейке ведёт плейхед ПЕРЕСМОТРА: основной прибит к
+                    // живому краю записи, и `seek` для него в лайве всё равно ничего не делает.
+                    if showReviewPlayhead {
+                        videoManager.seekReview(to: time)
+                    } else {
+                        videoManager.seek(to: time)
+                    }
                 }
                 .offset(x: offsetX, y: band)
 
             // «Голова» плейхеда (треугольник) — только индикатор; хват — прозрачная зона ниже.
             PlayheadStemWithGrabHead(stemWidth: 2, headBaseWidth: 12, compact: false)
                 .frame(width: hitWidth, height: band + 30)
-                .offset(x: (dragController.isDragging ? dragController.dragX + offsetX : playheadX + offsetX) - 7, y: 0)
+                .offset(x: headContentX + offsetX - 7, y: 0)
                 .allowsHitTesting(false)
 
             // Прозрачная зона захвата плейхеда в шапке. Тянет тот же dragController, что и стебель
@@ -77,6 +108,29 @@ struct PinnedTimelineRulerView: View {
                 }
                 .gesture(playheadDragGesture)
                 .zIndex(1)
+
+            // «Голова» бирюзового плейхеда пересмотра — та же конструкция, что и у основного:
+            // треугольник-индикатор плюс отдельная прозрачная зона захвата.
+            if showReviewPlayhead {
+                PlayheadStemWithGrabHead(
+                    stemWidth: 2, headBaseWidth: 12, compact: false, tint: reviewPlayheadTint
+                )
+                .frame(width: hitWidth, height: band + 30)
+                .offset(x: reviewPlayheadViewportX - 7, y: 0)
+                .allowsHitTesting(false)
+                .zIndex(reviewMarkupActive ? 2 : 0.5)
+
+                Color.clear
+                    .frame(width: hitWidth, height: band + 30)
+                    .contentShape(Rectangle())
+                    .offset(x: reviewPlayheadViewportX - hitWidth / 2, y: 0)
+                    .onHover { hovering in
+                        NSCursor.setHiddenUntilMouseMoves(false)
+                        if hovering { NSCursor.openHand.set() } else { NSCursor.arrow.set() }
+                    }
+                    .gesture(reviewPlayheadDragGesture)
+                    .zIndex(reviewMarkupActive ? 2.1 : 0.6)
+            }
 
             // «Головы» меток рисунков (кликабельны — возврат к рисунку) закреплены в шапке-баре.
             // Стебли рисуются отдельно в скролле (на всю высоту дорожек) — см. timelineZStackContent.
@@ -95,6 +149,32 @@ struct PinnedTimelineRulerView: View {
         .frame(width: viewportWidth, height: band + 30, alignment: .topLeading)
         .coordinateSpace(name: "pinnedRuler")
         .clipped()
+    }
+
+    /// Перетаскивание бирюзового плейхеда за «голову» в шапке. Механика общая со стеблем —
+    /// `ReviewPlayheadDrag`; отличие только в переводе координат вьюпорта шапки в координаты
+    /// контента таймлайна.
+    private var reviewPlayheadDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("pinnedRuler"))
+            .onChanged { value in
+                ReviewPlayheadDrag.onChanged(
+                    contentX: value.location.x + controller.currentScrollX,
+                    gridWidth: gridWidth,
+                    duration: duration,
+                    dragController: reviewDragController,
+                    scrollController: controller,
+                    lastScrubPreviewAt: $lastReviewScrubPreviewAt,
+                    minInterval: scrubVideoPreviewMinInterval,
+                    wasPlaying: $wasReviewPlayingBeforeDrag
+                )
+            }
+            .onEnded { _ in
+                ReviewPlayheadDrag.onEnded(
+                    dragController: reviewDragController,
+                    lastScrubPreviewAt: $lastReviewScrubPreviewAt,
+                    wasPlaying: $wasReviewPlayingBeforeDrag
+                )
+            }
     }
 
     /// Перетаскивание плейхеда в закреплённой шапке. Координаты — во вьюпорте шапки; переводим их

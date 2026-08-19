@@ -57,6 +57,8 @@ struct CollectionNavigationPanel: View {
     @State private var editingLabelID: String?
     @State private var editingLabelName = ""
     @State private var capturingHotkeyTagID: String?
+    @State private var capturingHotkeyLabelID: String?
+    @State private var capturingHotkeyClockID: String?
     @State private var showAddTimeEventSheet = false
     @State private var selectedTimeEventID: String?
     @State private var newTimeEventName = ""
@@ -403,6 +405,14 @@ struct CollectionNavigationPanel: View {
                         .foregroundColor(.secondary)
                     Text(clock.name).font(.subheadline).lineLimit(1)
                     Spacer()
+                    inlineHotkeyField(
+                        current: clock.hotkey,
+                        isCapturing: Binding(
+                            get: { capturingHotkeyClockID == clock.id },
+                            set: { capturingHotkeyClockID = $0 ? clock.id : nil }
+                        ),
+                        apply: { applyClockHotkey(clock: clock, hotkey: $0) }
+                    )
                     Button(action: { TagFreeLayoutStorage.addClockToLayout(&layout, clock: clock) }) {
                         Image(systemName: "plus.rectangle.on.rectangle")
                     }
@@ -681,6 +691,72 @@ struct CollectionNavigationPanel: View {
         )
     }
 
+    // MARK: - Inline hotkey (лейбл/счётчик) — как у тега, прямо в левом столбце
+
+    /// Компактное поле захвата хоткея (тот же вид, что у тега). Универсально для лейбла и счётчика.
+    private func inlineHotkeyField(current: String?, isCapturing: Binding<Bool>, apply: @escaping (String?) -> Void) -> some View {
+        HStack(spacing: 4) {
+            ZStack {
+                Button(action: { isCapturing.wrappedValue = true }) {
+                    Text(current ?? ^String.Titles.assign)
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.3)))
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(isCapturing.wrappedValue)
+
+                if isCapturing.wrappedValue {
+                    KeyCaptureView(
+                        keyString: Binding(
+                            get: { current },
+                            set: { newValue in
+                                apply(newValue)
+                                isCapturing.wrappedValue = false
+                            }
+                        ),
+                        isCapturing: isCapturing
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+
+            if let hk = current, !hk.isEmpty, !isCapturing.wrappedValue {
+                Button(action: { apply(nil) }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(^String.Titles.reset)
+            }
+        }
+    }
+
+    private func applyLabelHotkey(label: Label, hotkey: String?) {
+        let trimmed = hotkey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = (trimmed?.isEmpty == false) ? trimmed : nil
+        collectionManager.updateLabel(id: label.id, name: label.name, description: label.description, hotkey: value)
+        _ = collectionManager.saveCollectionToFiles()
+        HotKeyManager.shared.registerCanvasElementHotkeys(labels: collectionManager.labels, clocks: collectionManager.clocks)
+    }
+
+    private func applyClockHotkey(clock: ClockEntity, hotkey: String?) {
+        let trimmed = hotkey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = (trimmed?.isEmpty == false) ? trimmed : nil
+        var updated = clock
+        updated.hotkey = value
+        collectionManager.updateClock(updated)
+        _ = collectionManager.saveCollectionToFiles()
+        HotKeyManager.shared.registerCanvasElementHotkeys(labels: collectionManager.labels, clocks: collectionManager.clocks)
+    }
+
     // MARK: - Labels tab
 
     private var labelsTabContent: some View {
@@ -756,7 +832,8 @@ struct CollectionNavigationPanel: View {
                     text: $editingLabelName,
                     placeholder: ^String.Titles.title,
                     onSubmit: {
-                        collectionManager.updateLabel(id: label.id, name: editingLabelName, description: label.description)
+                        // Хоткей не теряем при переименовании (updateLabel по умолчанию обнулил бы его).
+                        collectionManager.updateLabel(id: label.id, name: editingLabelName, description: label.description, hotkey: label.hotkey)
                         editingLabelID = nil
                     }
                 )
@@ -772,6 +849,15 @@ struct CollectionNavigationPanel: View {
             }
 
             Spacer()
+
+            inlineHotkeyField(
+                current: label.hotkey,
+                isCapturing: Binding(
+                    get: { capturingHotkeyLabelID == label.id },
+                    set: { capturingHotkeyLabelID = $0 ? label.id : nil }
+                ),
+                apply: { applyLabelHotkey(label: label, hotkey: $0) }
+            )
 
             Button(action: { labelPendingDelete = label }) {
                 Image(systemName: "xmark")

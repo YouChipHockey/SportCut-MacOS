@@ -78,7 +78,9 @@ private enum SportCutBottomPane: Int, CaseIterable {
 }
 
 /// Индексы верхних вкладок источников: `-2` плейлисты, `-1` все проекты, `0..<n` проект.
-private enum SportCutTimelineSourceTab {
+/// Служебные индексы вкладок источников (панель плейлистов в окне разметки открывает
+/// таймлайны сразу на `playlists`).
+enum SportCutTimelineSourceTab {
     static let playlists = -2
     static let allProjects = -1
 }
@@ -101,6 +103,9 @@ struct SportCutTimelineView: View {
     let sessionID: UUID
     @ObservedObject var playerManager: SportCutPlayerManager
     @ObservedObject var sessionManager = SportCutSessionManager.shared
+    /// С какой вкладки источников открыться. Панель плейлистов в окне разметки открывает
+    /// таймлайны сразу на плейлистах (`SportCutTimelineSourceTab.playlists`).
+    var initialSourceTab: Int? = nil
     
     @State private var bottomPane: SportCutBottomPane = .table
     @State private var selectedSourceIndex: Int = SportCutTimelineSourceTab.allProjects
@@ -110,7 +115,9 @@ struct SportCutTimelineView: View {
     @StateObject private var filter = TimelineFilter()
     @State private var timelineScale: CGFloat = 1.0
     @State private var showZoomPopover = false
-    @GestureState private var magnifyScale: CGFloat = 1.0
+    /// Живой масштаб пинч-жеста. Не `@GestureState`: зум ловится AppKit-монитором,
+    /// чтобы работать и в неактивном окне (см. `onFirstMouseMagnify`).
+    @State private var magnifyScale: CGFloat = 1.0
     /// Контроллер горизонтального скролла таймлайна разметки — чтобы зумить «в плейхед» (как в разметке).
     @StateObject private var markupScrollController = TimelineScrollController()
     /// Предыдущий эффективный масштаб — чтобы новый зум привязать к плейхеду (см. handleMarkupZoomChanged).
@@ -206,6 +213,16 @@ struct SportCutTimelineView: View {
             loadSourceDurationIfNeeded(sourceIndex: newIdx)
         }
         .onAppear {
+            if let initialSourceTab {
+                selectedSourceIndex = initialSourceTab
+                previousSelectedSourceIndex = initialSourceTab
+            }
+            loadSourceDurationIfNeeded(sourceIndex: selectedSourceIndex)
+        }
+        // Файл источника сменился (закончился лайв, проект дозаписан) — длительность,
+        // прочитанная один раз, уже неверна: сбрасываем кэш и читаем заново.
+        .onChange(of: sources.map { $0.videoBookmark.hashValue }) { _ in
+            sourceVideoDurations.removeAll()
             loadSourceDurationIfNeeded(sourceIndex: selectedSourceIndex)
         }
     }
@@ -614,14 +631,12 @@ struct SportCutTimelineView: View {
                 }
             }
         }
-        .gesture(
-            MagnificationGesture()
-                .updating($magnifyScale) { state, gestureState, _ in
-                    gestureState = max(1.0, state)
-                }
-                .onEnded { value in
-                    timelineScale = min(sportCutTimelineMaxScale, max(1.0, timelineScale * value))
-                }
+        .onFirstMouseMagnify(
+            onChanged: { magnifyScale = max(1.0, $0) },
+            onEnded: { value in
+                magnifyScale = 1.0
+                timelineScale = min(sportCutTimelineMaxScale, max(1.0, timelineScale * value))
+            }
         )
         } // end VStack wrapping selection bar + ScrollView
     }

@@ -346,11 +346,18 @@ struct MomentViewerView: View {
 
     /// Записи счётчиков, пересекающиеся с этим моментом. Считаются от ТЕКУЩИХ границ момента,
     /// поэтому ресайз клипа сам обновляет и список, и отрисовку.
+    /// Primary Counter тега этого момента (если задан) — показывается всегда, даже без флага.
+    private var momentPrimaryClockIds: Set<String> {
+        // Приоритет — сохранённый в штампе id; иначе резолвим по тегам штампа (оба пула).
+        ClockExportOverlayBuilder.momentPrimaryClockIds(for: sourceStamp)
+    }
+
     private var clockEntries: [MomentClockEntry] {
         MomentClocksFinder.entries(
             from: timelineData.lines,
             start: session.displayStartTime,
-            duration: session.displayDuration
+            duration: session.displayDuration,
+            primaryClockIds: momentPrimaryClockIds
         )
     }
 
@@ -492,6 +499,11 @@ struct MomentViewerView: View {
         }
         .onAppear {
             momentMiniLayoutEpoch += 1
+            // Счётчики момента (флаг «на видео» + Primary Counter) показываем сразу — «активны».
+            enabledClockStampIDs.formUnion(clockEntries.map(\.id))
+        }
+        .onChange(of: clockEntries.map(\.id)) { ids in
+            enabledClockStampIDs.formUnion(ids)
         }
         .onDisappear {
             session.invalidate()

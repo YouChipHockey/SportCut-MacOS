@@ -64,22 +64,26 @@ struct IntervalRecordingPreviewOverlay: View {
         .allowsHitTesting(false)
         // Именно короткий easeOut, а не пружина: штамп должен просто ПОЯВИТЬСЯ на своём месте
         // в момент старта записи. Всё «движение» даёт сам рост штампа вслед за плейхедом.
-        .animation(.easeOut(duration: 0.15), value: store.items)
+        .animation(.easeOut(duration: 0.15), value: store.allItems)
     }
 
     /// Раскладывает записи по строкам: индекс строки считаем здесь, а не в вьюхе, которая
     /// перерисовывается по часам плеера — там должно остаться только вычисление ширины.
     private func resolvedRows() -> [IntervalRecordingRow] {
-        guard !store.items.isEmpty else { return [] }
+        let active = store.allItems
+        guard !active.isEmpty else { return [] }
         let isTagBased = (MarkupMode.current == .tagBased)
         // Сколько записей уже легло в эту строку — по ним сужаем следующие, как это делают
         // пересекающиеся штампы в `TimelineLineView`.
         var stackByLine: [Int: Int] = [:]
         var rows: [IntervalRecordingRow] = []
-        for item in store.items {
-            // Куда ляжет штамп: в `tagBased` — в дорожку тега, в `standard` — в выбранную.
+        for item in active {
+            // Куда ляжет штамп: у счётчика дорожка задана явно (своя на каждый счётчик),
+            // у тега — в `tagBased` дорожка тега, в `standard` выбранная.
             let resolvedIndex: Int?
-            if isTagBased {
+            if let lineID = item.lineID {
+                resolvedIndex = lines.firstIndex(where: { $0.id == lineID })
+            } else if isTagBased {
                 resolvedIndex = lines.firstIndex(where: { $0.tagIdForMode == item.tagId })
             } else if let selected = selectedLineID {
                 resolvedIndex = lines.firstIndex(where: { $0.id == selected })
@@ -294,6 +298,11 @@ private struct LiveTailShape: Shape {
 }
 
 /// Собственно растущие штампы. Единственный подписчик часов плеера в этом слое.
+///
+/// Часы выбираются ПО ЗАПИСИ, а не по текущему режиму: запись, начатая по плейхеду пересмотра,
+/// растёт за бирюзовым до самого конца, даже если посреди неё переключили «Разметку лайва /
+/// пересмотра» — ровно так же считаются и границы готового штампа
+/// (`VideoPlayerManager.markupTime(usesReview:)`).
 private struct IntervalRecordingBars: View {
 
     let rows: [IntervalRecordingRow]
@@ -302,7 +311,20 @@ private struct IntervalRecordingBars: View {
     let rowHeight: CGFloat
     let topInset: CGFloat
 
+    // Обе шкалы: у каждой записи свой якорь (лайв или пересмотр), зафиксированный на старте.
     @ObservedObject private var clock = PlaybackClock.shared
+    @ObservedObject private var reviewClock = ReviewPlaybackClock.shared
+
+    /// Время, за которым растёт эта конкретная запись.
+    private func headTime(for row: IntervalRecordingRow) -> Double {
+        row.item.usesReviewTime ? reviewClock.time : clock.time
+    }
+
+    /// Цвет «пишущего» края — того плейхеда, за которым растёт штамп: белый (лайв/обычное видео)
+    /// или бирюзовый (пересмотр).
+    private func edgeColor(for row: IntervalRecordingRow) -> Color {
+        row.item.usesReviewTime ? reviewPlayheadTint : .white
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -315,7 +337,7 @@ private struct IntervalRecordingBars: View {
     @ViewBuilder
     private func bar(for row: IntervalRecordingRow) -> some View {
         let startX = min(max(row.item.visualStart / duration, 0), 1) * gridWidth
-        let headX = min(max(clock.time / duration, 0), 1) * gridWidth
+        let headX = min(max(headTime(for: row) / duration, 0), 1) * gridWidth
         let width = max(headX - startX, 4)
         // Та же логика, что у пересекающихся штампов: каждая следующая запись в строке ниже ростом.
         let height = max(9, 25 - CGFloat(row.stackIndex * 6))
@@ -325,7 +347,8 @@ private struct IntervalRecordingBars: View {
             name: row.item.name,
             color: ColorHexCache.color(hex: row.item.colorHex),
             width: width,
-            height: height
+            height: height,
+            edgeColor: edgeColor(for: row)
         )
         // Транзишен — ВНУТРИ `.offset`, на самом штампе. Снаружи `.offset` его ставить нельзя:
         // `.offset` двигает только отрисовку, layout-фрейм остаётся в левом верхнем углу слоя,
@@ -343,6 +366,8 @@ private struct IntervalRecordingBar: View {
     let color: Color
     let width: CGFloat
     let height: CGFloat
+    /// Цвет полоски у «пишущего» края — совпадает с цветом плейхеда, за которым идёт запись.
+    var edgeColor: Color = .white
 
     @State private var isPulsing = false
 
@@ -384,7 +409,7 @@ private struct IntervalRecordingBar: View {
         // «Пишущий» край — светлая полоска у плейхеда, чтобы читался рост штампа.
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(Color.white.opacity(0.9))
+                .fill(edgeColor.opacity(0.9))
                 .frame(width: 2, height: height)
                 .shadow(color: color.opacity(0.9), radius: 3)
         }

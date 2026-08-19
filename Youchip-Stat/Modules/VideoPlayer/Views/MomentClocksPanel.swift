@@ -31,16 +31,18 @@ struct MomentClockEntry: Identifiable {
 // MARK: - Поиск пересечений
 
 enum MomentClocksFinder {
-    /// Записи счётчиков, пересекающиеся с окном [start, start + duration].
-    /// Пересчитывается на каждое изменение границ момента, поэтому ресайз клипа сам обновляет список.
-    static func entries(from lines: [TimelineLine], start: Double, duration: Double) -> [MomentClockEntry] {
+    /// Записи счётчиков, пересекающиеся с окном [start, start + duration] и подлежащие показу на
+    /// видео: у счётчика есть флаг «Показывать на видео» ЛИБО он — Primary Counter момента
+    /// (`primaryClockIds`). Пересчитывается на каждое изменение границ, поэтому ресайз сам обновляет.
+    static func entries(from lines: [TimelineLine], start: Double, duration: Double,
+                        primaryClockIds: Set<String> = []) -> [MomentClockEntry] {
         let finish = start + duration
-        guard let line = lines.first(where: { $0.isClocksTimeline }) else { return [] }
 
         var result: [MomentClockEntry] = []
-        for stamp in line.stamps {
+        for stamp in lines.clockStamps {
             guard stamp.timeStartSeconds < finish, stamp.timeFinishSeconds > start else { continue }
             guard let info = stamp.clockInfo else { continue }
+            guard info.showOnVideo || primaryClockIds.contains(info.clockId) else { continue }
             result.append(MomentClockEntry(stamp: stamp, info: info))
         }
         result.sort { $0.stamp.timeStartSeconds < $1.stamp.timeStartSeconds }

@@ -63,50 +63,19 @@ struct ExportModeSelectionSheet: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding()
-        // Блок счётчиков появляется только когда они есть в проекте — под него и растим окно.
-        .frame(width: 380, height: ClockExportRecords.available().isEmpty ? 410 : 530)
+        // Тумблер счётчиков появляется только когда они есть в проекте — под него и растим окно.
+        .frame(width: 380, height: ClockExportRecords.available().isEmpty ? 410 : 450)
     }
 
-    /// Счётчики: сначала общий тумблер, под ним — какие именно наносить. По умолчанию берём все,
-    /// чтобы включить экспорт с таймерами можно было одной галочкой.
+    /// Счётчики: ОДИН тумблер, без выбора записей. В файл идёт то же, что видно на экране, —
+    /// все счётчики, попавшие в этот кусок видео (как в разметке и в просмотре).
     @ViewBuilder
     private var clockSelection: some View {
-        let records = ClockExportRecords.available()
-        if records.isEmpty {
+        if ClockExportRecords.available().isEmpty {
             EmptyView()
         } else {
-            VStack(alignment: .leading, spacing: 6) {
-                Toggle(^String.Titles.exportWithClocks, isOn: Binding(
-                    get: { !watermarkOptions.clockStampIDs.isEmpty },
-                    set: { on in
-                        watermarkOptions.clockStampIDs = on ? Set(records.map(\.id)) : []
-                    }
-                ))
+            Toggle(^String.Titles.exportWithClocks, isOn: $watermarkOptions.showClocks)
                 .help(^String.Titles.exportWithClocksHelp)
-
-                if !watermarkOptions.clockStampIDs.isEmpty {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(records) { record in
-                                Toggle(record.title, isOn: Binding(
-                                    get: { watermarkOptions.clockStampIDs.contains(record.id) },
-                                    set: { on in
-                                        if on {
-                                            watermarkOptions.clockStampIDs.insert(record.id)
-                                        } else {
-                                            watermarkOptions.clockStampIDs.remove(record.id)
-                                        }
-                                    }
-                                ))
-                                .toggleStyle(.checkbox)
-                                .font(.caption)
-                            }
-                        }
-                        .padding(.leading, 16)
-                    }
-                    .frame(maxHeight: 90)
-                }
-            }
         }
     }
 

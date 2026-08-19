@@ -44,6 +44,13 @@ enum TagFreeLayoutEditorPane {
     case full
 }
 
+/// Ссылка на объект коллекции, стоящий за кнопкой холста.
+struct CanvasElementRef: Identifiable, Equatable {
+    let kind: CanvasButtonKind
+    let elementId: String
+    var id: String { "\(kind.rawValue):\(elementId)" }
+}
+
 /// Запрос на открытие редактора элемента холста (двойной клик по кнопке в раскладке).
 struct PendingCanvasEdit: Equatable, Identifiable {
     let kind: CanvasButtonKind
@@ -119,6 +126,10 @@ struct TagFreeLayoutEditorContent: View {
     var onCreatePlayFieldFromURL: ((_ url: URL) -> PlayField?)? = nil
     /// Экспорт выделенной части коллекции (набор ключей "kind:elementId"). nil — недоступно.
     var onExportSelected: ((_ selectedItemIds: Set<String>) -> Void)? = nil
+    /// Удаление выбранных объектов из САМОЙ коллекции (не только с холста). nil — недоступно.
+    /// Нужно для редактора коллекции: кнопку тега с холста убрать нельзя (нормализация вернёт
+    /// её обратно), поэтому «удалить» там означает удалить сам тег/лейбл/событие/счётчик.
+    var onDeleteElements: ((_ targets: [CanvasElementRef]) -> Void)? = nil
 
     // Layout-mode drag / resize / rotate
     @State private var draggingItemId: String? = nil
@@ -267,14 +278,14 @@ struct TagFreeLayoutEditorContent: View {
                     .background(Color(NSColor.windowBackgroundColor))
                     .modifier(HoverTracker { p in hoverInViewport = p })
                     .onChange(of: geo.size) { viewportSize = $0 }
-                    // Пинч-зум к курсору (атомарно масштаб+смещение — без прыжка).
-                    .simultaneousGesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                zoomAround(canvasZoomBase * value,
-                                           viewportPoint: hoverInViewport ?? CGPoint(x: geo.size.width / 2, y: geo.size.height / 2))
-                            }
-                            .onEnded { _ in canvasZoomBase = canvasZoom }
+                    // Пинч-зум к курсору (атомарно масштаб+смещение — без прыжка). Ловим
+                    // AppKit-монитором: SwiftUI-жест не работает, пока окно не в фокусе.
+                    .onFirstMouseMagnify(
+                        onChanged: { value in
+                            zoomAround(canvasZoomBase * value,
+                                       viewportPoint: hoverInViewport ?? CGPoint(x: geo.size.width / 2, y: geo.size.height / 2))
+                        },
+                        onEnded: { _ in canvasZoomBase = canvasZoom }
                     )
                     .onChange(of: layout.items.map(\.id)) { ids in
                         handleItemsChange(ids)
@@ -488,8 +499,14 @@ struct TagFreeLayoutEditorContent: View {
             pasteButtons()
             return true
         }
-        // Delete / Backspace — убрать выделенные кнопки с холста.
+        // Delete / Backspace — удалить выделенное (в редакторе коллекции — сами объекты,
+        // иначе — убрать кнопки с холста).
         if mods.isEmpty, event.keyCode == 51 || event.keyCode == 117 {
+            if onDeleteElements != nil {
+                guard !session.selectedItemIds.isEmpty else { return false }
+                requestDeleteSelected()
+                return true
+            }
             guard !removableItemIds(in: session.selectedItemIds).isEmpty else { return false }
             removeSelectedFromCanvas()
             return true
@@ -1042,12 +1059,20 @@ struct TagFreeLayoutEditorContent: View {
                     onExport(session.selectedItemIds)
                 }
             }
-            let removable = removableItemIds(in: targets)
-            if !removable.isEmpty {
+            if onDeleteElements != nil {
                 Divider()
-                Button(String(format: ^String.Titles.canvasRemoveFromCanvas, removable.count), role: .destructive) {
+                Button(String(format: ^String.Titles.canvasDeleteElements, targets.count), role: .destructive) {
                     selectForContext(item)
-                    removeSelectedFromCanvas()
+                    requestDeleteSelected()
+                }
+            } else {
+                let removable = removableItemIds(in: targets)
+                if !removable.isEmpty {
+                    Divider()
+                    Button(String(format: ^String.Titles.canvasRemoveFromCanvas, removable.count), role: .destructive) {
+                        selectForContext(item)
+                        removeSelectedFromCanvas()
+                    }
                 }
             }
         }
@@ -1078,6 +1103,17 @@ struct TagFreeLayoutEditorContent: View {
     /// возвращает их обратно (у каждого тега коллекции всегда есть кнопка).
     private func removableItemIds(in ids: Set<String>) -> Set<String> {
         Set(layout.items.filter { ids.contains($0.id) && $0.kind != .tag }.map { $0.id })
+    }
+
+    /// Отдаёт выделенные объекты на удаление владельцу редактора (он спросит подтверждение
+    /// и удалит их из коллекции — вместе с кнопками и связками).
+    private func requestDeleteSelected() {
+        guard let delete = onDeleteElements else { return }
+        let targets = layout.items
+            .filter { session.selectedItemIds.contains($0.id) }
+            .map { CanvasElementRef(kind: $0.kind, elementId: $0.elementId) }
+        guard !targets.isEmpty else { return }
+        delete(targets)
     }
 
     /// Убирает с холста ВСЕ выделенные кнопки (раньше удалялась только одна — та, по которой
@@ -1508,9 +1544,17 @@ struct TagFreeLayoutEditorContent: View {
             Divider()
             copyPasteButtons
 
-            // Удаление всего выделения (теги остаются: их кнопки восстанавливает нормализация).
+            // Удаление всего выделения. В редакторе коллекции удаляются сами объекты (кнопку
+            // тега с холста не убрать — нормализация вернёт её), иначе — только кнопки с холста.
             let removableSelected = removableItemIds(in: session.selectedItemIds)
-            if !removableSelected.isEmpty {
+            if onDeleteElements != nil {
+                Button(role: .destructive, action: requestDeleteSelected) {
+                    SwiftUI.Label(String(format: ^String.Titles.canvasDeleteElements, session.selectedItemIds.count),
+                                  systemImage: "trash")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+            } else if !removableSelected.isEmpty {
                 Button(role: .destructive, action: removeSelectedFromCanvas) {
                     SwiftUI.Label(String(format: ^String.Titles.canvasRemoveFromCanvas, removableSelected.count),
                                   systemImage: "trash")
@@ -1916,7 +1960,18 @@ struct TagFreeLayoutEditorContent: View {
 
             // Remove palette item from canvas
             let removableHere = removableItemIds(in: contextTargets(for: item))
-            if !removableHere.isEmpty {
+            if onDeleteElements != nil {
+                Button(role: .destructive, action: {
+                    selectForContext(item)
+                    requestDeleteSelected()
+                }) {
+                    SwiftUI.Label(String(format: ^String.Titles.canvasDeleteElements, contextTargets(for: item).count),
+                                  systemImage: "trash")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                Divider()
+            } else if !removableHere.isEmpty {
                 Button(role: .destructive, action: {
                     selectForContext(item)
                     removeSelectedFromCanvas()

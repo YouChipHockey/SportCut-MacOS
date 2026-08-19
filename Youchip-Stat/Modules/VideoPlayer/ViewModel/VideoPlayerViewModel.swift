@@ -591,10 +591,11 @@ class VideoPlayerViewModel: ObservableObject {
     }
     
     private func performTakeScreenshotForEditor() {
-        if VideoPlayerManager.shared.isReviewMode {
-            openEditorFromReviewPlayer()
-            return
-        }
+        // Источник кадра и времени определяет ОКНО, из которого открыли редактор, а не то, каким
+        // плейхедом сейчас ведут разметку. Это действие приходит только из окна разметки (кнопка
+        // «Редактор»), поэтому в лайве берём ЖИВОЙ кадр и время лайва — даже когда открыт
+        // пересмотр и включена «Разметка пересмотра». У окна пересмотра свой вход:
+        // `.takeReviewScreenshotForEditor` → `openEditorFromReviewPlayer` (кадр и время пересмотра).
         if VideoPlayerManager.shared.isLiveMode {
             openEditorFromLiveFrame()
             return

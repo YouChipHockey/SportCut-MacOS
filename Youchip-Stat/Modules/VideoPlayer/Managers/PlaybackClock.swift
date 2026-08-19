@@ -44,3 +44,23 @@ final class PlaybackClock: ObservableObject {
         time = sanitized
     }
 }
+
+/// Часы ПЕРЕСМОТРА в лайве: публикуют позицию review-плеера. Отдельно от `PlaybackClock`
+/// (тот в лайве держит позицию ЖИВОЙ записи), чтобы на таймлайне жили ДВА плейхеда: основной
+/// (лайв) и бирюзовый (пересмотр). Подписчик один — бирюзовый плейхед; правило то же, что у
+/// `PlaybackClock`: подписывать сюда список таймлайнов нельзя.
+final class ReviewPlaybackClock: ObservableObject {
+
+    static let shared = ReviewPlaybackClock()
+
+    /// Текущая позиция пересмотра, сек. Пишется из `VideoPlayerManager` (review time observer).
+    @Published private(set) var time: Double = 0
+
+    private init() {}
+
+    func update(_ newTime: Double) {
+        let sanitized = newTime.isFinite ? newTime : 0
+        guard time != sanitized else { return }
+        time = sanitized
+    }
+}

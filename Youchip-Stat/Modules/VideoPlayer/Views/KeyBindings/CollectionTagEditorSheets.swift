@@ -188,6 +188,8 @@ struct TagEditSheetView: View {
     @State private var isCapturingHotkey = false
     @State private var isCapturingLabelHotkeys: [String: Bool] = [:]
     @State private var showHotkeyConflict = false
+    /// Primary Counter тега — счётчик, чья запись всегда выводится на видео для момента тега.
+    @State private var primaryClockId: String?
 
     @Environment(\.presentationMode) private var presentationMode
 
@@ -196,6 +198,7 @@ struct TagEditSheetView: View {
         self.tag = tag
         self.onDismiss = onDismiss
         _formData = State(initialValue: TagFormData(from: tag))
+        _primaryClockId = State(initialValue: tag.primaryClockId)
     }
 
     var body: some View {
@@ -215,6 +218,7 @@ struct TagEditSheetView: View {
                     mapToggle
                     intervalToggle
                     hotkeySection
+                    primaryCounterSection
                     if !collectionManager.isKeyBindingsMode {
                         labelGroupsSection
                     }
@@ -371,6 +375,28 @@ struct TagEditSheetView: View {
         collectionManager.labels.filter { group.lables.contains($0.id) }
     }
 
+    /// Выбор Primary Counter — счётчика коллекции, чья запись всегда выводится на видео для момента
+    /// этого тега (пересмотр/экспорт), даже если у счётчика нет флага «Показывать на видео».
+    @ViewBuilder
+    private var primaryCounterSection: some View {
+        if !collectionManager.clocks.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(^String.Titles.tagPrimaryCounter).font(.caption).foregroundColor(.secondary)
+                Picker("", selection: $primaryClockId) {
+                    Text(^String.Titles.tagPrimaryCounterNone).tag(String?.none)
+                    ForEach(collectionManager.clocks) { clock in
+                        Text(ClockTimelineRecorder.displayName(for: clock)).tag(String?.some(clock.id))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                Text(^String.Titles.tagPrimaryCounterHint)
+                    .font(.caption2).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     private func saveChanges() {
         if collectionManager.hasAnyLabelHotkeyConflicts(labelHotkeys: formData.labelHotkeys, excludingTagID: tag.id) {
             showHotkeyConflict = true
@@ -394,6 +420,7 @@ struct TagEditSheetView: View {
             mapEnabled: formData.mapEnabled
         )
         if success {
+            collectionManager.updateTagPrimaryClock(id: tag.id, clockId: primaryClockId)
             onDismiss()
             presentationMode.wrappedValue.dismiss()
         } else {

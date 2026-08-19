@@ -630,7 +630,9 @@ struct OrganizerView: View {
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: outputURL)
         
-        let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clockPlacements)
+        // Пустая дорожка (у исходника нет звука) роняет экспорт с «Operation Stopped».
+        composition.removeEmptyTracks()
+        let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(overlayItems: overlayItems, videoTrack: videoTrack, compositionVideoTrack: compVideoTrack, compositionDuration: composition.duration, clockPlacements: clockPlacements, watermarkOptions: watermarkOptions)
         
         let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
         exportHelper.addExportSession(exportSession)
@@ -738,6 +740,7 @@ struct OrganizerView: View {
                 playlistIndex: index + 1,
                 watermarkOptions: watermarkOptions
             )
+            composition.removeEmptyTracks()
             let overlayVideoComposition = exportHelper.videoCompositionWithTextOverlay(
                 overlayItem: overlayItem,
                 videoTrack: videoTrack,
@@ -750,7 +753,8 @@ struct OrganizerView: View {
                     sourceRange: segment.timeRange,
                     compositionStart: 0,
                     momentPrimaryClockIds: ClockExportOverlayBuilder.momentPrimaryClockIds(for: stamp)
-                )
+                ),
+                watermarkOptions: watermarkOptions
             )
             
             

@@ -28,6 +28,14 @@ struct SportCutMainView: View {
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
     }
+
+    /// Меняется при добавлении/удалении источника и при смене файла видео у источника,
+    /// но НЕ на каждую правку разметки — иначе плеер сбрасывал бы кэш ассетов постоянно.
+    private var sourceBindingSignature: String {
+        (session?.sources ?? [])
+            .map { "\($0.id.uuidString):\($0.videoBookmark.hashValue)" }
+            .joined(separator: "|")
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -116,7 +124,9 @@ struct SportCutMainView: View {
                         }
                     }
                 }
-                .onChange(of: session.sources.count) { _ in
+                // Не только количество: при финализации лайва/дозаписи у источника меняется
+                // сама привязка к файлу видео, и плеер должен взять новую закладку.
+                .onChange(of: sourceBindingSignature) { _ in
                     if let session = self.session {
                         playerManager.configure(sources: session.sources)
                     }

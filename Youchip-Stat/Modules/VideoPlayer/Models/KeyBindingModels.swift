@@ -34,6 +34,10 @@ enum KeyBindingType: String, Codable, CaseIterable {
     case deactivation
     /// Инверсия состояния интервального тега: зажат — отжат, отжат — зажат.
     case intervalInversion
+    /// Синхронизация состояния: дублирует статус источника на цель в ОБЕ стороны и на активации,
+    /// и на деактивации. Источник активировался — цель активировалась; источник выключился — цель
+    /// выключилась. Осмысленна между «состоянийными» кнопками (интервальный тег / счётчик).
+    case stateSync
     /// Сброс счётчика (секундомер — в 0, таймер — к стартовому значению). Только для целей-счётчиков.
     case clockReset
     /// Делает суб-кнопку видимой.
@@ -140,6 +144,7 @@ extension KeyBindingType {
         case .activation:         return "keyBindingTypeActivation"
         case .deactivation:       return "keyBindingTypeDeactivation"
         case .intervalInversion:  return "keyBindingTypeIntervalInversion"
+        case .stateSync:          return "keyBindingTypeStateSync"
         case .clockReset:         return "keyBindingTypeClockReset"
         case .visibility:         return "keyBindingTypeVisibility"
         case .invisibility:       return "keyBindingTypeInvisibility"
@@ -160,6 +165,12 @@ extension KeyBindingType {
         allCases.filter { type in
             if type == .clockReset {
                 return source == .clock || target == .clock || current == .clockReset
+            }
+            if type == .stateSync {
+                // Синхронизация состояния осмысленна только между «состоянийными» кнопками —
+                // интервальным тегом и счётчиком (у них есть вкл/выкл, которое можно зеркалить).
+                let stateful: Set<CanvasButtonKind> = [.tag, .clock]
+                return (stateful.contains(source) && stateful.contains(target)) || current == .stateSync
             }
             return true
         }

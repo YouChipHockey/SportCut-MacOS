@@ -1938,10 +1938,12 @@ struct ScreenshotConstants {
 
 // MARK: - Clock Timeline Constants
 
-/// Скрытый таймлайн счётчиков: секундомеры/таймеры пишутся туда отрезками, как интервальные теги,
-/// но пользователю линия по умолчанию не показывается (⌘⌃0 — показать/скрыть). Отдельная линия с
-/// фиксированным id — тот же приём, что у таймлайна рисунков.
+/// Таймлайны счётчиков: секундомеры/таймеры пишутся отрезками, как интервальные теги, КАЖДЫЙ НА
+/// СВОЮ линию (имя — подпись счётчика, а без неё название). По умолчанию линии показаны; ⌘⌃0
+/// скрывает/показывает их все разом.
 struct ClockTimelineConstants {
+    /// Легаси: единая линия счётчиков из старых проектов (до разделения по счётчикам). Новые
+    /// линии получают обычные UUID и узнаются по `TimelineLine.clockId`.
     static let clocksTimelineID = UUID(uuidString: "00000000-0000-0000-0000-000000000229")!
     static let clocksGroupID = "clocks_group_id_unique_229"
     static var clocksTimelineName: String { ^String.Titles.clockTimelineName }
@@ -1951,10 +1953,37 @@ struct ClockTimelineConstants {
 
 extension TimelineLine {
     var isDrawingsTimeline: Bool { id == ScreenshotConstants.screenshotsTimelineID }
-    /// Скрытая линия счётчиков — служебная, как и линия рисунков: не участвует в аналитике,
-    /// экспорте разметки и слиянии проектов.
-    var isClocksTimeline: Bool { id == ClockTimelineConstants.clocksTimelineID }
+    /// Линия счётчика — служебная, как и линия рисунков: не участвует в аналитике,
+    /// экспорте разметки и слиянии проектов. Своя линия у каждого счётчика (`clockId`);
+    /// вторая ветка — единая линия из старых проектов.
+    var isClocksTimeline: Bool { clockId != nil || id == ClockTimelineConstants.clocksTimelineID }
     /// Служебная линия (не пользовательская разметка тегами).
     var isServiceTimeline: Bool { isDrawingsTimeline || isClocksTimeline }
+}
+
+extension Array where Element == TimelineLine {
+    /// Все записи счётчиков проекта. Раньше они лежали на ОДНОЙ линии и читались через
+    /// `first(where: isClocksTimeline)`; теперь у каждого счётчика своя линия, поэтому всем
+    /// потребителям (оверлей на видео, экспорт, панель момента) нужен именно этот сбор.
+    var clockStamps: [TimelineStamp] {
+        filter { $0.isClocksTimeline }
+            .flatMap { $0.stamps }
+            .sorted { $0.timeStartSeconds < $1.timeStartSeconds }
+    }
+
+    /// Записи счётчиков в «плоском» виде — без опоры на разметку (см. `ClockRecordSnapshot`).
+    /// В таком виде их показывает оверлей, наносит экспорт и хранит клип плейлиста.
+    /// `primaryClockIds` — Primary Counter'ы тега МОМЕНТА, ради которого собираем.
+    func clockRecordSnapshots(primaryClockIds: Set<String> = []) -> [ClockRecordSnapshot] {
+        clockStamps.compactMap { stamp in
+            guard let info = stamp.clockInfo else { return nil }
+            return ClockRecordSnapshot(
+                info: info,
+                start: stamp.timeStartSeconds,
+                finish: stamp.timeFinishSeconds,
+                isPrimary: primaryClockIds.contains(info.clockId)
+            )
+        }
+    }
 }
 

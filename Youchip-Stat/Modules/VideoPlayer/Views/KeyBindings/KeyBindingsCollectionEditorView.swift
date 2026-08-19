@@ -22,6 +22,11 @@ struct KeyBindingsCollectionEditorView: View {
     /// Элемент, редактируемый в отдельном окне (двойной клик по кнопке в раскладке).
     @State private var elementToEdit: PendingCanvasEdit?
     @State private var showExportSheet = false
+    /// Объекты, выбранные на холсте под удаление (ждут подтверждения).
+    @State private var pendingDeletion: [CanvasElementRef] = []
+    @State private var showDeleteAlert = false
+    /// Отмена/возврат правок редактора (⌘Z / ⌘⇧Z).
+    @StateObject private var history = CollectionEditorHistory()
 
     init() {
         let manager = CustomCollectionManager()
@@ -93,7 +98,8 @@ struct KeyBindingsCollectionEditorView: View {
                         showsModePicker: false,
                         onSetTagsColor: setTagsColor,
                         onDuplicateElement: duplicateElement,
-                        onCreatePlayFieldFromURL: createPlayFieldFromURL
+                        onCreatePlayFieldFromURL: createPlayFieldFromURL,
+                        onDeleteElements: requestDeleteElements
                     )
                     .frame(width: 340)
                 }
@@ -101,7 +107,12 @@ struct KeyBindingsCollectionEditorView: View {
         }
         .onAppear {
             normalizeLayoutFromManager()
+            history.reset(to: currentSnapshot())
         }
+        // История: снимок состояния после любой правки — раскладки или самой коллекции.
+        // `CollectionEditorHistory` схлопывает серию правок одного действия в одну запись.
+        .onChange(of: layoutHistorySignature) { _ in scheduleHistoryCapture() }
+        .onReceive(collectionManager.objectWillChange) { _ in scheduleHistoryCapture() }
         .onChange(of: collectionManager.tags) { _ in normalizeLayoutFromManager() }
         .onChange(of: collectionManager.labels) { _ in normalizeLayoutFromManager() }
         .onChange(of: collectionManager.timeEvents) { _ in normalizeLayoutFromManager() }
@@ -121,6 +132,98 @@ struct KeyBindingsCollectionEditorView: View {
             CollectionExportSheet(collectionManager: collectionManager, layout: layout,
                                   onDone: { showExportSheet = false })
         }
+        .alert(^String.Titles.alertsAreYouSure, isPresented: $showDeleteAlert) {
+            Button(^String.Titles.cancelButtonTitle, role: .cancel) { pendingDeletion = [] }
+            Button(^String.Titles.deleteButtonTitle, role: .destructive) { performPendingDeletion() }
+        } message: {
+            Text(String(format: ^String.Titles.canvasDeleteConfirmMessage, pendingDeletion.count))
+        }
+    }
+
+    // MARK: - История правок (⌘Z / ⌘⇧Z)
+
+    /// Слепок раскладки для отслеживания правок холста: позиции, размеры, вид кнопок и связки.
+    private var layoutHistorySignature: String {
+        let items = layout.items
+            .map { "\($0.id)|\(Int($0.center.x))|\(Int($0.center.y))|\(Int($0.size.width))|\(Int($0.size.height))|\(Int($0.rotation))|\($0.isVisible)|\($0.shape.rawValue)|\($0.fillOpacity)|\($0.strokeColor ?? "")|\($0.textColor ?? "")|\($0.fontSize)|\($0.showLabel)" }
+            .joined(separator: ";")
+        let bindings = layout.bindings
+            .map { "\($0.sourceButtonKey)>\($0.targetButtonKey)" }
+            .joined(separator: ";")
+        return items + "#" + bindings
+    }
+
+    private func currentSnapshot() -> CollectionEditorSnapshot {
+        CollectionEditorSnapshot(
+            layout: layout,
+            tags: collectionManager.tags,
+            tagGroups: collectionManager.tagGroups,
+            labels: collectionManager.labels,
+            labelGroups: collectionManager.labelGroups,
+            timeEvents: collectionManager.timeEvents,
+            clocks: collectionManager.clocks,
+            playFields: collectionManager.playFields
+        )
+    }
+
+    private func scheduleHistoryCapture() {
+        history.scheduleCapture { currentSnapshot() }
+    }
+
+    private func apply(_ snapshot: CollectionEditorSnapshot) {
+        collectionManager.tags = snapshot.tags
+        collectionManager.tagGroups = snapshot.tagGroups
+        collectionManager.labels = snapshot.labels
+        collectionManager.labelGroups = snapshot.labelGroups
+        collectionManager.timeEvents = snapshot.timeEvents
+        collectionManager.clocks = snapshot.clocks
+        collectionManager.playFields = snapshot.playFields
+        // Раскладку ставим последней: изменения пулов дёргают нормализацию, и она должна
+        // работать уже по восстановленной раскладке.
+        layout = snapshot.layout
+        layoutSession.resetSelection()
+    }
+
+    private func undo() {
+        guard let snapshot = history.undo() else { return }
+        apply(snapshot)
+    }
+
+    private func redo() {
+        guard let snapshot = history.redo() else { return }
+        apply(snapshot)
+    }
+
+    // MARK: - Удаление объектов с холста
+
+    /// Кнопку тега с холста убрать нельзя — нормализация раскладки вернёт её обратно, поэтому
+    /// «удалить» на холсте редактора означает удалить сам объект коллекции. Спрашиваем подтверждение.
+    private func requestDeleteElements(_ targets: [CanvasElementRef]) {
+        guard !targets.isEmpty else { return }
+        pendingDeletion = targets
+        showDeleteAlert = true
+    }
+
+    private func performPendingDeletion() {
+        let targets = pendingDeletion
+        pendingDeletion = []
+        guard !targets.isEmpty else { return }
+
+        for target in targets {
+            switch target.kind {
+            case .tag:       collectionManager.deleteTag(id: target.elementId)
+            case .label:     collectionManager.deleteLabel(id: target.elementId)
+            case .timeEvent: collectionManager.removeTimeEvent(id: target.elementId)
+            case .clock:     collectionManager.removeClock(id: target.elementId)
+            case .map:       collectionManager.removeFieldImage(id: target.elementId)
+            }
+        }
+
+        let ids = Set(targets.map { $0.id })
+        layout.items.removeAll { ids.contains($0.id) }
+        layout.bindings.removeAll { ids.contains($0.sourceButtonKey) || ids.contains($0.targetButtonKey) }
+        layoutSession.resetSelection()
+        normalizeLayoutFromManager()
     }
 
     // MARK: - Toolbar
@@ -129,6 +232,24 @@ struct KeyBindingsCollectionEditorView: View {
         HStack(spacing: 16) {
             Text(^String.Titles.freeLayoutTitle)
                 .font(.headline)
+
+            HStack(spacing: 6) {
+                Button(action: undo) {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!history.canUndo)
+                .keyboardShortcut("z", modifiers: .command)
+                .help(^String.Titles.editorUndo)
+
+                Button(action: redo) {
+                    Image(systemName: "arrow.uturn.forward")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!history.canRedo)
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+                .help(^String.Titles.editorRedo)
+            }
 
             Spacer()
 
@@ -204,7 +325,8 @@ struct KeyBindingsCollectionEditorView: View {
                 onSetTagsColor: setTagsColor,
                 onDuplicateElement: duplicateElement,
                 onCreatePlayFieldFromURL: createPlayFieldFromURL,
-                onExportSelected: { ids in _ = collectionManager.exportSelectedCanvasItems(ids, layout: layout) }
+                onExportSelected: { ids in _ = collectionManager.exportSelectedCanvasItems(ids, layout: layout) },
+                onDeleteElements: requestDeleteElements
             )
         }
     }

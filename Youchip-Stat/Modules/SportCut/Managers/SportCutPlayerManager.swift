@@ -157,46 +157,71 @@ class SportCutPlayerManager: ObservableObject {
     /// на кадре счётчик идёт ровно так, как шёл вживую.
     func currentClockOverlayItems() -> [ClockOverlayItem] {
         guard let sourceID = currentSourceID,
-              let t = absoluteVideoTimelineTime(forSourceID: sourceID),
-              let timelines = timelinesForOverlay(sourceID: sourceID) else { return [] }
+              let t = absoluteVideoTimelineTime(forSourceID: sourceID) else { return [] }
 
-        // Primary Counter тега ТЕКУЩЕГО момента (события) — его счётчик виден даже без флага.
-        // Именно момента, а не всех тегов под плейхедом: иначе в командных видах на кадр лезли бы
-        // счётчики соседних тегов. Штамп события ищем в дорожках источника по его id.
-        var primarySet = Set<String>()
-        if let event = currentEvent {
-            for line in timelines where !line.isServiceTimeline {
-                if let stamp = line.stamps.first(where: { $0.id == event.stampID }) {
-                    if let pc = stamp.primaryClockId ?? TagLibraryManager.shared.findTagById(stamp.idTag)?.primaryClockId,
-                       !pc.isEmpty {
-                        primarySet.insert(pc)
-                    }
-                    break
-                }
-            }
-        }
+        // Записи счётчиков клипа: свежие из разметки источника, а если её уже нет (проект снесли,
+        // разметку удалили) — пришитый к клипу снимок. Клип обязан работать всегда и со всем.
+        let records = clockRecordsForOverlay(sourceID: sourceID)
+        guard !records.isEmpty else { return [] }
 
         var result: [ClockOverlayItem] = []
         var seen = Set<String>()
-        for stamp in timelines.clockStamps {
-            guard let info = stamp.clockInfo,
-                  info.showOnVideo || primarySet.contains(info.clockId),
-                  t >= stamp.timeStartSeconds, t <= stamp.timeFinishSeconds,
-                  !seen.contains(info.clockId) else { continue }
-            seen.insert(info.clockId)
+        for record in records.sorted(by: { $0.start < $1.start }) {
+            guard record.isVisibleOnVideo,
+                  record.contains(t),
+                  !seen.contains(record.info.clockId) else { continue }
+            seen.insert(record.info.clockId)
             result.append(
                 ClockOverlayItem(
-                    clockId: info.clockId,
-                    seconds: info.value(atVideoTime: t, start: stamp.timeStartSeconds, finish: stamp.timeFinishSeconds),
-                    appearance: info.appearance,
-                    showCentiseconds: info.showCentiseconds,
-                    caption: info.caption,
+                    clockId: record.info.clockId,
+                    seconds: record.value(atVideoTime: t),
+                    appearance: record.info.appearance,
+                    showCentiseconds: record.info.showCentiseconds,
+                    caption: record.info.caption,
                     progress: nil
                 )
             )
         }
         // Порядок стабильный (по clockId) — иначе стопка не-позиционированных прыгала бы.
         return result.sorted { $0.clockId < $1.clockId }
+    }
+
+    /// Записи счётчиков текущего клипа/момента для оверлея.
+    ///
+    /// Приоритет — живая разметка источника (там правки и ресайз штампов). Если записей в ней нет,
+    /// берём снимок, пришитый к событию плейлиста: именно он даёт таймеры на клипах, у которых
+    /// разметки-источника больше не существует. Primary Counter момента показываем без флага.
+    private func clockRecordsForOverlay(sourceID: UUID) -> [ClockRecordSnapshot] {
+        let timelines = timelinesForOverlay(sourceID: sourceID)
+        if let timelines, !timelines.clockStamps.isEmpty {
+            var primarySet = Set<String>()
+            if let event = currentEvent {
+                var stamp: TimelineStamp?
+                for line in timelines where !line.isServiceTimeline {
+                    if let found = line.stamps.first(where: { $0.id == event.stampID }) {
+                        stamp = found
+                        break
+                    }
+                }
+                primarySet = SportCutClockSnapshotBuilder.primaryClockIds(
+                    forStamp: stamp,
+                    mainTagID: event.mainTagID,
+                    source: sourceForOverlay(sourceID: sourceID)
+                )
+            }
+            return timelines.clockRecordSnapshots(primaryClockIds: primarySet)
+        }
+        return currentEvent?.clockRecords ?? []
+    }
+
+    /// Источник из сессии (свежий снимок тегов) — для резолва Primary Counter.
+    private func sourceForOverlay(sourceID: UUID) -> SportCutSource? {
+        if let sessionID,
+           let session = SportCutSessionManager.shared.sessions.first(where: { $0.id == sessionID }),
+           let source = session.sources.first(where: { $0.id == sourceID }) {
+            return source
+        }
+        return sources.first(where: { $0.id == sourceID })
     }
 
     /// Дорожки исходника: сначала из сессии (там свежие правки — ресайз штампа пересчитывает

@@ -18,12 +18,18 @@ struct VideoPlayerView: View {
     @ObservedObject var videoManager: VideoPlayerManager
     @ObservedObject private var markupBanner = VideoMarkupActivityBanner.shared
     @ObservedObject private var windowLayout = MarkupWindowLayoutStore.shared
+    /// Панель плейлистов просмотра: когда играют её клипы, окно показывает плеер просмотра.
+    @ObservedObject private var playlistPanel = MarkupPlaylistPanelStore.shared
     
     var body: some View {
         GeometryReader { geometry in
             Group {
                 if viewModel.state.isEditorMode {
                     editorModeView
+                } else if playlistPanel.isPlaybackActive && playlistPanel.playerManager.isEditorMode {
+                    // Рисование поверх клипа плейлиста: тот же редактор, что и в просмотре,
+                    // привязанный к плееру панели — рисунок сохраняется на клип, а не в разметку.
+                    MarkupPlaylistClipEditorView(playerManager: playlistPanel.playerManager)
                 } else {
                     normalModeView
                 }
@@ -91,7 +97,11 @@ struct VideoPlayerView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 
-                if videoManager.isLiveMode {
+                if playlistPanel.isPlaybackActive {
+                    // Просмотр клипов/фильма плейлиста прямо в окне разметки: играет плеер
+                    // просмотра, разметочные оверлеи (счётчики, активность, джойстик) убраны.
+                    markupPlaylistPlaybackContent
+                } else if videoManager.isLiveMode {
                     // Live stream: show camera preview layer directly (smooth, no file reads)
                     GeometryReader { geometry in
                         liveStreamContent(geometry: geometry)
@@ -248,6 +258,77 @@ struct VideoPlayerView: View {
         }
     }
     
+    // MARK: - Клипы плейлиста в окне разметки
+
+    /// Плеер просмотра в главном видео-окне. Возврат — кнопкой здесь, кликом по обычному тегу,
+    /// новым тегом, закрытием панели или откатом к выбору сессии (см. `MarkupPlaylistPanelStore`).
+    private var markupPlaylistPlaybackContent: some View {
+        let manager = playlistPanel.playerManager
+        return ZStack {
+            // Тот же стек, что и в окне просмотра: зум, водяные знаки и — главное — картинки
+            // (рисунки) клипа. Без него на видео не показывались рисунки из плейлиста.
+            ZoomableVideoPlayerView(player: manager.player) {
+                SportCutMinimalPlayerView(player: manager.player)
+            }
+            .background(Color.black)
+
+            SportCutWatermarkOverlay(playerManager: manager)
+
+            // Счётчики клипа — как в окне просмотра: записи разметки под текущей позицией клипа.
+            SportCutClockOverlayView(playerManager: manager)
+
+            if manager.isShowingDrawing, let drawingImage = manager.displayedDrawingImage {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    ZStack(alignment: .topTrailing) {
+                        Image(nsImage: drawingImage)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .onFirstMouseTap { manager.hideDrawingOverlay() }
+                        Button(action: { manager.hideDrawingOverlay() }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .zIndex(10)
+            }
+
+            VStack {
+                HStack {
+                    Button(action: { playlistPanel.returnToMarkup() }) {
+                        SwiftUI.Label(^String.Titles.markupPlaylistsReturnToMarkup, systemImage: "arrow.uturn.left")
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.black.opacity(0.55)))
+                            .foregroundColor(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .help(^String.Titles.markupPlaylistsReturnToMarkup)
+
+                    if let event = manager.currentEvent {
+                        Text(event.tagName)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.black.opacity(0.4)))
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(12)
+        }
+    }
+
     // MARK: - Live Stream Content
     
     private func liveStreamContent(geometry: GeometryProxy) -> some View {
@@ -259,6 +340,12 @@ struct VideoPlayerView: View {
                 )
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .gesture(videoGestures(geometry: geometry))
+                    .onFirstMouseMagnify(onChanged: { value in
+                        viewModel.action.send(.handleMagnificationChange(
+                            value: value,
+                            geometrySize: geometry.size
+                        ))
+                    })
             } else {
                 DirectCameraPreviewView(
                     scale: viewModel.state.videoScale,
@@ -266,6 +353,12 @@ struct VideoPlayerView: View {
                 )
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .gesture(videoGestures(geometry: geometry))
+                    .onFirstMouseMagnify(onChanged: { value in
+                        viewModel.action.send(.handleMagnificationChange(
+                            value: value,
+                            geometrySize: geometry.size
+                        ))
+                    })
                     .overlay(
                         ZStack {
                             Color.black.opacity(0.3)
@@ -287,7 +380,12 @@ struct VideoPlayerView: View {
             if viewModel.state.videoScale > 1.0 {
                 joystickView(geometry: geometry)
             }
-            
+
+            // Счётчики, которые пишутся по плейхеду ЛАЙВА (и записи, пересечённые им), — поверх
+            // живого кадра, как в обычной разметке поверх видео.
+            ClockVideoOverlayView()
+                .zIndex(7)
+
             VideoMarkupActivityOverlay()
                 .zIndex(6)
         }
@@ -542,6 +640,12 @@ struct VideoPlayerView: View {
                     .scaleEffect(viewModel.state.videoScale)
                     .offset(viewModel.state.videoOffset)
                     .gesture(videoGestures(geometry: geometry))
+                    .onFirstMouseMagnify(onChanged: { value in
+                        viewModel.action.send(.handleMagnificationChange(
+                            value: value,
+                            geometrySize: geometry.size
+                        ))
+                    })
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
                 CustomVideoPlayer(
@@ -550,6 +654,12 @@ struct VideoPlayerView: View {
                     offset: viewModel.state.videoOffset
                 )
                     .gesture(videoGestures(geometry: geometry))
+                    .onFirstMouseMagnify(onChanged: { value in
+                        viewModel.action.send(.handleMagnificationChange(
+                            value: value,
+                            geometrySize: geometry.size
+                        ))
+                    })
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
@@ -557,26 +667,19 @@ struct VideoPlayerView: View {
     
     // MARK: - Gestures
     
+    /// Зум вынесен из жестов в `onFirstMouseMagnify` (AppKit-монитор): SwiftUI-жест не работает,
+    /// пока окно не в фокусе, а разметка идёт в трёх окнах сразу.
     private func videoGestures(geometry: GeometryProxy) -> some Gesture {
-        SimultaneousGesture(
-            MagnificationGesture()
-                .onChanged { value in
-                    viewModel.action.send(.handleMagnificationChange(
-                        value: value,
-                        geometrySize: geometry.size
-                    ))
-                },
-            DragGesture()
-                .onChanged { value in
-                    viewModel.action.send(.handleDragChange(
-                        translation: value.translation,
-                        geometrySize: geometry.size
-                    ))
-                }
-                .onEnded { _ in
-                    viewModel.action.send(.handleDragEnded)
-                }
-        )
+        DragGesture()
+            .onChanged { value in
+                viewModel.action.send(.handleDragChange(
+                    translation: value.translation,
+                    geometrySize: geometry.size
+                ))
+            }
+            .onEnded { _ in
+                viewModel.action.send(.handleDragEnded)
+            }
     }
     
     // MARK: - Toolbar Buttons
@@ -592,10 +695,18 @@ struct VideoPlayerView: View {
     
     private var editorButton: some View {
         Button {
-            viewModel.action.send(.takeScreenshotForEditor)
+            if playlistPanel.isPlaybackActive {
+                // Идут клипы плейлиста — редактор рисует поверх текущего кадра клипа
+                // (плеер панели), а не поверх видео разметки.
+                playlistPanel.playerManager.captureFrameForEditor()
+            } else {
+                viewModel.action.send(.takeScreenshotForEditor)
+            }
         } label: {
             Text(^String.Titles.editorTitle)
         }
+        .disabled(playlistPanel.isPlaybackActive &&
+                  !(playlistPanel.playerManager.currentPlaylistID != nil && playlistPanel.playerManager.currentEvent != nil))
         .help(^String.Titles.videoOpenEditorHelp)
     }
     
