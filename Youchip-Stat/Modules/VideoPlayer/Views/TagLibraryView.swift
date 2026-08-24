@@ -953,6 +953,9 @@ struct TagLibraryView: View {
         if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
             ensureCollectionFields(collectionName: collectionName) { fields in
                 let usable = self.usableMapFields(for: tag, in: fields)
+                // Встраиваем карты, на которых сейчас размечают, прямо в разметку (id → картинка),
+                // чтобы визуализация работала и без коллекции. Дедуп и фон — внутри стора.
+                for field in usable { EmbeddedMapsStore.shared.captureIfNeeded(from: field) }
                 if usable.count > 1 {
                     // Несколько карт: показываем стопкой, точку ставим на каждой.
                     WindowsManager.shared.showMultiFieldMapSelection(
@@ -1861,6 +1864,9 @@ struct TagLibraryView: View {
         if useFieldMap, tag.mapEnabled == true, let collectionName = resolvedCollectionName() {
             ensureCollectionFields(collectionName: collectionName) { fields in
                 let usable = self.usableMapFields(for: tag, in: fields)
+                // Встраиваем карты, на которых сейчас размечают, прямо в разметку (id → картинка),
+                // чтобы визуализация работала и без коллекции. Дедуп и фон — внутри стора.
+                for field in usable { EmbeddedMapsStore.shared.captureIfNeeded(from: field) }
                 if usable.count > 1 {
                     WindowsManager.shared.showMultiFieldMapSelection(
                         tag: tag, items: self.mapItems(from: usable), lockWindows: lockWindowsDuringFieldMap
@@ -2569,6 +2575,8 @@ struct TagButtonView: View, Equatable {
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .minimumScaleFactor(0.5)
+                        // Длинное имя тега обрезается троеточием — полное во всплывающей подсказке.
+                        .help(tag.name)
                     
                     if tagCount > 0 {
                         Text("\(tagCount)")

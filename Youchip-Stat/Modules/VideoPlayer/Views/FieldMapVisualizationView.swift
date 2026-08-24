@@ -1082,13 +1082,42 @@ struct FieldMapVisualizationView: View {
     }
     
     private func loadFieldImageAndDimensions() {
+        // 1) Карты коллекции (идеальный случай) — если коллекция установлена и распарсилась.
+        var fields: [PlayField] = []
         let collectionManager = CustomCollectionManager()
-        guard collectionManager.loadCollectionFromBookmarks(named: collection.name),
-              !collectionManager.playFields.isEmpty else {
-            return
+        if collectionManager.loadCollectionFromBookmarks(named: collection.name) {
+            fields = collectionManager.playFields
         }
-        availablePlayFields = collectionManager.playFields
+        availablePlayFields = fields
         loadAllMapImages()
+
+        // 2) Карты, которых нет в коллекции, но на которых стоят точки — берём из встроенных в
+        //    разметку (группа «Импортированное»). Так визуализация работает и без коллекции.
+        appendEmbeddedMaps(excluding: Set(fields.map { $0.id }))
+    }
+
+    /// Дополняет `availablePlayFields` встроенными картами (`EmbeddedMapsStore`) для тех id, на
+    /// которых стоят точки, но которых нет в коллекции. Каждая — синтетическое поле «Импортированное».
+    private func appendEmbeddedMaps(excluding collectionIds: Set<String>) {
+        var referenced: [String] = []
+        var seen = Set<String>()
+        for stamp in stamps {
+            for mp in stamp.mapPositions {
+                if let id = mp.mapFieldId, seen.insert(id).inserted { referenced.append(id) }
+            }
+        }
+        let importedLabel = ^String.Titles.fieldMapImportedGroup
+        for id in referenced where !collectionIds.contains(id) {
+            guard availablePlayFields.first(where: { $0.id == id }) == nil,
+                  let embedded = EmbeddedMapsStore.shared.map(for: id) else { continue }
+            let name = embedded.name.map { "\(importedLabel) — \($0)" } ?? importedLabel
+            availablePlayFields.append(PlayField(id: embedded.id, name: name, imagePath: "",
+                                                 width: embedded.width, height: embedded.height,
+                                                 imageBookmark: nil))
+            if fieldImages[id] == nil, let img = EmbeddedMapsStore.shared.image(for: id) {
+                fieldImages[id] = img
+            }
+        }
     }
 
     /// Загружает изображения всех карт коллекции в кэш `fieldImages`.

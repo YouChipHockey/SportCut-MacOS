@@ -21,6 +21,8 @@ struct TagSelectionSheetView: View {
     let uniqueTags: [Tag]
     let onSelect: (Tag) -> Void
     let onSelectWithLabels: (Tag) -> Void
+    /// В оконном режиме закрывает окно шага; в режиме листа (nil) — через `presentationMode`.
+    var onCancel: (() -> Void)? = nil
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @Environment(\.presentationMode) var presentationMode
     
@@ -59,7 +61,7 @@ struct TagSelectionSheetView: View {
             
             HStack {
                 Button(^String.Titles.collectionsButtonCancel) {
-                    presentationMode.wrappedValue.dismiss()
+                    if let onCancel { onCancel() } else { presentationMode.wrappedValue.dismiss() }
                 }
                 
                 Spacer()

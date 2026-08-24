@@ -536,7 +536,7 @@ final class ClipAutoSaveManager: ObservableObject {
     /// композиции (для одиночного клипа — .zero и его длительность).
     private func overlayItem(for stamp: TimelineStamp, videoTrack: AVAssetTrack, start: CMTime, duration: CMTime) -> OverlayItem? {
         let tag = TagLibraryManager.shared.findTagById(stamp.idTag)
-            ?? Tag.syntheticDrawingTag(for: stamp)
+            ?? Tag.synthetic(for: stamp)
         guard let tag else { return nil }
         let transform = videoTrack.preferredTransform
         let natural = videoTrack.naturalSize.applying(transform)

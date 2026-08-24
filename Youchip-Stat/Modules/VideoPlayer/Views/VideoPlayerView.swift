@@ -345,6 +345,11 @@ struct VideoPlayerView: View {
                             value: value,
                             geometrySize: geometry.size
                         ))
+                    }, onEnded: { value in
+                        viewModel.action.send(.handleMagnificationEnded(
+                            value: value,
+                            geometrySize: geometry.size
+                        ))
                     })
             } else {
                 DirectCameraPreviewView(
@@ -355,6 +360,11 @@ struct VideoPlayerView: View {
                     .gesture(videoGestures(geometry: geometry))
                     .onFirstMouseMagnify(onChanged: { value in
                         viewModel.action.send(.handleMagnificationChange(
+                            value: value,
+                            geometrySize: geometry.size
+                        ))
+                    }, onEnded: { value in
+                        viewModel.action.send(.handleMagnificationEnded(
                             value: value,
                             geometrySize: geometry.size
                         ))
@@ -645,6 +655,11 @@ struct VideoPlayerView: View {
                             value: value,
                             geometrySize: geometry.size
                         ))
+                    }, onEnded: { value in
+                        viewModel.action.send(.handleMagnificationEnded(
+                            value: value,
+                            geometrySize: geometry.size
+                        ))
                     })
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
@@ -656,6 +671,11 @@ struct VideoPlayerView: View {
                     .gesture(videoGestures(geometry: geometry))
                     .onFirstMouseMagnify(onChanged: { value in
                         viewModel.action.send(.handleMagnificationChange(
+                            value: value,
+                            geometrySize: geometry.size
+                        ))
+                    }, onEnded: { value in
+                        viewModel.action.send(.handleMagnificationEnded(
                             value: value,
                             geometrySize: geometry.size
                         ))

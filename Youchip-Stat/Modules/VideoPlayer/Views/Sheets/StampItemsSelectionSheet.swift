@@ -18,6 +18,10 @@ struct StampItemsSelectionSheet: View {
     let initialIds: [String]
     let tag: Tag?
     let tagLibrary: TagLibraryManager
+    /// Лейблы, взятые из самой разметки проекта (импорт из Sportscode/Nacsport/Dartfish и т.п.).
+    /// Их нет в пуле коллекций, поэтому передаём готовыми — иначе их нельзя было бы ни снять,
+    /// ни увидеть. Показываются отдельной группой «Лейблы (импорт)».
+    var importedLabels: [Label] = []
     var isDop: Bool = false
     let onDone: ([String]) -> Void
     let onCancel: () -> Void
@@ -32,6 +36,14 @@ struct StampItemsSelectionSheet: View {
     @ObservedObject var timelineData = TimelineDataManager.shared
     @State private var hotkeyObserver: Any? = nil
     
+    /// Группа лейблов для выбора — уже с разрешёнными лейблами (не по id): часть из них может
+    /// не существовать в пуле коллекций (импортированная разметка).
+    private struct LabelPickerGroup: Identifiable {
+        let id: String
+        let name: String
+        let labels: [Label]
+    }
+
     /// Groups keep the order set in the collection editor rather than being sorted by
     /// name, so the arrangement authored there is what the user sees while tagging.
     private var filteredLabelGroups: [LabelGroupData] {
@@ -43,19 +55,69 @@ struct StampItemsSelectionSheet: View {
             return tagLibrary.allLabelGroups
         }
     }
+
+    /// Что показываем в листе лейблов:
+    /// 1. Свои группы тега — как и раньше, обычная разметка не меняется.
+    /// 2. Если своих групп нет (тег из стороннего XML — его коллекция не установлена) —
+    ///    группы ТЕКУЩЕЙ коллекции, чтобы можно было навесить наши лейблы.
+    /// 3. Плюс «Лейблы (импорт)» — всё, что уже встречается в разметке этого проекта и не
+    ///    попало в пункты выше. Без этой группы нанесённый импортом лейбл нельзя было снять.
+    private var labelPickerGroups: [LabelPickerGroup] {
+        let baseGroups: [LabelGroupData]
+        if tag != nil {
+            let own = filteredLabelGroups
+            if own.isEmpty {
+                baseGroups = tagLibrary.labelGroups.isEmpty ? tagLibrary.allLabelGroups : tagLibrary.labelGroups
+            } else {
+                baseGroups = own
+            }
+        } else {
+            baseGroups = tagLibrary.allLabelGroups
+        }
+
+        var result: [LabelPickerGroup] = []
+        var shownIds = Set<String>()
+        for group in baseGroups {
+            let labels = group.lables.compactMap { tagLibrary.findLabelById($0) }
+            guard !labels.isEmpty else { continue }
+            labels.forEach { shownIds.insert($0.id) }
+            result.append(LabelPickerGroup(id: group.id, name: group.name, labels: labels))
+        }
+
+        var seenImported = Set<String>()
+        let rest = importedLabels.filter { !shownIds.contains($0.id) && seenImported.insert($0.id).inserted }
+        if !rest.isEmpty {
+            result.append(LabelPickerGroup(
+                id: "imported-labels",
+                name: ^String.Titles.xmlImportNotesLabelGroupName,
+                labels: rest
+            ))
+        }
+        return result
+    }
     
+    /// Высота окна, из которого открыт лист. Лист — часть этого окна, поэтому он не должен
+    /// быть выше него: при большом списке лейблов (импортированная разметка — их там десятки)
+    /// он раздувался до 75% экрана и вылезал за окно вверх/вниз.
+    @State private var hostWindowHeight: CGFloat? = NSApp.keyWindow?.frame.height
+
+    /// Сколько по вертикали можно отдать самому списку. Из высоты окна вычитаем шапку листа
+    /// («Timestamp: …», строка про таймлайн) и строку кнопок с отступами.
     private var maxSheetContentHeight: CGFloat {
-        (NSScreen.main?.visibleFrame.height ?? 600) * 0.75
+        let screenCap = (NSScreen.main?.visibleFrame.height ?? 600) * 0.75
+        guard let host = hostWindowHeight, host > 0 else { return min(screenCap, 420) }
+        return max(180, min(screenCap, host - 190))
     }
     
     private let timeEvents: [TimeEvent]
     
-    init(sheetType: StampEditSheetType, stampName: String, initialIds: [String], tag: Tag?, tagLibrary: TagLibraryManager, isDop: Bool = false, onDone: @escaping ([String]) -> Void, onCancel: @escaping () -> Void) {
+    init(sheetType: StampEditSheetType, stampName: String, initialIds: [String], tag: Tag?, tagLibrary: TagLibraryManager, importedLabels: [Label] = [], isDop: Bool = false, onDone: @escaping ([String]) -> Void, onCancel: @escaping () -> Void) {
         self.sheetType = sheetType
         self.stampName = stampName
         self.initialIds = initialIds
         self.tag = tag
         self.tagLibrary = tagLibrary
+        self.importedLabels = importedLabels
         self.isDop = isDop
         self.onDone = onDone
         self.onCancel = onCancel
@@ -127,6 +189,10 @@ struct StampItemsSelectionSheet: View {
         .padding()
         .frame(minWidth: 400, minHeight: isDop ? 0 : 400)
         .fixedSize(horizontal: false, vertical: true)
+        // Точный размер окна-хозяина известен только после показа листа (`sheetParent`).
+        .background(SheetHostWindowAccessor { height in
+            if hostWindowHeight != height { hostWindowHeight = height }
+        })
         .onAppear {
             // Keep the previously stored order; drop any accidental duplicates.
             var seen = Set<String>()
@@ -152,48 +218,46 @@ struct StampItemsSelectionSheet: View {
 
     private func stackForLabelsLayout() -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(filteredLabelGroups) { group in
+            ForEach(labelPickerGroups) { group in
                 DisclosureGroup(isExpanded: .constant(true)) {
                     LazyVGrid(
                         columns: [GridItem(.adaptive(minimum: 140), spacing: 16, alignment: .top)],
                         spacing: 16
                     ) {
-                        ForEach(group.lables, id: \.self) { labelID in
-                            if let label = tagLibrary.findLabelById(labelID) {
-                                Button {
-                                    toggleSelection(label.id)
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(
-                                            systemName: selectedItems.contains(label.id)
-                                            ? "checkmark.square"
-                                            : "square"
-                                        )
-                                        Text(label.name)
-                                            .lineLimit(1)
-                                            .font(.system(size: 12))
-                                        
-                                        if let tagHotkeys = tag?.labelHotkeys,
-                                           let hotkey = tagHotkeys[label.id], !hotkey.isEmpty {
-                                            Spacer()
-                                            Text(hotkey)
-                                                .font(.system(size: 9, weight: .light))
-                                                .padding(.horizontal, 4)
-                                                .padding(.vertical, 1)
-                                                .background(Color.black.opacity(0.15))
-                                                .cornerRadius(3)
-                                        }
+                        ForEach(group.labels, id: \.id) { label in
+                            Button {
+                                toggleSelection(label.id)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(
+                                        systemName: selectedItems.contains(label.id)
+                                        ? "checkmark.square"
+                                        : "square"
+                                    )
+                                    Text(label.name)
+                                        .lineLimit(1)
+                                        .font(.system(size: 12))
+
+                                    if let tagHotkeys = tag?.labelHotkeys,
+                                       let hotkey = tagHotkeys[label.id], !hotkey.isEmpty {
+                                        Spacer()
+                                        Text(hotkey)
+                                            .font(.system(size: 9, weight: .light))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Color.black.opacity(0.15))
+                                            .cornerRadius(3)
                                     }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(selectedItems.contains(label.id)
-                                                ? Color.blue.opacity(0.2)
-                                                : Color.gray.opacity(0.1))
-                                    .cornerRadius(8)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .buttonStyle(BorderlessButtonStyle())
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(selectedItems.contains(label.id)
+                                            ? Color.blue.opacity(0.2)
+                                            : Color.gray.opacity(0.1))
+                                .cornerRadius(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
+                            .buttonStyle(BorderlessButtonStyle())
                         }
                     }
                 } label: {
@@ -289,3 +353,4 @@ struct StampItemsSelectionSheet: View {
     }
     
 }
+

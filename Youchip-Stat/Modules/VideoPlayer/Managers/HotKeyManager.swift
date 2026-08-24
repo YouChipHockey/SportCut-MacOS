@@ -140,8 +140,12 @@ class HotKeyManager: ObservableObject {
         blockedSheetActive = false
     }
 
-    /// Не перехватывать пробел (play/pause), пока пользователь вводит текст в поле или телестрацию.
-    private func shouldPassThroughSpaceForTextInput() -> Bool {
+    /// Пользователь реально печатает в текстовом поле (или в текстбоксе телестрации)?
+    /// Проверяется firstResponder ключевого окна, а не только разделяемый флаг: флаг легко
+    /// «залипает» при переключении окон, а firstResponder всегда отражает состояние AppKit.
+    /// Пока это true — ни один хоткей разметки не должен срабатывать (иначе набор комментария
+    /// в окне момента ставил бы теги).
+    private func isTypingInTextInput() -> Bool {
         if isEditingTextBox { return true }
         if FocusStateManager.shared.isAnyTextFieldFocused { return true }
         guard let responder = NSApp.keyWindow?.firstResponder else { return false }
@@ -185,7 +189,7 @@ class HotKeyManager: ObservableObject {
                WindowsManager.shared.isSportCutKeyWindow(),
                self.isEnabled,
                !self.blockedSheetActive,
-               !self.shouldPassThroughSpaceForTextInput() {
+               !self.isTypingInTextInput() {
                 NotificationCenter.default.post(name: .sportCutTogglePlayPause, object: nil)
                 return nil
             }
@@ -219,20 +223,30 @@ class HotKeyManager: ObservableObject {
                 return nil
             }
             // Shift+стрелки в окне разметки — перемотка ±3 сек (также в режиме редактирования рисунка).
+            // В окне «Пересмотр» (key window) — тоже, чтобы перемотка работала и когда фокус на нём.
             if event.modifierFlags.contains(.shift),
                (event.keyCode == 123 || event.keyCode == 124),
                self.isEnabled,
                !self.blockedSheetActive,
-               ActiveWindowManager.shared.isMarkerWindowActive() || ActiveWindowManager.shared.isViewerWindowActive() {
+               ActiveWindowManager.shared.isMarkerWindowActive() || ActiveWindowManager.shared.isViewerWindowActive() || WindowsManager.shared.isReviewWindowKey() {
                 let isViewer = WindowsManager.shared.viewerWindow != nil && ActiveWindowManager.shared.isViewerWindowActive()
                 let seekBy: Double = event.keyCode == 123 ? -3 : 3
+                // В лайве с пересмотром перематываем плейхед ПЕРЕСМОТРА: основной прибит к живому
+                // краю записи, и `seek(by:)` для него ничего не двигает.
+                let usesReview = VideoPlayerManager.shared.isReviewMode
                 if isViewer {
                     NotificationCenter.default.post(name: event.keyCode == 123 ? .seekViewerPlayerBackward : .seekViewerPlayerForward, object: nil)
                 } else if self.isEditorModeActive {
                     NotificationCenter.default.post(name: .editorModeChanged, object: false)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        VideoPlayerManager.shared.seek(by: seekBy)
+                        if usesReview {
+                            VideoPlayerManager.shared.seekReview(by: seekBy)
+                        } else {
+                            VideoPlayerManager.shared.seek(by: seekBy)
+                        }
                     }
+                } else if usesReview {
+                    VideoPlayerManager.shared.seekReview(by: seekBy)
                 } else {
                     VideoPlayerManager.shared.seek(by: seekBy)
                 }
@@ -247,7 +261,7 @@ class HotKeyManager: ObservableObject {
                self.isEnabled,
                !self.blockedSheetActive,
                !self.isEditingTextBox,
-               !FocusStateManager.shared.isAnyTextFieldFocused {
+               !self.isTypingInTextInput() {
                 TimelineDataManager.shared.toggleClocksTimelineVisibility()
                 return nil
             }
@@ -260,7 +274,7 @@ class HotKeyManager: ObservableObject {
                self.isEnabled,
                !self.blockedSheetActive,
                !self.isEditingTextBox,
-               !FocusStateManager.shared.isAnyTextFieldFocused {
+               !self.isTypingInTextInput() {
                 ClipAutoSaveManager.shared.saveMergedSelectedClips()
                 return nil
             }
@@ -273,7 +287,7 @@ class HotKeyManager: ObservableObject {
                self.isEnabled,
                !self.blockedSheetActive,
                !self.isEditingTextBox,
-               !FocusStateManager.shared.isAnyTextFieldFocused {
+               !self.isTypingInTextInput() {
                 ClipAutoSaveManager.shared.saveSelectedStampClip()
                 return nil
             }
@@ -288,7 +302,7 @@ class HotKeyManager: ObservableObject {
                self.isEnabled,
                !self.blockedSheetActive,
                !self.isEditingTextBox,
-               !FocusStateManager.shared.isAnyTextFieldFocused {
+               !self.isTypingInTextInput() {
                 VideoPlayerManager.shared.markupUsesReviewTime.toggle()
                 return nil
             }
@@ -297,7 +311,7 @@ class HotKeyManager: ObservableObject {
                ActiveWindowManager.shared.isMarkerWindowActive() || WindowsManager.shared.isReviewWindowKey(),
                self.isEnabled,
                !self.blockedSheetActive,
-               !self.shouldPassThroughSpaceForTextInput() {
+               !self.isTypingInTextInput() {
                 if MarkupPlaylistPanelStore.shared.isPlaybackActive {
                     // В окне видео идут клипы плейлиста — пробел управляет их плеером,
                     // основной плеер разметки не трогаем, пока играют клипы.
@@ -318,7 +332,7 @@ class HotKeyManager: ObservableObject {
 
             // Горячие клавиши подсветки связок
             if KeyBindingRuntimeManager.shared.highlightModeActive,
-               !FocusStateManager.shared.isAnyTextFieldFocused {
+               !self.isTypingInTextInput() {
                 let hotkeyStr = self.hotkeyStringFromEvent(event)
                 if KeyBindingRuntimeManager.shared.handleHighlightHotkey(hotkeyStr) {
                     return nil
@@ -328,7 +342,7 @@ class HotKeyManager: ObservableObject {
             guard self.isEnabled,
                   (!self.blockedSheetActive || self.isLabelHotkeyMode),
                   !self.isEditorModeActive,
-                  !FocusStateManager.shared.isAnyTextFieldFocused else {
+                  !self.isTypingInTextInput() else {
                 return event
             }
             return self.handleHotkey(event) ? nil : event
@@ -352,7 +366,7 @@ class HotKeyManager: ObservableObject {
         let isViewerMode = WindowsManager.shared.viewerWindow != nil && isViewerWindowActive
         
         if event.keyCode == 49 {
-            if shouldPassThroughSpaceForTextInput() { return false }
+            if isTypingInTextInput() { return false }
             
             if isViewerMode {
                 NotificationCenter.default.post(name: .toggleViewerPlayer, object: nil)

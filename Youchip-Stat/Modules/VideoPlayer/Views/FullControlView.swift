@@ -122,6 +122,20 @@ struct FullControlView: View {
                 return event
             }
 
+            // Открыт редактор рисунка (или на экране «застыл» рисунок пересмотра) — ВСЕ клавиши
+            // идут в редактор, а не в таймлайн. Текстбокс редактора — не NSTextField/field-editor,
+            // поэтому проверка выше его не ловит, и Backspace в нём удалял ВЫБРАННЫЙ НА ТАЙМЛАЙНЕ
+            // тег. Пока редактор открыт — таймлайн клавиши не трогают вовсе.
+            if VideoPlayerManager.shared.isVideoPlayerInEditorMode
+                || VideoPlayerManager.shared.isShowingReviewScreenshot {
+                return event
+            }
+
+            // Клавиши таймлайна работают ТОЛЬКО когда ключевое окно — окно разметки
+            // (таймлайн/видео/библиотека тегов). Из листа, попапа или чужого окна событие
+            // пропускаем — иначе Backspace откуда угодно удалял бы выбранный тег.
+            guard ActiveWindowManager.shared.isMarkerWindowActive() else { return event }
+
             switch event.keyCode {
             case 48:
                 // Tab — прыжок к следующему тегу на таймлайне; ⇧Tab — к предыдущему.
@@ -258,7 +272,8 @@ struct FullControlView: View {
     @State private var showZoomPopover = false
     /// Поиск по клипам в разметке: прячет на таймлайне все штампы, кроме найденных/выбранных.
     @StateObject private var clipFilter = TimelineFilter()
-    @State private var showClipSearchSheet = false
+    /// Инлайн-поиск по клипам (поле в баре) — сразу фильтрует таймлайн по совпадениям, без панели.
+    @State private var clipSearchText: String = ""
 
     /// Панель плейлистов просмотра справа от таймлайнов.
     @ObservedObject private var playlistPanel = MarkupPlaylistPanelStore.shared
@@ -285,14 +300,19 @@ struct FullControlView: View {
     @State private var multiTagSelectionItem: MultiSelectionItem?
     @State private var multiLabelSelectionItem: MultiSelectionItem?
     
-    struct MultiSelectionItem: Identifiable {
+    struct MultiSelectionItem: Identifiable, Equatable {
         let id = UUID()
         let tag: Tag?
         let label: Label?
-        
+
         init(tag: Tag? = nil, label: Label? = nil) {
             self.tag = tag
             self.label = label
+        }
+
+        // Сравниваем по id — нужно для `.onChange(of: multiSelectionItem)` (открывает окно шага).
+        static func == (lhs: MultiSelectionItem, rhs: MultiSelectionItem) -> Bool {
+            lhs.id == rhs.id
         }
     }
     
@@ -828,6 +848,8 @@ struct FullControlView: View {
                                 RoundedRectangle(cornerRadius: 4)
                                     .stroke(lineNameStroke(line), lineWidth: lineNameStrokeWidth(line))
                             )
+                            // Длинное имя дорожки/тега обрезается — полное показываем при наведении.
+                            .help(line.name)
                     }
 
                     Spacer(minLength: 0)
@@ -916,6 +938,8 @@ struct FullControlView: View {
                                 RoundedRectangle(cornerRadius: 4)
                                     .stroke(lineNameStroke(line), lineWidth: lineNameStrokeWidth(line))
                             )
+                            // Длинное имя дорожки/тега обрезается — полное показываем при наведении.
+                            .help(line.name)
                     }
 
                     Spacer(minLength: 0)
@@ -980,12 +1004,15 @@ struct FullControlView: View {
     private func timelineZStackContent(duration: Double, interval: Double, gridWidth: CGFloat, effectiveScale: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             TimeGridView(
-                // Мелкие линии сетки идут в 5 раз чаще подписей, поэтому каждая
-                // 5-я (жирная) линия попадает ровно под подпись времени.
+                // Вертикальные линии сетки убраны: за временну́ю привязку отвечает
+                // линейка с делениями в закреплённой шапке (TimelineTimestampsHeaderView).
+                // Остаются только горизонтальные разделители дорожек. Это снимает до
+                // ~550 stroke на каждый кадр pinch-зума/ресайза. См. perf-заметку.
                 duration: duration,
                 interval: interval / 5,
                 width: gridWidth,
-                height: 30 * CGFloat(timelineData.visibleLines.count + 1)
+                height: 30 * CGFloat(timelineData.visibleLines.count + 1),
+                showVerticalLines: false
             )
             .padding(.top, markerHeadBand)
             
@@ -1042,7 +1069,11 @@ struct FullControlView: View {
                             }
                         },
                         onTagDragging: { tagEdgePosition in
-                            self.tagEdgePosition = tagEdgePosition
+                            // Белый плейхед следует за краем тега только в обычной разметке.
+                            // В лайве он прибит к живому краю записи: кадр всё равно живой, и
+                            // «подкинутый» на край тега плейхед просто врал бы. Позицию правки
+                            // в лайве показывает бирюзовый плейхед пересмотра (если он включён).
+                            self.tagEdgePosition = videoManager.isLiveMode ? nil : tagEdgePosition
                         },
                         onEditComment: { stamp in
                             stampForCommentEdit = StampInLine(line: line, stamp: stamp)
@@ -2009,6 +2040,14 @@ struct FullControlView: View {
         hoveredStampInfo
     }
     
+    /// Инлайн-поиск по клипам в баре: набор текста сразу оставляет на таймлайне совпавшие клипы.
+    private var markupSearchField: some View {
+        MarkupInlineSearchField(searchText: $clipSearchText)
+            .onChange(of: clipSearchText) { newValue in
+                MarkupClipSearch.apply(to: clipFilter, query: newValue)
+            }
+    }
+
     @ViewBuilder
     private var inlineControlsBar: some View {
         HStack(spacing: 6) {
@@ -2026,7 +2065,7 @@ struct FullControlView: View {
 
             timelineFilterMenuButton
 
-            clipSearchButton
+            markupSearchField
 
             clipAutoSaveButton
 
@@ -2188,32 +2227,6 @@ struct FullControlView: View {
         }
         .buttonStyle(.plain)
         .help(^String.Titles.clipAutoExportBadge)
-    }
-
-    /// Поиск по клипам: открывает лист поиска; подсвечивается, когда фильтр активен, рядом — сброс.
-    private var clipSearchButton: some View {
-        HStack(spacing: 4) {
-            Button(action: { showClipSearchSheet = true }) {
-                Image(systemName: clipFilter.hasActiveFilters() ? "magnifyingglass.circle.fill" : "magnifyingglass.circle")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(clipFilter.hasActiveFilters() ? .blue : .primary)
-                    .padding(6)
-                    .background(Color.gray.opacity(0.12))
-                    .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-            .help(^String.Titles.clipSearchTitle)
-
-            if clipFilter.hasActiveFilters() {
-                Button(action: { clipFilter.clearFilters() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help(^String.Titles.reset)
-            }
-        }
     }
 
     private var timelineFilterMenuButton: some View {
@@ -2466,13 +2479,13 @@ struct FullControlView: View {
                 parentWindowHeight = newSize.height
             }
         }
+        // Клик по таймлайну (перемотка/плейхед пересмотра/плашки) срабатывает сразу, без
+        // предварительного «взятия окна в фокус»: окно становится ключевым уже на наведении.
+        .activatesWindowOnHover()
         .sheet(isPresented: $showAddLineSheet) {
             AddLineSheet { newLineName in
                 timelineData.addLine(name: newLineName)
             }
-        }
-        .sheet(isPresented: $showClipSearchSheet) {
-            MarkupClipSearchSheet(filter: clipFilter)
         }
         // Оба листа подняты из `TimelineLineView` сюда: на строке они означали по два
         // presentation-хоста на каждую строку. См. TASK-007, 3.5.
@@ -2526,55 +2539,72 @@ struct FullControlView: View {
         .sheet(item: $stampItemsEditSheetType) { sheetType in
             StampEditSheet(sheetType: sheetType)
         }
-        .sheet(isPresented: $showExportModeSheet) {
-            ExportModeSelectionSheet(
-                onSelect: { mode in
+        // Экспорт из разметки теперь ОТДЕЛЬНОЕ окно, а не лист: флаг `showExportModeSheet` остаётся
+        // общим триггером (его выставляют десятки мест), но по нему открывается окно через
+        // WindowsManager. Окно живёт одно на сессию, закрытие сбрасывает флаг.
+        .onChange(of: showExportModeSheet) { show in
+            guard show else { return }
+            WindowsManager.shared.openExportModeSelection(
+                withDrawings: exportWithDrawings,
+                watermark: exportWatermarkOptions,
+                onSelect: { mode, withDrawings, watermark in
+                    exportWithDrawings = withDrawings
+                    exportWatermarkOptions = watermark
                     isExporting = true
-                    exportHelper.performExport(selectedExportType: selectedExportType, mode: mode, withScreenshots: exportWithDrawings, watermarkOptions: exportWatermarkOptions) { error in
+                    exportHelper.performExport(selectedExportType: selectedExportType, mode: mode, withScreenshots: withDrawings, watermarkOptions: watermark) { error in
                         isExporting = false
-                        showExportModeSheet = false
                         if let error {
                             showErrorAlert = true
                             errorMessage = error.localizedDescription
                         }
                     }
                 },
-                exportWithDrawings: $exportWithDrawings,
-                watermarkOptions: $exportWatermarkOptions
+                onClose: {
+                    showExportModeSheet = false
+                }
             )
         }
-        .sheet(isPresented: $showLabelSelectionSheet) {
-            LabelSelectionSheetView(
-                uniqueLabels: uniqueLabelsFromTimelines(),
-                onLabelSelected: { selectedLabel in
-                    
-                    let availableTags = tagsForLabel(selectedLabel)
-                    
-                    if !availableTags.isEmpty {
-                        showLabelSelectionSheet = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // Экспорт по лейблам: шаг «выбрать лейбл» — ОТДЕЛЬНЫМ окном (было листом). Флаг остаётся
+        // общим триггером (его ставит обработчик .toolsExportCutsByLabels), но по нему открывается
+        // окно через WindowsManager. Окно закрывается крестиком → onClose сбрасывает флаг; переход
+        // к следующему шагу/режиму сам закрывает это окно (замена в WindowsManager).
+        .onChange(of: showLabelSelectionSheet) { show in
+            guard show else { return }
+            WindowsManager.shared.openExportSelectionWindow(
+                title: ^String.Titles.selectLabelForExport,
+                width: 360, height: 460,
+                onClose: { showLabelSelectionSheet = false }
+            ) {
+                LabelSelectionSheetView(
+                    uniqueLabels: uniqueLabelsFromTimelines(),
+                    onLabelSelected: { selectedLabel in
+                        let availableTags = tagsForLabel(selectedLabel)
+                        if !availableTags.isEmpty {
+                            showLabelSelectionSheet = false
                             showMultiTagSelection(for: selectedLabel)
+                        } else {
+                            selectedExportType = .label(selectedLabel: selectedLabel)
+                            showLabelSelectionSheet = false
+                            showExportModeSheet = true
                         }
-                    } else {
-                        selectedExportType = .label(selectedLabel: selectedLabel)
+                    },
+                    onSkip: {
                         showLabelSelectionSheet = false
-                        showExportModeSheet = true
-                    }
-                },
-                onSkip: {
-                    showLabelSelectionSheet = false
-                },
-                showMultiSelection: true
-            )
-            .frame(width: 300, height: 300)
+                        WindowsManager.shared.closeExportSelectionWindow()
+                    },
+                    showMultiSelection: true
+                )
+            }
         }
-        
-        
-        
-        .sheet(item: $multiTagSelectionItem) { item in
-            if let label = item.label {
-                let availableTags = tagsForLabel(label)
-                
+        // Под-шаг «выбрать теги для лейбла» — окном.
+        .onChange(of: multiTagSelectionItem) { item in
+            guard let item, let label = item.label else { return }
+            let availableTags = tagsForLabel(label)
+            WindowsManager.shared.openExportSelectionWindow(
+                title: ^String.Titles.selectTagsForExport,
+                width: 440, height: 480,
+                onClose: { multiTagSelectionItem = nil }
+            ) {
                 MultiTagSelectionSheetView(
                     availableTags: availableTags,
                     onDone: { selectedTags in
@@ -2588,14 +2618,17 @@ struct FullControlView: View {
                         showExportModeSheet = true
                     }
                 )
-                .frame(width: 400, height: 300)
             }
         }
-        
-        .sheet(item: $multiLabelSelectionItem) { item in
-            if let tag = item.tag {
-                let availableLabels = labelsForTag(tag)
-                
+        // Под-шаг «выбрать лейблы для тега» — окном.
+        .onChange(of: multiLabelSelectionItem) { item in
+            guard let item, let tag = item.tag else { return }
+            let availableLabels = labelsForTag(tag)
+            WindowsManager.shared.openExportSelectionWindow(
+                title: ^String.Titles.selectLabelsForExport,
+                width: 440, height: 480,
+                onClose: { multiLabelSelectionItem = nil }
+            ) {
                 MultiLabelSelectionSheetView(
                     availableLabels: availableLabels,
                     onDone: { selectedLabels in
@@ -2609,35 +2642,55 @@ struct FullControlView: View {
                         showExportModeSheet = true
                     }
                 )
-                .frame(width: 400, height: 300)
             }
         }
-        
-        .sheet(isPresented: $showEventSelectionSheet) {
-            EventSelectionSheetView(timeEvents: uniqueEventsFromTimelines()) { selectedEvent in
-                selectedExportType = .timeEvent(selectedEvent: selectedEvent)
-                showEventSelectionSheet = false
-                showExportModeSheet = true
-            }
-            .frame(width: 300, height: 300)
-        }
-        
-        .sheet(isPresented: $showTagSelectionSheet) {
-            TagSelectionSheetView(
-                uniqueTags: uniqueTagsFromTimelines(),
-                onSelect: { selectedTag in
-                    selectedExportType = .tag(selectedTag: selectedTag)
-                    showTagSelectionSheet = false
-                    showExportModeSheet = true
-                },
-                onSelectWithLabels: { selectedTag in
-                    showTagSelectionSheet = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        showMultiLabelSelection(for: selectedTag)
+        // Экспорт по событиям: шаг «выбрать событие» — окном.
+        .onChange(of: showEventSelectionSheet) { show in
+            guard show else { return }
+            WindowsManager.shared.openExportSelectionWindow(
+                title: ^String.Titles.selectEventForExport,
+                width: 360, height: 460,
+                onClose: { showEventSelectionSheet = false }
+            ) {
+                EventSelectionSheetView(
+                    timeEvents: uniqueEventsFromTimelines(),
+                    onSelect: { selectedEvent in
+                        selectedExportType = .timeEvent(selectedEvent: selectedEvent)
+                        showEventSelectionSheet = false
+                        showExportModeSheet = true
+                    },
+                    onCancel: {
+                        showEventSelectionSheet = false
+                        WindowsManager.shared.closeExportSelectionWindow()
                     }
-                }
-            )
-            .frame(width: 300, height: 300)
+                )
+            }
+        }
+        // Экспорт по тегам: шаг «выбрать тег» — окном.
+        .onChange(of: showTagSelectionSheet) { show in
+            guard show else { return }
+            WindowsManager.shared.openExportSelectionWindow(
+                title: ^String.Titles.selectTagForExport,
+                width: 380, height: 500,
+                onClose: { showTagSelectionSheet = false }
+            ) {
+                TagSelectionSheetView(
+                    uniqueTags: uniqueTagsFromTimelines(),
+                    onSelect: { selectedTag in
+                        selectedExportType = .tag(selectedTag: selectedTag)
+                        showTagSelectionSheet = false
+                        showExportModeSheet = true
+                    },
+                    onSelectWithLabels: { selectedTag in
+                        showTagSelectionSheet = false
+                        showMultiLabelSelection(for: selectedTag)
+                    },
+                    onCancel: {
+                        showTagSelectionSheet = false
+                        WindowsManager.shared.closeExportSelectionWindow()
+                    }
+                )
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .toolsExportMarkupJSONFull)) { _ in
             guard ActiveWindowManager.shared.isMarkerWindowActive() else { return }
@@ -2732,49 +2785,111 @@ struct FullControlView: View {
                     case .timeEvents:
                         timelineData.lines[lineIndex].stamps[stampIndex].timeEvents
                     }
-                    let stampName = timelineData.lines[lineIndex].stamps[stampIndex].label
-                    let tagId = timelineData.lines[lineIndex].stamps[stampIndex].idTag
-                    
-                    if let tag = TagLibraryManager.shared.findTagById(tagId) {
-                        StampItemsSelectionSheet(
-                            sheetType: sheetType,
-                            stampName: stampName,
-                            initialIds: currentIds,
-                            tag: tag,
-                            tagLibrary: TagLibraryManager.shared,
-                            isDop: true,
-                            onDone: { newIds in
-                                switch sheetType {
-                                case .lables:
-                                    let tagLibrary = TagLibraryManager.shared
-                                    let fullLabels = newIds.compactMap { labelID -> FullLabelWithGroup? in
-                                        guard let label = tagLibrary.findLabelById(labelID) else { return nil }
+                    let stamp = timelineData.lines[lineIndex].stamps[stampIndex]
+                    let stampName = stamp.label
+                    let tagId = stamp.idTag
+                    // Разметка из Sportscode / Nacsport / Dartfish: тега может не быть в пуле
+                    // коллекций (её просто не установили). Раньше лист в этом случае вообще не
+                    // открывался — «тег не найден», и лейблы нельзя было ни снять, ни добавить.
+                    // Теперь собираем тег из самого штампа: его имени/цвета для листа достаточно.
+                    let tag = Self.resolvedTag(id: tagId, from: stamp)
+                    // Лейблы, которые уже встречаются в разметке проекта (в том числе принесённые
+                    // импортом и отсутствующие в коллекциях) — уходят в группу «Лейблы (импорт)».
+                    let importedLabels = Self.labelsFromTimelines(timelineData.lines)
+                    let importedLabelsByID = Self.embeddedLabelsByID(timelineData.lines)
+
+                    StampItemsSelectionSheet(
+                        sheetType: sheetType,
+                        stampName: stampName,
+                        initialIds: currentIds,
+                        tag: tag,
+                        tagLibrary: TagLibraryManager.shared,
+                        importedLabels: importedLabels,
+                        isDop: true,
+                        onDone: { newIds in
+                            switch sheetType {
+                            case .lables:
+                                let tagLibrary = TagLibraryManager.shared
+                                let fullLabels = newIds.compactMap { labelID -> FullLabelWithGroup? in
+                                    if let label = tagLibrary.findLabelById(labelID) {
                                         let groupId = tagLibrary.allLabelGroups.first(where: { $0.lables.contains(labelID) })?.id ?? ""
                                         return FullLabelWithGroup(id: label.id, name: label.name, description: label.description, lableGroupId: groupId)
                                     }
-                                    timelineData.updateStampLabels(
-                                        lineID: lineID,
-                                        stampID: stampID,
-                                        newLabels: fullLabels
-                                    )
-                                case .timeEvents:
-                                    timelineData.updateStampTimeEvents(
-                                        lineID: lineID,
-                                        stampID: stampID,
-                                        newEvents: newIds
-                                    )
+                                    // Лейбл из импортированной разметки — в пуле его нет,
+                                    // берём данные из штампа, где он уже стоит.
+                                    return importedLabelsByID[labelID]
                                 }
-                            }, onCancel: { return }
-                        )
-                    } else {
-                        Text(^String.Titles.fullControlExportErrorStampNotFound)
-                    }
+                                timelineData.updateStampLabels(
+                                    lineID: lineID,
+                                    stampID: stampID,
+                                    newLabels: fullLabels
+                                )
+                            case .timeEvents:
+                                timelineData.updateStampTimeEvents(
+                                    lineID: lineID,
+                                    stampID: stampID,
+                                    newEvents: newIds
+                                )
+                            }
+                        }, onCancel: { return }
+                    )
                 } else {
                     Text(^String.Titles.fullControlExportErrorStampNotFound)
                 }
             } else {
                 Text(^String.Titles.fullControlExportErrorStampNotFound)
             }
+        }
+
+        /// Тег из пула коллекций, либо синтезированный из самого штампа (импортированная разметка).
+        static func resolvedTag(id tagId: String, from stamp: TimelineStamp) -> Tag {
+            if let pooled = TagLibraryManager.shared.findTagById(tagId) { return pooled }
+            return Tag(
+                id: tagId,
+                primaryID: stamp.primaryID,
+                name: stamp.label,
+                description: "",
+                color: stamp.colorHex,
+                defaultTimeBefore: 0,
+                defaultTimeAfter: 0,
+                collection: nil,
+                lablesGroup: [],
+                hotkey: nil,
+                labelHotkeys: nil,
+                mapEnabled: false,
+                isInterval: true
+            )
+        }
+
+        /// Все лейблы, встречающиеся в разметке проекта, — прямо из штампов, без обращения к пулу
+        /// (у импортированных проектов коллекции нет). Порядок первого появления.
+        static func labelsFromTimelines(_ lines: [TimelineLine]) -> [Label] {
+            var seen = Set<String>()
+            var result: [Label] = []
+            for line in lines {
+                for stamp in line.stamps {
+                    for item in stamp.labels where seen.insert(item.id).inserted {
+                        let name = TagLibraryManager.shared.findLabelById(item.id)?.name ?? item.name
+                        guard !name.isEmpty else { continue }
+                        result.append(Label(id: item.id, name: name, description: item.description))
+                    }
+                }
+            }
+            return result
+        }
+
+        /// Те же лейблы, но в исходном виде (с их `lableGroupId`) — чтобы при сохранении не
+        /// потерять группу импортированного лейбла.
+        static func embeddedLabelsByID(_ lines: [TimelineLine]) -> [String: FullLabelWithGroup] {
+            var result: [String: FullLabelWithGroup] = [:]
+            for line in lines {
+                for stamp in line.stamps {
+                    for item in stamp.labels where result[item.id] == nil {
+                        result[item.id] = item
+                    }
+                }
+            }
+            return result
         }
     }
     
@@ -3011,7 +3126,6 @@ struct LabelSelectionSheetView: View {
             }
             .padding()
         }
-        .frame(width: 300, height: 300)
     }
 }
 
@@ -3066,9 +3180,6 @@ struct MultiTagSelectionSheetView: View {
             }
             .padding()
         }
-        .frame(width: 400, height: 300)
-        .onAppear {
-        }
     }
 }
 
@@ -3121,10 +3232,6 @@ struct MultiLabelSelectionSheetView: View {
                 .disabled(selectedLabels.isEmpty)
             }
             .padding()
-        }
-        .frame(width: 400, height: 300)
-        .onAppear {
-            print("\(availableLabels.map { $0.name })")
         }
     }
 }
@@ -3559,9 +3666,20 @@ struct ScreenshotMarkersView: View {
 
             if part != .stemsOnly {
             Button(action: {
-                videoManager.seek(to: screenshot.videoTime)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    videoManager.player?.pause()
+                // В пересмотре «голова» рисунка ведёт плейхед ПЕРЕСМОТРА и ставит на паузу
+                // плеер пересмотра — основной прибит к живому краю записи, `seek` для него в
+                // лайве ничего не делает, поэтому раньше клик по плашке в пересмотре выглядел
+                // как «не реагирует».
+                if videoManager.isReviewMode {
+                    videoManager.seekReview(to: screenshot.videoTime)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        videoManager.reviewPlayer?.pause()
+                    }
+                } else {
+                    videoManager.seek(to: screenshot.videoTime)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        videoManager.player?.pause()
+                    }
                 }
             }) {
                 Image(systemName: hasRelatedTags ? "pencil.circle.fill" : "pencil.circle")

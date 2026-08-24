@@ -130,6 +130,9 @@ struct SportCutTimelineView: View {
     @State private var sourceVideoDurations: [UUID: Double] = [:]
     /// Когда плейлистов несколько — держит собранные клипы до выбора плейлиста назначения.
     @State private var pendingAddAll: PendingAddAllClips?
+    /// Инлайн-поиск по клипам (поле в баре, результаты панелью под баром).
+    /// Инлайн-поиск по клипам (поле в баре) — сразу фильтрует таймлайн/таблицу по совпадениям, без панели.
+    @State private var clipSearchText: String = ""
 
     private var session: SportCutSession? {
         sessionManager.sessions.first { $0.id == sessionID }
@@ -148,7 +151,7 @@ struct SportCutTimelineView: View {
         VStack(spacing: 0) {
             controlBar
             Divider()
-            
+
             if selectedSourceIndex == SportCutTimelineSourceTab.playlists {
                 SportCutPlaylistsTimelinePane(
                     sessionID: sessionID,
@@ -199,9 +202,17 @@ struct SportCutTimelineView: View {
             )
         }
         .background(Color.gray.opacity(0.1))
+        .onChange(of: clipSearchText) { newValue in
+            // Инлайн-поиск без панели: остаются все совпавшие клипы текущей области источника.
+            let sources = SportCutClipSearch.scopeSources(sessionID: sessionID, selectedSourceIndex: selectedSourceIndex)
+            SportCutClipSearch.apply(to: filter, query: newValue, sources: sources)
+        }
         .onChange(of: selectedSourceIndex) { newIdx in
             let oldIdx = previousSelectedSourceIndex
             previousSelectedSourceIndex = newIdx
+            // Область поиска зависит от вкладки источника — при смене сбрасываем поиск (onChange
+            // по clipSearchText сам снимет searchAllowedStampIDs).
+            if !clipSearchText.isEmpty { clipSearchText = "" }
             if newIdx == SportCutTimelineSourceTab.allProjects {
                 bottomPane = .table
             } else if newIdx == SportCutTimelineSourceTab.playlists {
@@ -251,8 +262,14 @@ struct SportCutTimelineView: View {
             if selectedSourceIndex != SportCutTimelineSourceTab.playlists {
                 bottomPaneToggle
             }
+            if selectedSourceIndex != SportCutTimelineSourceTab.playlists {
+                SportCutInlineSearchField(searchText: $clipSearchText)
+            }
             filterButton
-            
+            if filter.hasActiveFilters() {
+                filterClearButton
+            }
+
             if selectedSourceIndex == SportCutTimelineSourceTab.playlists {
                 zoomControls
             } else if bottomPane == .markup {
@@ -379,6 +396,21 @@ struct SportCutTimelineView: View {
         }
     }
     
+    /// Крестик рядом с «Фильтры»: сбрасывает и категориальные фильтры, и выбор поиска одним кликом,
+    /// не открывая окно фильтров (как поиск эпизодов в разметке).
+    private var filterClearButton: some View {
+        Button(action: {
+            filter.clearFilters()
+            clipSearchText = ""
+        }) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .help(^String.Titles.reset)
+    }
+
     private var filterButton: some View {
         Button(action: { showFilterSheet = true }) {
             HStack(spacing: 4) {

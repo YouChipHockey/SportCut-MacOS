@@ -15,6 +15,8 @@ struct EventSelectionSheetView: View {
     
     let timeEvents: [TimeEvent]
     let onSelect: (TimeEvent) -> Void
+    /// В оконном режиме закрывает окно шага; в режиме листа (nil) — через `presentationMode`.
+    var onCancel: (() -> Void)? = nil
     @ObservedObject var tagLibrary = TagLibraryManager.shared
     @Environment(\.presentationMode) var presentationMode
     
@@ -34,7 +36,7 @@ struct EventSelectionSheetView: View {
             }
             
             Button(^String.Titles.collectionsButtonCancel) {
-                presentationMode.wrappedValue.dismiss()
+                if let onCancel { onCancel() } else { presentationMode.wrappedValue.dismiss() }
             }
             .padding(.top, 10)
         }

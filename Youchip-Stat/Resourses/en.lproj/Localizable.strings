@@ -62,6 +62,7 @@
 "FieldMapDetailPosition" = "Position:";  // ^String.Titles.fieldMapDetailPosition
 "FieldMapDetailColor" = "Color:";  // ^String.Titles.fieldMapDetailColor
 "FieldMapDetailNoGroup" = "No Group";  // ^String.Titles.fieldMapDetailNoGroup
+"FieldMapImportedGroup" = "Imported";  // ^String.Titles.fieldMapImportedGroup
 "FieldMapTagTitle" = "Tag #"; //*  // ^String.Titles.fieldMapTagTitle
 "FieldMapTagTitleNoNumber" = "Tag:";  // ^String.Titles.fieldMapTagTitleNoNumber
 "FieldMapTagPosition" = "Position: x: %.2f, y: %.2f"; //*  // ^String.Titles.fieldMapTagPosition
@@ -662,8 +663,8 @@
 "XmlImportNoInstancesError" = "The XML file contains no instances to import.";
 "XmlImportParseFailedError" = "Could not read the XML file.";
 "XmlImportCollectionDisplayName" = "XML import";
-"XmlImportTagGroupName" = "Imported codes";
-"XmlImportNotesLabelGroupName" = "Notes from XML";
+"XmlImportTagGroupName" = "Tags (import)";
+"XmlImportNotesLabelGroupName" = "Labels (import)";
 "XmlImportTimelineLineName" = "Line 1";
 "VideoMarkupToastTagAdded" = "Tag: %@";
 "VideoMarkupToastIntervalRecording" = "Recording: %@";
@@ -1059,6 +1060,7 @@
 "MomentWindowTitlePrefix" = "Moment: %@";
 "MomentClipNotFullyRecorded" = "Clip isn't fully recorded yet — part of the tag isn't in the buffer.";
 "MomentRefreshClip" = "Refresh";
+"MomentCommentPlaceholder" = "Comment on the tag…";
 
 // ReviewVideo
 "ReviewLoadingRecording" = "Loading recording...";

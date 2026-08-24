@@ -17,8 +17,11 @@ struct ProjectExportModel: Codable {
     let isFavorite: Bool
     let projectId: String
     let customCollection: CustomCollectionExport?
-    
-    init(projectName: String, videoMetadata: VideoMetadata, timelines: [TimelineLine], customName: String?, isFavorite: Bool, projectId: String, customCollection: CustomCollectionExport? = nil) {
+    /// Карты поля, встроенные в разметку (id карты → картинка). Позволяют визуализировать точки
+    /// БЕЗ установленной коллекции. Опционально — старые проекты без него парсятся как раньше.
+    let embeddedMaps: [EmbeddedFieldMap]?
+
+    init(projectName: String, videoMetadata: VideoMetadata, timelines: [TimelineLine], customName: String?, isFavorite: Bool, projectId: String, customCollection: CustomCollectionExport? = nil, embeddedMaps: [EmbeddedFieldMap]? = nil) {
         self.version = "1.0"
         self.exportDate = Date()
         self.projectName = projectName
@@ -28,6 +31,7 @@ struct ProjectExportModel: Codable {
         self.isFavorite = isFavorite
         self.projectId = projectId
         self.customCollection = customCollection
+        self.embeddedMaps = embeddedMaps
     }
 }
 
@@ -41,6 +45,25 @@ struct ProjectImportModel: Codable {
     let isFavorite: Bool
     let projectId: String
     let customCollection: CustomCollectionExport?
+    /// См. `ProjectExportModel.embeddedMaps`. Опционально — старые файлы без него валидны.
+    let embeddedMaps: [EmbeddedFieldMap]?
+
+    // Явный init с дефолтом для `embeddedMaps` — чтобы XML-импортёры (Nacsport/Sportcode/Dartfish),
+    // строящие модель вручную без карт, продолжали компилироваться. Codable-синтез сохраняется.
+    init(version: String, exportDate: Date, projectName: String, videoMetadata: VideoMetadata,
+         timelines: [TimelineLine], customName: String?, isFavorite: Bool, projectId: String,
+         customCollection: CustomCollectionExport?, embeddedMaps: [EmbeddedFieldMap]? = nil) {
+        self.version = version
+        self.exportDate = exportDate
+        self.projectName = projectName
+        self.videoMetadata = videoMetadata
+        self.timelines = timelines
+        self.customName = customName
+        self.isFavorite = isFavorite
+        self.projectId = projectId
+        self.customCollection = customCollection
+        self.embeddedMaps = embeddedMaps
+    }
 }
 
 struct CustomCollectionExport: Codable {

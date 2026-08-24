@@ -30,6 +30,58 @@ final class FirstMouseHostingController<Content: View>: NSHostingController<Cont
     }
 }
 
+// MARK: - Активация окна наведением (клик сразу, без «сначала взять окно в фокус»)
+
+/// Делает окно ключевым, как только курсор входит в зону, — БЕЗ поднятия окна на передний план.
+///
+/// `acceptsFirstMouse` (см. `FirstMouseHostingView`) доводит первый клик до кнопок, но
+/// SwiftUI-ЖЕСТЫ (`onTapGesture`, `DragGesture`) первый клик в неключевом окне всё равно теряют:
+/// он уходит на активацию. Ставить свои NSView-ловушки на весь таймлайн нельзя — они перекрыли
+/// бы клипы и стебель плейхеда (у них свои жесты). Поэтому идём с другой стороны: окно становится
+/// ключевым ещё на наведении, и клик приходит уже в активное окно — все жесты срабатывают сразу.
+///
+/// Слой прозрачный и НИЧЕГО не перехватывает: `NSTrackingArea` следит только за входом курсора,
+/// клики/жесты идут мимо. `makeKey()` (не `makeKeyAndOrderFront`) не меняет порядок окон.
+private struct WindowActivateOnHover: NSViewRepresentable {
+    func makeNSView(context: Context) -> TrackingView { TrackingView() }
+    func updateNSView(_ nsView: TrackingView, context: Context) {}
+
+    final class TrackingView: NSView {
+        private var tracking: NSTrackingArea?
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil } // прозрачен для кликов
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let tracking { removeTrackingArea(tracking) }
+            let area = NSTrackingArea(
+                rect: bounds,
+                options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self,
+                userInfo: nil
+            )
+            addTrackingArea(area)
+            tracking = area
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            guard let window, window.canBecomeKey, !window.isKeyWindow else { return }
+            // Пока открыт редактор рисунка — не перехватываем фокус наведением: иначе увод курсора
+            // на соседнее окно во время печатания в текстбоксе сбрасывал бы фокус с редактора.
+            if VideoPlayerManager.shared.isVideoPlayerInEditorMode { return }
+            window.makeKey()
+        }
+    }
+}
+
+extension View {
+    /// Окно становится ключевым по наведению курсора (без поднятия наверх), чтобы клики и жесты
+    /// срабатывали с первого раза. Вешать на корень окна, где важен клик-сквозь-фокус.
+    func activatesWindowOnHover() -> some View {
+        background(WindowActivateOnHover())
+    }
+}
+
 // MARK: - Курсор над кликабельной зоной
 
 /// Курсор-палец при наведении: подсказка, что зона кликабельна (важно теперь, когда клик

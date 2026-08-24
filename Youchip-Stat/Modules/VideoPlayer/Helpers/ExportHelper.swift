@@ -287,7 +287,7 @@ class ExportHelper: ObservableObject {
                         startTime: currentTime
                     )
                     let tag = tagLibrary.findTagById(segment.stamp.idTag)
-                        ?? Tag.syntheticDrawingTag(for: segment.stamp)
+                        ?? Tag.synthetic(for: segment.stamp)
                     if let tag {
                         episodeOrdinal += 1
                         let overlayItem = OverlayItem(
@@ -327,7 +327,7 @@ class ExportHelper: ObservableObject {
             }
             
             let tag = tagLibrary.findTagById(segment.stamp.idTag)
-                ?? Tag.syntheticDrawingTag(for: segment.stamp)
+                ?? Tag.synthetic(for: segment.stamp)
             if let tag {
                 episodeOrdinal += 1
                 let overlayItem = OverlayItem(
@@ -605,7 +605,7 @@ class ExportHelper: ObservableObject {
             let videoSize = CGSize(width: abs(naturalSize.width), height: abs(naturalSize.height))
             let overlayVideoComposition: AVVideoComposition?
             let tag = tagLibrary.findTagById(segment.stamp.idTag)
-                ?? Tag.syntheticDrawingTag(for: segment.stamp)
+                ?? Tag.synthetic(for: segment.stamp)
             let clipClockPlacements = ClockExportOverlayBuilder.placements(
                 enabled: watermarkOptions.showClocks,
                 lines: timelineData.lines,

@@ -49,10 +49,7 @@ struct ReviewVideoView: View {
                             HStack {
                                 Spacer()
                                 Button {
-                                    videoManager.isShowingReviewScreenshot = false
-                                    videoManager.reviewScreenshotImage = nil
-                                    videoManager.reviewPlayer?.play()
-                                    NotificationCenter.default.post(name: .screenshotDisplayChanged, object: false)
+                                    resumeReviewFromScreenshot()
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.system(size: 24))
@@ -66,6 +63,14 @@ struct ReviewVideoView: View {
                         }
                     }
                     .transition(.opacity)
+                    // Клик по «застывшему» рисунку возобновляет пересмотр — как в обычной разметке
+                    // (там тап по скриншоту шлёт .hideScreenshotAndResume). Раньше в пересмотре
+                    // возобновляла только маленькая крестик-кнопка, и «нажатие на тачпад» по кадру
+                    // ничего не делало.
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        resumeReviewFromScreenshot()
+                    }
                 }
 
                 // Счётчики: пишущиеся ПО ПЛЕЙХЕДУ ПЕРЕСМОТРА и записи, пересечённые им —
@@ -96,8 +101,18 @@ struct ReviewVideoView: View {
             }
         }
         .frame(minWidth: 480, minHeight: 270)
+        // Клик по окну пересмотра срабатывает сразу, без предварительного «взятия в фокус».
+        .activatesWindowOnHover()
     }
-    
+
+    /// Убирает «застывший» рисунок и продолжает пересмотр. Общий путь для крестика и тапа по кадру.
+    private func resumeReviewFromScreenshot() {
+        videoManager.isShowingReviewScreenshot = false
+        videoManager.reviewScreenshotImage = nil
+        videoManager.reviewPlayer?.play()
+        NotificationCenter.default.post(name: .screenshotDisplayChanged, object: false)
+    }
+
     // MARK: - Toolbar
     
     private var reviewToolbar: some View {

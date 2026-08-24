@@ -23,6 +23,8 @@ struct LabelChip: View {
         HStack(spacing: 3) {
             Image(systemName: "tag.fill")
             Text(label.name)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
@@ -30,6 +32,8 @@ struct LabelChip: View {
         .cornerRadius(8)
         .foregroundColor(textColor)
         .font(.system(size: fontSize))
+        // Длинное имя лейбла обрезается троеточием — полное показываем во всплывающей подсказке.
+        .help(label.name)
     }
     
 }

@@ -17,6 +17,7 @@ enum VideoPlayerAction {
     case zoomOut
     case resetZoom
     case handleMagnificationChange(value: CGFloat, geometrySize: CGSize)
+    case handleMagnificationEnded(value: CGFloat, geometrySize: CGSize)
     case handleDragChange(translation: CGSize, geometrySize: CGSize)
     case handleDragEnded
     case handleJoystickMove(direction: JoystickDirection, geometrySize: CGSize)
@@ -165,18 +166,22 @@ class VideoPlayerViewModel: ObservableObject {
         // Don't show screenshots while user is resizing a tag
         guard !VideoPlayerManager.shared.isResizingTag else { return }
 
+        let isReview = VideoPlayerManager.shared.isReviewMode
         let currentTime: Double
-        if VideoPlayerManager.shared.isReviewMode {
+        if isReview {
             currentTime = VideoPlayerManager.shared.reviewCurrentTime
         } else {
             currentTime = VideoPlayerManager.shared.currentTime
         }
-        let timeDifference = abs(currentTime - state.lastCheckedVideoTime)
-        
+        // Позиция на прошлом тике — нужна, чтобы ловить рисунок по ПЕРЕСЕЧЕНИЮ его времени между
+        // тиками, а не по попаданию в узкое окно ±0.15с. На скорости пересмотра >1x соседние тики
+        // (таймер 10 Гц) перепрыгивали это окно, и плейхед пролетал рисунок не останавливаясь.
+        let previousTime = state.lastCheckedVideoTime
+
         // Если скриншот показан и пользователь нажал play, скрываем скриншот и возобновляем воспроизведение
         if state.isShowingScreenshot {
             let isPlaying: Bool
-            if VideoPlayerManager.shared.isReviewMode {
+            if isReview {
                 isPlaying = VideoPlayerManager.shared.reviewPlayer?.timeControlStatus == .playing
             } else {
                 isPlaying = (VideoPlayerManager.shared.player?.rate ?? 0) > 0
@@ -187,14 +192,30 @@ class VideoPlayerViewModel: ObservableObject {
             }
             return
         }
-        
+
         state.lastCheckedVideoTime = currentTime
-        
+
         guard !state.isShowingScreenshot else { return }
-        
+
         let screenshots = ScreenshotsMetadataManager.shared.screenshots
-        
-        if let screenshot = screenshots.first(where: { abs($0.videoTime - currentTime) < 0.15 }) {
+
+        // В пересмотре сначала ищем рисунок, чьё время оказалось ПРОЙДЕНО между прошлым и текущим
+        // тиком (движение в любую сторону). Диапазон ограничен 2с, чтобы прыжок плейхеда (seek на
+        // произвольную позицию) не «проигрывал» все промежуточные рисунки. Если пересечения нет —
+        // падаем на прежнюю проверку по близости (пауза/точное попадание).
+        let matched: ScreenshotMetadata? = {
+            if isReview {
+                let lo = min(previousTime, currentTime)
+                let hi = max(previousTime, currentTime)
+                if hi - lo <= 2.0,
+                   let crossed = screenshots.first(where: { $0.videoTime > lo && $0.videoTime <= hi }) {
+                    return crossed
+                }
+            }
+            return screenshots.first(where: { abs($0.videoTime - currentTime) < 0.15 })
+        }()
+
+        if let screenshot = matched {
             if state.lastShownScreenshotName != screenshot.screenshotName {
                 showScreenshotOverlay(metadata: screenshot)
             }
@@ -268,11 +289,15 @@ class VideoPlayerViewModel: ObservableObject {
             
         case .resetZoom:
             state.videoScale = 1.0
+            magnifyBaseScale = 1.0
             state.videoOffset = .zero
             state.lastDragValue = .zero
-            
+
         case let .handleMagnificationChange(value, geometrySize):
             handleMagnificationChange(value: value, geometrySize: geometrySize)
+
+        case let .handleMagnificationEnded(value, geometrySize):
+            handleMagnificationEnded(value: value, geometrySize: geometrySize)
             
         case let .handleDragChange(translation, geometrySize):
             handleDragChange(translation: translation, geometrySize: geometrySize)
@@ -380,12 +405,14 @@ class VideoPlayerViewModel: ObservableObject {
     private func handleZoomIn() {
         let newScale = min(4.0, state.videoScale + 0.1)
         state.videoScale = newScale
+        magnifyBaseScale = newScale
         updateVideoOffsetForScale(newScale)
     }
-    
+
     private func handleZoomOut() {
         let newScale = max(1.0, state.videoScale - 0.1)
         state.videoScale = newScale
+        magnifyBaseScale = newScale
         updateVideoOffsetForScale(newScale)
     }
     
@@ -398,24 +425,36 @@ class VideoPlayerViewModel: ObservableObject {
     
     // MARK: - Magnification Logic
     
+    /// Масштаб, ЗАФИКСИРОВАННЫЙ до текущего пинч-жеста. `value` от `onFirstMouseMagnify` — фактор
+    /// ОТНОСИТЕЛЬНО начала жеста (стартует с 1.0), поэтому эффективный масштаб = база × фактор.
+    /// Иначе новый жест шёл бы от 1.0 и отдаление мгновенно сбрасывало весь зум (см.
+    /// `ZoomableVideoPlayerView`, где так же: `scale × pinch`, коммит в `onEnded`).
+    private var magnifyBaseScale: CGFloat = 1.0
+
     private func handleMagnificationChange(value: CGFloat, geometrySize: CGSize) {
-        let newScale = min(max(1.0, value), 4.0)
-        
+        let newScale = min(max(1.0, magnifyBaseScale * value), 4.0)
+
         if newScale == 1.0 {
             state.videoOffset = .zero
             state.lastDragValue = .zero
         } else {
             let maxOffsetX = (geometrySize.width * (newScale - 1)) / 2
             let maxOffsetY = (geometrySize.height * (newScale - 1)) / 2
-            
+
             state.videoOffset = CGSize(
                 width: min(max(state.videoOffset.width, -maxOffsetX), maxOffsetX),
                 height: min(max(state.videoOffset.height, -maxOffsetY), maxOffsetY)
             )
             state.lastDragValue = state.videoOffset
         }
-        
+
         state.videoScale = newScale
+    }
+
+    /// Конец пинч-жеста: коммитим накопленный масштаб как новую базу для следующего жеста.
+    private func handleMagnificationEnded(value: CGFloat, geometrySize: CGSize) {
+        magnifyBaseScale = min(max(1.0, magnifyBaseScale * value), 4.0)
+        state.videoScale = magnifyBaseScale
     }
     
     // MARK: - Drag Logic
@@ -1310,12 +1349,22 @@ class VideoPlayerViewModel: ObservableObject {
     // MARK: - Window Management
     
     private func handleRestoreWindowFrame() {
-        guard let savedFrame = state.savedWindowFrame else { return }
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             guard let window = WindowsManager.shared.videoWindow?.window else { return }
-            
-            window.setFrame(NSRect(x: savedFrame.origin.x, y: savedFrame.origin.y, width: savedFrame.width, height: savedFrame.height), display: true, animate: false)
+
+            // Редактор открывали из окна пересмотра: видео-окно лайва в этой раскладке занимает
+            // левую половину, и вернуть его нужно именно туда — детерминированно, не полагаясь на
+            // `savedWindowFrame` (в этом сценарии он мог не совпасть, из-за чего окно оставалось
+            // на весь экран). Вне пересмотра — как раньше, по сохранённому кадру.
+            if WindowsManager.shared.isReviewSplitActive,
+               let reviewFrame = WindowsManager.shared.liveVideoWindowReviewSplitFrame() {
+                window.setFrame(reviewFrame, display: true, animate: false)
+            } else if let savedFrame = self?.state.savedWindowFrame {
+                window.setFrame(
+                    NSRect(x: savedFrame.origin.x, y: savedFrame.origin.y, width: savedFrame.width, height: savedFrame.height),
+                    display: true, animate: false
+                )
+            }
             self?.state.savedWindowFrame = nil
         }
     }

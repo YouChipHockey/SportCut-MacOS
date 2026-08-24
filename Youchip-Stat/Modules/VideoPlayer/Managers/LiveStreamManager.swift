@@ -625,8 +625,10 @@ class LiveStreamManager: NSObject, ObservableObject {
 
             Task {
                 // Concatenate all segments if there are multiple; otherwise just move the single file.
+                // При дозаписи — всегда склейка: `moveToPermanentLocation` кладёт ОДИН файл на
+                // место итогового, то есть затёр бы исходное видео последним куском.
                 let finalURL: URL?
-                if allSegments.count <= 1 {
+                if allSegments.count <= 1 && self.preloadedBaseURL == nil {
                     finalURL = self.moveToPermanentLocation()
                 } else {
                     finalURL = await self.concatenateSegmentsToFinalLocation(segments: allSegments)
@@ -680,6 +682,15 @@ class LiveStreamManager: NSObject, ObservableObject {
         return composition
     }
     
+    /// Склейка всех сегментов записи в итоговый файл проекта.
+    ///
+    /// ВАЖНО (баг второй дозаписи): при дозаписи исходное видео лежит РОВНО по `finalURL` —
+    /// проект дозаписывается «в себя» (`videoId` = id проекта, а `updateVideoURL` после первой
+    /// дозаписи ставит проекту файл `Recordings/<videoId>.mov`). Раньше этот файл удалялся ДО
+    /// сборки композиции, поэтому вся предыдущая запись пропадала и в проекте оставался только
+    /// последний кусок. Первая дозапись выживала случайно: у неё исходник лежал по другому пути.
+    /// Поэтому: сначала собираем и экспортируем во временный файл и только потом, по факту
+    /// успеха, подменяем им итоговый.
     private func concatenateSegmentsToFinalLocation(segments: [URL]) async -> URL? {
         CameraLogger.shared.log("concatenateSegments: \(segments.count) segments")
         guard let videoId = currentVideoId else { return nil }
@@ -690,30 +701,49 @@ class LiveStreamManager: NSObject, ObservableObject {
             try? fileManager.createDirectory(at: recordingsDir, withIntermediateDirectories: true)
         }
         let finalURL = recordingsDir.appendingPathComponent("\(videoId).mov")
-        if fileManager.fileExists(atPath: finalURL.path) {
-            try? fileManager.removeItem(at: finalURL)
-        }
-        
+        let baseURL = self.preloadedBaseURL
+        let isAppending = baseURL != nil
+        let mergedURL = recordingsDir.appendingPathComponent("\(videoId)_merge_\(UUID().uuidString).mov")
+
         let composition = await buildCompositionFromSegments(segments)
-        
-        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
-            return moveToPermanentLocation()
+        guard composition.duration.seconds > 0 else {
+            CameraLogger.shared.logError("concatenateSegments: composition is empty, keeping existing files")
+            // При дозаписи запасной путь запрещён — он затирает исходное видео хвостом.
+            return isAppending ? nil : moveToPermanentLocation()
         }
-        exporter.outputURL = finalURL
+
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
+            CameraLogger.shared.logError("concatenateSegments: cannot create exporter")
+            return isAppending ? nil : moveToPermanentLocation()
+        }
+        exporter.outputURL = mergedURL
         exporter.outputFileType = .mov
         await exporter.export()
-        
-        if exporter.status == .completed {
-            // Remove intermediate segment files, but never the preloaded base video.
-            let baseURL = self.preloadedBaseURL
-            for url in segments where url != baseURL {
-                try? fileManager.removeItem(at: url)
-            }
-            return finalURL
-        } else {
-            print("LiveStreamManager: Concatenation export failed: \(exporter.error?.localizedDescription ?? "unknown")")
-            return moveToPermanentLocation()
+
+        guard exporter.status == .completed else {
+            try? fileManager.removeItem(at: mergedURL)
+            CameraLogger.shared.logError("concatenateSegments: export failed: \(exporter.error?.localizedDescription ?? "unknown")")
+            return isAppending ? nil : moveToPermanentLocation()
         }
+
+        // Экспорт закончен — исходники больше не читаются, итоговый файл можно подменять.
+        do {
+            if fileManager.fileExists(atPath: finalURL.path) {
+                try fileManager.removeItem(at: finalURL)
+            }
+            try fileManager.moveItem(at: mergedURL, to: finalURL)
+        } catch {
+            CameraLogger.shared.logError("concatenateSegments: failed to place merged file: \(error.localizedDescription)")
+            // Склейка цела — отдаём её как есть, ничего не теряем.
+            return mergedURL
+        }
+
+        // Промежуточные сегменты чистим только после успешной подмены. Исходное видео не трогаем:
+        // при дозаписи «в себя» оно уже стало итоговым файлом, иначе это файл пользователя.
+        for url in segments where url != baseURL && url != finalURL {
+            try? fileManager.removeItem(at: url)
+        }
+        return finalURL
     }
     
     func abort() {
@@ -764,6 +794,12 @@ class LiveStreamManager: NSObject, ObservableObject {
     
     private func moveToPermanentLocation() -> URL? {
         guard let tempURL = tempFileURL, let videoId = currentVideoId else { return nil }
+        // Страховка: этот путь кладёт на место итогового файла ОДИН сегмент. При дозаписи это
+        // потеря всего, что было записано раньше, — туда ходить нельзя.
+        guard preloadedBaseURL == nil else {
+            CameraLogger.shared.logError("moveToPermanentLocation: refused during append (would drop the base video)")
+            return nil
+        }
         
         let fileManager = FileManager.default
         let documentsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!

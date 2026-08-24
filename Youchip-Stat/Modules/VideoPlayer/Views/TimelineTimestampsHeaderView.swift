@@ -33,6 +33,10 @@ struct TimelineTimestampsHeaderView: View {
         return duration / Double(n - 1)
     }
 
+    /// Сколько равных мелких насечек приходится на один шаг подписи (включая крупную под подписью).
+    /// Между двумя подписями получается `subdivisions - 1` мелких делений.
+    private static let subdivisions = 5
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             LinearGradient(
@@ -49,26 +53,50 @@ struct TimelineTimestampsHeaderView: View {
                 .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
                 .frame(width: width, height: 30)
 
+            // Все насечки одним Canvas (дёшево, без сотен View): крупные — под подписями,
+            // между ними — равные мелкие деления. Прижаты к низу полосы, как на обычной линейке.
+            Canvas { context, size in
+                guard duration > 0, width > 0 else { return }
+                let minorStep = effectiveTimeStep / Double(Self.subdivisions)
+                guard minorStep > 0 else { return }
+                let baseY = size.height
+                let majorHeight: CGFloat = 6
+                let minorHeight: CGFloat = 3
+                var idx = 0
+                var t = 0.0
+                while t <= duration + 1e-6 {
+                    let x = (t / duration) * Double(width)
+                    let isMajor = idx % Self.subdivisions == 0
+                    let h = isMajor ? majorHeight : minorHeight
+                    var path = Path()
+                    path.move(to: CGPoint(x: x, y: baseY))
+                    path.addLine(to: CGPoint(x: x, y: baseY - h))
+                    context.stroke(
+                        path,
+                        with: .color(Color.gray.opacity(isMajor ? 0.45 : 0.28)),
+                        lineWidth: isMajor ? 1 : 0.5
+                    )
+                    idx += 1
+                    t = Double(idx) * minorStep
+                }
+            }
+            .frame(width: width, height: 30)
+
+            // Подписи времени — у верха полосы, по позициям крупных насечек.
             ForEach(0..<tickCount, id: \.self) { i in
                 let timePosition = Double(i) * effectiveTimeStep
                 let xPosition = (timePosition / duration) * Double(width)
 
-                VStack(spacing: 2) {
-                    Text(secondsToTimeString(timePosition))
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.primary)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.gray.opacity(0.1))
-                                .padding(.horizontal, -2)
-                                .padding(.vertical, -1)
-                        )
-
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.4))
-                        .frame(width: 1, height: 4)
-                }
-                .position(x: CGFloat(xPosition), y: 15)
+                Text(secondsToTimeString(timePosition))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.primary)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.gray.opacity(0.1))
+                            .padding(.horizontal, -2)
+                            .padding(.vertical, -1)
+                    )
+                    .position(x: CGFloat(xPosition), y: 9)
             }
         }
         .frame(width: width, height: 30)

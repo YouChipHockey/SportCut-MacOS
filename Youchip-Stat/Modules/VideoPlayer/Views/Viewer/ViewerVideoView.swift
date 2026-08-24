@@ -420,7 +420,7 @@ struct ViewerVideoView: View {
                 guard let group = group else { return nil }
                 return OverlayLabelGroupItem(group: group, selectedLabels: labels)
             }
-            let tag = resolvedTag ?? stamp.flatMap { Tag.syntheticDrawingTag(for: $0) }
+            let tag = resolvedTag ?? stamp.flatMap { Tag.synthetic(for: $0) }
             if let tag, let stamp {
                 let overlayItem = OverlayItem(tag: tag, stamp: stamp, selectedLabelGroups: selectedLabelGroups, start: .zero, duration: .zero, videoSize: nil)
                 let attributedString = NSAttributedString.attributedStringForTagInfo(overlayItem: overlayItem) ?? NSAttributedString(string: "")

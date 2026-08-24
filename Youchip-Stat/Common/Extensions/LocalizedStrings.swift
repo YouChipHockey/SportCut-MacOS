@@ -67,6 +67,7 @@ extension String {
         case fieldMapDetailPosition // ^String.Titles.fieldMapDetailPosition
         case fieldMapDetailColor // ^String.Titles.fieldMapDetailColor
         case fieldMapDetailNoGroup // ^String.Titles.fieldMapDetailNoGroup
+        case fieldMapImportedGroup // ^String.Titles.fieldMapImportedGroup
         case fieldMapTagTitle // ^String.Titles.fieldMapTagTitle
         case fieldMapTagTitleNoNumber // ^String.Titles.fieldMapTagTitleNoNumber
         case fieldMapTagPosition // ^String.Titles.fieldMapTagPosition
@@ -1177,6 +1178,7 @@ extension String {
         case momentWindowTitlePrefix
         case momentClipNotFullyRecorded
         case momentRefreshClip
+        case momentCommentPlaceholder
 
         // ReviewVideo
         case reviewLoadingRecording

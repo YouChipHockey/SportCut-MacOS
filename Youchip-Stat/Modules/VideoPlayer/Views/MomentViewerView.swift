@@ -314,6 +314,13 @@ struct MomentViewerView: View {
     /// Отмеченные счётчики: их показываем поверх кадра момента.
     @State private var enabledClockStampIDs: Set<UUID> = []
 
+    /// Черновик комментария к тегу (поле снизу). Пишется в сам штамп — тот же `comment`,
+    /// что правится через ПКМ по тегу на таймлайне.
+    @State private var commentDraft: String = ""
+    /// Что уже лежит в штампе — чтобы не дёргать таймлайн без изменений и ловить внешние правки.
+    @State private var savedComment: String = ""
+    @FocusState private var isCommentFocused: Bool
+
     private var sourceStamp: TimelineStamp? {
         guard let lineID = session.lineID,
               let stampID = session.stampID,
@@ -366,6 +373,31 @@ struct MomentViewerView: View {
         session.displayStartTime + session.compositionPlaybackSeconds
     }
 
+    /// Включённые счётчики момента как элементы перетаскиваемой канвы. Позиция/масштаб берутся из
+    /// общего `ClockOverlayLayoutStore` по `clockId` — той же, что у оверлея разметки и экспорта,
+    /// поэтому «куда утащил в пересмотре тега — там и на видео, и в экспорте (разметка и клипы)».
+    /// Дедуп по `clockId`, чтобы не было коллизии id во `ForEach` канвы.
+    private var clockOverlayItems: [ClockOverlayItem] {
+        var seen = Set<String>()
+        var items: [ClockOverlayItem] = []
+        for entry in clockEntries {
+            guard enabledClockStampIDs.contains(entry.id),
+                  let value = entry.value(atVideoTime: sourceVideoTime) else { continue }
+            let clockId = entry.info.clockId
+            guard !seen.contains(clockId) else { continue }
+            seen.insert(clockId)
+            items.append(ClockOverlayItem(
+                clockId: clockId,
+                seconds: value,
+                appearance: entry.info.appearance,
+                showCentiseconds: entry.info.showCentiseconds,
+                caption: entry.info.caption,
+                progress: nil
+            ))
+        }
+        return items
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
@@ -381,12 +413,10 @@ struct MomentViewerView: View {
                     }
                 }
                 // Включённые счётчики идут прямо на кадре — значения те же, что были в разметке.
+                // Перетаскиваемая канва (как в разметке/просмотре): позицию можно менять, она
+                // запоминается в общем `ClockOverlayLayoutStore` по clockId и используется в экспорте.
                 .overlay(
-                    MomentClocksOverlay(
-                        entries: clockEntries,
-                        enabledStampIDs: enabledClockStampIDs,
-                        videoTime: sourceVideoTime
-                    )
+                    ClockOverlayCanvas(items: clockOverlayItems)
                 )
 
                 // Панель появляется только если в момент вообще попали счётчики.
@@ -463,7 +493,7 @@ struct MomentViewerView: View {
                 .padding(.vertical, 8)
                 .background(Color(NSColor.controlBackgroundColor))
 
-                if !stampEventNames.isEmpty || !stampLabelNames.isEmpty || !(sourceStamp?.comment ?? "").isEmpty {
+                if !stampEventNames.isEmpty || !stampLabelNames.isEmpty {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -477,37 +507,119 @@ struct MomentViewerView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
-                        if let comment = sourceStamp?.comment, !comment.isEmpty {
-                            HStack(alignment: .top, spacing: 4) {
-                                Circle()
-                                    .fill(Color.red)
-                                    .overlay(Circle().stroke(Color.black, lineWidth: 0.8))
-                                    .frame(width: 7, height: 7)
-                                    .padding(.top, 3)
-                                Text(comment)
-                                    .font(.caption)
-                                    .foregroundColor(.primary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
                     .background(Color(NSColor.windowBackgroundColor))
                 }
+
+                commentBar
             }
         }
         .onAppear {
             momentMiniLayoutEpoch += 1
             // Счётчики момента (флаг «на видео» + Primary Counter) показываем сразу — «активны».
             enabledClockStampIDs.formUnion(clockEntries.map(\.id))
+            loadComment()
+            // Поле сразу активно для ввода. С задержкой — окно только что создано, до того как
+            // оно стало ключевым, фокус в него не встаёт.
+            if sourceStamp != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    isCommentFocused = true
+                }
+            }
+        }
+        // Комментарий могли поправить снаружи (ПКМ по тегу) — подтягиваем, если поле не редактируется.
+        .onChange(of: sourceStamp?.comment ?? "") { external in
+            guard external != savedComment else { return }
+            savedComment = external
+            if !isCommentFocused { commentDraft = external }
+        }
+        // Уход фокуса = сохранение: пользователь мог просто кликнуть на видео и закрыть окно.
+        .onChange(of: isCommentFocused) { focused in
+            if !focused { saveComment() }
         }
         .onChange(of: clockEntries.map(\.id)) { ids in
             enabledClockStampIDs.formUnion(ids)
         }
         .onDisappear {
+            saveComment()
             session.invalidate()
         }
+    }
+
+    // MARK: - Комментарий к тегу
+
+    /// Поле комментария снизу окна. Пишет в `TimelineStamp.comment` — то же поле, что правится
+    /// через ПКМ по тегу на таймлайне, поэтому оба пути видят одно значение (и в лайве, и в
+    /// обычной разметке). Enter — сохранить, корзина — удалить.
+    @ViewBuilder
+    private var commentBar: some View {
+        // Без привязки к штампу (окно открыто не с таймлайна) писать некуда.
+        if sourceStamp != nil {
+            Divider()
+
+            HStack(spacing: 8) {
+                Image(systemName: "text.bubble")
+                    .foregroundColor(.secondary)
+
+                TextField(^String.Titles.momentCommentPlaceholder, text: $commentDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                    .focused($isCommentFocused)
+                    // Enter сохраняет И снимает фокус — иначе поле оставалось активным и «съедало»
+                    // клавиши (пробел/хоткеи) после сохранения.
+                    .onSubmit {
+                        saveComment()
+                        isCommentFocused = false
+                    }
+
+                if !savedComment.isEmpty || !commentDraft.isEmpty {
+                    Button(action: deleteComment) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(^String.Titles.viewingDeleteComment)
+                }
+
+                Button(^String.Titles.saveButtonTitle) {
+                    saveComment()
+                    isCommentFocused = false
+                }
+                    .controlSize(.small)
+                    .disabled(commentDraft == savedComment)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor))
+        }
+    }
+
+    private func loadComment() {
+        commentDraft = sourceStamp?.comment ?? ""
+        savedComment = commentDraft
+    }
+
+    private func saveComment() {
+        guard let lineID = session.lineID, let stampID = session.stampID,
+              let lineIndex = timelineData.lines.firstIndex(where: { $0.id == lineID }),
+              let stampIndex = timelineData.lines[lineIndex].stamps.firstIndex(where: { $0.id == stampID })
+        else { return }
+        let trimmed = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Пустой комментарий = его нет (тогда в меню ПКМ снова «Добавить комментарий»).
+        let newValue: String? = trimmed.isEmpty ? nil : commentDraft
+        commentDraft = newValue ?? ""
+        savedComment = commentDraft
+        guard timelineData.lines[lineIndex].stamps[stampIndex].comment != newValue else { return }
+        timelineData.lines[lineIndex].stamps[stampIndex].comment = newValue
+        timelineData.updateTimelines()
+    }
+
+    private func deleteComment() {
+        commentDraft = ""
+        saveComment()
+        isCommentFocused = true
     }
 
     /// Плашка «клип ещё не дозаписан» + кнопка «Обновить» (только в лайв-разметке).

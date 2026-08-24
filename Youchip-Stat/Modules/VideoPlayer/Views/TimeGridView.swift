@@ -17,37 +17,45 @@ struct TimeGridView: View {
     let interval: Double
     let width: CGFloat
     let height: CGFloat
+    /// Вертикальные линии сетки на всю высоту дорожек. Отключаются там, где за
+    /// временну́ю привязку отвечает отдельная линейка с делениями
+    /// (`TimelineTimestampsHeaderView`): на каждый кадр pinch-зума/ресайза это
+    /// снимает до ~550 отдельных `stroke`. Горизонтальные разделители строк
+    /// остаются. См. [[project_fullcontrolview_perf]].
+    var showVerticalLines: Bool = true
     
     var body: some View {
         Canvas { context, size in
-            let d = max(duration, 0.000_001)
-            var gridInterval = max(interval, 0.000_001)
-            var lineCount = Int(ceil(d / gridInterval)) + 1
-            let maxLines = 550
-            while lineCount > maxLines {
-                gridInterval *= 1.35
-                lineCount = Int(ceil(d / gridInterval)) + 1
+            if showVerticalLines {
+                let d = max(duration, 0.000_001)
+                var gridInterval = max(interval, 0.000_001)
+                var lineCount = Int(ceil(d / gridInterval)) + 1
+                let maxLines = 550
+                while lineCount > maxLines {
+                    gridInterval *= 1.35
+                    lineCount = Int(ceil(d / gridInterval)) + 1
+                }
+                let numberOfLines = max(1, lineCount)
+                for i in 0..<numberOfLines {
+                    let timePosition = Double(i) * gridInterval
+                    let xPosition = (timePosition / d) * Double(width)
+
+                    var path = Path()
+                    path.move(to: CGPoint(x: xPosition, y: 0))
+                    path.addLine(to: CGPoint(x: xPosition, y: height))
+
+                    let isMajorLine = i % 5 == 0
+                    let lineWidth: CGFloat = isMajorLine ? 1.0 : 0.5
+                    let opacity: Double = isMajorLine ? 0.4 : 0.2
+
+                    context.stroke(
+                        path,
+                        with: .color(Color.gray.opacity(opacity)),
+                        lineWidth: lineWidth
+                    )
+                }
             }
-            let numberOfLines = max(1, lineCount)
-            for i in 0..<numberOfLines {
-                let timePosition = Double(i) * gridInterval
-                let xPosition = (timePosition / d) * Double(width)
-                
-                var path = Path()
-                path.move(to: CGPoint(x: xPosition, y: 0))
-                path.addLine(to: CGPoint(x: xPosition, y: height))
-                
-                let isMajorLine = i % 5 == 0
-                let lineWidth: CGFloat = isMajorLine ? 1.0 : 0.5
-                let opacity: Double = isMajorLine ? 0.4 : 0.2
-                
-                context.stroke(
-                    path,
-                    with: .color(Color.gray.opacity(opacity)),
-                    lineWidth: lineWidth
-                )
-            }
-            
+
             let numberOfRows = Int(height / 30)
             for i in 1..<numberOfRows {
                 let yPosition = CGFloat(i) * 30

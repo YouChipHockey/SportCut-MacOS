@@ -59,16 +59,9 @@ struct Youchip_StatApp: App {
         .handlesExternalEvents(matching: [])
         .commands {
             CommandMenu("Tools") {
+                // Экспорт разметки без JSON (Full/Simple) — их убрали, чтобы юзеры не путались.
+                // Остаются табличные форматы: XML, Excel, CSV.
                 Menu(^String.Titles.toolsExportMarkup) {
-                    Button(^String.Titles.toolsExportMarkupJsonFull) {
-                        NotificationCenter.default.post(name: .toolsExportMarkupJSONFull, object: nil)
-                    }
-                    .keyboardShortcut("e", modifiers: [.command])
-
-                    Button(^String.Titles.toolsExportMarkupJsonSimple) {
-                        NotificationCenter.default.post(name: .toolsExportMarkupJSONSimple, object: nil)
-                    }
-
                     Button("XML") {
                         NotificationCenter.default.post(name: .toolsExportMarkupXML, object: nil)
                     }
@@ -103,7 +96,7 @@ struct Youchip_StatApp: App {
                         NotificationCenter.default.post(name: .toolsExportCutsByEvents, object: nil)
                     }
                 }
-                
+
                 Menu(^String.Titles.toolsReport) {
                     Button(^String.Titles.toolsReportSimple) {
                         NotificationCenter.default.post(name: .toolsReportSimple, object: nil)

@@ -21,9 +21,16 @@ struct FieldMapVisualizationPicker: View {
     @State private var selectedMode: VisualizationMode = .all
     @State private var selectedTagIDs: Set<String> = []
     @State private var selectedTimelineIDs: Set<UUID> = []
+    /// Id карт, на которых стоят точки, но которых нет (с картинкой) ни в одной коллекции —
+    /// зато есть встроенная карта. Считаем один раз на onAppear (грузить все коллекции на каждый
+    /// рендер дорого). Наличие таких id = доступна псевдо-коллекция «Импортированное».
+    @State private var orphanMapIds: Set<String> = []
     @ObservedObject private var timelineData = TimelineDataManager.shared
-    
-    private var availableCollections: [CollectionBookmark] {
+
+    /// Сентинел псевдо-коллекции «Импортированное» (визуализация встроенных карт без коллекции).
+    private static let importedCollectionId = "__imported_maps__"
+
+    private var realAvailableCollections: [CollectionBookmark] {
         collections.filter { collection in
             let manager = CustomCollectionManager()
             // Годится ЛЮБАЯ карта коллекции с картинкой, не только playFields.first. В
@@ -34,6 +41,30 @@ struct FieldMapVisualizationPicker: View {
             return manager.loadCollectionFromBookmarks(named: collection.name) &&
                   manager.playFields.contains { $0.imageBookmark != nil }
         }
+    }
+
+    private var availableCollections: [CollectionBookmark] {
+        var list = realAvailableCollections
+        // Псевдо-коллекция для встроенных карт без коллекции-источника — чтобы визуализировать
+        // можно было ВСЕГДА, независимо от проблем коллекций.
+        if !orphanMapIds.isEmpty {
+            list.append(Self.importedCollectionBookmark())
+        }
+        return list
+    }
+
+    private func isImportedCollection(_ collection: CollectionBookmark) -> Bool {
+        collection.id == Self.importedCollectionId
+    }
+
+    private static func importedCollectionBookmark() -> CollectionBookmark {
+        CollectionBookmark(
+            id: importedCollectionId,
+            name: ^String.Titles.fieldMapImportedGroup,
+            tagGroupsBookmark: Data(), tagsBookmark: Data(),
+            labelGroupsBookmark: Data(), labelsBookmark: Data(),
+            timeEventsBookmark: Data(), playFieldBookmark: nil
+        )
     }
     
     var body: some View {
@@ -248,13 +279,63 @@ struct FieldMapVisualizationPicker: View {
     
     private func loadCollections() {
         collections = UserDefaults.standard.getCollectionBookmarks()
+        recomputeOrphanMapIds()
     }
-    
-    /// Id тегов и id карт (PlayField) выбранной коллекции — считаем один раз за проход.
+
+    /// Карты, на которых стоят точки, но которых нет (с картинкой) ни в одной коллекции, зато есть
+    /// встроенная карта. Тяжёлый проход (грузит коллекции) — делаем один раз здесь, кэшируем.
+    private func recomputeOrphanMapIds() {
+        // id карт, реально использованных точками штампов.
+        var referenced = Set<String>()
+        for line in timelineData.lines {
+            for stamp in line.stamps {
+                for mp in stamp.mapPositions { if let id = mp.mapFieldId { referenced.insert(id) } }
+            }
+        }
+        guard !referenced.isEmpty else { orphanMapIds = []; return }
+
+        // id карт, которые коллекции могут показать (есть картинка).
+        var provided = Set<String>()
+        for c in collections {
+            let m = CustomCollectionManager()
+            guard m.loadCollectionFromBookmarks(named: c.name) else { continue }
+            for f in m.playFields where f.imageBookmark != nil { provided.insert(f.id) }
+        }
+
+        orphanMapIds = referenced.subtracting(provided).filter { EmbeddedMapsStore.shared.contains(id: $0) }
+    }
+
+    /// Штампы, стоящие на «осиротевших» картах (только встроенные, без коллекции-источника).
+    private func orphanStamps() -> [TimelineStamp] {
+        guard !orphanMapIds.isEmpty else { return [] }
+        return timelineData.lines.flatMap { line in
+            line.stamps.filter { stamp in
+                stamp.isActiveForMapView == true &&
+                stamp.mapPositions.contains { mp in mp.mapFieldId.map { orphanMapIds.contains($0) } ?? false }
+            }
+        }
+    }
+
+    /// Id тегов и id карт (PlayField) выбранной коллекции — считаем один раз за проход. Для
+    /// псевдо-коллекции «Импортированное» — теги/карты «осиротевших» штампов.
     private func collectionTagAndFieldIds(_ collection: CollectionBookmark) -> (tags: Set<String>, fields: Set<String>) {
+        if isImportedCollection(collection) {
+            let stamps = orphanStamps()
+            let tags = Set(stamps.flatMap { $0.idTags })
+            return (tags, orphanMapIds)
+        }
         let manager = CustomCollectionManager()
         guard manager.loadCollectionFromBookmarks(named: collection.name) else { return ([], []) }
         return (Set(manager.tags.map { $0.id }), Set(manager.playFields.map { $0.id }))
+    }
+
+    /// Эффективный набор: карты коллекции + «осиротевшие» встроенные (для реальной коллекции), чтобы
+    /// «Импортированное» показывалось вместе с картами коллекции. Для псевдо-коллекции — только orphan.
+    private func effectiveTagAndFieldIds(_ collection: CollectionBookmark) -> (tags: Set<String>, fields: Set<String>) {
+        let base = collectionTagAndFieldIds(collection)
+        guard !isImportedCollection(collection), !orphanMapIds.isEmpty else { return base }
+        let orphanTags = orphanStamps().flatMap { $0.idTags }
+        return (base.tags.union(orphanTags), base.fields.union(orphanMapIds))
     }
 
     /// Штамп можно визуализировать, только если его тег в коллекции И карта, на которой стоит
@@ -271,7 +352,7 @@ struct FieldMapVisualizationPicker: View {
 
     private func availableTagsForCollection() -> [TimelineStamp] {
         guard let collection = selectedCollection else { return [] }
-        let ids = collectionTagAndFieldIds(collection)
+        let ids = effectiveTagAndFieldIds(collection)
 
         let allTags = timelineData.lines.flatMap { line in
             line.stamps.filter { isVisualizable($0, tagIds: ids.tags, fieldIds: ids.fields) }
@@ -288,7 +369,7 @@ struct FieldMapVisualizationPicker: View {
 
     private func availableTimelinesForCollection() -> [TimelineLine] {
         guard let collection = selectedCollection else { return [] }
-        let ids = collectionTagAndFieldIds(collection)
+        let ids = effectiveTagAndFieldIds(collection)
         return timelineData.lines.filter { line in
             line.stamps.contains { isVisualizable($0, tagIds: ids.tags, fieldIds: ids.fields) }
         }
@@ -296,13 +377,13 @@ struct FieldMapVisualizationPicker: View {
 
     private func countPositionedStampsInTimeline(_ timeline: TimelineLine) -> Int {
         guard let collection = selectedCollection else { return 0 }
-        let ids = collectionTagAndFieldIds(collection)
+        let ids = effectiveTagAndFieldIds(collection)
         return timeline.stamps.filter { isVisualizable($0, tagIds: ids.tags, fieldIds: ids.fields) }.count
     }
 
     private func allPositionedStampsForCollection() -> [TimelineStamp] {
         guard let collection = selectedCollection else { return [] }
-        let ids = collectionTagAndFieldIds(collection)
+        let ids = effectiveTagAndFieldIds(collection)
         return timelineData.lines.flatMap { line in
             line.stamps.filter { isVisualizable($0, tagIds: ids.tags, fieldIds: ids.fields) }
         }
@@ -313,7 +394,7 @@ struct FieldMapVisualizationPicker: View {
 
         switch selectedMode {
         case .byTimeline:
-            let ids = collectionTagAndFieldIds(collection)
+            let ids = effectiveTagAndFieldIds(collection)
             return timelineData.lines.filter { line in
                 selectedTimelineIDs.contains(line.id)
             }.flatMap { line in

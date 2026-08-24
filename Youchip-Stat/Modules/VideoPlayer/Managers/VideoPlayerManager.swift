@@ -279,76 +279,74 @@ class VideoPlayerManager: ObservableObject {
                 }
                 
                 let newItem = AVPlayerItem(asset: composition)
-                let newPlayer = AVPlayer(playerItem: newItem)
-                newPlayer.isMuted = true
-                
-                // Keep a STRONG reference so ARC doesn't destroy the player before readyToPlay fires.
-                self.pendingReviewPlayer = newPlayer
-                
+
+                // ВАЖНО: переиспользуем ТОТ ЖЕ `AVPlayer` и меняем только item (`replaceCurrentItem`),
+                // а НЕ создаём новый плеер. Раньше на каждое обновление (докидка live-сегментов)
+                // создавался новый `AVPlayer` и присваивался в `reviewPlayer` (@Published) → SwiftUI
+                // пересобирал `VideoPlayer`, а нативный бар AVKit терял привязку своего таймера:
+                // «текущее время» в баре замирало (само видео и плейхед на таймлайнах при этом шли),
+                // и лечилось только скрытием/показом бара (увод/наведение курсора). При смене только
+                // item того же плеера бар остаётся привязан и время в нём продолжает идти.
+                let isNewPlayer = (self.reviewPlayer == nil)
+                let player = self.reviewPlayer ?? AVPlayer()
+                let wasPlaying = self.reviewPlayer?.timeControlStatus == .playing
+
+                // Пока меняем item и досеиваемся — глушим persistent time-observer, иначе он на миг
+                // напишет reviewCurrentTime ≈ 0 (item пересоздаётся) и бирюзовый плейхед дёрнется в
+                // начало. Снимаем глушилку по завершении сика (или при провале готовности).
+                self.reviewSeekSuppressUntil = Date().addingTimeInterval(5)
+
                 self.reviewItemStatusObserver?.cancel()
                 self.reviewItemStatusObserver = newItem.publisher(for: \.status)
                     .filter { $0 == .readyToPlay || $0 == .failed }
                     .first()
                     .receive(on: DispatchQueue.main)
                     .sink { [weak self] status in
-                        guard let self = self, self.isReviewMode else {
-                            self?.pendingReviewPlayer = nil
+                        guard let self = self, self.isReviewMode, status == .readyToPlay else {
+                            self?.reviewSeekSuppressUntil = nil
                             self?.isRefreshingReview = false
                             return
                         }
-                        // Retrieve the pending player (held strongly by self.pendingReviewPlayer).
-                        guard let pending = self.pendingReviewPlayer, status == .readyToPlay else {
-                            self.pendingReviewPlayer = nil
-                            self.isRefreshingReview = false
-                            return
-                        }
-                        
-                        let itemDuration = pending.currentItem?.duration.seconds ?? 0
+
+                        let itemDuration = newItem.duration.seconds
                         let shouldSeekToEnd = self.shouldSeekReviewToEndOnNextReady && itemDuration > 0
                         let targetSeconds: Double
                         if shouldSeekToEnd {
                             targetSeconds = max(0, itemDuration - 0.05)
-                            self.reviewCurrentTime = targetSeconds
-                            self.currentTime = targetSeconds
                             self.shouldSeekReviewToEndOnNextReady = false
                         } else {
                             targetSeconds = self.reviewCurrentTime
                         }
                         let seekTarget = CMTime(seconds: targetSeconds, preferredTimescale: 600)
-                        pending.seek(
+                        player.seek(
                             to: seekTarget,
                             toleranceBefore: CMTime(seconds: 0.5, preferredTimescale: 600),
                             toleranceAfter:  CMTime(seconds: 0.5, preferredTimescale: 600)
                         ) { [weak self] _ in
                             DispatchQueue.main.async { [weak self] in
-                                guard let self = self, self.isReviewMode,
-                                      let pending = self.pendingReviewPlayer else {
-                                    self?.pendingReviewPlayer = nil
+                                guard let self = self, self.isReviewMode else {
+                                    self?.reviewSeekSuppressUntil = nil
                                     self?.isRefreshingReview = false
                                     return
                                 }
-                                // Preserve the pause/play state of the previous player.
-                                let wasPlaying = self.reviewPlayer?.timeControlStatus == .playing
-                                
-                                if let token = self.reviewTimeObserver {
-                                    self.reviewPlayer?.removeTimeObserver(token)
-                                    self.reviewTimeObserver = nil
-                                }
-                                self.setupReviewTimeObserver(for: pending)
-                                
-                                self.reviewPlayer?.pause()
-                                pending.isMuted = AppConfig.isDebug
-                                self.reviewPlayer = pending
-                                self.pendingReviewPlayer = nil
-                                if wasPlaying {
-                                    pending.play()
-                                } else {
-                                    pending.pause()
-                                }
+                                self.reviewCurrentTime = targetSeconds
+                                if shouldSeekToEnd { self.currentTime = targetSeconds }
+                                if wasPlaying { player.play() } else { player.pause() }
+                                self.reviewSeekSuppressUntil = nil
                                 self.isRefreshingReview = false
                             }
                         }
                     }
+
+                player.isMuted = AppConfig.isDebug
+                // Пауза на время подмены — чтобы новый item не проигрывался с 0 до сика.
+                player.pause()
+                player.replaceCurrentItem(with: newItem)
+
+                if isNewPlayer {
+                    self.setupReviewTimeObserver(for: player)
+                    self.reviewPlayer = player
+                }
             }
         }
     }

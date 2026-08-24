@@ -510,6 +510,12 @@ class CollectionsBookmarksManager {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
 
+        // Уникальное имя считаем ДО взятия `cacheLock`: `ensureUniqueCollectionName` внутри зовёт
+        // `loadCollections()`, а тот берёт этот же НЕрекурсивный `NSLock`. Вызов из-под лока —
+        // самодедлок на главном потоке: приложение вставало намертво по «Сохранить» в
+        // переименовании коллекции из меню.
+        let uniqueName = CustomCollectionManager().ensureUniqueCollectionName(trimmed, collectionID: id)
+
         cacheLock.lock()
         if collectionsCache.isEmpty {
             collectionsCache = loadCollectionsFromFile()
@@ -519,8 +525,6 @@ class CollectionsBookmarksManager {
             return false
         }
 
-        let manager = CustomCollectionManager()
-        let uniqueName = manager.ensureUniqueCollectionName(trimmed, collectionID: id)
         let mode = collectionsCache[index].displayMode
         collectionsCache[index] = CollectionInfo(id: id, name: uniqueName, tagLibraryDisplayMode: mode)
         cacheLock.unlock()

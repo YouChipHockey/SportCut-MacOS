@@ -17,7 +17,9 @@ struct ClipSearchTagRow: Identifiable {
     let tagName: String
     let colorHex: String
     let nameMatched: Bool     // совпадение по имени тега
-    let matchedLabels: [String]
+    /// ВСЕ лейблы совпавших штампов этого тега (не только совпавшие с запросом) — у тега его лейблы
+    /// должны быть видны при любом поиске. Совпадение с запросом внутри подсвечивается жирным.
+    let labels: [String]
     let matchedEvents: [String]
     let stampIDs: Set<UUID>   // штампы этого тега, попавшие под запрос
 }
@@ -45,7 +47,8 @@ enum ClipSearch {
             let tagName: String
             let colorHex: String
             var nameMatched = false
-            var labels = Set<String>()
+            /// ВСЕ лейблы совпавших штампов (не только совпавшие с запросом).
+            var allLabels = Set<String>()
             var events = Set<String>()
             var stampIDs = Set<UUID>()
         }
@@ -64,7 +67,9 @@ enum ClipSearch {
 
             var acc = byTag[tid] ?? Acc(id: tid, tagName: name, colorHex: stamp.colorHex)
             if nameHit { acc.nameMatched = true }
-            acc.labels.formUnion(labelHits)
+            // Показываем ВСЕ лейблы совпавшего штампа — чтобы у тега его лейблы были видны при любом
+            // поиске (по имени тега они раньше не показывались вовсе). Совпадение подсветится жирным.
+            acc.allLabels.formUnion(labels)
             acc.events.formUnion(eventHits)
             acc.stampIDs.insert(stamp.id)
             byTag[tid] = acc
@@ -75,7 +80,7 @@ enum ClipSearch {
                 ClipSearchTagRow(
                     id: $0.id, tagName: $0.tagName, colorHex: $0.colorHex,
                     nameMatched: $0.nameMatched,
-                    matchedLabels: $0.labels.sorted(), matchedEvents: $0.events.sorted(),
+                    labels: $0.allLabels.sorted(), matchedEvents: $0.events.sorted(),
                     stampIDs: $0.stampIDs
                 )
             }
@@ -162,7 +167,9 @@ struct ClipSearchResultsList: View {
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(.secondary)
                     }
-                    let subMatches = row.matchedLabels + row.matchedEvents
+                    // Лейблы тега (все) + совпавшие события. Лейблы видны всегда, совпадение с
+                    // запросом внутри — жирным (см. subMatchesText → highlighted).
+                    let subMatches = row.labels + row.matchedEvents
                     if !subMatches.isEmpty {
                         subMatchesText(subMatches)
                             .foregroundColor(.secondary)

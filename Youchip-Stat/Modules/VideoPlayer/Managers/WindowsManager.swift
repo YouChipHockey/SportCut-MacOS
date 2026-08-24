@@ -44,6 +44,11 @@ class WindowsManager: NSObject, NSWindowDelegate {
     /// After opening SportCut from markup, main view starts playback of this playlist.
     private(set) var pendingSportCutAutoplayPlaylistID: UUID?
     var reviewVideoWindow: ReviewVideoWindowController?
+    /// Окно выбора режима экспорта разметки (раньше было листом). Одно на сессию.
+    var exportModeWindow: ExportModeWindowController?
+    /// Окно текущего шага выбора для экспорта (по тегам/лейблам/событиям и под-выборы). Одно на
+    /// сессию: переход к следующему шагу заменяет содержимое этого же окна.
+    var exportSelectionWindow: ExportSelectionWindowController?
     var markupMirrorVideoWindow: MirroredVideoWindowController?
     var viewerMirrorVideoWindow: MirroredVideoWindowController?
     var sportCutMirrorVideoWindow: MirroredVideoWindowController?
@@ -224,7 +229,18 @@ class WindowsManager: NSObject, NSWindowDelegate {
         reviewVideoWindow?.window?.delegate = nil
         reviewVideoWindow?.close()
         reviewVideoWindow = nil
-        
+
+        // Окно экспорта разметки — закрываем без колбэка (delegate снят), чтобы не дёргать
+        // сброс флага у уже закрывающегося FullControlView.
+        exportModeWindow?.window?.delegate = nil
+        exportModeWindow?.close()
+        exportModeWindow = nil
+
+        // Окно шага выбора для экспорта — тоже без колбэка.
+        exportSelectionWindow?.window?.delegate = nil
+        exportSelectionWindow?.close()
+        exportSelectionWindow = nil
+
         ScreenshotsMetadataManager.shared.clearScreenshots()
         
         HotKeyManager.shared.clearHotkeys()
@@ -236,7 +252,14 @@ class WindowsManager: NSObject, NSWindowDelegate {
         } else {
             VideoPlayerManager.shared.deleteVideo()
         }
-        
+
+        // Жёстко обнуляем ссылки на окна разметки. Иначе после закрытия оставалась «висячая»
+        // ссылка на уже закрытый контроллер, и инвариант «одно окно» ниже (проверка на nil) не
+        // мог отличить закрытую сессию от открытой. См. openVideo/openLiveWindows.
+        videoWindow = nil
+        controlWindow = nil
+        tagLibraryWindow = nil
+
         isClosing = true
     }
     
@@ -388,6 +411,12 @@ class WindowsManager: NSObject, NSWindowDelegate {
     }
     
     private func openLiveWindows() {
+        // Тот же жёсткий инвариант «одно окно разметки», что и в openVideo: если окно уже живое,
+        // не создаём второй набор (иначе плодятся FullControlWindow при рассинхроне isClosing).
+        guard controlWindow == nil else {
+            controlWindow?.window?.makeKeyAndOrderFront(nil)
+            return
+        }
         HotKeyManager.shared.resumeKeyboardMonitoring()
 
         videoWindow = VideoPlayerWindowController(id: currentVideoId)
@@ -763,6 +792,27 @@ class WindowsManager: NSObject, NSWindowDelegate {
         restoreLiveVideoWindowFrameAfterReview()
     }
 
+    /// Идёт ли пересмотр с открытым окном: тогда видео-окно лайва занимает левую половину
+    /// (см. `openReviewWindow`), и «исходный размер» для него — именно этот кадр.
+    var isReviewSplitActive: Bool { reviewVideoWindow != nil }
+
+    /// Кадр видео-окна лайва в раскладке пересмотра (левая половина верхнего правого блока).
+    /// Тот же расчёт, что и в `openReviewWindow`. `nil`, если нет главного экрана.
+    func liveVideoWindowReviewSplitFrame() -> NSRect? {
+        guard let screen = NSScreen.main else { return nil }
+        let screenFrame = screen.frame
+        let bottomHeight = screenFrame.height * 0.4
+        let topHeight = screenFrame.height - bottomHeight - 40
+        let halfWidth = (screenFrame.width * 2) / 3 / 2
+        let leftStartX = screenFrame.minX + screenFrame.width / 3
+        return NSRect(
+            x: leftStartX,
+            y: screenFrame.minY + bottomHeight,
+            width: halfWidth,
+            height: topHeight
+        )
+    }
+
     private func restoreLiveVideoWindowFrameAfterReview() {
         // Restore live video window to its original 2/3 width.
         if let screen = NSScreen.main {
@@ -779,6 +829,77 @@ class WindowsManager: NSObject, NSWindowDelegate {
         }
     }
     
+    // MARK: - Export Mode Window
+
+    /// Открывает окно выбора режима экспорта разметки (вместо листа). Одно окно на сессию: если уже
+    /// открыто — просто на передний план. `onSelect` получает режим и актуальные тумблеры;
+    /// `onClose` вызывается при любом закрытии окна (в т.ч. крестиком) — сбросить флаг у вызывающего.
+    func openExportModeSelection(
+        withDrawings: Bool,
+        watermark: ExportWatermarkOptions,
+        onSelect: @escaping (ExportMode, Bool, ExportWatermarkOptions) -> Void,
+        onClose: @escaping () -> Void
+    ) {
+        // Переход к режиму экспорта завершает цепочку выбора — закрываем окно шага (если есть).
+        closeExportSelectionWindow()
+        guard exportModeWindow == nil else {
+            exportModeWindow?.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let controller = ExportModeWindowController(
+            withDrawings: withDrawings,
+            watermark: watermark,
+            onSelect: onSelect
+        )
+        controller.onClosed = { [weak self] in
+            self?.exportModeWindow = nil
+            onClose()
+        }
+        exportModeWindow = controller
+        controller.showWindow(nil)
+        controller.window?.center()
+    }
+
+    /// Открывает окно ОДНОГО шага выбора для экспорта (по тегам/лейблам/событиям и под-выборы) —
+    /// вместо листа. Одно окно шага на сессию: следующий шаг заменяет содержимое (старое окно
+    /// закрывается без колбэка). `onClose` вызывается только при закрытии крестиком — сбросить
+    /// флаг-триггер у вызывающего.
+    func openExportSelectionWindow<Content: View>(
+        title: String,
+        width: CGFloat = 320,
+        height: CGFloat = 340,
+        onClose: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        // Заменяем предыдущий шаг (delegate снят → без onClosed).
+        closeExportSelectionWindow()
+        let controller = ExportSelectionWindowController(
+            title: title,
+            width: width,
+            height: height
+        ) {
+            // Фиксируем размер контента — иначе `List` без «родной» высоты схлопывает окно в
+            // крошечное (как и у окна выбора режима экспорта, размер задаёт сам контент).
+            content()
+                .frame(width: width, height: height)
+        }
+        controller.onClosed = { [weak self] in
+            self?.exportSelectionWindow = nil
+            onClose()
+        }
+        exportSelectionWindow = controller
+        controller.showWindow(nil)
+        controller.window?.center()
+    }
+
+    /// Закрывает окно шага выбора без колбэка (delegate снят) — используется при переходе к
+    /// следующему шагу и при завершении цепочки экспорта.
+    func closeExportSelectionWindow() {
+        exportSelectionWindow?.window?.delegate = nil
+        exportSelectionWindow?.close()
+        exportSelectionWindow = nil
+    }
+
     func showFieldMapVisualizationPicker() {
         let controller = FieldMapVisualizationWindowController()
         controller.showWindow(nil)
@@ -945,15 +1066,25 @@ class WindowsManager: NSObject, NSWindowDelegate {
     }
     
     func openVideo(id: String) {
+        // Жёсткий инвариант: одно окно разметки на сессию. `isClosing` — простой Bool и на старых
+        // маках при экспорте рассинхронизировался (становился true, пока окна ещё открыты), из-за
+        // чего повторный вход сюда пересоздавал окна (появлялись новые FullControlWindow) и заодно
+        // сбрасывал разметку. Проверяем реальное наличие живого окна разметки ПЕРВЫМ делом: если
+        // оно есть — сессия уже открыта, просто выводим его вперёд и выходим, ничего не сбрасывая.
+        guard controlWindow == nil else {
+            controlWindow?.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+
         currentVideoId = id
         TagLibraryFreeLayoutFitStore.shared.resetForProject(id)
         guard let filesFile = VideoFilesManager.shared.files.first(where: { $0.videoData.id == id }) else {
             return
         }
-        guard let file = filesFile.url, isClosing else { 
+        guard let file = filesFile.url, isClosing else {
             return
         }
-        
+
         let loadedTimelines = filesFile.timelines
         let timelineNames = loadedTimelines.map { $0.name }
         let uniqueNames = Set(timelineNames)

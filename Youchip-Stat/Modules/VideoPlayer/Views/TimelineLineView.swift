@@ -80,6 +80,28 @@ struct TimelineLineView: View, Equatable {
     
     @State private var lastSeekTime: Date = Date()
     private let seekThrottleInterval: TimeInterval = 0.033 // ~30fps
+
+    /// Куда «подкидывать» плейхед, пока тег двигают или тянут за край.
+    ///
+    /// - обычная разметка — основной плеер, как и было;
+    /// - лайв + пересмотр — ТОЛЬКО плеер пересмотра: на лайв-видео всегда идёт лайв, поэтому
+    ///   белый плейхед прыгал впустую и на кадре ничего не менялось;
+    /// - лайв без пересмотра — никуда: двигать белый плейхед лайва бессмысленно.
+    ///
+    /// `isPreview` — непрерывное перетаскивание (seek с допуском, чтобы кадр поспевал за
+    /// курсором); `false` — финальная точка после отпускания.
+    private func seekWhileEditingStamp(to time: Double, isPreview: Bool = true) {
+        if videoManager.isReviewMode {
+            if isPreview {
+                videoManager.seekReviewForTimelineScrubPreview(to: time)
+            } else {
+                videoManager.seekReview(to: time)
+            }
+            return
+        }
+        guard !videoManager.isLiveMode else { return }
+        videoManager.seek(to: time)
+    }
     
     // MARK: - drag properties
     @State private var dragOffsetY: CGFloat = 0
@@ -161,7 +183,16 @@ struct TimelineLineView: View, Equatable {
                             timelineData.clearSportCutExportSelection()
                         }
                     ) { time in
-                        videoManager.seek(to: time)
+                        // В пересмотре клик по телу дорожки ведёт бирюзовый плейхед пересмотра —
+                        // так же, как клик по линейке (см. PinnedTimelineRulerView). Основной
+                        // (белый) плейхед в лайве прибит к живому краю, и `seek` для него ничего
+                        // не делает, поэтому раньше клик по дорожке в лайв-пересмотре не двигал
+                        // ничего.
+                        if videoManager.isReviewMode {
+                            videoManager.seekReview(to: time)
+                        } else {
+                            videoManager.seek(to: time)
+                        }
                     }
                     // Идентичность по `stamp.id`, как и была; `Array(enumerated())` больше не
                     // нужен — перекрытия приходят словарём, посчитанным один раз на строку.
@@ -186,7 +217,6 @@ struct TimelineLineView: View, Equatable {
         let isResizing = resizingStampID == stamp.id
         let currentStartTime = isResizing && resizingEdge == .left ? dragStartTime : stamp.timeStartSeconds
         let currentEndTime = isResizing && resizingEdge == .right ? dragStartTime : stamp.timeFinishSeconds
-        let currentDuration = currentEndTime - currentStartTime
 
         let isDragging = draggingStampID == stamp.id
 
@@ -196,19 +226,28 @@ struct TimelineLineView: View, Equatable {
         let minYOffset = -1 * CGFloat(lineIndex) * lineHeight
         let verticalOffset = isDragging ? max(min(dragOffsetY, maxYOffset), minYOffset) : 0
         
-        let startRatio = currentStartTime / totalDuration
-        let durationRatio = currentDuration / totalDuration
-        
-        let baseStampWidth = max(durationRatio * widthMax, 10)
-        let baseStampX = startRatio * widthMax
-        //let stampWidth = max(durationRatio * widthMax, 10) // Minimum width
-        let stampWidth = ((isResizing && resizingEdge == .right) ?
-            (visualWidth ?? baseStampWidth) : (isResizing && resizingEdge == .left) ?
-            (visualWidth ?? baseStampWidth) : baseStampWidth) ?? 0
-        
+        // Геометрия клипа считается из времени штампа, поэтому битые данные (конец далеко за
+        // пределами видео — импорт из чужого XML, недозаписанный хвост в лайве — или NaN/inf)
+        // давали прямоугольник шириной в несколько экранов. `.frame` в SwiftUI НЕ обрезает
+        // содержимое и не ограничивает попадания, так что такой штамп ложится поверх соседей
+        // (рисуется последним) и забирает себе ВСЕ клики: клик по любому тегу подматывал и
+        // открывал последний тег разметки. Инфо-строка при наведении при этом права — её считает
+        // `TimelineMouseTracker` по координате курсора, мимо hit-testing'а SwiftUI.
+        // Поэтому клип всегда держим внутри таймлайна.
+        let safeStart = currentStartTime.isFinite ? min(max(currentStartTime, 0), totalDuration) : 0
+        let safeEnd = currentEndTime.isFinite ? min(max(currentEndTime, safeStart), totalDuration) : safeStart
 
-        let stampX = ((isResizing && resizingEdge == .left) ?
-                      (visualOffsetX ?? baseStampX) : baseStampX) ?? 0
+        let startRatio = safeStart / totalDuration
+        let durationRatio = (safeEnd - safeStart) / totalDuration
+
+        let baseStampWidth = min(max(durationRatio * widthMax, 10), max(widthMax, 10))
+        let baseStampX = min(max(startRatio * widthMax, 0), max(widthMax - 10, 0))
+
+        let rawStampWidth: CGFloat = isResizing ? (visualWidth ?? baseStampWidth) : baseStampWidth
+        let stampWidth = min(max(rawStampWidth, 10), max(widthMax, 10))
+
+        let rawStampX: CGFloat = (isResizing && resizingEdge == .left) ? (visualOffsetX ?? baseStampX) : baseStampX
+        let stampX = min(max(rawStampX, 0), max(widthMax - 10, 0))
         // Во время переноса штамп едет за курсором по обеим осям, не вылезая за таймлайн.
         let draggedStampX = isDragging
             ? min(max(stampX + dragOffsetX, 0), max(widthMax - stampWidth, 0))
@@ -281,6 +320,9 @@ struct TimelineLineView: View, Equatable {
             }
         }
         .frame(width: stampWidth, height: stampHeight)
+        // Кликабельна ровно площадь самого клипа: подписи/бейджи внутри могут вылезать за рамку,
+        // а перехватывать чужие клики они не должны.
+        .contentShape(Rectangle())
         .position(x: clampedCenterX(isDragging: isDragging, stampX: draggedStampX, stampWidth: stampWidth), y: verticalOffset + 15)
         .pointingHandCursor()
         // Подсказка по наведению работает и когда окно таймлайнов неактивно — не нужно
@@ -345,7 +387,7 @@ struct TimelineLineView: View, Equatable {
                     let now = Date()
                     if now.timeIntervalSince(lastSeekTime) >= seekThrottleInterval {
                         lastSeekTime = now
-                        videoManager.seek(to: (previewX / widthMax) * totalDuration)
+                        seekWhileEditingStamp(to: (previewX / widthMax) * totalDuration)
                     }
                 }
                 .onEnded { value in
@@ -396,7 +438,7 @@ struct TimelineLineView: View, Equatable {
                     }
 
                     if movedInTime {
-                        videoManager.seek(to: newStart)
+                        seekWhileEditingStamp(to: newStart, isPreview: false)
                     }
                 }
         )
@@ -504,7 +546,7 @@ struct TimelineLineView: View, Equatable {
                 let now = Date()
                 if now.timeIntervalSince(lastSeekTime) >= seekThrottleInterval {
                     lastSeekTime = now
-                    videoManager.seek(to: time)
+                    seekWhileEditingStamp(to: time)
                 }
             }
             .onEnded { _ in
@@ -582,7 +624,7 @@ struct TimelineLineView: View, Equatable {
                 let now = Date()
                 if now.timeIntervalSince(lastSeekTime) >= seekThrottleInterval {
                     lastSeekTime = now
-                    videoManager.seek(to: time)
+                    seekWhileEditingStamp(to: time)
                 }
             }
             .onEnded { _ in

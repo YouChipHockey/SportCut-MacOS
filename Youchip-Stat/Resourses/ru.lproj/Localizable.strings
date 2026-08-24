@@ -62,6 +62,7 @@
 "FieldMapDetailPosition" = "Позиция:";  // ^String.Titles.fieldMapDetailPosition
 "FieldMapDetailColor" = "Цвет:";  // ^String.Titles.fieldMapDetailColor
 "FieldMapDetailNoGroup" = "Без группы";  // ^String.Titles.fieldMapDetailNoGroup
+"FieldMapImportedGroup" = "Импортированное";  // ^String.Titles.fieldMapImportedGroup
 "FieldMapTagTitle" = "Тег №"; //*  // ^String.Titles.fieldMapTagTitle
 "FieldMapTagTitleNoNumber" = "Тег:";  // ^String.Titles.fieldMapTagTitleNoNumber
 "FieldMapTagPosition" = "Позиция: x: %.2f, y: %.2f"; //*  // ^String.Titles.fieldMapTagPosition
@@ -661,8 +662,8 @@
 "XmlImportNoInstancesError" = "В XML нет ни одного события для импорта.";
 "XmlImportParseFailedError" = "Не удалось прочитать XML-файл.";
 "XmlImportCollectionDisplayName" = "Импорт XML";
-"XmlImportTagGroupName" = "Импортированные коды";
-"XmlImportNotesLabelGroupName" = "Примечания из XML";
+"XmlImportTagGroupName" = "Теги (импорт)";
+"XmlImportNotesLabelGroupName" = "Лейблы (импорт)";
 "XmlImportTimelineLineName" = "Линия 1";
 "VideoMarkupToastTagAdded" = "Тег: %@";
 "VideoMarkupToastIntervalRecording" = "Запись: %@";
@@ -1067,6 +1068,7 @@
 "MomentWindowTitlePrefix" = "Момент: %@";
 "MomentClipNotFullyRecorded" = "Клип ещё не дозаписан — часть тега не попала в буфер.";
 "MomentRefreshClip" = "Обновить";
+"MomentCommentPlaceholder" = "Комментарий к тегу…";
 
 // ReviewVideo
 "ReviewLoadingRecording" = "Загрузка записи...";
@@ -1462,6 +1464,6 @@
 "MarkupAnchorLive" = "Разметка лайва";
 "MarkupAnchorReview" = "Разметка пересмотра";
 "MarkupAnchorHelp" = "Куда добавлять теги: по плейхеду лайва или пересмотра (Opt+W)";
-"TagPrimaryCounter" = "Primary Counter";
+"TagPrimaryCounter" = "Основной таймер/секундомер";
 "TagPrimaryCounterNone" = "Нет";
 "TagPrimaryCounterHint" = "Счётчик всегда выводится на видео для момента этого тега (пересмотр/экспорт), даже без флага «Показывать на видео».";

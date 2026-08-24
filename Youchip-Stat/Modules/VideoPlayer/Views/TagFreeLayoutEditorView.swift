@@ -640,10 +640,20 @@ struct TagFreeLayoutEditorContent: View {
                     .zIndex(editorZIndex(for: item))
             }
 
+            // Служебные слои поверх ВСЕХ объектов. Объекты имеют собственный zIndex (1...100),
+            // а у слоя без явного zIndex он равен 0 — поэтому обводке и ручкам нужен свой,
+            // заведомо больший, иначе любая кнопка, лежащая выше по z, их перекрывает.
+
+            // Обводка выделенных объектов (и источника связки).
+            selectionOutlinesOverlay(scale: scale, origin: origin,
+                                     canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                .zIndex(900)
+
             // Общий bounding box выделения с ручками размера/поворота (поверх кнопок).
             if session.editorMode == .layout, marqueePixelRect == nil, let bbox = selectionBBoxCanvas {
                 selectionHandlesOverlay(bbox: bbox, scale: scale, origin: origin,
                                         canvasPixelWidth: canvasPixelWidth, canvasPixelHeight: canvasPixelHeight)
+                    .zIndex(1000)
             }
 
             // Визуальная рамка выделения поверх кнопок.
@@ -654,6 +664,7 @@ struct TagFreeLayoutEditorContent: View {
                     .frame(width: rect.width, height: rect.height)
                     .offset(x: rect.minX, y: rect.minY)
                     .allowsHitTesting(false)
+                    .zIndex(1001)
             }
         }
         .frame(width: canvasPixelWidth, height: canvasPixelHeight, alignment: .topLeading)
@@ -670,6 +681,11 @@ struct TagFreeLayoutEditorContent: View {
     /// будто она «ловит нажатия дальше своих границ» (на самом деле — по кнопкам, попавшим на неё).
     /// Карта — фон-зона под кнопками; выделенный объект поднимаем, чтобы его нельзя было потерять.
     private func editorZIndex(for item: TagFreeLayoutItem) -> Double {
+        // Карта — ВСЕГДА фон под кнопками, даже когда выделена. Иначе выделение поднимало бы её на
+        // z=100 (как любой объект), она перекрывала бы теги и воровала по ним клики/перетаскивание.
+        // Обводку и ручки выделенной карты рисуют отдельные служебные слои (zIndex 900+) — поэтому
+        // её всё равно видно и можно двигать (за ручки или по свободной от кнопок части).
+        if item.kind == .map { return 1 }
         if session.selectedItemIds.contains(item.id) || session.selectedItemId == item.id { return 100 }
         switch item.kind {
         case .map:       return 1
@@ -806,9 +822,11 @@ struct TagFreeLayoutEditorContent: View {
         let viewSize = CGSize(width: item.size.width * scale, height: item.size.height * scale)
         let cr = item.cornerRadius * scale
         let strokeCol = item.strokeColor.map { Color(hex: $0) } ?? Color.black.opacity(0.3)
+        // Обводка самого объекта — только его собственная. Служебная обводка выделения рисуется
+        // отдельным слоем поверх всего холста (см. `selectionOutlinesOverlay`).
         let strokeStyle = StrokeStyle(
-            lineWidth: (isInSelection ? 2 : item.strokeWidth) * scale,
-            dash: (isInSelection ? true : item.strokeDashed) ? [4 * scale, 3 * scale] : []
+            lineWidth: item.strokeWidth * scale,
+            dash: item.strokeDashed ? [4 * scale, 3 * scale] : []
         )
         let textCol = item.textColor.map { Color(hex: $0) } ?? Color.white
         let swiftWeight: Font.Weight = {
@@ -816,10 +834,6 @@ struct TagFreeLayoutEditorContent: View {
             case .regular: return .regular; case .medium: return .medium; case .bold: return .bold
             }
         }()
-
-        // In bindings mode: highlight source/selected state
-        let isBindingSource = session.editorMode == .bindings && session.bindingSourceId == itemKey
-        let strokeOverride: Color = isBindingSource ? .orange : (isInSelection ? .accentColor : strokeCol)
 
         ZStack {
             TagFreeShapeView(shape: item.shape, cornerRadius: cr)
@@ -875,7 +889,7 @@ struct TagFreeLayoutEditorContent: View {
                 .frame(width: viewSize.width, height: viewSize.height)
                 .overlay(
                     TagFreeShapeView(shape: item.shape, cornerRadius: cr)
-                        .stroke(strokeOverride, style: strokeStyle)
+                        .stroke(strokeCol, style: strokeStyle)
                 )
 
             // Kind indicator (small icon in corner)
@@ -1127,6 +1141,33 @@ struct TagFreeLayoutEditorContent: View {
         if let selected = session.selectedItemId, ids.contains(selected) {
             session.selectedItemId = session.selectedItemIds.first
         }
+    }
+
+    /// Служебный слой обводки выделения — рисуется НАД всеми объектами холста (`zIndex(900)`).
+    ///
+    /// Раньше обводка была частью самой кнопки, поэтому объект, лежащий выше по z (карта, лейбл),
+    /// перекрывал обводку соседа снизу: при наложении было не видно, что выделено, и куда тянуть.
+    /// Служебная графика к слоям объектов не относится и всегда сверху.
+    private func selectionOutlinesOverlay(scale: CGFloat, origin: CGPoint,
+                                          canvasPixelWidth: CGFloat, canvasPixelHeight: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(layout.items) { item in
+                let isInSelection = session.selectedItemIds.contains(item.id) || session.selectedItemId == item.id
+                let isBindingSource = session.editorMode == .bindings && session.bindingSourceId == item.id
+                if isInSelection || isBindingSource {
+                    TagFreeShapeView(shape: item.shape, cornerRadius: item.cornerRadius * scale)
+                        .stroke(isBindingSource ? Color.orange : Color.accentColor,
+                                style: StrokeStyle(lineWidth: 2 * scale, dash: [4 * scale, 3 * scale]))
+                        .frame(width: item.size.width * scale, height: item.size.height * scale)
+                        .rotationEffect(.degrees(item.rotation))
+                        .position(x: (item.center.x - origin.x) * scale,
+                                  y: (item.center.y - origin.y) * scale)
+                }
+            }
+        }
+        .frame(width: canvasPixelWidth, height: canvasPixelHeight, alignment: .topLeading)
+        // Только графика — клики идут к кнопкам под ней.
+        .allowsHitTesting(false)
     }
 
     // MARK: - Handles

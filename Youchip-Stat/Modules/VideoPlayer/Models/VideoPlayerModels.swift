@@ -46,6 +46,31 @@ struct Tag: Identifiable, Codable, Equatable {
 }
 
 extension Tag {
+    /// «Тег» для оверлея/водяного знака, когда настоящего в коллекциях нет: разметка
+    /// импортирована из Sportscode/Nacsport/Dartfish и т.п., её коллекция не установлена.
+    /// Всё нужное для водяного знака лежит в самом штампе (имя тега и цвет), поэтому оверлей
+    /// строится без обращения к пулу. Optional — чтобы вставать в цепочку
+    /// `findTagById(...) ?? Tag.synthetic(for:)` там, где результат разбирается через `if let`;
+    /// nil только если у штампа нет даже имени.
+    static func synthetic(for stamp: TimelineStamp) -> Tag? {
+        guard !stamp.label.isEmpty else { return nil }
+        return Tag(
+            id: stamp.idTag,
+            primaryID: stamp.primaryID,
+            name: stamp.label,
+            description: "",
+            color: stamp.colorHex,
+            defaultTimeBefore: 0,
+            defaultTimeAfter: 0,
+            collection: nil,
+            lablesGroup: [],
+            hotkey: nil,
+            labelHotkeys: nil,
+            mapEnabled: nil,
+            isInterval: nil
+        )
+    }
+
     static func syntheticDrawingTag(for stamp: TimelineStamp) -> Tag? {
         guard stamp.idTag.hasPrefix("screenshot_"), !stamp.label.isEmpty else { return nil }
         return Tag(

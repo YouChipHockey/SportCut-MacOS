@@ -150,7 +150,8 @@ class ProjectExportManager {
         
         let timelines = file.timelines
         let customCollection = collectCustomTagsFromTimelines(timelines)
-        
+        let embeddedMaps = gatherEmbeddedMaps(for: timelines)
+
         return ProjectExportModel(
             projectName: file.name,
             videoMetadata: videoMetadata,
@@ -158,8 +159,51 @@ class ProjectExportManager {
             customName: file.videoData.customName,
             isFavorite: file.videoData.isFavorite ?? false,
             projectId: file.id,
-            customCollection: customCollection
+            customCollection: customCollection,
+            embeddedMaps: embeddedMaps.isEmpty ? nil : embeddedMaps
         )
+    }
+
+    /// Карты поля, встроенные в разметку: только те id, на которых реально стоят точки (уникально —
+    /// дедуп по id карты). Берём из `EmbeddedMapsStore`; чего там нет (старые проекты, разметка до
+    /// фичи) — добираем из установленных коллекций (backfill). Так проект самодостаточен: его карты
+    /// визуализируются у получателя без коллекции.
+    private func gatherEmbeddedMaps(for timelines: [TimelineLine]) -> [EmbeddedFieldMap] {
+        var referenced: [String] = []
+        var seen = Set<String>()
+        for line in timelines {
+            for stamp in line.stamps {
+                for mp in stamp.mapPositions {
+                    if let id = mp.mapFieldId, seen.insert(id).inserted {
+                        referenced.append(id)
+                    }
+                }
+            }
+        }
+        guard !referenced.isEmpty else { return [] }
+
+        let missing = referenced.filter { !EmbeddedMapsStore.shared.contains(id: $0) }
+        if !missing.isEmpty {
+            backfillEmbeddedMapsFromCollections(ids: Set(missing))
+        }
+
+        return EmbeddedMapsStore.shared.maps(forIds: referenced)
+    }
+
+    /// Ищет во всех установленных коллекциях карты с указанными id и синхронно кладёт их в стор.
+    private func backfillEmbeddedMapsFromCollections(ids: Set<String>) {
+        var remaining = ids
+        let names = UserDefaults.standard.getCollectionBookmarks().map { $0.name }
+        for name in names {
+            if remaining.isEmpty { break }
+            let manager = CustomCollectionManager()
+            guard manager.loadCollectionFromBookmarks(named: name) else { continue }
+            for field in manager.playFields where remaining.contains(field.id) {
+                if EmbeddedMapsStore.shared.capture(from: field) != nil {
+                    remaining.remove(field.id)
+                }
+            }
+        }
     }
     
     private func extractTeam1(from fileName: String) -> String {
@@ -399,6 +443,12 @@ class ProjectExportManager {
         var updatedTimelines = projectData.timelines
         if let customCollection = projectData.customCollection {
             updatedTimelines = importCustomCollection(customCollection, timelines: projectData.timelines)
+        }
+
+        // Встроенные карты проекта кладём в общий стор — визуализация точек заработает даже без
+        // коллекции-источника (группа «Импортированное»).
+        if let embeddedMaps = projectData.embeddedMaps, !embeddedMaps.isEmpty {
+            EmbeddedMapsStore.shared.importMaps(embeddedMaps)
         }
         
         let videoData = VideosData(
